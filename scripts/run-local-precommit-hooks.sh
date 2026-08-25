@@ -71,6 +71,7 @@ GATE_HOOKS = (
 # runs here or it is claimed by a step, and nothing else passes silently.
 COVERED_BY_A_GATE_STEP = (
     "backend-bandit",
+    "backend-comment-hygiene",
     "backend-pyright",
     "backend-vulture",
     "backend-deptry",

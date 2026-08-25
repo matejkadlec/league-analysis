@@ -177,30 +177,13 @@ class MatchInfoDTO(RiotDTO):
     # from the trust boundary to a NOT NULL violation at flush.
     game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
-    # `min_length=1` for the same reason as `platformId` below. Production
-    # stored `EUN1_3990695865` on 2026-08-16 with no participant rows, `queueId`
-    # 0, empty `gameMode`, `gameType` and `gameVersion`, `mapId` 0 and
-    # `gameStartTimestamp` 0 -- only `gameEndTimestamp` and `platformId` held a
-    # value. `build_match_record` copies the DTO field for field and no other
-    # writer reaches those columns, so the response was empty in the same
-    # places; the response itself was never logged, so that is inference from
-    # the row. Every one of those zeros was written as fact, the row was
-    # marked `fully_analyzed`, and `game_start_timestamp_source` recorded
-    # `riot_game_start`, which asserts Riot said the game began at epoch 0.
-    #
-    # A match with no participants cannot be rendered and cannot be filtered by
-    # queue, so it is noise that only ever has to be excluded again later. The
-    # refusal is per-match and recoverable: `process_queue_sync_match` catches
-    # it, `must_abort_writer_sync` defers to `is_database_job_error`, which does
-    # not claim a `ValidationError`, so the run logs the match and continues.
+    # `min_length=1`: a participant-less match would otherwise be stored as fact
+    # and marked `fully_analyzed`. The refusal is per-match and recoverable --
+    # `process_queue_sync_match` logs it and the run continues.
     participants: list[ParticipantDTO] = Field(..., min_length=1)
-    # `min_length=1`, so an empty `platformId` is refused here rather than
-    # standing in for a real one. `upsert_match` used to substitute "EUN1",
-    # which `normalize_platform` accepts without complaint -- a KR or NA
-    # participant first seen through that path got `platform='eun1'` written
-    # onto their player row, and every later Riot call for them was routed to
-    # the wrong region forever. A rejected match is one recoverable failure;
-    # a wrong platform is permanent and invisible.
+    # `min_length=1`, so an empty `platformId` is refused rather than standing
+    # in for a real one: a substituted platform pins the player row to the wrong
+    # region, and every later Riot call for them is misrouted forever.
     platform: str = Field(..., alias="platformId", min_length=1)
 
 
@@ -235,9 +218,8 @@ class LeagueEntryDTO(RiotDTO):
     wins: int
     losses: int
     # leagueId, veteran, inactive, freshBlood and hotStreak are deliberately
-    # absent: nothing read them, and declaring them required meant a response
-    # omitting one -- which the live by-PUUID route does for leagueId -- would
-    # have failed the whole league sync. `extra="ignore"` drops them.
+    # absent: nothing reads them, and requiring them would fail the whole league
+    # sync when a response omits one (the by-PUUID route omits leagueId).
 
     @property
     def win_rate(self) -> float:
@@ -252,23 +234,9 @@ class LeagueEntryDTO(RiotDTO):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
-# ---------------------------------------------------------------------------
-# Match-V5 timeline
-#
-# Generated from Riot's published OpenAPI specification rather than written by
-# hand, and the slice these mirror is vendored at
-# `tests/data/riot_match_v5_timeline_schema.json` so
-# `test_timeline_dto_matches_riot_schema` can prove they still agree without a
-# network call. Refresh both with `tests/data/refresh_timeline_schema.py`.
-#
-# Only the structural spine is required: metadata/info, frames, and each
-# frame's timestamp and events. Every leaf is optional even where Riot's
-# specification marks it required, because the specification is generated from
-# a reference that is documented to carry "small errors or missing DTO specs",
-# and this codebase has already been bitten by exactly that — see
-# the omitted-field note on `LeagueEntryDTO` above. A ValidationError on a
-# field nothing reads
-# would be a regression against the `dict.get()` access this replaces.
+# Match-V5 timeline mirroring `tests/data/riot_match_v5_timeline_schema.json`
+# (refresh with `tests/data/refresh_timeline_schema.py`). Only the structural
+# spine is required -- Riot's spec marks leaves required in error.
 class MatchTimelinePositionDTO(RiotDTO):
     """A map coordinate."""
 

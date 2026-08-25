@@ -22,11 +22,9 @@ afterEach(() => {
 
 describe("what counts as consent", () => {
   it("does not honour a consent given against an older version", () => {
-    // The only reason `COOKIE_CONSENT_VERSION` exists: when what we ask for
-    // changes, the previous answer stops counting and the banner asks again.
-    // Dropping `isCurrentCookieConsent` from this check kept all 356 tests
-    // green, and it silently converts every stale "accept all" in the wild
-    // into consent for terms its owner never saw.
+    // Dropping `isCurrentCookieConsent` from this check kept all 356 tests green,
+    // and it silently converts every stale "accept all" in the wild into consent
+    // for terms its owner never saw.
     expect(
       canUseOptionalStorage({
         level: "all",
@@ -50,22 +48,18 @@ describe("what counts as consent", () => {
     ["no timestamp at all", "v1|all|"],
     ["nothing but separators", "||"],
   ])("refuses a consent cookie carrying %s", (_label, raw) => {
-    // A consent cookie is visitor-writable and outlives releases, so it is
-    // read the way any untrusted input is read. Every rejection branch in the
-    // parser was unexercised: removing them left the suite green while a
-    // hand-edited cookie became a `CookieConsentState` the rest of the app
-    // trusts.
+    // A consent cookie is visitor-writable and outlives releases. Every rejection
+    // branch in the parser was unexercised: removing them left the suite green
+    // while a hand-edited cookie became state the rest of the app trusts.
     setConsentCookie(raw);
 
     expect(readCookieConsentFromBrowser()).toBeNull();
   });
 
   it("writes a consent cookie that survives a round trip, with its attributes", () => {
-    // jsdom hands back only `name=value` when reading `document.cookie`, so
-    // the attributes are asserted at the point of writing. Without that,
-    // dropping `SameSite=Lax` -- or the six-month `Max-Age`, which is what
-    // makes the answer persist instead of being asked on every visit -- passes
-    // every other test in the suite.
+    // jsdom hands back only `name=value`, so the attributes are asserted at the
+    // point of writing -- otherwise dropping `SameSite=Lax`, or the six-month
+    // `Max-Age` that makes the answer persist, passes every other test here.
     const writes: string[] = [];
     vi.spyOn(document, "cookie", "set").mockImplementation((value: string) => {
       writes.push(value);

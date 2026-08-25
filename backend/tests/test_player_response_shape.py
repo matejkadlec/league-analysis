@@ -1,17 +1,8 @@
 """Two endpoints answering with the same player answer with the same player.
 
 `GET /players/{puuid}` and the `current_player` on `GET /players/context` both
-return a `PlayerResponse` for one row of `core.players`, and callers have no
-way to tell which one produced the object they are holding. They were not
-built the same way: only the first filled `total_matches` and
-`analyzed_matches`, and `PlayerResponse` defaults both to 0, so the context
-endpoint reported every player as having no matches at all.
-
-Nothing read those two fields off a context player, so nothing broke -- until
-the frontend began seeding its `["player", puuid]` cache from the context
-response, at which point the zeros became what every route displayed. The
-divergence is the defect, not the symptom, so this pins the shapes together
-rather than pinning the frontend's use of them.
+return a `PlayerResponse` for one row of `core.players`, and callers cannot
+tell which one produced the object they hold, so the shapes are pinned here.
 """
 
 from datetime import UTC, datetime

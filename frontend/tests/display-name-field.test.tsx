@@ -73,8 +73,7 @@ describe("the display name on the settings page", () => {
   it("sends the trimmed name, not what the box contains", async () => {
     // This is the name other people see. A pasted value carries whatever
     // whitespace came with it, and the server stores the string it is given,
-    // so without the trim the account is renamed to something that renders
-    // with a gap in front of it and reads as a different name in a list.
+    // so without the trim the name renders with a gap in front of it.
     const queryClient = renderField();
 
     type("  Padded Name  ");
@@ -92,11 +91,9 @@ describe("the display name on the settings page", () => {
   });
 
   it("tells someone who cleared the box that it is empty", async () => {
-    // The message is what is asserted, not just that something was refused.
-    // Drop this guard and the blank field is still refused -- by the length
-    // check below it, which answers "Use at least 3 characters" to someone
-    // who typed nothing at all. Naming the message is the only way to hold
-    // the two apart.
+    // Drop the empty-name guard and the blank field is still refused -- by
+    // the length check below it, which answers "Use at least 3 characters"
+    // to someone who typed nothing. Only the message tells the two apart.
     const queryClient = renderField();
 
     type("     ");
@@ -130,8 +127,7 @@ describe("the display name on the settings page", () => {
   ])("refuses %s (%s)", async (name) => {
     // The rule is printed in the refusal, so each of these is a case someone
     // will actually type. Widen the pattern and the name goes to the server,
-    // which has its own rule and answers with a generic failure toast that
-    // names none of this.
+    // which answers with a generic failure toast that names none of this.
     const queryClient = renderField();
 
     type(name);

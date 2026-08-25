@@ -1,9 +1,8 @@
 """The skeletal player row a match write creates, and what it must not clobber.
 
 Every participant of every stored match becomes a `core.players` row so the
-participant FK resolves. Two writers create the same bystander rows at once --
-the Match Fetcher and the matchmaking worker, on separate sessions -- so the
-statement has to settle the collision itself.
+participant FK resolves. The Match Fetcher and the matchmaking worker create
+the same bystander rows at once, so the statement settles the collision.
 """
 
 import json
@@ -38,12 +37,9 @@ def _compiled(participant: ParticipantDTO) -> str:
 def test_a_colliding_participant_updates_instead_of_raising() -> None:
     """A select-then-insert made one PK collision fail the whole job run.
 
-    IntegrityError was a SQLAlchemyError like any other to
-    `must_abort_writer_sync`, which escalated it past the per-match handler --
-    so a bystander participant created by another writer meant every remaining
-    tracked player in the pass was skipped. That predicate no longer escalates
-    a row-level violation, but settling the collision in the conflict clause is
-    still the fix: the row gets written rather than skipped.
+    A bystander participant created by another writer used to skip every
+    remaining tracked player in the pass. Settling the collision in the
+    conflict clause writes the row rather than skipping it.
     """
     compiled = _compiled(_participant())
 

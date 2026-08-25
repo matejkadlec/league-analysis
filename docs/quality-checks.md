@@ -38,6 +38,23 @@ so it is safe to call from the main checkout or any worktree.
   reach the network, pages began hydrating before the payload had settled, so
   React discarded the server HTML and re-rendered — not a state worth asserting
   on. It uses intercepted fixtures and reaches neither Riot nor a database.
+- **The frontend linter is oxlint, and its house rules are the point.** ESLint
+  ran the same checks in roughly eight seconds; oxlint runs them in under one,
+  type-aware rules included, which moves linting from a CI step to something
+  that runs on save. The move cost one native rule — oxlint has no
+  `no-restricted-syntax` and will not get one — so the selector lists the
+  session guards depend on moved into a JS plugin. That plugin directory is now
+  where this project's non-obvious invariants get enforced rather than
+  reviewed; each rule states what it is for in its own report message. The pin
+  is exact, like Ruff and Pyright: a linter release
+  that adds a rule must not tighten the gate on an unrelated commit.
+- **A lint rule's test is a fixture, not a unit test.** Each house rule has a
+  fixture where the shapes it must flag carry a disable directive and the
+  shapes it must not carry none. The gate runs with
+  `--report-unused-disable-directives-severity=error`, so a rule that stops
+  matching leaves an unused directive and fails, and one that over-matches
+  reports on an accepted case and fails. One file proves both directions and
+  fails on a regression rather than on a rewrite.
 - **Dependency advisories are GitHub's job, not a CI job.** Advisory databases
   change independently of a commit, so an advisory check is not reproducible
   and cannot gate anything deterministically. Dependabot alerts and security

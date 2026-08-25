@@ -57,9 +57,8 @@ describe("the patched form primitives", () => {
 
   it("describes a healthy control by nothing at all", async () => {
     // Upstream points `aria-describedby` at `<id>-form-item-description`
-    // unconditionally, and `FormDescription` is the only thing that renders
-    // that id. Nothing in this app renders one, so upstream's version names
-    // an element that is not in the document on every single field.
+    // unconditionally, and nothing in this app renders that id, so upstream's
+    // version names an element that is not in the document.
     render(<Harness />);
 
     expect(
@@ -83,11 +82,9 @@ describe("the patched form primitives", () => {
   });
 
   it("refuses a form primitive used outside a FormField", () => {
-    // Upstream guards on `!fieldContext`, which cannot be false — the context
-    // is created with `{}` as its default — and reads `fieldContext.name`
-    // through it one line earlier anyway. Without the patch this renders a
-    // label whose `htmlFor` is "undefined-form-item", pointing at nothing,
-    // and says nothing about why.
+    // Upstream guards on `!fieldContext`, which cannot be false, and reads
+    // `fieldContext.name` through it one line earlier anyway. Without the patch
+    // the label's `htmlFor` is "undefined-form-item", pointing at nothing.
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});

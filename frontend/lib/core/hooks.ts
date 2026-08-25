@@ -44,9 +44,8 @@ function showToast({
   };
 
   // Sonner names one method per variant and `ToastVariant` is exactly that set
-  // of names, so the four-armed switch this replaces was spelling out an
-  // identity. The second argument is still withheld when there is nothing to
-  // put in it, which is what callers asserting a bare `(title)` expect.
+  // of names. The second argument is withheld when there is nothing to put in
+  // it, which is what callers asserting a bare `(title)` expect.
   return Object.keys(options).length > 0
     ? sonnerToast[variant](title, options)
     : sonnerToast[variant](title);
@@ -79,15 +78,9 @@ export function useToast() {
 }
 
 /**
- * The complete vocabulary of a query's `meta`.
- *
- * A type alias, not an interface, and the distinction is the whole point:
- * `QueryMeta` resolves to `Register["queryMeta"]` only when that type extends
- * `Record<string, unknown>`, which an alias does by implicit index signature
- * and an interface does not. Declare this as an interface and `QueryMeta`
- * silently falls back to `Record<string, unknown>` -- which is what `meta`
- * used to be, and why `meta: { silenceErrorToasts: true }` compiled, read as
- * an unknown key, and toasted anyway.
+ * The complete vocabulary of a query's `meta`. A type alias, not an interface:
+ * `QueryMeta` resolves to `Register["queryMeta"]` only when it extends
+ * `Record<string, unknown>`, which an alias satisfies and an interface cannot.
  */
 type AppQueryMeta = {
   /** Some other surface reports this failure; say which in a comment. */
@@ -103,11 +96,9 @@ declare module "@tanstack/react-query" {
 }
 
 /**
- * Decide what a failed query should announce, or `null` to stay silent.
- *
- * Kept pure and separate from the cache handler that calls it so the silence
- * rules are testable: a handler that decided inline could only be checked by
- * driving a real QueryClient and intercepting Sonner.
+ * Decide what a failed query should announce, or `null` to stay silent. Pure
+ * and separate from the cache handler that calls it, so the silence rules are
+ * testable without driving a real QueryClient and intercepting Sonner.
  */
 export function queryErrorToast(
   error: unknown,

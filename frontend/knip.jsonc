@@ -5,5 +5,8 @@
   // not use is not something to delete. Everything else must be reachable --
   // `deadcode` includes `exports`, so a barrel re-export nobody imports fails
   // the gate rather than accumulating.
-  "ignore": ["components/ui/**"]
+  // Lint fixtures are linted, never imported: oxlint reads them from disk, so
+  // nothing in the graph reaches them and knip is right that they are
+  // unreferenced. Deleting one would silently retire a rule's only test.
+  "ignore": ["components/ui/**", ".oxlint-plugins/fixtures/**"]
 }

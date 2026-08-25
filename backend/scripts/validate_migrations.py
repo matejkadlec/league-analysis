@@ -253,9 +253,8 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
     """Exercise lifecycle backfill, active-run dedup and the 0017 basis rewrite.
 
     The completed row carries 820 because that is what the pre-fix formula
-    stored; seeding the post-fix 910 here would be an anachronism, and it would
-    also leave revision 0017's `UPDATE` matching nothing, so emptying that
-    revision would pass this gate unnoticed.
+    stored; seeding the post-fix 910 would leave revision 0017's `UPDATE`
+    matching nothing, so emptying that revision would pass this gate unnoticed.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -289,11 +288,9 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
-# Three keys, because the row revision 0019 must keep is not the newest one.
-# The pre-0019 save path could reactivate an older row, so an inactive key can
-# carry a *later* `added_at` than the active one -- and the new lookup takes
-# the newest row outright. Seeding only an active key would let the revision
-# skip its DELETE and still pass.
+# Three keys, because the row revision 0019 must keep is not the newest one: the
+# pre-0019 save path could reactivate an older row, so an inactive key can carry
+# a *later* `added_at` than the active one.
 _VALIDATION_ACTIVE_KEY = "RGAPI-" + "validation-active".ljust(36, "0")
 _VALIDATION_STALE_KEYS = (
     ("RGAPI-" + "validation-older".ljust(36, "0"), "2026-08-01T00:00:00Z"),
@@ -305,10 +302,8 @@ def seed_riot_keys_revision_0019_must_collapse(database: str) -> None:
     """Seed the key history and the health binding revision 0019 collapses.
 
     `riot_credential_health` only exists from revision 0008, so this seeds at
-    0018 rather than alongside the baseline fixtures. The health row points at
-    the active key through an `ON DELETE SET NULL` foreign key: if the revision
-    deletes rows in the wrong order the binding silently becomes NULL, which
-    reads to the application as "no key configured".
+    0018, not with the baseline fixtures. The health row's `ON DELETE SET NULL`
+    binding silently becomes NULL if the revision deletes rows in the wrong order.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -349,13 +344,9 @@ def seed_riot_keys_revision_0019_must_collapse(database: str) -> None:
 def seed_rows_revision_0022_must_empty(database: str) -> None:
     """Seed the two stand-ins for absence that revision 0022 retires.
 
-    Both shapes were written by the service before `summary_stats` could be
-    NULL: the `note` blob for a player with no matches, and the *string*
-    `"None"` where a role or champion could not be determined. Neither is a
-    `SummaryStats`, and the API now promises that type.
-
-    Seeded at the 0003 stop beside the 0014 fixtures, under two puuids of its
-    own so revision 0014's de-duplication leaves both rows standing.
+    Both are pre-NULL stand-ins for absence: the `note` blob for a player with
+    no matches, and the *string* `"None"` for an undetermined role or champion.
+    Two puuids of their own, so revision 0014's de-dup leaves both rows standing.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -468,9 +459,7 @@ def seed_rows_revision_0014_must_repair(database: str) -> None:
 
     Both operations 0014 performs on data are conditional on data nobody can
     produce any more: the NULL counters predate the columns getting a default,
-    and the duplicate playstyle rows predate the unique index. Without a row of
-    each here, the revision's `UPDATE` and `DELETE` run against nothing and the
-    gate would pass just as happily if they were deleted.
+    and the duplicate playstyle rows predate the unique index.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -571,12 +560,9 @@ def validate_revision_0017_rewrote_the_seeded_basis(database: str) -> None:
 def validate_revision_0030_owns_every_analysis(database: str) -> None:
     """Assert both analysis tables can no longer hold an unowned run.
 
-    This is the half of LGA-102 that pytest structurally cannot reach: the
-    suite has no database, so a NOT NULL, a foreign key and a partial unique
-    index are all invisible to it. The check that matters is the last one --
-    the active-run indexes led with `puuid` alone, which let either account
-    lock the other out of a player, and rekeying them is easy to get wrong in
-    a way nothing else notices until two accounts collide in production.
+    pytest has no database, so a NOT NULL, a foreign key and a partial unique
+    index are all invisible to it. The check that matters is the last one: the
+    active-run indexes led with `puuid` alone, so accounts could lock each other out.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -636,15 +622,9 @@ def validate_revision_0030_owns_every_analysis(database: str) -> None:
 def validate_revision_0031_dropped_the_legacy_queue_ids(database: str) -> None:
     """Assert no job configuration still carries `enabled_queue_ids`.
 
-    pytest cannot reach this: the suite has no database, and the key's only
-    remaining source is the seed in the initial schema, which this database
-    has just replayed. So the fixture is free -- upgrading to head writes the
-    key at 0001 and revision 0031 has to have taken it off again by the time
-    the run finishes. Production carried the same row (mirror, 2026-08-24).
-
-    Worth checking rather than assuming: the strip is a `-` operator against
-    `jsonb`, and run against a `json` column or a NULL it silently does
-    nothing at all.
+    pytest has no database, and the key's only remaining source is the seed in
+    the initial schema this database just replayed, so the fixture is free. The
+    strip is a `-` against `jsonb`: on a `json` column or a NULL it does nothing.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -700,16 +680,9 @@ def _rendered_default(value: object) -> str:
 def validate_column_defaults(database: str) -> None:
     """Assert no column's DEFAULT disagrees with the model's own default.
 
-    `alembic/env.py` leaves `compare_server_default` off, because turning it on
-    reports 127 columns where the database carries a `DEFAULT` and the model
-    declares only a client-side `default=`. That is a difference in where the
-    value is written, not in what it is, and closing it would mean restating
-    every one of those defaults in the models.
-
-    The failure that difference could hide is the one checked here: the two
-    sides naming *different* values, so a row written by hand in psql and a row
-    written through the ORM disagree. All 128 comparable columns agreed when
-    this check was added.
+    `alembic/env.py` leaves `compare_server_default` off, because it reports 127
+    columns where the database has a `DEFAULT` and the model only a client-side
+    `default=`. The failure that hides is the two naming *different* values.
     """
     from app.core.models import Base
     from app.model_registry import import_all_models
@@ -791,27 +764,9 @@ def _check_constraint_definitions(
 def validate_check_constraints(database: str) -> None:
     """Assert every CHECK constraint enforces the condition its model declares.
 
-    `alembic check` routes CHECK constraints through Alembic's
-    `checkconstraint_byname` comparison, which matches them by name and never
-    reads the expression. Rewriting a constraint's condition in a model while
-    keeping its name is therefore invisible: the database goes on enforcing the
-    old rule, autogenerate emits nothing, and the gate stays green.
-
-    Comparing the two expressions as text does not work, which is presumably
-    why Alembic does not try. PostgreSQL stores a parsed node and prints it
-    back normalised, so the model's `status IN ('pending', 'failed')` comes out
-    as `status::text = ANY (ARRAY['pending'::character varying, ...])` and no
-    string comparison survives it.
-
-    So both sides are put through that same deparser. Each model constraint is
-    added to its real table as `NOT VALID` (no row scan, and these tables are
-    empty anyway) under a marker name, every CHECK on the table is then read
-    back through `pg_get_constraintdef`, and the marked definitions are
-    compared with the ones that were already there. The whole thing runs in a
-    transaction that is always rolled back, so the database is untouched.
-
-    Constraints are matched on expression rather than on name, because the name
-    is the half `alembic check` already compares.
+    `alembic check` matches CHECK constraints by name and never reads the
+    expression, so a condition rewritten under an unchanged name is invisible.
+    Both sides go through PostgreSQL's deparser and match on expression, not name.
     """
     from sqlalchemy import CheckConstraint
 
@@ -876,14 +831,8 @@ def validate_metadata_drift(database: str, restored_database: str) -> None:
     """Assert the ORM models describe the migrated schema exactly.
 
     `alembic check` autogenerates against the live database and fails if it
-    would emit any operation, so a model edited without a revision is caught
-    here. It runs through `alembic/env.py`, which is what keeps the runtime
-    owned tables (APScheduler's job store, `alembic_version`) out of the
-    comparison — reimplementing that filter here would let the two disagree.
-
-    Both databases are checked. The restored copy is built by a different route
-    (pg_dump and pg_restore) than the migrated source, so agreement between them
-    means the result cannot vary with how the schema was produced.
+    would emit any operation; running it through `alembic/env.py` keeps the
+    runtime owned tables out. Both databases are checked, built by two routes.
     """
     for target in (database, restored_database):
         result = subprocess.run(
@@ -975,8 +924,6 @@ async def verify_application_database_access(database: str) -> None:
         # Every job type needs a configuration row, seeded by an incremental
         # migration. Without one the type is declared, registered, runnable —
         # and never scheduled, because the scheduler iterates configurations.
-        # This replaced a hardcoded row count, which a new job type satisfied
-        # by simply being absent.
         from app.features.jobs.models import JobType
 
         unconfigured = {member.value for member in JobType} - configured_job_types
@@ -999,13 +946,8 @@ async def verify_expired_key_turns_health_missing(database: str) -> None:
     """Drive the real credential sync over the real foreign key.
 
     `riot_credential_health.db_key_id` is `ON DELETE SET NULL`, so deleting an
-    aged key blanks the binding as a side effect. A version of this code that
-    deleted before comparing left health reading `valid` for a credential that
-    no longer existed -- and because no client can be built without a key, no
-    Riot response could ever correct it. Mocked sessions cannot show that: it
-    only exists when a real foreign key fires. The fixture seeded for revision
-    0019 is already the failing shape, an aged key with `valid` health bound
-    to it.
+    aged key blanks the binding as a side effect. Only a real foreign key shows
+    that. The 0019 fixture is already the failing shape.
     """
     original_database = os.environ.get("POSTGRES_DB")
     os.environ["POSTGRES_DB"] = database
@@ -1064,8 +1006,7 @@ def main() -> int:
         run_upgrade(database, "20260820_0018")
         # Before head on purpose: revision 0030 gives the analysis tables an
         # owning account, and rows seeded here have none to give, so it empties
-        # them. Left after head this check would read zero rows -- and the
-        # assertion it makes would then be about nothing at all.
+        # them. Left after head this check would read zero rows.
         validate_revision_0017_rewrote_the_seeded_basis(database)
         seed_riot_keys_revision_0019_must_collapse(database)
         run_upgrade(database)

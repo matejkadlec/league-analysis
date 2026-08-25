@@ -8,15 +8,9 @@ export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
 /**
- * Every optional-storage key the app writes, owned here rather than by the
- * features that write them.
- *
- * They cannot live with their writers: `match-history-preferences.ts` already
- * imports `writeOptionalStorage` from this module, so importing the keys back
- * would be a cycle. Owning them here is what lets `OPTIONAL_STORAGE_KEYS`
- * below be *derived* rather than hand-listed -- and that list is what
- * withdrawing consent erases, so a key renamed at its writer and missed here
- * would go on being written and stop being cleared, silently.
+ * Every optional-storage key the app writes, owned here rather than by its
+ * writer: `match-history-preferences.ts` imports from this module, so the
+ * other direction is a cycle. Withdrawing consent erases the derived list.
  */
 export const HEADER_MESSAGES_CLOSED_STORAGE_KEY = "header_messages_closed:v1";
 export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
@@ -148,11 +142,9 @@ export function clearOptionalBrowserStorage(): void {
     return;
   }
 
-  // Blocked site data makes every `localStorage` access throw a
-  // SecurityError, and this runs in a mount effect above every error
-  // boundary -- so an unguarded throw here unmounts the whole tree and hands
-  // the visitor a blank page. Failing to clear optional storage is not worth
-  // a dead site, and if storage is blocked there is nothing stored to clear.
+  // Blocked site data makes every `localStorage` access throw, and this runs
+  // in a mount effect above every error boundary: an unguarded throw unmounts
+  // the whole tree and hands the visitor a blank page.
   try {
     for (const key of OPTIONAL_STORAGE_KEYS) {
       window.localStorage.removeItem(key);
@@ -163,9 +155,8 @@ export function clearOptionalBrowserStorage(): void {
 }
 
 // Optional storage is only readable and writable with current "all" consent,
-// and every access needs the same SecurityError guard as
-// `clearOptionalBrowserStorage` above -- the `window.localStorage` getter
-// itself throws for a visitor with site data blocked.
+// and every access needs the same SecurityError guard -- the
+// `window.localStorage` getter itself throws when site data is blocked.
 export function readOptionalStorage(key: string): string | null {
   if (!isBrowser() || !canUseOptionalStorage()) {
     return null;

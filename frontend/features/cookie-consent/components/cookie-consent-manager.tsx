@@ -41,19 +41,9 @@ export function CookieConsentManager() {
   const [isSaving, setIsSaving] = useState(false);
 
   const lastSyncedKeyRef = useRef<string | null>(null);
-  // Who answered the banner in this page session, if anyone: the account id
-  // at the time, or `null` for a visitor who was not signed in. Answering as
-  // a visitor and then signing in is an ordinary path and that choice really
-  // is theirs, which is what tells it apart from a cookie left behind by
-  // whoever used the browser before. (There is no self-service registration:
-  // `/join-us` redirects, so this is a sign-in, not a sign-up.)
-  //
-  // The id matters, not merely the fact of a choice. `logout` navigates with
-  // `router.push`, and this component is mounted in the root layout, so it is
-  // never remounted across a sign-out: a bare boolean set by account A would
-  // still be set when account B signed in on the next screen, and B would get
-  // A's level written to its audit trail -- the very record this reconcile
-  // exists to prevent.
+  // Who answered the banner in this page session: the account id at the time,
+  // or `null` for a visitor. This component is never remounted across a
+  // sign-out, so a bare boolean would write A's level into B's audit trail.
   const choiceOwnerRef = useRef<{ userId: number | null } | null>(null);
 
   const syncConsentForUser = useCallback(
@@ -79,7 +69,7 @@ export function CookieConsentManager() {
     [],
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Consent state initializes from the browser cookie after hydration. */
+  /* oxlint-disable react/set-state-in-effect -- Consent state initializes from the browser cookie after hydration. */
   useEffect(() => {
     const storedConsent = readCookieConsentFromBrowser();
 
@@ -97,7 +87,7 @@ export function CookieConsentManager() {
     notifyCookieConsentUpdated(storedConsent);
     setIsReady(true);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  /* oxlint-enable react/set-state-in-effect */
 
   useEffect(() => {
     const openPreferences = () => setIsBannerOpen(true);
@@ -114,18 +104,9 @@ export function CookieConsentManager() {
     };
   }, []);
 
-  // Reconcile the browser cookie against the account that is actually signed
-  // in.
-  //
-  // Browser-level is right for a visitor -- the banner has to work before
-  // anyone signs in, and the storage it gates is this browser's. It stops
-  // being right the moment a second account signs in on the same browser: the
-  // cookie jar is shared, so that account inherited the first one's choice
-  // without ever being asked, and this effect used to write the inherited
-  // choice into its own audit trail as `consent_source: "banner"` -- a record
-  // that somebody clicked a banner they never saw. Consent is a statement by
-  // a person, so the server's per-account record is the only thing that holds
-  // one, and it wins here.
+  // Reconcile the browser cookie against the account actually signed in. The
+  // jar is shared, so a second account inherits the first's choice, which must
+  // not be recorded as `consent_source: "banner"`.
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       return;
@@ -153,8 +134,7 @@ export function CookieConsentManager() {
       if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
         // This account has decided before, so its record is the answer
         // whatever the browser is carrying. `writeCookieConsent` restamps the
-        // cookie's own timestamp; the true `consented_at` lives on the record
-        // this just read, which is what the audit trail is.
+        // cookie's timestamp; the true `consented_at` lives on the record.
         const adopted = writeCookieConsent(stored.consent_level);
         if (stored.consent_level !== "all") {
           clearOptionalBrowserStorage();

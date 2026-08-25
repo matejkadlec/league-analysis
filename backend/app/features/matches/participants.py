@@ -259,12 +259,9 @@ class MatchParticipant(Base):
     )
 
 
-# Create composite indexes for common queries
-# No `idx_participants_match_puuid`: `uq_match_participants_puuid_match` is a
-# unique constraint on the same two columns in the same order, and its backing
-# index already serves every lookup a plain one would. For the same reason
-# `match_id` carries no `index=True` -- it leads both the primary key and that
-# unique constraint.
+# Composite indexes for common queries. No `idx_participants_match_puuid`:
+# `uq_match_participants_puuid_match` is unique on the same two columns and
+# already serves them, as the primary key does for `match_id`.
 
 Index(
     "idx_participants_champion_win", MatchParticipant.champion_id, MatchParticipant.win

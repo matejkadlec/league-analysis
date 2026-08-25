@@ -4,9 +4,7 @@ import type { AuthLoginError } from "../types";
 
 /**
  * Said by the sign-in form and by every gated surface a deactivated session
- * still reaches, so it is written once. The two used to disagree on whether
- * the administrator could restore the account; this is the wording that says
- * what the visitor can actually do about it.
+ * still reaches, so it is written once.
  */
 export const ACCOUNT_INACTIVE_MESSAGE =
   "This account is inactive. Contact an administrator to restore access.";
@@ -14,12 +12,9 @@ export const ACCOUNT_INACTIVE_MESSAGE =
 export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * Deadline for the session probe and the refresh that follows it.
- *
- * Shorter than the login deadline on purpose: a sign-in is a deliberate act
- * whose result is worth waiting for, while this runs before the page can draw
- * anything. A stalled connection here holds every gated surface at `null`, so
- * failing quickly and saying so beats waiting quietly.
+ * Deadline for the session probe and the refresh that follows it. Shorter
+ * than the login deadline: this runs before the page can draw anything, and a
+ * stalled connection holds every gated surface at `null`.
  */
 export const AUTH_PROBE_TIMEOUT_MS = 10_000;
 

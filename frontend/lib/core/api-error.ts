@@ -24,13 +24,8 @@ export interface ApiError {
 
 /**
  * A rejected request carrying the normalized error rather than only its text.
- *
- * Throwing a plain `Error` built from `result.error.message` loses
- * `kind`/`code`/`status`, so the
- * `QueryCache` handler in `components/providers.tsx` re-normalizes a bare
- * `Error` into `kind: "unexpected"` and shows the generic fallback instead of
- * the curated message. `normalizeApiError` unwraps this class back to the
- * original `ApiError`.
+ * A plain `Error` loses `kind`/`code`/`status`, so the `QueryCache` handler
+ * re-normalizes it to `kind: "unexpected"` and shows the generic fallback.
  */
 export class ApiRequestError extends Error {
   readonly apiError: ApiError;
@@ -53,17 +48,9 @@ const TECHNICAL_MESSAGE_PATTERN =
   /(?:internal server|failed to fetch|network error|err_[a-z_]+|traceback|stack trace|sql(?:alchemy)?|postgres|axios|https?:\/\/|\/api\/|riotapierror|\bat\s+[A-Za-z_$][\w$]*\s*\(|rgapi-[A-Za-z0-9-]+)/i;
 
 /**
- * The structured `detail` FastAPI's `http_error` builds, read defensively.
- *
- * Every field was spelled out three times: once in an interface, once in a
- * hand-written reader, and once more in `sanitizedDetails` below, which
- * rebuilt all five to rewrite one. A sixth field added to the interface
- * compiled while the reader silently never populated it.
- *
- * Per-field `.catch(undefined)` keeps the old semantics exactly -- a wrong
- * type reads as absent rather than failing the whole detail -- and the
- * object-level `.catch({})` covers the shape FastAPI returns for a 422, where
- * `detail` is an array of validation errors and not an object at all.
+ * FastAPI's structured `detail`, read defensively. Per-field
+ * `.catch(undefined)` makes a wrong type read as absent; the object-level
+ * `.catch({})` covers the 422 shape, where `detail` is an array.
  */
 const StructuredErrorDetailSchema = z
   .object({
@@ -283,8 +270,7 @@ export function normalizeApiError(error: unknown): ApiError {
 
     // A reachability failure may point at this application's own backend, and
     // never at the user's internet connection. The browser reached this code,
-    // so their connection demonstrably works; blaming it sends people to
-    // reboot a router over a service outage.
+    // so blaming their connection sends people to reboot a router.
     return {
       kind: "network",
       code: "NETWORK_ERROR",

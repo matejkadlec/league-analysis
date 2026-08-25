@@ -15,12 +15,9 @@ from starlette.requests import Request
 def undecorated[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
     """Return the endpoint that ``rate_limit`` wrapped.
 
-    The decorator preserves the endpoint's signature for callers, but the
-    wrapper it installs wants limiter state and a fully formed ASGI request
-    that these unit tests have no reason to build. ``functools.wraps`` leaves
-    the original coroutine function on ``__wrapped__``, which no ``Callable``
-    type describes, so the unwrapping is dynamic and the signature is restated
-    here — it is the one the decorator is contracted to keep.
+    The wrapper wants limiter state and a fully formed ASGI request that these
+    unit tests have no reason to build. ``__wrapped__`` is not described by any
+    ``Callable`` type, so the unwrapping is dynamic and the signature restated.
     """
     return cast(Callable[P, R], inspect.unwrap(endpoint))
 

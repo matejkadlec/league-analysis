@@ -28,6 +28,7 @@ import {
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 import { jobRecentExecutionsQueryOptions } from "../jobs-query";
+import { cn } from "@/lib/core/utils";
 import { useJobCardControls } from "./use-job-card-controls";
 
 interface JobCardProps {
@@ -107,7 +108,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
                 className="icon-circle relative"
               >
                 <FlaskConical
-                  className={`h-3.5 w-3.5${isTestRunning ? " opacity-40" : ""}`}
+                  className={cn("h-3.5 w-3.5", isTestRunning && "opacity-40")}
                 />
                 {isTestRunning && (
                   <LoaderCircle className="absolute inset-0 m-auto h-6 w-6 animate-spin text-primary-foreground" />

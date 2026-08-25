@@ -11,20 +11,9 @@ import { allSourceFiles, allTestFiles } from "./source-scan-support";
 
 import { MATCH_HISTORY_PAGE_SIZES } from "../features/matches/match-history-pagination";
 
-/**
- * Every zod schema must accept everything its OpenAPI counterpart may send.
- *
- * `backend/tests/test_model_schema_alignment.py` guards column -> Pydantic.
- * This is the other half, Pydantic -> zod, and it is the direction that has
- * broken twice: eight rune IDs that were `number` against an `integer`, and
- * `detailed_logs`, where Pydantic serialised an absent `X | None` as `null`
- * while zod said `.optional()` -- which accepts `undefined` and rejects
- * `null`. Both passed tsc, eslint and the whole suite.
- *
- * Needs `OPENAPI_JSON` pointing at `backend/scripts/dump_openapi.py` output;
- * `test.sh` produces it. Without it there is nothing to compare against, so
- * the check skips rather than pretending to pass.
- */
+// Pydantic -> zod, the half `backend/tests/test_model_schema_alignment.py`
+// does not cover and the direction that has broken twice. Needs `OPENAPI_JSON`
+// from `backend/scripts/dump_openapi.py`, which `./test.sh` supplies.
 
 /** Schema pairs the FooSchema <-> Foo/FooResponse heuristic cannot see. */
 const ALIASES: Record<string, string> = {
@@ -135,11 +124,9 @@ const CALL_SITE =
 const ANY_LITERAL = /(?:`([^`]*)`|"([^"]*)"|'([^']*)')/;
 
 /**
- * Reduce a call-site path to the shape OpenAPI writes.
- *
- * `${puuid}` becomes `{}`, matching a `{puuid}` parameter; an interpolation
- * that produces a query string (`${force ? "?force=true" : ""}`) is dropped
- * whole, because a query is not part of the path.
+ * Reduce a call-site path to the shape OpenAPI writes: `${puuid}` becomes
+ * `{}`, matching a `{puuid}` parameter, while an interpolation producing a
+ * query string is dropped whole, because a query is not part of the path.
  */
 function normalizeCallPath(literal: string): string {
   return literal
@@ -150,12 +137,9 @@ function normalizeCallPath(literal: string): string {
 }
 
 /**
- * The API path a call site names, or null when it names something else.
- *
- * The validated helpers and the axios instance take a path relative to the
- * prefix; `fetch` takes an absolute one, sometimes behind `${API_BASE_URL}`,
- * and is also used for page routes and static assets, which is why only a
- * literal carrying the prefix counts as an API call there.
+ * The API path a call site names, or null when it names something else. The
+ * helpers take a path relative to the prefix; `fetch` also fetches page routes
+ * and static assets, so only a literal carrying the prefix counts there.
  */
 function apiPathFrom(helper: string, literal: string): string | null {
   const prefixed = literal.indexOf(API_PREFIX);
@@ -189,7 +173,6 @@ function calledApiPaths(): Map<string, string[]> {
 
 /**
  * The helpers whose next argument is a query-parameter object, by HTTP method.
- *
  * `validatedPost` takes one too, in fourth position after the body; no call
  * site uses it, so it is not read here.
  */
@@ -232,16 +215,9 @@ function hasFurtherArgument(after: string): boolean {
 }
 
 /**
- * The query names every call site sends.
- *
- * One entry per call site, not per endpoint. Keying by endpoint and keeping
- * the first hit is how a real regression got through: two call sites ask
- * `/matches/player/{}/stats`, they sent different names, and the one the walk
- * reached second was discarded unread.
- *
- * Both spellings count: the object literal, and any `?name=` written into the
- * path itself. Keys of a nested object are not parameters, so one level of
- * nesting is stripped before the names are read.
+ * The query names every call site sends -- one entry per call site, not per
+ * endpoint, since keying by endpoint drops all but one site on a shared path.
+ * Both the object literal and a `?name=` written into the path count.
  */
 function calledQueryParams(): QueryCall[] {
   const calls: QueryCall[] = [];
@@ -267,11 +243,10 @@ function calledQueryParams(): QueryCall[] {
         // Comments first. A `//` line inside the object leaves the first key
         // with no `{` or `,` in front of it, so neither pattern below matches
         // and the site reports no names -- green, and checking nothing.
-        //
+
         // Nested braces are NOT stripped. `QueryParams` admits only string,
-        // number and boolean, so an object cannot be a value here -- every
-        // brace inside the argument belongs to a conditional spread, and
-        // `...(x !== undefined && { platform: x })` names a real parameter.
+        // number and boolean, so every brace inside the argument belongs to a
+        // conditional spread, which names a real parameter.
         const top = body
           .slice(1, -1)
           .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -284,10 +259,9 @@ function calledQueryParams(): QueryCall[] {
         key: `${method} ${normalizeCallPath(apiPath)}`,
         names,
         file: `${relative(process.cwd(), file)}`,
-        // A params argument this cannot read is not the same as no params.
-        // The site that broke passed a ternary of two object literals and was
-        // recorded as sending nothing, which is the shape that passes.
-        // A trailing comma before `)` is not an argument.
+        // A params argument this cannot read is not the same as no params: a
+        // ternary of two object literals reads as sending nothing, which
+        // passes. A trailing comma before `)` is not an argument.
         resolved: body !== null || !hasFurtherArgument(after),
       });
     }
@@ -297,27 +271,24 @@ function calledQueryParams(): QueryCall[] {
 
 const openApiPath = process.env.OPENAPI_JSON;
 
-describe("zod against the OpenAPI contract", () => {
-  if (!openApiPath) {
-    // Not a silent pass: `npm test` alone has no OpenAPI document to compare
-    // against, and inventing one would be checking zod against itself.
-    it.skip("needs OPENAPI_JSON, which ./test.sh supplies", () => {});
-    return;
-  }
-
-  const document = JSON.parse(readFileSync(openApiPath, "utf8")) as {
+// Reported as skipped rather than passed: `npm test` alone has no document to
+// compare against, and inventing one would check zod against itself. The empty
+// stand-in only feeds collection, which vitest runs for a skipped suite too.
+describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", () => {
+  const document = (
+    openApiPath === undefined
+      ? { components: { schemas: {} }, paths: {} }
+      : JSON.parse(readFileSync(openApiPath, "utf8"))
+  ) as {
     components: { schemas: Record<string, JsonSchema> };
     paths: Record<string, unknown>;
   };
   const apiSchemas = document.components.schemas;
 
   /**
-   * Every path the frontend calls must be one the backend serves.
-   *
-   * Nothing else checks this: a route renamed or moved on the backend leaves
-   * every zod schema, type and test here green, and the call 404s at runtime
-   * for whoever opens the page. The paths in this repo are template literals
-   * over a helper, so they are readable statically.
+   * Nothing else checks this: a route renamed on the backend leaves every zod
+   * schema, type and test here green, and the call 404s at runtime for whoever
+   * opens the page.
    */
   it("asks only for paths the API serves", () => {
     const served = new Set(
@@ -338,20 +309,9 @@ describe("zod against the OpenAPI contract", () => {
   });
 
   /**
-   * The page-size picker offers a fixed list; the endpoint bounds what it will
-   * accept. Nothing connected them, and the largest option is exactly the
-   * endpoint's ceiling -- so the next option added to the picker is a 422 on a
-   * real click, and lowering the bound on the backend is the same 422 from the
-   * other side. Both sides are hand-maintained lists of numbers.
-   */
-  /**
-   * Query parameters, in both directions.
-   *
-   * The failure this catches is quieter than a wrong request body. FastAPI
-   * rejects a body field it does not declare with a 422, but a *query* name it
-   * does not declare is dropped and the parameter's default used instead -- so
-   * a renamed `queues` or a mistyped `active_only` returns 200 and answers a
-   * different question. A required one that is missing is the loud 422.
+   * Quieter than a wrong request body: FastAPI drops an undeclared *query*
+   * name and uses the parameter's default, so a renamed one returns 200 and
+   * answers a different question. A missing required one is the loud 422.
    */
   it("names only query parameters the API declares", () => {
     const declared = new Map<
@@ -414,6 +374,11 @@ describe("zod against the OpenAPI contract", () => {
     expect(problems).toEqual([]);
   });
 
+  /**
+   * Two hand-maintained lists of numbers with nothing connecting them, and the
+   * largest option is exactly the endpoint's ceiling -- so a new picker option,
+   * or a lowered backend bound, is a 422 on a real click.
+   */
   it("offers only page sizes the match endpoint accepts", () => {
     const detailed = document.paths[
       `${API_PREFIX}/matches/player/{puuid}/detailed`
@@ -477,23 +442,16 @@ describe("zod against the OpenAPI contract", () => {
   );
 
   it("finds the request bodies to check", () => {
-    // Signal first: these pair by name, so a renamed schema drops out of the
-    // list silently and every rule below would pass by having nothing to run.
-    // The floor is the count, not the count minus slack: slack is exactly the
-    // room a rename needs to go unnoticed, and a body legitimately added only
-    // ever raises this.
+    // These pair by name, so a renamed schema drops out silently and every
+    // rule below passes by having nothing to run. The floor is the exact count,
+    // not the count minus slack -- slack is room for a rename to go unnoticed.
     expect(requestPairs.length).toBeGreaterThanOrEqual(11);
   });
 
   /**
-   * The other direction, which only a request needs.
-   *
-   * "Accepts everything the API sends" is the right rule for a response and
-   * the wrong one for a body: there, a field zod lacks is a required field the
-   * frontend never sends, and a field zod has and the API does not is one
-   * FastAPI either ignores or rejects outright. Both are a 422 on a real
-   * click, and both used to be invisible -- `validatedPost` takes the body as
-   * `unknown`, so nothing in the type system looked at it either.
+   * The other direction, which only a request needs: a field zod lacks is one
+   * the frontend never sends, a field the API lacks is one FastAPI rejects.
+   * `validatedPost` takes the body as `unknown`, so tsc sees neither.
    */
   it.each(requestPairs.map(([name, apiName]) => [name, apiName]))(
     "%s sends exactly what %s accepts",
@@ -506,10 +464,8 @@ describe("zod against the OpenAPI contract", () => {
       );
       const required = (api.required as string[] | undefined) ?? [];
       // Required-ness, not presence: under `io: "input"` an `.optional()` zod
-      // field still appears in `properties`, so a field the API requires and
-      // zod marks optional would read as present and 422 on the click that
-      // omits it. Zod may require more than the API does -- sending an
-      // optional field is always legal -- so this runs one way only.
+      // field still appears in `properties`. Zod requiring more is always
+      // legal, so this runs one way only.
       const zodRequired = new Set(
         (resolve(zodJson, {}).required as string[] | undefined) ?? [],
       );
@@ -526,12 +482,9 @@ describe("zod against the OpenAPI contract", () => {
   );
 
   it("names every platform the API accepts", () => {
-    // Not a schema pair, and `kinds()` below could not check it if it were:
-    // it reduces both a `$ref`-to-enum and a `z.enum` to "string". This is
-    // the only thing tying the frontend's platform vocabulary to the API's.
-    // A platform added on the backend and missing from the display-name table
-    // now fails `PlayerSchema` for every player on it, rather than merely
-    // going unoffered by the picker.
+    // The only thing tying the frontend's platform vocabulary to the API's:
+    // `kinds()` below reduces both to "string". A platform missing from the
+    // display-name table fails `PlayerSchema` for every player on it.
     const platform = apiSchemas.Platform as { enum?: string[] } | undefined;
     expect(platform?.enum, "OpenAPI has no Platform enum").toBeTruthy();
     expect(new Set(Object.keys(PLATFORM_DISPLAY_NAMES))).toEqual(
@@ -566,21 +519,17 @@ describe("zod against the OpenAPI contract", () => {
         if (zr.const !== undefined && zr.const === ar.const) continue;
 
         // `kinds()` reduces an enum to the "string" it also declares, so
-        // membership drift used to be invisible here: a Python `Literal`
-        // gaining a member against a `z.enum` that did not compared equal.
-        // A wider zod stays legal; a narrower one is the failure.
-        //
+        // membership drift is invisible to it. A wider zod stays legal; a
+        // narrower one is the failure.
+
         // ponytail: reads the enum off the direct property node only, so a
-        // nullable enum (`anyOf: [enum, null]`), an enum inside an array, and
-        // an enum in a discriminated-union arm are all still invisible. No
-        // paired field is any of those today.
+        // nullable enum, one inside an array, and one in a union arm are all
+        // invisible. Walk those shapes when a paired field becomes one.
         const zodEnum = zr.enum as unknown[] | undefined;
         const apiEnum = ar.enum as unknown[] | undefined;
-        // A closed set on the API against an open `z.string()` here. Not a
-        // parse failure -- it is worse than that, because the value reaches
-        // React as a plain string and every consumer has to carry a branch for
-        // a member that cannot occur. `tier` was this, and `getRankColors`
-        // kept a grey fallback for it.
+        // A closed set on the API against an open `z.string()` here. Worse than
+        // a parse failure: the value reaches React as a plain string and every
+        // consumer carries a branch for a member that cannot occur.
         if (apiEnum && !zodEnum) {
           problems.push(
             `${field}: API sends one of ${apiEnum.length} enum members, zod says string`,
@@ -607,11 +556,9 @@ describe("zod against the OpenAPI contract", () => {
             `${field}: API may send null, zod does not accept null`,
           );
         }
-        // And the mirror. A zod field that accepts a null the API cannot send
-        // is a field whose absence no longer fails: five `core.matches`
-        // columns were NOT NULL in the DDL, `| None` in the response model and
-        // `.optional().nullable()` here, so renaming any of them on the
-        // backend would have left every parse in this suite green.
+        // And the mirror: a zod field accepting a null the API cannot send is
+        // a field whose absence no longer fails, so renaming the column behind
+        // it leaves every parse green.
         if (!apiKinds.has("null") && zodKinds.has("null")) {
           problems.push(
             `${field}: zod accepts null, API never sends it -- drop .nullable()`,
@@ -626,12 +573,9 @@ describe("zod against the OpenAPI contract", () => {
   it.each(pairs.map(([name, apiName]) => [name, apiName]))(
     "%s knows every value %s can send",
     (name) => {
-      // `kinds()` cannot do this: it reduces both a `$ref`-to-enum and a
-      // `z.enum` to "string", so two enums agreeing on being strings is all
-      // it ever checked. A member added on the backend and missing here fails
-      // the zod parse for every response carrying it -- an error toast, not a
-      // 422, and nothing in the suite would have said so. The hand-written
-      // `Platform` check above is the case this generalises.
+      // `kinds()` cannot do this: it reduces a `$ref`-to-enum and a `z.enum`
+      // alike to "string". A member missing here fails the zod parse for every
+      // response carrying it -- an error toast, not a 422.
       const [, apiName, zodJson] = pairs.find(([n]) => n === name)!;
       const zodEnums = enumFieldsOf(zodJson, {});
       const apiEnums = enumFieldsOf(apiSchemas[apiName], apiSchemas);
@@ -660,9 +604,8 @@ describe("zod against the OpenAPI contract", () => {
 
   it("compares enough enum fields to be worth trusting", () => {
     // The check above passes by finding nothing if either extractor stops
-    // recognising an enum -- `$ref` resolution, the `anyOf` an optional field
-    // is wrapped in, or whatever `z.toJSONSchema` emits next major version.
-    // So assert on what it CHECKED, not on it having found no problems.
+    // recognising an enum, so assert on what it CHECKED rather than on it
+    // having found no problems.
     const compared = pairs.flatMap(([, apiName, zodJson]) => {
       const zodEnums = enumFieldsOf(zodJson, {});
       return [...enumFieldsOf(apiSchemas[apiName], apiSchemas).keys()].filter(
@@ -676,20 +619,9 @@ describe("zod against the OpenAPI contract", () => {
   });
 });
 
-/**
- * `test.sh` runs the OpenAPI-backed checks as `npm test -- --run alignment`,
- * and every one of them skips itself when `OPENAPI_JSON` is unset. A file that
- * reads the document but is named outside that filter therefore does not fail
- * the gate -- it passes by comparing nothing, which is what
- * `tests/riot-id-alignment.test.ts` did from the day it was written until
- * 2026-08-21. This holds the naming convention the gate depends on.
- *
- * Scope, stated rather than implied: every `*.test.ts`/`*.test.tsx` file in
- * the project, including ones colocated beside the code they cover, that names
- * `OPENAPI_JSON` itself. A test that reached the document only through a
- * shared helper would carry no such literal and would not be caught -- no such
- * helper exists, and writing one is the way to defeat this check.
- */
+// `./test.sh` selects these checks by the `alignment` filter, so a reader of
+// the document named outside it passes by comparing nothing. Scope is every
+// test file naming `OPENAPI_JSON` itself, not one reaching it via a helper.
 describe("the gate reaches every test that reads the OpenAPI document", () => {
   it("names every OPENAPI_JSON reader so the alignment filter selects it", () => {
     const strays = allTestFiles()

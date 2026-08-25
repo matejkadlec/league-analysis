@@ -11,9 +11,8 @@ import {
 
 const scrollIntoView = vi.fn();
 
-// Module level, exactly as `app/rank-manipulation/page.tsx` and
-// `app/player-overview/page.tsx` declare theirs: an array literal rebuilt on
-// each render is a new dependency every time, which re-runs the effect and
+// Module level, exactly as the pages declare theirs: an array literal rebuilt
+// on each render is a new dependency every time, which re-runs the effect and
 // hides whether the observer does anything.
 const ITEMS: SectionQuickNavigationItem[] = [
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
@@ -130,11 +129,9 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("notices a section that arrives from outside React", async () => {
-    // The test above re-renders, and a re-render re-runs the effect on its
-    // own -- which is why it passed with the observer deleted. Production
-    // passes a module-level `items`, so its identity never churns and the
-    // observer is the only thing that can deliver a late section. This adds
-    // the node without React's help so nothing else can explain the update.
+    // The test above re-renders, and a re-render re-runs the effect on its own --
+    // which is why it passed with the observer deleted. This adds the node without
+    // React's help, so nothing else can explain the update.
     const user = userEvent.setup();
     render(<Page withResult={false} />);
     await user.hover(screen.getByTestId("section-quick-navigation"));
@@ -149,9 +146,8 @@ describe("SectionQuickNavigation", () => {
 
   it("does no watching while the panel is shut", async () => {
     // The observer is on `document.body` with `subtree: true`, so it sees
-    // every DOM change anywhere on the page -- on a surface that polls, that
-    // is a callback several times a minute for a list nobody can read while
-    // it is collapsed.
+    // every DOM change on the page -- on a surface that polls, a callback
+    // several times a minute for a list nobody can read while collapsed.
     const user = userEvent.setup();
     const observe = vi.spyOn(MutationObserver.prototype, "observe");
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");

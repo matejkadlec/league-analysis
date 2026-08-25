@@ -17,12 +17,9 @@ ENV_FILE = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=ENV_FILE)
 
 
-# A present-but-blank variable is a missing one, not an empty value: a blank
-# POSTGRES_HOST failing at startup beats it failing as a connection error at
-# first query. `env_ignore_empty` covers `""` for the whole model -- including
-# `postgres_port`, which a hand-written validator over the four `str` fields
-# could not reach -- and `pattern` covers the whitespace-only case it does not,
-# since pydantic's `pattern` searches rather than matches in full.
+# A present-but-blank variable is a missing one, not an empty value. `env_ignore_empty`
+# covers `""` model-wide, including the int `postgres_port`; `pattern` covers
+# whitespace-only, and pydantic's `pattern` searches rather than matches in full.
 RequiredEnvStr = Annotated[str, Field(pattern=r"\S")]
 
 
@@ -59,9 +56,7 @@ class Settings(BaseSettings):
 
     # Declared above `jwt_secret_key` on purpose: pydantic validates fields in
     # declaration order, and `validate_jwt_secret` reads this one out of
-    # `info.data`. No default -- an absent ENVIRONMENT used to read as "dev",
-    # which made every `settings.environment != "dev"` guard decorative
-    # against the one case that matters, a missing configuration.
+    # `info.data`. No default -- an absent ENVIRONMENT would read as "dev".
     environment: Literal["dev", "test", "production"]
 
     # JWT Authentication Configuration
@@ -136,10 +131,8 @@ class Settings(BaseSettings):
     def validate_jwt_secret(cls, v: str, info: ValidationInfo) -> str:
         """Validate JWT secret key meets security requirements.
 
-        Enforces:
-        - Minimum length of 32 characters (256 bits for HS256 per RFC 7518)
-        - No default/placeholder values in production
-        - Fails fast on startup with clear error messages
+        Enforces a 32-character minimum (256 bits for HS256 per RFC 7518) and
+        rejects default/placeholder values in production.
 
         Raises:
             ValueError: If secret is weak and environment is production

@@ -88,8 +88,7 @@ describe("the analyzed player scope", () => {
   it("seeds the default through the router, not a raw history write", async () => {
     // `window.history.replaceState` puts the PUUID in the address bar without
     // telling the router, so every other `useSearchParams` reader keeps
-    // answering "no player" while the URL says otherwise. Seeding has to be a
-    // navigation for the page and the address bar to agree.
+    // answering "no player". Seeding has to be a navigation.
     const { result } = renderHookWithQueryClient(() => useAnalyzedPlayer());
 
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));

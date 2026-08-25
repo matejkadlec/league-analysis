@@ -1,32 +1,8 @@
 """Matchmaking analysis service for analyzing League of Legends matchmaking fairness.
 
-Calculates avg winrate of allies vs enemies across the current player's last 10
-ranked matches. For each of the ~91 unique players in those matches, fetches their
-last 10 ranked matches (at the time the match with current player was played) to
-calculate their individual winrate.
-
-Analysis Flow:
-1. Fetch current player's last 10 ranked match IDs from API (no endTime — actual latest)
-2. For each spine match (10 total):
-   a. Use THIS match's game_start_timestamp as the anchor for this match
-   b. Get all 10 participants in this match
-   c. For each participant, get their last 10 ranked matches with endTime=anchor
-   d. Calculate each participant's winrate from those matches
-   e. Average team winrates and enemy winrates for this match
-3. Final: average of the 10 per-match team/enemy averages
-
-Key: Each match has its own anchor timestamp, ensuring historical accuracy
-
-DB-First Strategy:
-- Check DB for match data (fully_analyzed=true) before calling Riot API
-- Every match fetched from API is stored in DB for future use
-- This can save hundreds of API calls if matches are already in DB
-
-Rate Limiting:
-- The Riot client's own limiter waits out the windows it reads from Riot's
-  rate-limit response headers; a 429 that still lands is caught here
-- When rate limited, persists rate_limit_reset_at for lifecycle diagnostics
-- Waits and retries automatically (up to 30 minutes total)
+Averages ally against enemy winrates over the current player's last 10 ranked
+matches. Each spine match anchors its participants' own 10-match samples to that
+match's start timestamp. Matches are read from the DB before the Riot API.
 """
 
 import asyncio
@@ -83,10 +59,9 @@ MATCHES_TO_ANALYZE = 10
 MATCHES_FOR_WINRATE = 10
 MIN_MATCHES_REQUIRED = 10
 
-# Theoretical request maximum with an empty database: 1 call for the current
-# player's spine IDs, one match-ID list per other player, one match detail per
-# spine match, and each other player's remaining match details (1 of each
-# player's matches is the already-known spine match).
+# Theoretical request maximum with an empty database: the spine ID list, one
+# match-ID list per other player, one detail per spine match, and each other
+# player's remaining details (one of theirs is the known spine match).
 _OTHER_PLAYERS = MATCHES_TO_ANALYZE * 9
 THEORETICAL_MAX_REQUESTS = (
     (1 + _OTHER_PLAYERS)
@@ -161,11 +136,9 @@ def _build_completion_results(
 ) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
 
-    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict:
-    `_run_analysis_task` already persists a `failed` row for a raised error.
-    `matches_analyzed` is required and measured, not expected -- the UI prints
-    it as the basis of the verdict, and a shallow database reaches nothing
-    like the theoretical maximum.
+    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict.
+    `matches_analyzed` is measured, not expected -- the UI prints it as the
+    basis of the verdict, and a shallow database reaches nowhere near the max.
     """
     if not team_avgs or not enemy_avgs:
         raise MatchmakingAnalysisRuntimeError(
@@ -234,10 +207,8 @@ class MatchmakingAnalysisService:
         # only the background instance, built with its own tracked client,
         # ever reaches Riot.
         self.riot_client = riot_client
-        # The account this service answers for. See the identical note on
-        # `SmurfBoostDetectionService`: these were module-level WHERE helpers
-        # keyed on the player alone, which is how cancel and delete came to
-        # reach across accounts.
+        # The account this service answers for: every run WHERE clause is keyed
+        # on it, not on the player alone.
         self.user_id = user_id
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
@@ -280,10 +251,8 @@ class MatchmakingAnalysisService:
             existing = await self._get_active_analysis(puuid)
             if not existing:
                 # `commit_new_run` returns the IntegrityError rather than
-                # raising it, so there is no exception in flight here: a bare
-                # `raise` reached this line as `RuntimeError: No active
-                # exception to reraise`, hiding the constraint that actually
-                # failed.
+                # raising it, so no exception is in flight here and a bare
+                # `raise` would not surface the constraint that failed.
                 raise conflict
             logger.info("Attached after concurrent start", puuid=puuid)
             self._ensure_background_task(puuid, existing.created_at)
@@ -374,10 +343,6 @@ class MatchmakingAnalysisService:
         if not analysis:
             return None
 
-        # The same one-liner its two siblings use. What stood here restated
-        # `progress`/`total_puuids` -- both already computed fields on the
-        # response -- and re-listed all twelve fields by keyword, including a
-        # `requests_saved or 0` for a NOT NULL column.
         return MatchmakingAnalysisResponse.model_validate(analysis)
 
     async def get_analysis_history(
@@ -462,12 +427,9 @@ class MatchmakingAnalysisService:
                 service = MatchmakingAnalysisService(db, riot_client, self.user_id)
                 await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
-            # Deliberately leaves the persisted row active. This also fires when
-            # process shutdown cancels the task, and the documented contract is
-            # that a restart resumes the run with its completed progress intact;
-            # writing `cancelled` here would discard that work on every deploy.
-            # An explicit user cancellation is unaffected: `cancel_analysis`
-            # commits the terminal row before cancelling this task.
+            # Deliberately leaves the persisted row active: this also fires when
+            # process shutdown cancels the task, and a restart is contracted to
+            # resume with progress intact.
             logger.info("Background analysis task cancelled; persisted run left active")
             raise
         except Exception as e:
@@ -526,17 +488,11 @@ class MatchmakingAnalysisService:
         )
 
     async def _run_analysis(self, puuid: str, created_at: datetime) -> None:
-        """
-        Core analysis logic.
+        """Core analysis logic.
 
-        1. Fetch current player's last 10 ranked match IDs (no endTime — actual latest)
-        2. Ensure all spine matches are in DB
-        3. Pre-populate progress keys
-        4. For each spine match:
-           - Use that match's timestamp as anchor
-           - Calculate winrates for all 10 participants using that anchor
-           - Average team vs enemy winrates
-        5. Average the 10 per-match results
+        Each spine match anchors the winrate lookups for all 10 of its
+        participants to that match's own timestamp; the verdict is the average
+        of the 10 per-match team and enemy averages.
         """
         logger.info("Starting matchmaking analysis")
         self._reset_run_state(puuid, created_at)
@@ -574,11 +530,9 @@ class MatchmakingAnalysisService:
     ) -> None:
         """Guarded UPDATE of one active run, committed.
 
-        The maintenance check, the `_active_run_where` guard and the commit
-        were written out at four call sites; only the values ever differed.
-        Deliberately not used by `cancel_analysis`, which omits the
-        maintenance check on purpose, nor by `_finalize_completed_analysis`,
-        which reads the status back before it commits.
+        Deliberately not used by `cancel_analysis`, which omits the maintenance
+        check on purpose, nor by `_finalize_completed_analysis`, which reads the
+        status back before it commits.
         """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await guarded_run_update(
@@ -824,14 +778,11 @@ class MatchmakingAnalysisService:
         puuid: str,
         end_time_seconds: int,
     ) -> float | None:
-        """
-        Calculate a player's winrate from their ranked matches
+        """Calculate a player's winrate from their last 10 ranked matches
         ending before the anchor time.
 
-        Uses the last 10 ranked matches at that anchor time for every player.
-
-        DB-first: if we have ≥10 fully_analyzed ranked matches in DB, use those.
-        Otherwise fall back to API.
+        DB-first: uses the DB when it holds ≥10 fully_analyzed ranked matches
+        before the anchor, otherwise falls back to the API.
         """
         anchor_ms = end_time_seconds * 1000
 
@@ -970,13 +921,9 @@ class MatchmakingAnalysisService:
         """Run one Riot call under the shared rate-limit retry policy.
 
         Returns None when capacity is unavailable, the error is recoverable,
-        or retries are exhausted; `required=True` raises instead.
+        or retries are exhausted; `required=True` raises instead. These attempts
+        stack on the Riot client's own tenacity retry of 429/5xx.
         """
-        # These attempts stack on the Riot client's own tenacity retry of
-        # 429/5xx: the client may sleep through several server retry_afters
-        # inside one `fetch()` before this loop waits again. That is the
-        # intended posture for this long-running analysis — prefer eventually
-        # completing over failing fast.
         for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
             try:
                 result = await fetch()

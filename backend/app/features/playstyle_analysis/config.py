@@ -12,9 +12,7 @@ class TagConfig(TypedDict):
 
     Every tag carries the three presentation keys; the rest select which
     evaluator runs and what it compares against, which is why they are
-    `NotRequired`. Spelling them out is what makes a mistyped threshold in
-    `TAG_CONFIG` a type error rather than a tag that silently never fires --
-    a missing key reads as "criterion absent", so nothing else would notice.
+    `NotRequired`. Spelling them out makes a mistyped threshold a type error.
     """
 
     sentiment: Literal["positive", "negative", "neutral"]

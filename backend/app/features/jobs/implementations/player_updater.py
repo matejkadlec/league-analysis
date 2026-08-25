@@ -22,11 +22,9 @@ logger = structlog.get_logger(__name__)
 class PlayerUpdaterJob(BaseJob):
     """Job to update player profiles (game_name, tag_line, profile_icon_id, summoner_level).
 
-    This job calls:
-    - /lol/summoner/v4/summoners/by-puuid/{puuid} - for profile_icon_id and summoner_level
-    - /riot/account/v1/accounts/by-puuid/{puuid} - for game_name and tag_line
-
-    Should run less frequently (e.g., every 24 hours) as player profiles don't change often.
+    Calls summoner-v4 by-puuid (profile_icon_id, summoner_level) and
+    account-v1 by-puuid (game_name, tag_line). Should run infrequently
+    (e.g., every 24 hours) as player profiles don't change often.
     """
 
     recorded_errors_are_fatal = False

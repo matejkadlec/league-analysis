@@ -86,12 +86,9 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
         or 0,
         summoner1_id=participant.summoner1_id,
         summoner2_id=participant.summoner2_id,
-        # The column holds `dict[str, Any] | None` but the field is declared
-        # `RunesData | None`, and the raw dict is what the `mode="before"`
-        # validator `transform_runes` is there to convert. Pyright checks the
-        # call against the declared field type, which no pre-validator input
-        # ever matches, so this cast marks a validator boundary rather than
-        # silencing a real mismatch.
+        # The column holds `dict[str, Any] | None` while the field is declared
+        # `RunesData | None`; the `mode="before"` validator `transform_runes`
+        # converts the raw dict, so this cast marks a validator boundary.
         runes=cast(Any, participant.runes),
     )
 
@@ -100,14 +97,8 @@ def empty_team_stats(timeline: MatchTimeline | None) -> TeamStats:
     """Seed team objective totals from timeline rows when they exist.
 
     The running totals are the response model itself rather than a dict shaped
-    like it: every field below is a field of `TeamStats`, and the accumulators
-    that follow mutate it in place.
-
-    The six reads used to go through `getattr(timeline, "team_...")` helpers,
-    which return `Any`: the declared `int`/`int | None` was asserted, not
-    checked, so a typo in one of the six literals or a rename in `timeline.py`
-    type-checked clean and raised `AttributeError` at request time. The None
-    branch is what those helpers did, and matches `TeamStats`'s own defaults.
+    like it: the accumulators that follow mutate it in place. The None branch
+    matches `TeamStats`'s own defaults.
     """
     if timeline is None:
         return TeamStats(kills=0, deaths=0, assists=0)

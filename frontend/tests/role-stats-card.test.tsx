@@ -55,17 +55,9 @@ function iconSources(): string[] {
 
 describe("the role performance card", () => {
   it("gives every lane the backend can send its own icon", () => {
-    // Two maps face each other across the API: the backend turns Riot's
-    // `UTILITY` into `Support`, and this card turns `Support` back into
-    // `position-utility.svg`. Neither side names the other, and the card's
-    // lookup ends in `|| position-middle.svg`, so renaming a lane on either
-    // side does not fail -- it silently draws the mid icon on every support
-    // row, under alt text that still reads "Support".
-    //
-    // Distinctness is what catches that. Five names must produce five
-    // different icons; any single break collapses two of them onto the
-    // fallback. Asserting "not the fallback" cannot work, because Mid's own
-    // icon *is* the fallback.
+    // The card's lookup ends in `|| position-middle.svg`, so a rename draws the
+    // mid icon under alt text that still reads "Support". Distinctness catches
+    // that; "not the fallback" cannot, Mid's own icon being it.
     const names = backendLaneNames();
     expect(names.length).toBeGreaterThan(1);
 
@@ -91,9 +83,8 @@ describe("the role performance card", () => {
 
   it("colours the win rate figure and the bar under it the same way", () => {
     // Two separate functions carry the same three thresholds, and the two
-    // things they colour sit one above the other. A threshold that drifts in
-    // one shows a rate written in green over a bar drawn in yellow, which
-    // reads as a rendering fault rather than as data.
+    // things they colour sit one above the other. A threshold that drifts in one
+    // shows a rate in green over a bar in yellow, which reads as a fault.
     const hue = (className: string) =>
       /(green|yellow|rose)-500/.exec(className)?.[1];
 
@@ -117,16 +108,9 @@ describe("the role performance card", () => {
   });
 
   it("does not size the bar to NaN when no lane has been played", () => {
-    // The lane list is not empty, so the "not enough data" card does not
-    // apply; every lane simply has nothing in it. Without the `totalGames > 0`
-    // guard the division is 0/0, and `width: NaN%` is dropped by the browser,
-    // leaving a full-width bar that says the player mains every role equally.
-    //
-    // The count is asserted first because the first version of this test only
-    // looped over `[style*='width']` and passed against the mutation: React
-    // drops the invalid declaration, the attribute disappears, the selector
-    // matches nothing, and a loop over nothing asserts nothing. A test that
-    // reads the DOM by a selector has to pin how many elements it found.
+    // Without the `totalGames > 0` guard the division is 0/0, and the browser
+    // drops `width: NaN%` -- a full-width bar saying the player mains every role
+    // equally. The count is asserted first so an empty loop cannot pass.
     const { container } = renderCard([
       lane("Top", { games_played: 0, wins: 0, losses: 0 }),
       lane("Mid", { games_played: 0, wins: 0, losses: 0 }),

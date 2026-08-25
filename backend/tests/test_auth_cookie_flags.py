@@ -39,8 +39,7 @@ def test_tokens_are_httponly_and_the_hint_is_not() -> None:
 
     Flipping either direction breaks something quietly: HttpOnly on the hint
     puts back the two-request signed-out probe it was added to remove, and
-    dropping it from a token would expose a credential to any script on the
-    page.
+    dropping it from a token would expose a credential to any script.
     """
     cookies = _set_cookie_headers()
 
@@ -55,9 +54,7 @@ def test_the_hint_lives_exactly_as_long_as_the_refresh_token() -> None:
 
     `proxy.ts` routes on the hint, so once it is gone the visitor is reported
     signed out -- while the refresh cookie beside it is still there, still
-    valid, and JavaScript cannot reach it to spend it. A hardcoded 30 days
-    made that certain for anyone who set `jwt_refresh_token_expire_days`
-    higher, with no server refusal anywhere in the sequence.
+    valid, and JavaScript cannot reach it to spend it.
     """
     cookies = _set_cookie_headers()
 
@@ -76,15 +73,8 @@ def test_the_two_lifetimes_are_measured_once_not_twice(
     """The test above only catches this about once in a hundred thousand runs.
 
     `max_age_seconds` truncates against the clock of the moment it is called,
-    so computing it separately for the refresh cookie and for the hint left
-    them a second apart whenever a whole-second boundary fell between the two
-    calls -- and the hint, written second, is the one that came out shorter.
-    A hint expiring before the refresh token beside it is the stranded
-    session, so "the same lifetime" has to be one measurement, not two that
-    usually agree.
-
-    Rather than wait for a boundary, move it: this clock advances a second per
-    reading, so a second call cannot agree with the first.
+    so measuring twice can leave the hint, written second, a second shorter
+    than the refresh token. This clock advances a second per reading.
     """
 
     class _AdvancingClock:
@@ -123,18 +113,9 @@ def test_the_two_lifetimes_are_measured_once_not_twice(
 def test_the_hint_is_written_host_only() -> None:
     """No Domain, because the browser is what has to delete it.
 
-    A refused refresh answers with no Set-Cookie at all, so the only thing
-    that retracts the hint on that path is `clearAuthStateCookie` in the
-    frontend -- a different language in a different directory, with no
-    automated check between them. Domain is part of a cookie's identity, so a
-    `Domain=` here that the delete does not name would leave the hint standing
-    through every teardown: "Can't reach the server" forever, with `proxy.ts`
-    still admitting the visitor and no way out but clearing cookies by hand.
-
-    The delete now expires the hint under every parent domain of the current
-    host as well, so sharing the session across subdomains is survivable --
-    but this test is the tripwire that makes it a decision rather than an
-    accident.
+    A refused refresh answers with no Set-Cookie at all, so only
+    `clearAuthStateCookie` in the frontend retracts the hint. Domain is part
+    of a cookie's identity, and a `Domain=` the delete misses strands it.
     """
     cookies = _set_cookie_headers()
 
@@ -144,21 +125,9 @@ def test_the_hint_is_written_host_only() -> None:
 def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
     """The other half of a coupling with no compiler between its ends.
 
-    `proxy.ts` routes on `request.cookies.get(NAME)?.value === VALUE`, and
-    `auth-state-cookie.ts` deletes by name at `path=/`. Both sides are literal
-    strings in TypeScript; nothing imports them from here, and nothing
-    translates. Rename or revalue this cookie and every signed-in visitor is
-    reported signed out on their next navigation, with the refresh cookie
-    beside it live and unreachable. Narrow its Path and the delete stops
-    matching, so the hint survives every teardown instead -- "can't reach the
-    server" forever.
-
-    SameSite is the third: Lax is what sends the hint on a top-level
-    navigation, so Strict here would report anyone arriving from an external
-    link as signed out, and None would ship it on every cross-site request.
-
-    The literals are duplicated on purpose. This test is the check, and it
-    fails the moment either side moves without the other.
+    `proxy.ts` routes on `request.cookies.get(NAME)?.value === VALUE` and
+    `auth-state-cookie.ts` deletes by name at `path=/`, both as literal
+    TypeScript strings; SameSite=Lax is what sends the hint on a navigation.
     """
     cookies = _set_cookie_headers()
     hint = cookies[AUTH_STATE_COOKIE_NAME].lower()
@@ -178,14 +147,9 @@ def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
 def _assert_the_session_was_installed(response: Response) -> None:
     """The three cookies, carrying the right tokens, for the right lengths.
 
-    Names alone are not enough, and the ways to get this wrong are all one
-    word: passing the *old* refresh token (the variable is right there in
-    scope) leaves the browser holding what the rotation just revoked, so
-    every refresh from then on limps through the reuse branch's heal instead
-    of a clean rotation. Passing
-    `access_expires_at` for the refresh cookie gives it and the hint a
-    30-minute life against a 30-day row, so the visitor is reported signed out
-    on the next navigation with a live token nothing holds.
+    Names alone are not enough: passing the *old* refresh token leaves the
+    browser holding what the rotation just revoked, and `access_expires_at`
+    on the refresh cookie gives it a 30-minute life against a 30-day row.
     """
     written = {
         header.split("=", 1)[0]: header
@@ -245,12 +209,7 @@ async def test_a_successful_refresh_installs_the_new_cookies() -> None:
 
     The server revokes the old row and commits the new token either way, so a
     refresh that forgets to install it leaves the browser holding the token
-    that was just revoked, with an access cookie that never updates: every
-    later refresh limps through the reuse branch's heal while requests keep
-    failing, and signing in again strands again one rotation later. Nothing
-    else in the suite reaches this:
-    `set_auth_cookies` is tested in isolation above, and deleting the call
-    from the route left all 603 tests green.
+    that was just revoked, with an access cookie that never updates.
     """
     now = datetime.now(UTC)
     service = MagicMock(spec=AuthService)
@@ -323,22 +282,8 @@ def test_secure_tracks_the_environment(
     """The one attribute deciding whether the browser stores the cookie at all.
 
     The suite runs with ENVIRONMENT=test, so `_cookie_secure()` answered False
-    everywhere and both ways of breaking it passed: hardcoding False ships a
-    30-day HttpOnly refresh token over plaintext to anyone on the path, and
-    hardcoding True over an http origin makes the browser discard all three
-    Set-Cookie headers -- /login answers 200, the hint never lands, and the
-    gate bounces the visitor straight back to /sign-in with no message, for
-    ever. That second one is reachable by configuration, not hypothesis:
-    `deploy/production.env.example` names an http origin while
-    `compose.production.yml` sets ENVIRONMENT=production.
-
-    The other tests in this file read the same headers, so they need the
-    environment they were written under; only this one varies it.
-
-    The settings object is `@cache`d, so `monkeypatch.setenv` would be inert
-    here -- the environment is substituted at the reader instead. There is no
-    "absent" case any more: `environment` is a required settings field, so a
-    missing ENVIRONMENT is a startup error rather than a quiet `dev`.
+    everywhere and both ways of breaking it passed. The settings object is
+    `@cache`d, so `monkeypatch.setenv` is inert -- substitute at the reader.
     """
     monkeypatch.setattr(
         cookies_module,

@@ -51,11 +51,9 @@ def _client() -> RiotAPIClient:
 def _job_double(**attributes: object) -> BaseJob:
     """Present a duck-typed writer result as the `BaseJob` the API declares.
 
-    `_failure_from_job` is documented to read only the writer's cached scalars
-    and its two classification predicates, and several tests below exist to
-    prove it touches nothing else. A real `BaseJob` carries a live
-    `JobExecution`, so it would hide exactly the regression under test; the
-    cast records that only the read attributes are populated on purpose.
+    `_failure_from_job` reads only the writer's cached scalars and its two
+    classification predicates. A real `BaseJob` carries a live `JobExecution`,
+    so it would hide exactly the regression under test.
     """
     return cast(BaseJob, SimpleNamespace(**attributes))
 
@@ -381,9 +379,8 @@ class _NoMergeSession:
     """Session that fails the test if discovery reaches for another player row.
 
     Discovery may look the resolved PUUID up by primary key and insert or update
-    that one row. Any statement execution, bulk query, or delete would mean it
-    went looking for rows sharing the Riot ID, which is exactly the merge this
-    regression forbids.
+    that one row. Any statement execution, bulk query, or delete means it went
+    looking for rows sharing the Riot ID, the merge this regression forbids.
     """
 
     def __init__(self) -> None:
@@ -431,9 +428,8 @@ async def test_discovery_never_merges_a_row_sharing_the_riot_id(
     """A stale-looking row must survive discovery untouched.
 
     Discovery cannot tell a PUUID re-encrypted under a new developer account
-    apart from a Riot ID renamed away and reclaimed by someone else. Every table
-    referencing `core.players(puuid)` cascades on delete, so a wrong merge would
-    destroy one player's history. A duplicate row is the accepted outcome.
+    apart from a Riot ID reclaimed by someone else, and every table referencing
+    `core.players(puuid)` cascades on delete. A duplicate row is accepted.
     """
     monkeypatch.setattr(
         player_service_module,
@@ -587,9 +583,8 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
     """Process shutdown cancels the task; the persisted run must stay active.
 
     Writing a terminal row here would discard completed progress on every
-    deployment, contradicting the documented restart contract. Explicit user
-    cancellation is unaffected because `cancel_analysis` commits the terminal
-    row before it cancels this task.
+    deployment. Explicit user cancellation is unaffected because
+    `cancel_analysis` commits the terminal row before it cancels this task.
     """
     import asyncio
 

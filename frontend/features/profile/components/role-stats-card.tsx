@@ -8,6 +8,7 @@ import { ProfileCardEmptyState } from "./profile-card-empty-state";
 import { UpdatedStamp } from "./updated-stamp";
 import { Map } from "lucide-react";
 import { winRateColors } from "@/lib/core/format";
+import { cn } from "@/lib/core/utils";
 import { PerformanceFigures } from "./performance-figures";
 
 interface RoleStatsCardProps {
@@ -97,7 +98,11 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                   {/* Play rate bar */}
                   <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`absolute left-0 top-0 h-full ${winRateColors(lane.win_rate).bar} transition-all duration-300`}
+                      className={cn(
+                        "absolute left-0 top-0 h-full",
+                        winRateColors(lane.win_rate).bar,
+                        "transition-all duration-300",
+                      )}
                       style={{ width: `${playRate}%` }}
                     />
                   </div>

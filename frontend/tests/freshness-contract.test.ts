@@ -5,15 +5,9 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles } from "./source-scan-support";
 
 /**
- * Player freshness is `profile_synced_at` / `league_synced_at` /
- * `match_synced_at` — the timestamp of the provider check that actually
- * sourced the field. `updated_at` is a row-mutation timestamp: it moves when
- * anything on the row changes, so a card using it claims data is fresh when
- * only some unrelated column was touched.
- *
- * These files use `updated_at` for a record's own mutation time rather than
- * for player freshness, which is what it is for. Anything else must either
- * use a `*_synced_at` column or justify itself by being added here.
+ * Player freshness is `*_synced_at`, the timestamp of the provider check that
+ * sourced the field. `updated_at` moves when anything on the row changes, so a
+ * card using it claims freshness an unrelated column earned.
  */
 const NON_FRESHNESS_UPDATED_AT = new Map<string, string>([
   // The schema modules declare the wire shape; none of them display anything.

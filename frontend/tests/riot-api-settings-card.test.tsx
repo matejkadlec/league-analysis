@@ -43,12 +43,9 @@ import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential
 import { renderWithQueryClient } from "./render-support";
 
 /**
- * A key of the right shape, assembled rather than written out.
- *
- * The gitleaks hook scans for this exact pattern, and it is right to: a real
- * one pasted into a test would be committed. Joining the parts keeps the value
- * the component sees identical without leaving a key-shaped literal in the
- * repository for the scanner -- or a reader -- to trip over.
+ * A key of the right shape, assembled rather than written out: the gitleaks
+ * hook scans for this exact pattern, and rightly so. Joining the parts leaves
+ * no key-shaped literal for the scanner -- or a reader -- to trip over.
  */
 function riotKey(body: string): string {
   return [
@@ -120,11 +117,9 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("stamps the stored key in the viewer's clock, not UTC", async () => {
-    // This surface used to render its own `toLocaleString("en-GB", { timeZone:
-    // "UTC" })`, so an operator comparing "last updated" against a job run --
-    // every other timestamp in the app being local -- read two different
-    // clocks. `formatDateTime` is that one clock; the assertion is here
-    // because nothing else stops a fifth copy reappearing.
+    // An operator comparing "last updated" against a job run must not read two
+    // different clocks. `formatDateTime` is the one clock, and nothing else
+    // stops another copy reappearing.
     const queryClient = renderCard();
 
     await screen.findByText(
@@ -136,9 +131,8 @@ describe("the card that swaps the Riot API key", () => {
 
   it("refuses to save a key that is not shaped like a Riot key", async () => {
     // The key this writes is what every ingestion job authenticates with, and
-    // saving activates it with no restart. A paste that picked up the wrong
-    // string should not become the live credential; the prefix check is the
-    // only thing standing between the two, and it costs no request.
+    // saving activates it with no restart. The prefix check is all that keeps a
+    // mis-pasted string from becoming the live credential.
     const queryClient = renderCard();
 
     await typeKey("not-a-riot-key");
@@ -151,11 +145,9 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("says so when the save request itself fails", async () => {
-    // Both mutations used to return the `ApiResponse` envelope, which
-    // `validatedPut` cannot reject -- so their `onError` arms were dead and
-    // the global `MutationCache.onError` never saw a failed key save. Nothing
-    // pinned that shape: every mock in this file resolves a success. This case
-    // is what makes putting the envelope back fail.
+    // A mutation returning the `ApiResponse` envelope cannot reject, which
+    // leaves `onError` dead and hides a failed key save from the global
+    // `MutationCache.onError`.
     validatedPut.mockResolvedValue({
       success: false,
       error: {
@@ -236,16 +228,12 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("treats a missing stored key as a state, not a failure", async () => {
-    // Before the first key is ever saved there is no row, so the 404 is the
-    // normal answer and the card renders it as a prompt rather than an error.
-    //
-    // This runs on the real provider wiring rather than a bare client, because
-    // the DOM alone cannot tell the two apart: `setting` ends up null whether
-    // the 404 is caught or thrown. What separates them is the global
-    // `queryCache.onError`, which announces any failed query to the viewer --
-    // this one sets no `silenceErrorToast`. Let the 404 through and a fresh
-    // deployment raises "Could not load this data" over a card that is working
-    // exactly as intended.
+    // Before the first key is saved there is no row, so the 404 is the normal
+    // answer and the card renders it as a prompt.
+
+    // On the real provider wiring, because the DOM cannot tell the two apart:
+    // `setting` is null either way. The global `queryCache.onError` separates
+    // them, so letting the 404 through raises an error over a working card.
     respondWith({
       setting: { success: false, error: { status: 404, kind: "not_found" } },
       status: status({ credential_status: "missing", evidence: "missing" }),

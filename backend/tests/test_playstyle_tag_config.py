@@ -1,25 +1,8 @@
 """What `TAG_CONFIG` has to be true of, that the type checker cannot say.
 
-`TagConfig` pins the spelling and the value type of every key. Three things
-it cannot pin, and all three are silent when broken -- a tag whose criteria
-never match simply does not appear, and no caller notices:
-
-1. `dict.get` on a TypedDict accepts a key the TypedDict never declared and
-   returns `Any | None`, so renaming a key breaks its reader without a single
-   type error. Both `target_*` keys were renamed out of one overloaded
-   `target`, which is exactly that hazard.
-2. Every tag must reach an evaluator. A tag with neither a `type`, a
-   per-code evaluator, nor a threshold key falls through to the generic
-   comparison and can never fire.
-3. `_compare_aggregate_to_thresholds` scans for `min_`/`max_` prefixes and
-   compares the value numerically, so a non-numeric value under such a name
-   would be skipped rather than raise.
-4. Reaching the generic comparison is not enough: it compares against
-   `_generic_metric_average`, which resolves the metric *by name* off
-   `MatchParticipant` or the `advanced_stats` blob. A name that resolves to
-   neither returns 0.0 for every player, so the tag reaches its evaluator and
-   still never fires. Dropping ten redundant participant columns did exactly
-   that, and every other check here stayed green.
+`TagConfig` pins the spelling and the value type of every key, and nothing
+else. Every gap below is silent when broken -- a tag whose criteria never
+match simply does not appear, and no caller notices.
 """
 
 from __future__ import annotations
@@ -118,9 +101,8 @@ def test_every_generic_tag_names_a_metric_that_can_be_read() -> None:
     """A tag reaching the generic comparison must have something to compare.
 
     `_generic_metric_average` looks its metric up by name -- a
-    `MatchParticipant` column, or a key in the `advanced_stats` blob via
-    `_CHALLENGE_KEYS`. A name that is neither is not an error: the average is
-    0.0, every `min_` comparison fails, and the tag silently stops existing.
+    `MatchParticipant` column, or an `advanced_stats` key via `_CHALLENGE_KEYS`.
+    A name that is neither averages 0.0, so the tag silently stops existing.
     """
     unreadable = [
         f"{tag_code}: {sorted(k for k in config if k.startswith(('min_', 'max_')))}"

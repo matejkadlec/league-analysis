@@ -112,10 +112,9 @@ class SmurfBoostAnalysis(Base):
             values_in_sql("status", get_args(SmurfBoostStatus)),
             name="status_valid",
         ),
-        # Per account, not per player: the interlock exists so one viewer
-        # cannot start a second run over their own, and a puuid-wide version
-        # let either account block the other out of a page they share nothing
-        # on.
+        # Per account, not per player: the interlock stops one viewer starting
+        # a second run over their own, while a puuid-wide version would let
+        # either account block the other out of a page they share nothing on.
         Index(
             "uq_smurf_boost_analyses_active_puuid",
             "user_id",

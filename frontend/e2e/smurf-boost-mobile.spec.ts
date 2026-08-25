@@ -4,15 +4,9 @@ import { acceptCookieBanner } from "./support/auth";
 import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 
 /**
- * The page is read on a phone, and its result carries the widest content in the
- * feature. A six-column table needs roughly 450px of intrinsic width, which is
- * wider than the viewport this suite emulates.
- *
- * `main` in the app shell is a flex item with the default `min-width: auto`, so
- * it does not shrink below its content: anything too wide stretches the whole
- * document instead of scrolling inside its own card. That makes a wide result a
- * page-level defect rather than a local one, which is why the width assertion
- * below is on the document.
+ * The result carries the widest content in the feature -- a six-column table
+ * needs roughly 450px against the 390px viewport this suite emulates. `main`
+ * has default `min-width: auto`, so too-wide content stretches the document.
  */
 
 const PHONE = { width: 390, height: 844 };

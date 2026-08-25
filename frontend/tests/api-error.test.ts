@@ -48,11 +48,9 @@ describe("API error presentation", () => {
     ["a structured detail", { detail: { code: "sqlalchemy.exc.OperationalError" } }],
     ["a top-level field", { error_code: "at Object.<anonymous> (/app/main.py)" }],
   ])("refuses to carry %s through as an error code", (_label, data) => {
-    // The sibling guard on `message` is tested three ways; this one was tested
-    // nowhere, and widening `SAFE_CODE_PATTERN` to `/.*/` kept all 353 tests
-    // green. `code` is the field callers branch on and `reportApiError` logs,
-    // so prose arriving in it is the same leak the message pattern exists to
-    // stop -- just through the field nobody was watching.
+    // Widening `SAFE_CODE_PATTERN` to `/.*/` kept all 353 tests green. `code` is
+    // the field callers branch on and `reportApiError` logs, so prose arriving in
+    // it is the same leak the message pattern exists to stop.
     const { code } = normalizeApiError(axiosError(400, data));
 
     // The invariant is the shape, not one bad string: whatever reaches `code`
@@ -117,9 +115,8 @@ describe("API error presentation", () => {
 
   it("survives the array `detail` FastAPI returns for a 422", () => {
     // The only response body where `detail` is neither a string nor the
-    // structured object: a list of per-field validation errors. Nothing
-    // covered it, so a stricter `detail` reader could have thrown out of
-    // `normalizeApiError` -- the one function every failure path calls.
+    // structured object: a list of per-field validation errors. A stricter
+    // reader could throw out of `normalizeApiError`, which every path calls.
     expect(
       normalizeApiError(
         axiosError(422, {

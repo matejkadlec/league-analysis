@@ -90,9 +90,7 @@ class SmurfBoostDetectionService:
         self.db = db
         # The account every query in this service is answering for. Held on the
         # instance rather than threaded through a dozen private signatures: the
-        # service is constructed per request from the authenticated caller, so
-        # there is exactly one right value for its whole lifetime, and a
-        # parameter is a thing a future method can forget to accept.
+        # service is built per request, so one value serves its whole lifetime.
         self.user_id = user_id
 
     async def viewer_thresholds(self) -> dict[str, float]:
@@ -215,14 +213,9 @@ class SmurfBoostDetectionService:
     ) -> dict[int, int]:
         """Champion counts over every eligible game outside the recent window.
 
-        This deliberately reads the player's whole eligible history rather than
-        the capped window the engine scores. A champion is novel only when this
-        application has stored almost nothing of it, and truncating the history
-        first would make long-established champions look new.
-
-        The window is excluded by identifier rather than by a repeated offset,
-        so a match ingested between this query and the one that loaded the
-        window cannot shift what counts as recent.
+        Deliberately reads the whole eligible history rather than the capped
+        window the engine scores: a champion is novel only when almost nothing
+        of it is stored. The window is excluded by identifier, not by offset.
         """
         result = await self.db.execute(
             select(MatchParticipant.champion_id, func.count())
@@ -318,9 +311,7 @@ class SmurfBoostDetectionService:
     ) -> bool:
         """True when an existing run was computed the way this caller asked for.
 
-        Runs are per account, but this account's thresholds can still change
-        between two in-flight requests, and attaching to a run configured
-        differently would answer with settings the caller did not ask for. So
+        An account's thresholds can change between two in-flight requests, so
         the comparison is exact on both the model version and every threshold
         value.
         """
@@ -491,10 +482,9 @@ class SmurfBoostDetectionService:
     async def get_latest(self, puuid: str) -> SmurfBoostAnalysisResponse | None:
         """The newest run for a player, with a computed staleness flag.
 
-        A client that polls after an interrupted request would otherwise be told
-        a comparison is still running forever, because only a new request used
-        to clear the abandoned row and the page offers no way to start one while
-        a run looks active.
+        A client polling after an interrupted request would otherwise be told a
+        comparison is still running forever, because the page offers no way to
+        start a new one while a run looks active.
         """
         await self._expire_abandoned(puuid)
         run = await self._newest_run(puuid)
@@ -506,10 +496,8 @@ class SmurfBoostDetectionService:
         """True when a newer eligible game exists than the run considered.
 
         Comparing match identifiers rather than counts keeps the check correct
-        when the loaded history is capped, and when an older match is ingested
-        after the run without changing what "newest" means. A run computed with
-        no eligible history at all is stale as soon as one arrives, so a stored
-        identifier of `None` takes part in the comparison like any other value.
+        when the loaded history is capped. A stored identifier of `None` takes
+        part in the comparison like any other value.
         """
         if run.status != "completed":
             return False
@@ -528,9 +516,8 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
     """Convert the engine result into the stored JSON shape.
 
     The conversion goes through `SmurfBoostResults` rather than `asdict`, so the
-    stored document and the HTTP response are the same validated shape, the
-    mandatory disclaimer is always present, and the internal family score is
-    dropped in exactly one place.
+    stored document and the HTTP response are the same validated shape and the
+    internal family score is dropped in exactly one place.
     """
     payload = SmurfBoostResults(
         model_version=result.model_version,

@@ -35,10 +35,8 @@ def test_name_sanitization_is_stable() -> None:
 
 def test_extracted_participant_fits_the_row_it_becomes() -> None:
     # This is the whole production path: `MatchParticipant(match_id=...,
-    # **extract_participant_data(dto))` in match_persistence. The dict has
-    # ~75 keys and every one must name a real column — SQLAlchemy raises on
-    # an unknown kwarg, so this one construction checks the entire mapping
-    # without pinning a single value to its literal.
+    # **extract_participant_data(dto))` in match_persistence. SQLAlchemy raises
+    # on an unknown kwarg, so one construction checks the entire ~75-key mapping.
     data = MatchDTOTransformer.extract_participant_data(participant())
     row = MatchParticipant(match_id="EUN1_1", **data)
 
@@ -61,17 +59,15 @@ def test_remake_is_the_negation_of_progression_eligibility() -> None:
 def test_display_name_falls_back_through_riot_id_then_summoner_name() -> None:
     # Three generations of Riot naming in one field. The modern riotIdGameName
     # wins; the legacy summonerName fills in when the riot id is empty string
-    # (which the API sends, not null); a participant with neither still gets a
-    # printable name rather than NULL in a NOT NULL column.
+    # (which the API sends, not null); the column is NOT NULL, so a last resort.
     riot_id = participant(riotIdGameName="Faker", summonerName="OldName")
     assert MatchDTOTransformer.extract_participant_data(riot_id)["game_name"] == (
         "Faker"
     )
 
-    legacy = participant(riotIdGameName="", summonerName="OldName")
-    assert MatchDTOTransformer.extract_participant_data(legacy)["game_name"] == (
-        "OldName"
-    )
+    summoner_name_only = participant(riotIdGameName="", summonerName="OldName")
+    fallen_back = MatchDTOTransformer.extract_participant_data(summoner_name_only)
+    assert fallen_back["game_name"] == "OldName"
 
     nameless = participant()
     assert MatchDTOTransformer.extract_participant_data(nameless)["game_name"] == (
@@ -90,12 +86,9 @@ def test_lane_falls_back_to_individual_position() -> None:
 
 
 def test_challenge_stats_are_read_under_riots_own_names() -> None:
-    # The challenges dict is raw camelCase Riot vocabulary, and a typo in any
-    # key is silent -- .get(wrong, 0) writes a zero into every row forever,
-    # which is exactly the class of bug the lopsided prod data has hidden
-    # before. Only the six columns something still reads are copied out; the
-    # rest of the object stays in `advanced_stats`, where the blob is the
-    # single copy.
+    # The challenges dict is raw camelCase Riot vocabulary, and a typo in any key
+    # is silent -- .get(wrong, 0) writes a zero into every row forever. Only the
+    # six columns something still reads are copied; the rest stays in the blob.
     payload = participant(
         challenges={
             "soloKills": 3,

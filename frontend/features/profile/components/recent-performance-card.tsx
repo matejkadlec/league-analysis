@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { formatFractionAsPercent, formatKDA } from "@/lib/core/format";
+import { cn } from "@/lib/core/utils";
 
 /** The comparison window the card labels "Last 10 games". */
 const RECENT_GAME_COUNT = 10;
@@ -20,18 +21,9 @@ interface RecentPerformanceCardProps {
   lastUpdated?: string | null | undefined;
 }
 
-// Get a performance trend indicator.
-//
-// `threshold` defaults to 5% of the overall value, which is what raw stats
-// want -- CS is counted in the hundreds and a fixed number cannot serve both
-// it and a win rate. Fractions already on a 0-1 scale pass their own band.
-//
-// `higherIsBetter` has no default on purpose. Every stat on this card except
-// deaths wants `true`, which makes a default the obviously convenient choice
-// and exactly the wrong one: the single call that needs `false` is the one a
-// silent default would get wrong, and getting it wrong tells a player who is
-// dying less that they are declining. Requiring the argument makes each call
-// site say which direction it means.
+// A performance trend indicator. `threshold` defaults to 5% of the overall
+// value, because CS counted in the hundreds and a 0-1 win rate cannot share a
+// fixed band. `higherIsBetter` has no default: a silent one would be wrong.
 function getTrendIndicator(
   recent: number,
   overall: number,
@@ -93,30 +85,37 @@ function StatComparisonRow({
   const value = small ? "text-xl" : "text-2xl";
   const caption = small ? "text-[10px]" : "text-xs";
   return (
-    <div className={small ? "space-y-1" : "space-y-2"}>
+    <div className={cn(small ? "space-y-1" : "space-y-2")}>
       <h4
-        className={`${small ? "text-xs" : "text-sm"} font-medium text-muted-foreground`}
+        className={cn(
+          small ? "text-xs" : "text-sm",
+          "font-medium text-muted-foreground",
+        )}
       >
         {label}
       </h4>
       <div className="flex items-center justify-between">
         <div>
-          <p className={`${value} font-bold`}>{recentValue}</p>
-          <p className={`${caption} text-muted-foreground`}>Recent</p>
+          <p className={cn(value, "font-bold")}>{recentValue}</p>
+          <p className={cn(caption, "text-muted-foreground")}>Recent</p>
         </div>
         <div
-          className={`flex items-center ${small ? "gap-0.5" : "gap-1"} ${trend.color}`}
+          className={cn(
+            "flex items-center",
+            small ? "gap-0.5" : "gap-1",
+            trend.color,
+          )}
         >
           {trend.icon}
-          <span className={`${small ? "text-xs" : "text-sm"} capitalize`}>
+          <span className={cn(small ? "text-xs" : "text-sm", "capitalize")}>
             {trend.label}
           </span>
         </div>
         <div className="text-right">
-          <p className={`${value} font-bold text-muted-foreground`}>
+          <p className={cn(value, "font-bold text-muted-foreground")}>
             {overallValue}
           </p>
-          <p className={`${caption} text-muted-foreground`}>Overall</p>
+          <p className={cn(caption, "text-muted-foreground")}>Overall</p>
         </div>
       </div>
     </div>

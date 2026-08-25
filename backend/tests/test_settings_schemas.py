@@ -47,11 +47,8 @@ def test_strict_write_models_spell_every_alias_explicitly() -> None:
     """A generated alias is invisible to the type checker, so require a literal.
 
     With `populate_by_name=False` the alias is the *only* accepted spelling at
-    runtime, but Pyright cannot see an alias a generator produced: it builds
-    `__init__` from the field names instead, so it rejects the spelling that
-    works and accepts the one that raises. An explicit `Field(alias=...)` is
-    visible to both, which is why `.claude/pitfalls.md` no longer carries this
-    trap — this test is the mechanism that replaced it.
+    runtime, but Pyright builds `__init__` from the field names instead, so it
+    rejects the spelling that works. An explicit `Field(alias=...)` suits both.
     """
     models = _write_contract_models()
     assert models, "expected at least one strict write model to guard"

@@ -44,7 +44,7 @@ export function SignInForm() {
   });
 
   // Watch form values to enable/disable submit button
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
+  // oxlint-disable-next-line react/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const email = form.watch("email");
   const password = form.watch("password");
   const isFormValid = email.trim().length > 0 && password.trim().length > 0;
@@ -209,11 +209,9 @@ export function SignInForm() {
 
                 {captchaRequired && (
                   <div className="space-y-2">
-                    {/* A heading over the widget, not a form field. Not a
-                        <label> either: there is no control to label, and a
-                        FormLabel here would point `htmlFor` at an id nothing
-                        renders. The widget is named through aria-labelledby
-                        below. */}
+                    {/* A heading over the widget, not a form field: there is
+                        no control to label, and a FormLabel would point
+                        `htmlFor` at an id nothing renders. */}
                     <p
                       id="sign-in-captcha-heading"
                       className="text-sm font-medium leading-none text-gray-700"

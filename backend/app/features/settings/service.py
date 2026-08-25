@@ -134,14 +134,8 @@ class SettingsService:
             await self.db.flush()
 
         # Delete before binding, so this takes its key-row locks before the
-        # health-row lock -- the order `synchronize_riot_credential_health`
-        # already uses. Binding first would lock health then wait on a key row
-        # that a concurrent request holds, and the two would deadlock.
-        #
-        # `db_key_id` is `ON DELETE SET NULL`, so this may blank the binding on
-        # its way past; `mark_database_credential_valid` re-binds it in the
-        # same transaction, and reads the NULL as an identity change, which is
-        # exactly right for a key that just got replaced.
+        # health-row lock -- the order `synchronize_riot_credential_health` uses.
+        # The reverse order deadlocks against a concurrent request.
         await self.db.execute(delete(RiotAPIKey).where(RiotAPIKey.id != target_key.id))
         await mark_database_credential_valid(
             self.db,
@@ -464,9 +458,8 @@ class SettingsService:
                     "consent_version": update.consent_version,
                     "consent_source": update.consent_source,
                     # `consented_at` records an explicit choice, so a repeat
-                    # consent moves it, matching the previous update branch.
-                    # `updated_at` is set here because its `onupdate` is an
-                    # ORM-level hook that a Core ON CONFLICT never fires.
+                    # consent moves it. `updated_at` is set here because its
+                    # `onupdate` is an ORM hook a Core ON CONFLICT never fires.
                     "consented_at": func.now(),
                     "updated_at": func.now(),
                 },

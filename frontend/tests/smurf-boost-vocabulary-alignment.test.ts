@@ -14,19 +14,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(here, "../../backend/app/features/smurf_boost_detection");
 
 /**
- * The note and family identifiers the engine emits are copied by hand into
- * the vocabulary module's plain-language readings. The fallback that renders
- * an unknown identifier as itself is deliberate (a result computed under a
- * later model version must stay readable), which is exactly why nothing else
- * would ever notice the copy drifting: a renamed or added backend identifier
- * renders as raw snake_case on a page making smurfing observations, with a
- * green suite. The direction that matters is one-way: every identifier the
- * backend emits must read as English here. A label for an identifier the
- * backend no longer emits is allowed; it costs one line.
- *
- * Both constant shapes matter: the family ids (`FAMILY_A = "..."`) do not
- * spell the NOTE_ prefix, so a NOTE_-only sweep would silently drop them and
- * pass vacuously.
+ * The engine's identifiers are copied by hand into the vocabulary module, and
+ * a self-naming fallback means nothing else notices the copy drifting. Both
+ * constant shapes matter: family ids do not spell the NOTE_ prefix.
  */
 function backendIdentifiers(prefix: "NOTE_" | "FAMILY_"): string[] {
   const ids: string[] = [];

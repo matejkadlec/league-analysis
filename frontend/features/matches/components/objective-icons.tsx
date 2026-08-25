@@ -1,4 +1,5 @@
 import type { TeamStats } from "@/lib/core/schemas";
+import { cn } from "@/lib/core/utils";
 import { RIOT_OBJECTIVE_ICON_SOURCES } from "./objective-icon-assets";
 import {
   OBJECTIVE_DEFINITIONS,
@@ -38,7 +39,7 @@ function ObjectiveGlyph({
     <span
       aria-hidden="true"
       data-icon-source="riot-match-history"
-      className={`${className} block bg-contain bg-center bg-no-repeat`}
+      className={cn(className, "block bg-contain bg-center bg-no-repeat")}
       style={{
         backgroundImage: `url(${objectiveSource(objective)})`,
         filter: objectiveFilter(team),

@@ -1,9 +1,8 @@
 """Password hashing for the auth feature.
 
-Argon2id is deliberately expensive -- this repo's parameters measure ~42ms
-per call -- and the API runs one worker per container, so every hashing call
-is offloaded to a thread; done inline it would stall every other request in
-flight for that long, the dummy-hash branch of a failed login included.
+Argon2id here measures ~42ms per call and the API runs one worker per
+container, so every hashing call is offloaded to a thread; done inline it
+would stall every other request in flight for that long.
 """
 
 import asyncio

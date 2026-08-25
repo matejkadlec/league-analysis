@@ -22,14 +22,9 @@ class Player(Base):
 
     __tablename__ = "players"
     __table_args__ = (
-        # Five write paths disagreed about this column's casing while two
-        # lookups compared it case-sensitively, so a player first seen through
-        # a match was stored lowercase and then could not be found by name and
-        # tag. Normalising in Python fixes the code; this makes the invariant
-        # the database's, so a future writer that forgets fails loudly instead
-        # of silently hiding rows. Canonical is lowercase — Riot's own spelling
-        # and the `Platform` enum's values. See `normalize_platform`.
-        # Spelled bare: the `ck` convention prefixes `ck_<table>_` itself.
+        # Canonical casing is lowercase — Riot's own spelling and the `Platform`
+        # enum's values (see `normalize_platform`). The database owns the
+        # invariant so a writer that forgets fails loudly.
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",

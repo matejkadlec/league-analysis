@@ -48,24 +48,26 @@ export function formatApiCallParamLabel(paramKey?: string | null): string {
 }
 
 // Deliberately not shared with the identical-looking set in
-// `job-execution-logs.tsx`. That one hides fields the row already renders in
-// its header; this one skips fields the key below already emits positionally.
-// They agree today for different reasons, and one shared set means hiding a
-// noisy field from the display would also drop it from the key -- two rows
-// differing only in that field would collide and the second would never
-// render.
+// `job-execution-logs.tsx`: that one hides fields the row already renders, this
+// one skips fields the key emits positionally. Sharing them collides rows.
 const KEYED_POSITIONALLY = new Set(["level", "timestamp", "event"]);
+
+// Every field of a structlog record arrives as `unknown`, `event` and
+// `timestamp` included. Bare `String()` renders an object as `[object Object]`,
+// which reads as nothing on screen and collides with every other object here.
+export function logFieldText(value: unknown): string {
+  return typeof value === "object" && value !== null
+    ? JSON.stringify(value)
+    : String(value);
+}
 
 export function detailedLogKey(log: Record<string, unknown>): string {
   const level = typeof log.level === "string" ? log.level : "INFO";
-  const timestamp = String(log.timestamp ?? "");
-  const event = String(log.event ?? "");
+  const timestamp = logFieldText(log.timestamp ?? "");
+  const event = logFieldText(log.event ?? "");
   const extrasJoined = Object.entries(log)
     .filter(([key]) => !KEYED_POSITIONALLY.has(key))
-    .map(
-      ([key, value]) =>
-        `${key}:${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
-    )
+    .map(([key, value]) => `${key}:${logFieldText(value)}`)
     .join("|");
   return `${timestamp}|${level}|${event}|${extrasJoined}`;
 }

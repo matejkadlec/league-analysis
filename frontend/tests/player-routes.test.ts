@@ -21,9 +21,8 @@ describe("player routes", () => {
 
   it("leaves the locally scoped analysis pages out", () => {
     // Both carry `?puuid=`, and on both it names a page-local analysis target.
-    // Treating either as player-centric would let `playerNavigationRoute` hand
-    // that target to a route the player provider persists from, promoting a
-    // local choice to the account's current player.
+    // Treating either as player-centric would let `playerNavigationRoute`
+    // promote that local choice to the account's current player.
     expect(isPlayerCentricPath("/rank-manipulation")).toBe(false);
     expect(isPlayerCentricPath("/matchmaking-analysis")).toBe(false);
   });

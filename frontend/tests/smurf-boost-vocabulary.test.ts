@@ -7,15 +7,9 @@ import {
 } from "../features/smurf-boost/smurf-boost-vocabulary";
 
 describe("wording for a result this build has not seen", () => {
-  // Each of these lookups ends in a fallback, and the file says why: "a result
-  // computed under a later model version must still be readable instead of
-  // failing the whole page". The backend can add a family or a note at any
-  // time, and this frontend is deployed separately, so that is a matter of
-  // when rather than if.
-  //
-  // Nothing was holding any of it. Dropping `?? family`, `?? note` or `?? ""`
-  // kept all 364 tests green, and the page then renders the string "undefined"
-  // where a screen about smurfing and boosting accusations puts its label.
+  // Each of these lookups ends in a fallback so a result computed under a later
+  // model version stays readable. Dropping `?? family`, `?? note` or `?? ""`
+  // kept all 364 tests green and rendered the string "undefined" on the page.
 
   it("shows an unknown family's own identifier rather than undefined", () => {
     expect(familyTitle("account_sharing_v2")).toBe("account_sharing_v2");

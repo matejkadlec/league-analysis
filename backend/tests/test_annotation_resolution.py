@@ -1,21 +1,8 @@
 """Every annotation in `app/` must still resolve at runtime.
 
 Under PEP 649 an annotation is lazy, so a name imported only under
-`if TYPE_CHECKING:` costs nothing until something evaluates it — and then
-`inspect.signature()`, `typing.get_type_hints()` or any library reflecting over
-a signature raises `NameError` at call time, from a module that imported
-perfectly. Ruff's UP037 actively creates the condition by stripping the quotes
-that used to make such annotations safe, and Pyright agrees the name is valid
-because it honours `TYPE_CHECKING`, so neither gate reports it.
-
-It has bitten this repository four times: both service decorators (every
-decorated method raised on first call, caught only by four tests),
-`jobs/base.py`, `matches/match_utils.py`, and
-`riot_api/credential_health.py` — the last of which needed a genuine import
-cycle broken to fix, which is why the cheap fix is the wrong instinct.
-
-This walks the whole package rather than a list, so a new occurrence fails here
-instead of in production.
+`if TYPE_CHECKING:` raises `NameError` whenever something evaluates it — and
+neither Ruff nor Pyright reports that, so this walks the whole package.
 """
 
 from __future__ import annotations

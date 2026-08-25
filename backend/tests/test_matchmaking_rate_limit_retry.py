@@ -2,8 +2,7 @@
 
 `_api_call_with_retries` is the whole of this analysis's rate-limit posture --
 how long it waits, how many times, what it tells the client while waiting, and
-whether exhaustion is a failure or a shrug. None of it had a test, so any
-change to the loop was unfalsifiable.
+whether exhaustion is a failure or a shrug.
 """
 
 from typing import Any

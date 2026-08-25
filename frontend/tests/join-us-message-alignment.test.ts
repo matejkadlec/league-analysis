@@ -10,15 +10,9 @@ import {
 } from "@/features/auth/utils/join-us-message";
 
 /**
- * The Join Us message bounds are written on both sides, and the two halves of
- * the rule live in different places on the backend, so they are read from
- * different places here.
- *
- * The maximum is a `max_length` on the request schema, so it reaches the
- * OpenAPI document. The minimum is a plain module constant the service
- * compares against and reaches nothing -- the form's counter is the only
- * reason a user ever sees it before submitting, and a form that disagreed
- * would either block a message the API would take or invite a 422.
+ * The two halves of the rule live in different places on the backend, so they
+ * are read from different places here: the maximum is a `max_length` that
+ * reaches the OpenAPI document, the minimum a module constant reaching nothing.
  */
 const BACKEND_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -26,8 +20,7 @@ const BACKEND_ROOT = join(
 );
 
 // Where the constant lives, not where the flow lives: it moved from
-// `service.py` to `join_us.py` with the Join Us extraction, and the check
-// failed as a missing literal rather than as a mismatch. The error below is
+// `service.py` to `join_us.py` with the Join Us extraction. The error below is
 // the only thing that says which file to look in.
 const MINIMUM_SOURCE = "app/features/auth/join_us.py";
 

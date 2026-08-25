@@ -1,19 +1,8 @@
 """The timeline DTOs must keep agreeing with Riot's published schema.
 
-`MatchTimelineDTO` and friends were generated from Riot's OpenAPI
-specification, and the point of generating them is lost the moment the two
-drift apart. The specification slice is vendored next to this test rather than
-fetched, because the suite is offline by construction (`--disable-socket`) and
-because a gate that reaches the network fails for reasons unrelated to the
-change under review.
-
-When Riot adds or renames a field, the workflow is:
-
-    curl -sSfL https://raw.githubusercontent.com/MingweiSamuel/riotapi-schema/gh-pages/openapi-3.0.0.json \
-      | uv run --project backend python backend/tests/data/refresh_timeline_schema.py
-
-which turns the change into a reviewable diff, and this test into the thing
-that says whether the DTOs still match it.
+The specification slice is vendored next to this test rather than fetched,
+because the suite is offline by construction (`--disable-socket`). Refresh it
+with `backend/tests/data/refresh_timeline_schema.py` when Riot changes a field.
 """
 
 from __future__ import annotations
@@ -99,12 +88,9 @@ def test_dto_invents_no_field(schema_name: str) -> None:
 def test_only_the_structural_spine_is_required() -> None:
     """Leaves stay optional even where Riot marks them required.
 
-    Riot's specification is generated from a reference that carries documented
-    errors, and this repository has already been bitten by a field the portal
-    called required and the live API omitted. Requiring a leaf nothing reads
-    would turn a Riot quirk into a failed match sync, so the guarantee is
-    deliberately narrow — and this test is what keeps a future regeneration
-    from quietly widening it.
+    Riot's specification carries documented errors — a field the portal called
+    required and the live API omitted. Requiring a leaf nothing reads would turn
+    a Riot quirk into a failed match sync, so the guarantee is deliberately narrow.
     """
     required_by_model = {
         name: {

@@ -61,10 +61,9 @@ class JobStopSignal(Exception):
 class StoredAPICall(TypedDict):
     """One endpoint's grouped calls, as the jobs UI reads them back out of JSONB.
 
-    `frontend/lib/core/schemas/jobs.ts:JobExecutionApiCallSchema` is the other half
-    of this shape; keep the two in step. The four optional keys are the split
-    below: a single call keeps its whole params dict, a group keeps only the
-    key that varied and its first and last value.
+    `frontend/lib/core/schemas/jobs.ts:JobExecutionApiCallSchema` is the other
+    half of this shape; keep the two in step. A single call keeps its whole
+    params dict, a group keeps only the key that varied and its first/last.
     """
 
     endpoint: str
@@ -140,13 +139,7 @@ def _format_api_calls_for_storage(
 
 
 def _validation_field_locations(source_error: Exception | None) -> list[str]:
-    """Return reviewed Pydantic location paths from a diagnostic exception.
-
-    Pydantic ships `ErrorDetails` as a `py.typed` TypedDict whose `loc` is
-    `tuple[int | str, ...]`; this used to re-derive that at runtime through a
-    `getattr("errors")`, three `cast()`s and a `callable`/list/dict/tuple
-    ladder -- twenty-four lines to read a type the dependency already states.
-    """
+    """Return reviewed Pydantic location paths from a diagnostic exception."""
     if not isinstance(source_error, ValidationError):
         return []
     return [
@@ -196,14 +189,8 @@ def _build_error_diagnostic(
 class BaseJob(ABC):
     """Abstract base class for all automated jobs.
 
-    Provides common functionality for job execution:
-    - Job execution tracking and logging
-    - Error handling and metrics collection
-    - Database session management
-    - Structured logging with correlation IDs
-
-    Subclasses must implement:
-    - execute(): The main job logic
+    Subclasses implement execute(); this class handles execution tracking,
+    error diagnostics, metrics, session management and structured logging.
     """
 
     recorded_errors_are_fatal = True
@@ -239,16 +226,14 @@ class BaseJob(ABC):
         """Zero every per-run accumulator.
 
         The scheduler builds one instance per job and re-runs it on an
-        interval, so run() must call this: without it, metrics, error
-        diagnostics and API-call records carry over and every scheduled
-        execution row reports process-lifetime totals instead of its own.
+        interval, so run() must call this or metrics, diagnostics and API-call
+        records carry over into the next execution row.
         """
         self.job_config: JobConfiguration | None = None
         self.job_execution: JobExecution | None = None
-        # Plain copies of the identity and start time. A rollback expires every
+        # Plain copies of the identity and start time: a rollback expires every
         # ORM attribute, and reloading one outside the async greenlet raises
-        # MissingGreenlet, so completion paths must never read them off the
-        # instance.
+        # MissingGreenlet.
         self.job_execution_id: int | None = None
         self.job_execution_started_at: datetime | None = None
         self.job_execution_status: JobStatus | None = None
@@ -391,11 +376,7 @@ class BaseJob(ABC):
     ) -> None:
         """Log job execution completion and update JobExecution record.
 
-        :param db: Database session
-        :param success: Whether the job succeeded
-        :param error_message: Optional error message
-        :param logs: Optional list of log entries
-        :param status: Optional explicit status (overrides success-based status)
+        `status`, when given, overrides the success-based status.
         """
         # Exit early if job execution was never started
         if self.job_execution is None:
@@ -443,8 +424,7 @@ class BaseJob(ABC):
                 db, update_stmt
             )
 
-            # Publish the terminal status only once it is actually persisted.
-            # A failed write falls through to `_fail_unfinished_execution`, and
+            # Publish the terminal status only once it is actually persisted:
             # a cached status from a write that never landed would contradict
             # the stored row for every reader that classifies from the scalar.
             if self._completion_logged:
@@ -545,9 +525,8 @@ class BaseJob(ABC):
     async def _begin_run(self, db: AsyncSession) -> bool:
         """Start bookkeeping and register runtime control when the job may run."""
         # Claim first: everything below awaits, and a run that started its
-        # bookkeeping before taking the key could be interleaved with another
-        # run of the same configuration doing the same. Test runs claim the
-        # negated key, so they never conflict with regular runs.
+        # bookkeeping before taking the key could interleave with another run
+        # of the same configuration. Test runs claim the negated key.
         if not claim_runtime_control(self.runtime_key, asyncio.current_task()):
             logger.info(
                 "Skipping job execution - already running",
@@ -905,11 +884,8 @@ class BaseJob(ABC):
     ):
         """A job's Riot client with its bookkeeping wired on, not remembered.
 
-        Every job used to pass request_callback by hand and store the call
-        records after its happy path — so a job that raised lost its records,
-        and a job that forgot the kwarg silently reported zero API requests.
-        This wires the request counter in and stores the records on exit,
-        failure included.
+        Wires the request counter in and stores the call records on exit,
+        failure included, so a job that raises does not lose them.
         """
         client_options.setdefault("request_callback", self._track_api_request)
         async with await self.get_job_riot_api_client(db, **client_options) as client:
@@ -921,17 +897,9 @@ class BaseJob(ABC):
     async def _load_tracked_puuids(self, db: AsyncSession) -> list[str]:
         """Load the global allowlist or the explicit target_puuids set.
 
-        Both writers resolve their player list through this; a job that
-        ignores target_puuids simply never calls it.
-
-        Identifiers, not rows: `handle_player_error` rolls back to keep a
-        recoverable failure from poisoning the session, and a rollback expires
-        every instance the session holds -- `expire_on_commit=False` governs
-        commit only. The next attribute read on a row loaded before the
-        rollback would then be a lazy refresh outside the async greenlet, so
-        one skippable player error would kill the whole run with a
-        `MissingGreenlet`. A string cannot expire; each loop re-reads its row
-        through `db.get`, which refreshes through awaited IO.
+        Identifiers, not rows: `handle_player_error` rolls back a recoverable
+        failure, which expires every instance the session holds and turns the
+        next attribute read into a `MissingGreenlet`. A string cannot expire.
         """
         if self.target_puuids is None:
             players = await PlayerService(db).get_globally_tracked_players()
@@ -955,15 +923,9 @@ class BaseJob(ABC):
     ) -> bool:
         """Classify one player's failure and answer whether the run should stop.
 
-        Three loops across two jobs each spelled this out, and each reached a
-        slightly different answer about when to give up -- which is the whole
-        of a job's policy for a failing player, and the part that decides
-        whether a run keeps spending calls on a key Riot has already rejected.
-
         Returns True when the caller should stop. A database error is re-raised
         instead: the session cannot be reused, so continuing would run every
-        later player against a session that is already unusable and report one
-        failure as a list of unrelated ones.
+        later player against a session that is already unusable.
         """
         is_api_key_err = is_riot_api_key_error(error)
         logger.error(message, puuid=puuid, error_type=type(error).__name__)

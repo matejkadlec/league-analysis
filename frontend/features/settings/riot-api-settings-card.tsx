@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { formatDateTime } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
+import { cn } from "@/lib/core/utils";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
@@ -212,11 +213,11 @@ export function RiotApiSettingsCard() {
 
           {testResult && (
             <Alert
-              className={
+              className={cn(
                 testResult.success
                   ? "border-green-500/50 bg-green-500/10"
-                  : "border-red-500/50 bg-red-500/10"
-              }
+                  : "border-red-500/50 bg-red-500/10",
+              )}
             >
               <div className="flex items-start gap-2">
                 {testResult.success ? (

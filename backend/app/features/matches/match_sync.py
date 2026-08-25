@@ -34,23 +34,16 @@ OnMatchStored = Callable[[int, str], None] | None
 
 # The oldest release still synced. Deliberately not shared with
 # `timeline._uses_historical_atakhan_contract`, which happens to test the same
-# number today: that one records a permanent fact about when Riot changed the
-# objective set, while this one is a policy that moves when support does.
+# number today but records a permanent fact rather than a movable policy.
 OLDEST_SYNCED_GAME_MAJOR = 16
 
 
 def is_current_game_version(game_version: str) -> bool:
     """Whether a Riot match belongs to a release still worth syncing.
 
-    A `>=` on the major, not a prefix match. The prefix form answered False for
-    every future season, and the caller reads False as "the rest of this queue
-    is older, stop paging" -- so the first Riot major bump would have stopped
-    match ingestion for every player and every queue while the job still
-    reported SUCCESS with zero records.
-
-    A version this cannot parse counts as current, because refusing to sync is
-    the expensive mistake here and the caller's other branch simply stores one
-    match it might not have needed.
+    A `>=` on the major, not a prefix match: the caller reads False as "the
+    rest of this queue is older, stop paging", so a prefix form would stop
+    ingestion at the first Riot major bump. An unparseable version is current.
     """
     try:
         return int(game_version.split(".", 1)[0]) >= OLDEST_SYNCED_GAME_MAJOR
@@ -71,14 +64,8 @@ def must_abort_writer_sync(error: Exception) -> bool:
     """Return whether a lower-level sync error must reach the owning job.
 
     `is_database_job_error` asks whether continuing would reuse a failed or
-    unavailable session, and for a lost connection or an aborted transaction
-    the answer is yes. An `IntegrityError` is the exception: it is about the
-    one row being written, both writers below roll the session back before
-    re-raising, and the caller already logs the match and moves to the next
-    one. Escalating it failed a whole run twice -- once on the bystander
-    player-row race that `players/identity.py` documents, and again on the
-    `fk_match_timelines_puuid_players` violation of 2026-08-21, where four
-    consecutive Match Fetcher runs died on the same single match.
+    unavailable session. An `IntegrityError` is the exception: it is about the
+    one row, both writers roll back before re-raising, and the caller moves on.
     """
     if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
         return False
@@ -307,8 +294,7 @@ async def backfill_timeline_only_match(
     except Exception as error:
         # Without this the session is left holding a failed transaction and
         # every later match in the run fails on it, so the run's first error
-        # would be the only true one. `upsert_match` has always rolled back
-        # here; this path did not.
+        # would be the only true one.
         logger.error(
             "Failed to store a timeline-only backfill",
             match_id=match_id,

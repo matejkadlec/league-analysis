@@ -19,10 +19,9 @@ async def get_smurf_boost_service(
 ) -> SmurfBoostDetectionService:
     """Get smurf and boost detection service instance.
 
-    The caller is resolved here rather than per endpoint. Every stored run
-    belongs to one account, and a route that had to remember to pass the owner
-    was a route that could forget -- which is how the newest-run lookup came to
-    answer with whichever account had run last.
+    The caller is resolved here rather than per endpoint: every stored run
+    belongs to one account, and a route that has to remember to pass the owner
+    is a route that can forget.
     """
     return SmurfBoostDetectionService(db, current_user.id)
 

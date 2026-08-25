@@ -7,12 +7,9 @@ import { LEGAL_PAGES } from "@/lib/core/legal-pages";
 import { cn } from "@/lib/core/utils";
 
 /**
- * Shared by the two footers so they cannot say different things about the
- * same year or link to different sets of legal pages.
- *
- * Exported because `CookieSettingsTrigger` is a button, not a `Link`, and has
- * to be handed the same styling to sit in the same row without looking like a
- * different kind of thing.
+ * Shared by the two footers so they cannot disagree about the year or link to
+ * different sets of legal pages. Exported because `CookieSettingsTrigger` is a
+ * button rather than a `Link` and has to be handed the same styling.
  */
 export const LEGAL_LINK_CLASS =
   "underline transition-colors duration-300 hover:text-[#cfa93a]";

@@ -7,16 +7,9 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles } from "./source-scan-support";
 
 /**
- * Withdrawing cookie consent erases `OPTIONAL_STORAGE_KEYS`, and nothing else.
- *
- * So a key the app writes but that list does not name goes on surviving a
- * withdrawal -- no error, no failing test, just data the viewer asked to have
- * removed and which is still there. The three keys used to be written in two
- * places each (their writer, and that list), which is the arrangement where
- * renaming one produces exactly that.
- *
- * These two checks are what make the single registry hold: every key comes
- * from a constant, and every constant is in the list that clears them.
+ * Withdrawing consent erases `OPTIONAL_STORAGE_KEYS` and nothing else, so a
+ * key the app writes but that list does not name survives a withdrawal with
+ * no error anywhere. These two checks are what make the single registry hold.
  */
 const CONSENT_STORAGE = join(
   dirname(fileURLToPath(import.meta.url)),

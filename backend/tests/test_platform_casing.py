@@ -1,16 +1,8 @@
 """`platform` has exactly one stored spelling.
 
-Five write paths disagreed about the casing of `core.players.platform` while
-two lookups compared it case-sensitively, so a player whose row was created by
-a match sync was stored lowercase and then could not be found by name and tag.
-Two other read paths had already been patched around it individually — one with
-`ilike`, one with `lower()` — which is what a convention nobody enforces looks
-like on its way to becoming a bug.
-
-The database now holds the invariant (`ck_players_platform_is_lowercase`), so
-these tests cover the half a check constraint cannot: that the values the
-application *sends* are already canonical, and that the lookups compare against
-the same spelling the writers produce.
+The database holds the invariant (`ck_players_platform_is_lowercase`), so these
+tests cover the half a check constraint cannot: that the values the application
+*sends* are already canonical, and that lookups compare against that spelling.
 """
 
 from __future__ import annotations
@@ -54,8 +46,7 @@ def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> No
 
     The column is `varchar(4)` under a lowercase check constraint, so a new
     Riot platform stores cleanly -- and then fails `PlayerResponse`, whose
-    field is the enum. That is a 500 on the player routes and on every
-    tracked-player load inside the writer jobs. One skipped match is cheaper.
+    field is the enum: a 500 on the player routes and in the writer jobs.
     """
     with pytest.raises(ValueError):
         normalize_platform(unknown)
@@ -82,10 +73,9 @@ def test_platform_enum_values_are_already_canonical() -> None:
 def test_the_player_lookup_compares_against_canonical_casing() -> None:
     """The one remaining platform-filtered lookup binds the stored spelling.
 
-    It used to `ilike` its way around the question. The column is lowercase by
-    check constraint and the parameter is the enum, so an equality comparison
-    is both correct and index-usable -- but only while the value being bound
-    is the enum's own.
+    The column is lowercase by check constraint and the parameter is the enum,
+    so an equality comparison is both correct and index-usable -- but only
+    while the value being bound is the enum's own.
     """
     statement = build_player_search_query(Platform.EUN1, "name", "faker", "faker", None)
 

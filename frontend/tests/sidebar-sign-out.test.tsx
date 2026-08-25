@@ -4,19 +4,9 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The sidebar's Sign Out button is one of exactly two callers allowed to end
- * a session the server never answered about.
- *
- * `logout()` defaults to changing nothing locally when its request does not
- * arrive, because the caller a future author writes is a timer or an effect,
- * and one of those retracting the hint over a redeploy strands a live 30-day
- * refresh token. The two exceptions are buttons under someone's finger, where
- * being left staring at an account you asked to leave is the worse failure.
- *
- * Nothing else can pin that. The call arrives through React context, so no
- * import or syntax rule sees it, and dropping the flag here is a one-word
- * edit that leaves every other test in the suite green while the button
- * silently stops working for the visitor who needs it most.
+ * Sign Out is one of exactly two callers allowed to pass
+ * `evenIfTheServerCannotBeReached`. It arrives by React context, so no lint
+ * rule sees it and only this file holds the flag on.
  */
 
 const nav = vi.hoisted(() => ({ pathname: "/" }));
@@ -80,9 +70,8 @@ describe("the sidebar Sign Out button", () => {
 
   it("goes dead while the request is in flight", async () => {
     // Sign Out waits for the server, because only the server can revoke.
-    // Against a backend that hangs that is the full ten-second deadline with
-    // nothing on screen moving, so without the pending state the button reads
-    // as broken and every further click stacks another request.
+    // Against a backend that hangs that is the full ten-second deadline, so
+    // without the pending state every further click stacks another request.
     let releaseServer: (() => void) | undefined;
     auth.logout.mockImplementation(
       () =>

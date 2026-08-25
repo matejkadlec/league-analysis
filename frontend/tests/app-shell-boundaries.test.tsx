@@ -5,18 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The four files this branch exists for, and nothing was watching them.
- *
- * `not-found`, `loading`, `error` and `global-error` each used to render
- * `null` unless `useAuth()` said the visitor was authenticated -- which is the
- * blank page in the report. Reverting all four to those bodies left the suite
- * at 337 passing, and left the coverage summary byte-identical: vitest's
- * default scope is "files a test imported", so `app/` was in neither the
- * numerator nor the denominator and no ratchet could ever reach it.
- *
- * These render with no provider mounted at all. That is the assertion: the
- * shells must not consult session state, because every one of them is on
- * screen at a moment when the session is unknown or unavailable.
+ * `not-found`, `loading`, `error` and `global-error` render with no provider
+ * mounted at all, which is the assertion: none of them may consult session
+ * state.
  */
 
 import ErrorBoundary from "@/app/error";
@@ -84,12 +75,9 @@ describe("the shells shown when there is no page to show", () => {
   });
 
   it("brings its own document, because it replaces the one that threw", () => {
-    // Next.js renders `global-error.tsx` in place of the root layout, so
-    // whatever it returns *is* the document: without `html` and `body` of its
-    // own there is nothing to render into, and the boundary of last resort
-    // fails at exactly the moment it is needed. jsdom will not nest an `html`
-    // inside a container div, so this is the one assertion that has to be
-    // made against server markup.
+    // Next renders `global-error.tsx` in place of the root layout, so what it
+    // returns *is* the document. jsdom will not nest an `html`, so this is
+    // asserted against server markup.
     const markup = renderToStaticMarkup(
       <GlobalError error={thrown} reset={() => {}} />,
     );

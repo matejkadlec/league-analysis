@@ -8,8 +8,7 @@ import {
 /**
  * Two surfaces read the same gap with different thresholds on purpose: the
  * results card leaves a gap under three points grey, the history table colours
- * every gap. These cases pin both readings, including the boundary, so the
- * shared function cannot quietly adopt one of them for both.
+ * every gap. These cases pin both readings, including the boundary.
  */
 describe("gapVerdict", () => {
   it("calls a gap inside the fairness band fair", () => {

@@ -7,6 +7,9 @@ import {
 } from "@/features/auth/utils/auth-state-cookie";
 import { isPublicRoute } from "@/features/auth/utils/public-routes";
 
+// The edge asks nobody anything: it routes on the hint cookie alone and makes
+// no requests, because one unanswered probe cannot tell "signed out" from
+// "unreachable" and it has no way to refresh.
 function isStaticOrInternal(pathname: string): boolean {
   return (
     pathname.startsWith("/_next") ||
@@ -42,15 +45,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Match all routes except static files and api routes
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

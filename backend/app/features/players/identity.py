@@ -35,20 +35,9 @@ def upsert_player_statement(
 ) -> Insert:
     """Build the INSERT ... ON CONFLICT that satisfies the participant FK.
 
-    The precedence is unchanged -- the participant's own field, else whatever
-    is already stored, else a placeholder -- but it is expressed in the
-    conflict clause rather than in Python over a prior SELECT. That SELECT was
-    the race: the matchmaking worker and the Match Fetcher create the same
-    bystander player rows on separate sessions, both found nothing, and the
-    loser's IntegrityError was a SQLAlchemyError like any other to
-    `must_abort_writer_sync`, so one primary-key collision on one participant
-    failed the entire job run, skipping every remaining tracked player. That
-    predicate has since stopped escalating row-level violations; this clause
-    is what keeps the row from being skipped at all.
-
-    `is_tracked_by_anyone` is deliberately absent from the conflict clause:
-    the stored value wins, because writing back a value read moments earlier is
-    how a concurrent track or untrack gets lost.
+    Precedence -- the participant's own field, else the stored one, else a
+    placeholder -- lives in the conflict clause so concurrent writers cannot
+    race. `is_tracked_by_anyone` is absent: a stale write-back loses a track.
     """
     values: dict[str, Any] = {
         "puuid": participant.puuid,

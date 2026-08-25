@@ -153,11 +153,9 @@ describe("the executions list's paging", () => {
   });
 
   it("keeps every loaded page on screen through a failed poll", async () => {
-    // The 15-second poll refetches all loaded pages. If the failure envelope
-    // were returned as data instead of thrown, React Query would *replace*
-    // the good pages with it, truncate the list back to page 1, and stop
-    // paging — an operator scrolled to 40 rows loses 20 of them to a deploy
-    // blip and they do not come back on the next successful tick.
+    // The 15-second poll refetches every loaded page. Returned as data rather
+    // than thrown, a failure envelope *replaces* the good pages and truncates the
+    // list back to page 1 -- 20 rows an operator does not get back.
     const { queryClient } = renderExecutions();
     await waitFor(() =>
       expect(screen.getByText("Showing 20 of 50 executions")).toBeTruthy(),

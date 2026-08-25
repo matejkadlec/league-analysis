@@ -14,17 +14,9 @@ function testQueryClient() {
 }
 
 /**
- * Render a component under a fresh, retry-free `QueryClient`.
- *
- * Twenty-eight suites built this wrapper by hand, and the retry settings had
- * split three ways between them: queries only, queries and mutations, or a
- * bare `new QueryClient()` that retried three times and so turned one failing
- * request into a test that waited on three. Retries are never what a unit test
- * is measuring; a suite that needs them can still build its own client.
- *
- * A client per render, not per module: TanStack caches by query key, so a
- * shared client would let one test's answer satisfy the next test's request
- * and hide a call that never happened.
+ * Render a component under a fresh, retry-free `QueryClient`. Retries are
+ * never what a unit test measures, and a client per render keeps one test's
+ * cached answer from satisfying the next test's request.
  */
 export function renderWithQueryClient(ui: ReactNode) {
   const queryClient = testQueryClient();
@@ -45,11 +37,8 @@ export function renderWithQueryClient(ui: ReactNode) {
 }
 
 /**
- * The same client, for a hook rather than a component.
- *
- * `wrap` nests inside the provider, which is the order the suites that need
- * one depend on: a context provider that itself reads a query has to be able
- * to see the client.
+ * The same client, for a hook rather than a component. `wrap` nests inside
+ * the provider, so a context provider that itself reads a query can see it.
  */
 export function renderHookWithQueryClient<TProps, TResult>(
   hook: (props: TProps) => TResult,

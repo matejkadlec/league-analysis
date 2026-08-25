@@ -2,9 +2,7 @@
 
 The retry and logging files both drive the real ``_make_request`` path over
 an ``httpx.MockTransport``. The client builder and the sleep recorder live
-here once, so a change to client stubbing or to the sleep-observation
-contract lands in every suite at the same time instead of leaving one of
-them silently testing stale wiring.
+here once, so both suites share one stubbing contract.
 """
 
 import asyncio
@@ -67,9 +65,8 @@ def reset_shared_burst_clock() -> None:
     """Reset the process-wide Riot burst clock between tests.
 
     `RateLimiter` keeps its 20-requests/second spacing on the class, because
-    the ceiling belongs to the API key rather than to one client. That makes
-    it leak across tests: whichever test issued a Riot request last decides
-    whether the next one sleeps.
+    the ceiling belongs to the API key rather than to one client. That leaks
+    across tests: whichever test issued a Riot request last decides the next.
     """
     from app.core.riot_api.rate_limiter import RateLimiter
 

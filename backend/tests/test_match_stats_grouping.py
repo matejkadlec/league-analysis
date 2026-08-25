@@ -1,13 +1,8 @@
 """Characterise champion and lane statistic aggregation.
 
-`match_stats.py` had no test of any kind: nothing in `tests/` imported these
-functions and no route test reaches `/champion-stats` or `/lane-stats`. They
-are pure, so the absence was cheap to fix and expensive to leave -- the two
-accumulators and the two builders were near-copies, and a copy nobody checks is
-where the two halves quietly stop agreeing.
-
-Written to pass against the pre-refactor implementation as well, so it says
-what the code does rather than what the refactor happened to produce.
+The two accumulators and the two builders are near-copies, and a copy nobody
+checks is where the two halves quietly stop agreeing. Written to pass against
+the pre-refactor implementation as well.
 """
 
 import pytest
@@ -96,10 +91,8 @@ def test_lane_totals_skip_rows_with_no_lane() -> None:
 
 
 def test_a_nameless_champion_is_skipped_rather_than_grouped_under_nothing() -> None:
-    # The one intended behaviour change from sharing an accumulator with the
-    # lane path. `champion_name` is NOT NULL so this is a data defect either
-    # way, but it used to produce a row with a blank champion name in the
-    # response; now it produces no row.
+    # `champion_name` is NOT NULL so this is a data defect either way; a blank
+    # name produces no row rather than a row with a blank champion name.
     totals = accumulate_champion_stats(
         [participant(champion_name=""), participant(champion_name="Ahri")]
     )

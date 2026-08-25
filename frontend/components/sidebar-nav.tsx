@@ -9,6 +9,7 @@ import { CookieSettingsTrigger } from "@/components/cookie-settings-trigger";
 import { LEGAL_LINK_CLASS, LegalNotice } from "@/components/legal-notice";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
+import { cn } from "@/lib/core/utils";
 import {
   isPlayerCentricPath,
   playerNavigationRoute,
@@ -32,17 +33,14 @@ export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   // Sign out awaits the server before clearing anything, because only the
-  // server can revoke. Against a backend that hangs, that is the full probe
-  // deadline with nothing on screen moving -- the button reads as dead and
+  // server can revoke. Against a hanging backend the button reads as dead, so
   // every further click stacks another request.
   const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  // Scoped to player-centric routes, exactly as `player-context.tsx` scopes
-  // its own read. `/matchmaking-analysis` also carries `?puuid=`, but that is
-  // a page-local analyzed player; carrying it onto these links would hand it
-  // to a route the provider *does* persist from, quietly making a local
-  // choice the account's current player.
+  // Scoped exactly as `player-context.tsx` scopes its own read.
+  // `/matchmaking-analysis` also carries `?puuid=`, but that one is a
+  // page-local analysed player, not the account's current player.
   const urlPuuid = isPlayerCentricPath(pathname)
     ? searchParams.get("puuid")
     : null;
@@ -81,9 +79,10 @@ export function SidebarNav() {
       <aside
         suppressHydrationWarning
         style={{ backgroundColor: "#0a1428" }}
-        className={`fixed inset-y-0 left-0 z-40 w-[240px] transform shadow-xl transition-transform duration-300 ease-in-out md:sticky md:top-0 md:h-screen md:w-[220px] lg:w-[240px] ${
-          menuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-[240px] transform shadow-xl transition-transform duration-300 ease-in-out md:sticky md:top-0 md:h-screen md:w-[220px] lg:w-[240px]",
+          menuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        )}
       >
         <div className="flex h-full flex-col">
           {/* Logo Section */}
@@ -131,19 +130,21 @@ export function SidebarNav() {
                       href={href}
                       onClick={() => setMenuOpen(false)}
                       data-active={active}
-                      className={`block border-l-4 px-6 py-3 text-white transition-colors duration-300 hover:bg-white/10 ${
+                      className={cn(
+                        "block border-l-4 px-6 py-3 text-white transition-colors duration-300 hover:bg-white/10",
                         active
                           ? "border-[#cfa93a] bg-white/5"
-                          : "border-transparent hover:border-[#cfa93a]/50"
-                      }`}
+                          : "border-transparent hover:border-[#cfa93a]/50",
+                      )}
                     >
                       <span
                         suppressHydrationWarning
-                        className={`transition-colors duration-300 ${
+                        className={cn(
+                          "transition-colors duration-300",
                           active
                             ? "text-[#cfa93a] font-medium"
-                            : "hover:text-[#cfa93a]"
-                        }`}
+                            : "hover:text-[#cfa93a]",
+                        )}
                       >
                         {item.name}
                       </span>
@@ -178,9 +179,10 @@ export function SidebarNav() {
                   <Link
                     href="/jobs"
                     onClick={() => setMenuOpen(false)}
-                    className={`flex items-center gap-2 px-4 py-2 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] ${
-                      isActive("/jobs") ? "text-[#cfa93a] font-medium" : ""
-                    }`}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors duration-300 hover:text-[#cfa93a]",
+                      isActive("/jobs") ? "text-[#cfa93a] font-medium" : "text-white",
+                    )}
                   >
                     <Wrench className="h-4 w-4 text-[#cfa93a]" />
                     Jobs
@@ -190,9 +192,10 @@ export function SidebarNav() {
                 <Link
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-2 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] ${
-                    isActive("/settings") ? "text-[#cfa93a] font-medium" : ""
-                  }`}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors duration-300 hover:text-[#cfa93a]",
+                    isActive("/settings") ? "text-[#cfa93a] font-medium" : "text-white",
+                  )}
                 >
                   <Settings className="h-4 w-4 text-[#cfa93a]" />
                   Settings
@@ -219,9 +222,8 @@ export function SidebarNav() {
           {/* Footer */}
           <div className="border-t border-white/10 p-6">
             {/* The cookie policy tells every reader they can reopen the
-                dialog "using the Cookie settings link in the page footer".
-                Only the public footer carried one, so for a signed-in reader
-                that sentence named a control this shell did not render. */}
+                dialog "using the Cookie settings link in the page footer",
+                so the signed-in shell has to render one too. */}
             <LegalNotice>
               <CookieSettingsTrigger className={LEGAL_LINK_CLASS} />
             </LegalNotice>

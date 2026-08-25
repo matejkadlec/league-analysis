@@ -241,15 +241,9 @@ describe("Match History controls", () => {
   });
 
   it("reports a failed load inline, and retries when asked", async () => {
-    // This query sets `meta: { silenceErrorToast: true }`, so the card below
-    // is the *only* thing that tells the viewer anything went wrong -- and
-    // replacing its condition with `if (false)` kept all 362 tests green,
-    // leaving a failed load looking like a player with no matches.
-    //
-    // The rejection is shaped as a network failure on purpose: the component's
-    // own `retry` predicate stops retrying only for that kind, so this also
-    // pins the predicate that decides how long the viewer waits before being
-    // told.
+    // This query sets `silenceErrorToast`, so the card below is the only thing
+    // telling the viewer anything went wrong. The network-shaped rejection also
+    // pins the component's own `retry` predicate.
     const networkFailure = new axios.AxiosError("Network Error");
     validatedGet.mockReset();
     validatedGet.mockRejectedValue(networkFailure);

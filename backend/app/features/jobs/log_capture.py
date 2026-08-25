@@ -13,11 +13,8 @@ class BoundedLogCapture:
     """Log capture with bounded memory using deque.
 
     Automatically drops oldest entries when max capacity is reached. Only
-    events emitted while a job execution is bound (they carry the
-    ``job_execution_id`` contextvar, merged before this processor runs) are
-    captured: the deque exists so ``_get_job_logs`` can persist a job's own
-    records at completion, and request-scoped traffic would otherwise evict
-    a long job's early entries before they are harvested.
+    events carrying the ``job_execution_id`` contextvar are captured, so
+    request-scoped traffic cannot evict a long job's early entries.
     """
 
     def __init__(self, maxlen: int = 1000):

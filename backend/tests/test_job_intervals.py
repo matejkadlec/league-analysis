@@ -1,11 +1,8 @@
 """A job configuration that cannot name an interval must not be accepted.
 
-Both halves of this used to be silent. `_parse_interval_from_config` returned
-None for a *present but unusable* override, so `interval_seconds: 0` fell
-through to the schedule string and the job ran on a source nobody chose; and
-every caller of the resolver wrapped it in `except Exception: logger.error`,
-so `PUT /api/v1/jobs/{id}` answered 200 with the new config echoed back while
-APScheduler kept the old interval.
+A present but unusable override such as `interval_seconds: 0` must not fall
+through to the schedule string, and a swallowed resolver failure must not let
+`PUT /api/v1/jobs/{id}` answer 200 while APScheduler keeps the old interval.
 """
 
 from typing import Any, cast

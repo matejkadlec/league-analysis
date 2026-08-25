@@ -6,10 +6,8 @@ import { describe, expect, it } from "vitest";
 import { ExecutionStatusBadge } from "@/features/jobs/components/execution-status-badge";
 import type { JobStatus } from "@/lib/core/schemas";
 
-// The three surfaces that show an execution status each wrote this ladder out
-// in full, and they had drifted: the job card's history strip had lost the
-// CANCELLED and PAUSED colours, so a cancelled run there looked identical to a
-// pending one. Nothing failed, because no test read the badge. These do.
+// The three surfaces that show an execution status each write this colour
+// ladder out in full, so they drift silently unless something reads the badge.
 
 
 function badgeFor(status: JobStatus) {
@@ -41,10 +39,7 @@ describe("the execution status badge", () => {
   );
 
   it("draws the states that are neither a success nor a failure alike", () => {
-    // PENDING and RUNNING both mean "no outcome yet". The executions table
-    // used to single PENDING out as `outline` while every other surface called
-    // it `secondary`, which made the same run look different depending on
-    // where you read it.
+    // PENDING and RUNNING both mean "no outcome yet".
     const pending = badgeFor("PENDING").className;
     cleanup();
     const running = badgeFor("RUNNING").className;

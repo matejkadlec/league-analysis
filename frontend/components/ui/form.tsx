@@ -49,9 +49,8 @@ const useFormField = () => {
   const { getFieldState, formState } = useFormContext();
 
   // PATCHED (see components/CLAUDE.md): upstream tests `!fieldContext`, which
-  // is never true because the context defaults to `{}`, and tests it *after*
-  // `getFieldState` has already read through it. Checking the field name
-  // first is what makes the message the developer actually sees.
+  // is never true because the context defaults to `{}`. Checking the field
+  // name first is what makes the message the developer actually sees.
   if (!fieldContext.name) {
     throw new Error("useFormField should be used within <FormField>");
   }
@@ -114,18 +113,9 @@ const FormControl = React.forwardRef<
 >(({ ...props }, ref) => {
   const { error, formItemId, formMessageId } = useFormField();
 
-  // PATCHED (see components/CLAUDE.md): upstream always describes the control
-  // by a `-form-item-description` id, and points at a message id whenever
-  // `error` is set. `FormMessage` renders nothing without a message, so both
-  // could name elements that are not in the DOM. Describe the control only
-  // by the message that is actually on screen.
-  //
-  // Known gap, deliberately not machinery: `FormMessage` also renders when
-  // given children as static helper text, and `FormControl` is its sibling
-  // so it cannot see them. That case would be visible but unannounced.
-  // No call site passes children -- both use a bare `<FormMessage />` -- and
-  // wiring it properly needs a registration context that costs more than the
-  // case is worth. Pass helper text through a labelled element instead.
+  // PATCHED (see components/CLAUDE.md): describe the control only by the
+  // message on screen -- upstream names ids `FormMessage` may never render.
+  // Known gap: static helper children need their own labelled element.
   const describedBy = error?.message ? formMessageId : undefined;
 
   return (

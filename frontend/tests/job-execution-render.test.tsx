@@ -7,10 +7,9 @@ import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-a
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
 import type { JobExecutionApiCall } from "@/lib/core/schemas";
 
-// The two renderers behind a job execution's expanded view. The format
-// helpers they call are pinned by job-execution-format tests; what lives
-// here and nowhere else is the conditional structure — which call gets an
-// expander, which params are shown, and how a malformed log line degrades.
+// The two renderers behind a job execution's expanded view. What lives here
+// and nowhere else is the conditional structure — which call gets an expander,
+// which params are shown, and how a malformed log line degrades.
 
 
 const STARTED = "2026-08-19T10:00:00Z";

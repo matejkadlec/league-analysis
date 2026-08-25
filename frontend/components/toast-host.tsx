@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { z } from "zod";
 
 import { appToast, TOAST_DEFAULT_DURATION_MS } from "@/lib/core/hooks";
+import { cn } from "@/lib/core/utils";
 
 const TOAST_ICON_CLASS = "h-[18px] w-[18px]";
 const TOAST_PREVIEW_EVENT = "league-analysis:toast";
@@ -60,25 +61,25 @@ export function ToastHost() {
         success: (
           <CircleCheckBig
             aria-hidden="true"
-            className={`${TOAST_ICON_CLASS} text-[#166534]`}
+            className={cn(TOAST_ICON_CLASS, "text-[#166534]")}
           />
         ),
         warning: (
           <TriangleAlert
             aria-hidden="true"
-            className={`${TOAST_ICON_CLASS} text-[#854d0e]`}
+            className={cn(TOAST_ICON_CLASS, "text-[#854d0e]")}
           />
         ),
         error: (
           <CircleX
             aria-hidden="true"
-            className={`${TOAST_ICON_CLASS} text-[#991b1b]`}
+            className={cn(TOAST_ICON_CLASS, "text-[#991b1b]")}
           />
         ),
         info: (
           <Info
             aria-hidden="true"
-            className={`${TOAST_ICON_CLASS} text-[#1e3a8a]`}
+            className={cn(TOAST_ICON_CLASS, "text-[#1e3a8a]")}
           />
         ),
       }}

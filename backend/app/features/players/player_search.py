@@ -2,8 +2,7 @@
 
 Pure algorithm, no session: everything here works on a query string and
 `Player` rows the caller already holds. `PlayerService.fuzzy_search_players`
-owns the database round trip and the per-user tracking flags; this module
-owns what a search means.
+owns the database round trip and the per-user tracking flags.
 """
 
 from collections.abc import Sequence
@@ -90,9 +89,8 @@ def build_player_search_query(
 ) -> Select[tuple[Player]]:
     """Build SQLAlchemy query based on search type."""
     # `platform` arrives as the enum, whose values are the one spelling the
-    # column is allowed to hold (`ck_players_platform_is_lowercase`), so
-    # this compares rather than `ilike`-ing around a casing question that
-    # the database already settled.
+    # column is allowed to hold (`ck_players_platform_is_lowercase`), so an
+    # equality compare is enough.
     platform_filter = [Player.platform == platform.value] if platform else []
 
     if search_type == "full_id" and game_name and tag_line:
@@ -165,10 +163,6 @@ def _closest_field_distance(
     None when the search type compares nothing on this player. The field
     sets are deliberately different: a tag search only ever looks at the
     tag, and a game-name search sees the tag only inside the full Riot ID.
-
-    Split out from the caller only because the two together rank C on the
-    complexity gate; the four one-caller helpers this replaced did the
-    same work through four more frames.
     """
     composite = (
         f"{player.game_name}#{player.tag_line}".lower()

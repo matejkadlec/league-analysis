@@ -7,22 +7,15 @@ import {
 
 /**
  * `main` in the app shell is a flex item, so content wider than the viewport
- * stretches the whole document rather than scrolling inside its own card. A
- * table that needs 460px on a 390px phone therefore reads as a page-level
- * defect, which is why the assertion is on the document.
- *
- * The fixtures matter as much as the viewport: measured against an empty
- * database every one of these routes reports exactly 390, because none of the
- * wide descendants render without rows to put in them.
+ * stretches the document rather than its own card -- hence the assertion on
+ * the document. Against an empty database every route reports exactly 390.
  */
 
 const PHONE = { width: 390, height: 844 };
 
-// A container that scrolls its own content sideways keeps the document honest
-// while still costing the reader a swipe, so surfaces that should reflow are
-// measured one by one. `reflowSurfaces` names them, and each is asserted to
-// be present: a fixture that stopped producing matches fails here instead of
-// quietly skipping the assertion it exists for.
+// A container that scrolls its own content keeps the document honest while
+// still costing the reader a swipe, so surfaces that should reflow are measured
+// one by one and each asserted present.
 test.describe("player pages on a phone", () => {
   test.use({ viewport: PHONE });
 

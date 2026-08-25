@@ -1,10 +1,8 @@
 """Error classification shared by the job implementations.
 
 `RateLimitSignal` plus a handful of predicates that answer what a caught
-exception means -- an expired Riot key, a PUUID minted under a different key,
-a database failure that must abort the run. Each job decides for itself what
-to do about the answer; there is no shared handler, because the three jobs
-disagree about which errors are fatal.
+exception means. Each job decides for itself what to do about the answer;
+there is no shared handler, because the three jobs disagree about what is fatal.
 """
 
 from collections.abc import Iterator
@@ -24,8 +22,7 @@ logger = structlog.get_logger(__name__)
 class RateLimitSignal(Exception):
     """Signal that a rate limit was hit during job execution.
 
-    This is NOT a failure - it signals that the job should stop gracefully
-    and save its progress with a RATE_LIMITED status.
+    NOT a failure - the job should stop gracefully with a RATE_LIMITED status.
 
     :param retry_after: Seconds to wait before retrying (from Riot API)
     :param message: Optional message describing the rate limit

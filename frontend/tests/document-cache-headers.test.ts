@@ -10,12 +10,9 @@ import {
 } from "../next.config";
 
 /**
- * After a deploy, a cached HTML document still names the previous image's
- * `/_next/static` hashes. Cloudflare was willing to keep that document for
- * six hours (`s-maxage=21600`) and to serve it stale for a year
- * (`stale-while-revalidate=31514400`). The browser then asked for
- * `1-1rz19yxhyis.js`, the origin 404'd, and React mounted `undefined`
- * (minified error #130). Hashed assets may stay immutable; documents may not.
+ * A cached HTML document after a deploy still names the previous image's
+ * `/_next/static` hashes, so the browser asks for an asset the origin 404s and
+ * React mounts `undefined`. Hashed assets stay immutable; documents may not.
  */
 describe("document cache headers", () => {
   it("forbids storing HTML and reaffirms immutable hashed assets, in that order", async () => {

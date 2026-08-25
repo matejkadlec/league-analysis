@@ -153,6 +153,16 @@ A credential's identity is its row id, so replacing the key always produces a
 new identity and resets stale evidence. No key hash, prefix, suffix, or other
 key-derived fingerprint is persisted or returned.
 
+Every path that locks both tables takes the **key row before the health row**.
+The save path deletes the superseded key before binding the health record for
+exactly this reason: binding first would hold the health lock while waiting on
+a key row a concurrent request already holds, and the two deadlock. A second
+invariant falls out of the same race — a `LIMIT 1 … FOR UPDATE` chooses its row
+from its own snapshot and only then blocks, so a lock that loses to a
+concurrent replacement returns nothing rather than the new row. Reading that
+emptiness as "no key" reports `missing` for a live credential; the read is
+retried under a fresh snapshot instead.
+
 Both admin and non-admin headers read `/api/v1/settings/service-status`.
 Browser refresh, another tab, polling, and exact invalid-key lifecycle signals
 therefore converge on the same durable backend state. Dismissal identifiers use
@@ -244,6 +254,20 @@ be "fixed" away:
   before changing strict DTO or timeline behavior. Unknown current building or
   epic-monster kinds are logged with reviewed fields and retained in compact
   generic events/maps for follow-up.
+- **A MATCH-V5 match can come back structurally valid and empty (observed
+  2026-08-16).** Production stored `EUN1_3990695865` with no participants,
+  `queueId` 0, empty `gameMode`/`gameType`/`gameVersion`, `mapId` 0 and
+  `gameStartTimestamp` 0 — only `gameEndTimestamp` and `platformId` carried a
+  value. (The response itself was not logged; this is inferred from the row,
+  which is copied from the DTO field for field.) Every zero was persisted as
+  fact, the row was marked `fully_analyzed`, and its start-time source claimed
+  Riot had said the game began at epoch 0. Participants and `platformId` are
+  therefore refused when empty rather than defaulted. The `platformId` half is
+  the more dangerous one: substituting a house default like `EUN1` passes
+  normalization, and a KR or NA player first seen through that path gets that
+  platform written onto their player row, routing every later call for them to
+  the wrong region permanently. A rejected match is one recoverable per-match
+  failure; a wrong platform is silent and forever.
 - **Atakhan was removed in patch 26.1** (with Blood Roses and Feats of
   Strength). Atakhan columns and old compact events remain readable for
   pre-2026 matches, but Atakhan is not a current first-class objective.

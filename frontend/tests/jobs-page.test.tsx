@@ -25,10 +25,9 @@ vi.mock("@/features/auth/context/auth-context", async (importOriginal) => ({
   useAuth,
 }));
 
-// The three children are stubbed because what is under test here is the
-// page's own wiring: which tab is showing, which of the four job-list states
-// is rendered, and whether a click inside a job card reaches the other tab.
-// Each stub keeps the one prop the page is responsible for passing.
+// The three children are stubbed because what is under test here is the page's
+// own wiring: which tab is showing, which job-list state is rendered, and
+// whether a click inside a job card reaches the other tab.
 vi.mock("@/features/jobs", async (importOriginal) => ({
   ...(await importOriginal()),
   JobCard: ({
@@ -106,11 +105,9 @@ describe("the background jobs page", () => {
     await waitFor(() =>
       expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
     );
-    // The inactive panel must be absent, not merely hidden. This is the only
-    // assertion in the suite that touches `components/ui/tabs.tsx`, whose one
-    // consumer is this page: replace `TabsContent` with something that always
-    // renders and both panels stack on top of each other, which no assertion
-    // about the *active* tab can see.
+    // The inactive panel must be absent, not merely hidden: a `TabsContent`
+    // that always rendered would stack both panels, which no assertion about
+    // the active tab can see.
     expect(screen.queryByText(/executions list/)).toBeNull();
 
     fireEvent.click(screen.getByText(/job card Match Fetcher/));
@@ -188,11 +185,9 @@ describe("the background jobs page", () => {
         expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
       );
 
-      // The window is wide because `shouldAdvanceTime` lets real elapsed time
-      // add to the mocked clock, and the gate runs on a Pi that also runs
-      // deploys. It is still narrow enough to fail on a countdown that does
-      // not move (15) or one that has bottomed out (0), which is the whole
-      // claim.
+      // The window is wide because `shouldAdvanceTime` lets real elapsed time add to
+      // the mocked clock and the gate runs on a Pi that also runs deploys. Still
+      // narrow enough to fail on a countdown that does not move or has bottomed out.
       await vi.advanceTimersByTimeAsync(3000);
       await waitFor(() =>
         expect(

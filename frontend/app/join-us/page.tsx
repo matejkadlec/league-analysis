@@ -10,8 +10,8 @@ export default async function JoinUsPage() {
   const authStateCookie = cookieStore.get(AUTH_STATE_COOKIE_NAME)?.value;
   const isAuthenticatedHint = authStateCookie === AUTH_STATE_COOKIE_VALUE;
 
-  // Temporarily hidden while Riot production-key review is pending.
-  // Signed-in users are sent to home, signed-out users to sign-in.
+  // The page is hidden while Riot production-key review is pending: signed-in
+  // visitors go home, signed-out visitors to sign-in.
   if (isAuthenticatedHint) {
     redirect("/");
   }

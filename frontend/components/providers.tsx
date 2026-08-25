@@ -30,18 +30,14 @@ function cacheKey(key: readonly unknown[] | undefined): string | undefined {
 
 /**
  * Build the shared cache handlers exactly the way `Providers` mounts them.
- *
- * Kept as an exported factory (mirroring how `queryErrorToast` stays pure in
- * `lib/core/hooks.ts`) so the cache wiring is testable by driving a
- * QueryClient directly instead of rendering the whole provider tree.
+ * An exported factory so the wiring is testable by driving a QueryClient
+ * directly instead of rendering the whole provider tree.
  */
 export function createProvidersQueryClient(): QueryClient {
   return new QueryClient({
-    // 28 of the 35 `useQuery` call sites read only `data` and `isLoading`,
-    // so a failed fetch used to render as a permanently empty or loading
-    // surface that told the viewer nothing. Announcing it once here covers
-    // every call site including the ones not written yet, which is what a
-    // per-caller rule could never do.
+    // Most `useQuery` call sites read only `data` and `isLoading`, so a failed
+    // fetch renders as a permanently empty surface. Announcing it once here
+    // covers every call site including the ones not written yet.
     queryCache: new QueryCache({
       onError: (error, query) => {
         reportApiError(normalizeApiError(error), {
@@ -88,11 +84,8 @@ export function Providers({
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           {/* Not `fallback={null}`: `PlayerContextProvider` reads
-              `useSearchParams`, which bails out to client rendering during a
-              static prerender, and this boundary is what the prerender emits
-              in its place. A null fallback shipped every prerendered route
-              with an empty <body>, and pre-empted `app/loading.tsx`, which
-              sits further out and so never got the chance to render. */}
+              `useSearchParams`, which bails to client rendering during a static
+              prerender, so this fallback is what the prerender emits. */}
           <Suspense fallback={<AppSkeleton />}>
             <PlayerContextProvider>
               <AuthGate>{children}</AuthGate>

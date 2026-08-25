@@ -3,12 +3,9 @@
 import type { UserResponse } from "@/lib/core/schemas";
 
 /**
- * The signed-in user record, as the API declares it.
- *
- * This used to be ten hand-written fields duplicating `UserResponseSchema`,
- * with nothing holding the two together -- and `GET /auth/me` was the one
- * response in the app that reached React state without a zod parse, so a
- * renamed backend field would have landed here as garbage in silence.
+ * The signed-in user record, as the API declares it. Hand-written fields here
+ * left `GET /auth/me` the one response reaching React state without a zod
+ * parse, so a renamed backend field landed as garbage in silence.
  */
 export type User = UserResponse;
 
@@ -37,9 +34,8 @@ export interface AuthContextType {
   // know when the request has actually come back.
   /**
    * Ends the session. Without the flag this changes nothing locally when the
-   * server could not be reached -- the safe answer for anything automatic,
-   * which is what a timer or an effect will write. Pass the flag only from a
-   * control a person just used.
+   * server could not be reached -- the safe answer for anything automatic.
+   * Pass the flag only from a control a person just used.
    */
   logout: (options?: {
     evenIfTheServerCannotBeReached?: boolean;

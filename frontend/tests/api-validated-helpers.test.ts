@@ -90,11 +90,9 @@ afterAll(() => {
 
 describe("the validated request helpers", () => {
   it("refuses a payload the schema rejects instead of passing it through", async () => {
-    // This is the single guard the whole module exists for. `validateResponse`
-    // could return the parsed value or the raw one and every caller would look
-    // identical on the happy path, because for a valid payload they are the
-    // same object. On an invalid one the difference is unvalidated server data
-    // rendered as if it had been checked.
+    // The single guard the module exists for. Returning the parsed value or
+    // the raw one is indistinguishable on a valid payload -- same object -- so
+    // only an invalid one separates a check from unvalidated server data.
     vi.spyOn(console, "error").mockImplementation(() => {});
     reply = { status: 200, data: { id: "not a number", secret: "leak" } };
 
@@ -105,17 +103,13 @@ describe("the validated request helpers", () => {
   });
 
   it("logs which field failed without logging what was in it", async () => {
-    // The rejected payload is the one most likely to hold something that
-    // should not be in a log — it is server data that did not match its
-    // contract. `logValidationError` takes `data` and deliberately drops it
-    // (`void data`), keeping the url and the issue paths, which is what
-    // actually identifies the break.
+    // A rejected payload is server data that broke its contract, so it is the
+    // one most likely to hold something that should not be logged. The url and
+    // the issue paths identify the break without it.
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    // One failure at the top level and one inside a nested object. The nested
-    // one is the reason `issue.path.join(".")` exists at all: with only a
+    // The nested failure is why `issue.path.join(".")` exists: with only a
     // top-level fixture, joining the path and taking its first segment are
-    // indistinguishable, and a log that says "profile" instead of
-    // "profile.email" names the wrong field on a response with several.
+    // indistinguishable, and "profile" names the wrong field.
     const Nested = z.object({
       id: z.number(),
       profile: z.object({ email: z.string() }),
@@ -128,11 +122,9 @@ describe("the validated request helpers", () => {
     await validatedGet(Nested, "/players/context");
 
     expect(error).toHaveBeenCalledTimes(1);
-    // Read the logged object rather than searching its JSON. The first draft
-    // asserted `toContain("id")` and passed against a mutation that blanked
-    // every issue path, because the Zod issue *code* is `invalid_type` and
-    // that string contains "id". A substring assertion over a serialised
-    // object matches coincidences.
+    // Read the logged object rather than searching its JSON: `toContain("id")`
+    // passed against blanked issue paths, because Zod's `invalid_type` code
+    // contains "id". A substring over a serialised object matches coincidences.
     const [message, payload] = error.mock.calls[0] as [
       string,
       { url: string; issues: { code: string; path: string }[] },
@@ -143,10 +135,9 @@ describe("the validated request helpers", () => {
       "id",
       "profile.email",
     ]);
-    // The code says *how* each field failed. Asserted as non-empty rather
-    // than by value: the literals are Zod's own vocabulary, and pinning them
-    // would turn a library upgrade that changed nothing about this app into a
-    // failing test, while a blanked code is what actually loses the reader.
+    // The code says *how* each field failed. Asserted as non-empty rather than
+    // by value: the literals are Zod's own vocabulary, and pinning them would
+    // fail on a library upgrade that changed nothing about this app.
     for (const issue of payload.issues) {
       expect(issue.code.length).toBeGreaterThan(0);
     }
@@ -164,13 +155,9 @@ describe("the validated request helpers", () => {
   it.each(HELPERS)(
     "answers a failed %s rather than throwing out of the helper",
     async (_method, call) => {
-      // Callers branch on `result.success`; `unwrap` is what turns a failure
-      // into a throw, and it is deliberately a separate step. A helper that
-      // rejected instead would take the same failure past every `if
-      // (!result.success)` in the app and into an unhandled rejection.
-      //
-      // All five are covered because all five carry their own copy of the
-      // `catch`: testing one leaves four `return`s that could be anything.
+      // Callers branch on `result.success`; turning a failure into a throw is
+      // `unwrap`'s separate step. A helper that rejected instead would take the
+      // failure past every `if (!result.success)` into an unhandled rejection.
       reply = { status: 500, data: { detail: "boom" } };
 
       const result = await call(Schema, "/players/context");
@@ -182,10 +169,9 @@ describe("the validated request helpers", () => {
   it.each(HELPERS)(
     "sends %s over the matching HTTP method",
     async (method, call) => {
-      // Five near-identical wrappers written by copy and paste, and the only
-      // difference between them is the axios call in the middle. A `validatedPut`
-      // that issues a GET reads correctly at every call site, type-checks, and
-      // returns a plausible answer — the write simply never happens.
+      // Five near-identical wrappers, and the only difference between them is
+      // the axios call in the middle. A `validatedPut` that issues a GET reads
+      // correctly at every call site and type-checks — the write never happens.
       await call(Schema, "/players/context");
 
       expect(seen).toHaveLength(1);
@@ -195,9 +181,8 @@ describe("the validated request helpers", () => {
 
   it("forwards query parameters to the request", async () => {
     // `validatedGet` is the only one of the five that takes params, and the
-    // argument is optional, so dropping it is silent. Every filtered list in
-    // the app then asks for the unfiltered one and renders whatever comes
-    // back as if it had been filtered.
+    // argument is optional, so dropping it is silent. Every filtered list would
+    // then ask for the unfiltered one and render it as if it had been filtered.
     await validatedGet(Schema, "/players/suggestions", {
       q: "faker",
       limit: 5,
@@ -214,8 +199,10 @@ describe("the response interceptor", () => {
     // server for a token it has just refused, once per request in flight.
     reply = { status: 401, data: {} };
 
-    await validatedPost(Schema, "/auth/refresh");
+    const result = await validatedPost(Schema, "/auth/refresh");
 
+    expect(seen.map((request) => request.url)).toEqual(["/auth/refresh"]);
+    expect(result.success).toBe(false);
     expect(refreshAccessToken).not.toHaveBeenCalled();
   });
 
@@ -225,33 +212,44 @@ describe("the response interceptor", () => {
     // the failure as an expired session.
     reply = { status: 401, data: {} };
 
-    await validatedPost(Schema, "/auth/login");
+    const result = await validatedPost(Schema, "/auth/login");
 
+    expect(seen.map((request) => request.url)).toEqual(["/auth/login"]);
+    expect(result.success).toBe(false);
     expect(refreshAccessToken).not.toHaveBeenCalled();
   });
 
   it("does refresh once for a 401 on any other endpoint", async () => {
     // The other half of the same guard: pinning only the exclusions would
-    // pass against an interceptor that never refreshes at all.
+    // pass against an interceptor that never refreshes at all. A renewed
+    // session is observable as the original request going out a second time.
+    refreshAccessToken.mockResolvedValue({ outcome: "refreshed" });
     reply = { status: 401, data: {} };
 
     await validatedGet(Schema, "/players/context");
 
+    expect(seen.map((request) => request.url)).toEqual([
+      "/players/context",
+      "/players/context",
+    ]);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
   });
 
   it("reports an invalid Riot key found on a failed response, not just a 200", async () => {
     // The key can fail on any endpoint that reaches Riot, and those come back
-    // as errors. Watching only the success interceptor leaves the header
-    // saying the credentials are healthy for exactly the requests that prove
-    // they are not.
+    // as errors. Watching only the success interceptor calls the credentials
+    // healthy for exactly the requests that prove they are not.
     reply = {
       status: 503,
       data: { detail: { code: "RIOT_API_KEY_INVALID" } },
     };
 
-    await validatedGet(Schema, "/matches/player/x/stats");
+    const result = await validatedGet(Schema, "/matches/player/x/stats");
 
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "RIOT_API_KEY_INVALID", status: 503, kind: "service" },
+    });
     expect(notifyRiotCredentialHealthUpdated).toHaveBeenCalledTimes(1);
   });
 });

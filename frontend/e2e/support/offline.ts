@@ -1,37 +1,14 @@
 import type { Page } from "@playwright/test";
 
 /**
- * Keep the suite off the public internet.
- *
- * The specs mock the API, but that is not the whole of what a player page
- * requests. Champion, profile and summoner-spell icons come straight from Riot's
- * CDN, and `champion-stats-card` and `player-card` omit `unoptimized`, so
- * theirs route through `/_next/image` and are fetched by the Next server rather
- * than the browser. Both are public-internet dependencies the gate would
- * otherwise carry: they 403 harmlessly today, but a slow or blocked CDN turns
- * into a flaky run.
- *
- * The manifest fetch behind `resolveDDragonVersion` is server-side too, and no
- * browser-level route reaches it. `test.sh` pins `DDRAGON_VERSION` on the build
- * and `playwright.config.ts` pins it on the server, which between them cover
- * the prerendered and the dynamic routes.
- *
- * Aborting is safe here. It was worth checking, because an abort is instant
- * where a real 403 is not, and the icons that fail this way sit behind an
- * `onError` fallback in `player-card`. Under `next dev` that did coincide with
- * a hydration mismatch — but serving a placeholder pixel instead did not fix
- * it, and moving the suite onto the production build did, so the abort was
- * never the cause. Aborting also leaves the fallback branch exercised, which a
- * pixel would quietly stop covering.
- *
- * `/_next/image` is only intercepted when it is proxying an absolute URL. The
- * app serves its own logo through it too, and that one is local.
+ * Keep the suite off the public internet: icon requests go to Riot's CDN, and
+ * the two cards without `unoptimized` route through `/_next/image` server-side.
+ * Aborting rather than serving a placeholder pixel leaves `onError` exercised.
  */
 export async function blockUpstreamRequests(page: Page): Promise<void> {
-  // The production beacon POSTs here so docker logs can see client
-  // failures. Populated-page specs then wait for networkidle; leaving
-  // those beacons on the real origin kept the network busy for the whole
-  // 60s timeout.
+  // The production beacon POSTs here so docker logs can see client failures.
+  // Populated-page specs then wait for networkidle; leaving those beacons on
+  // the real origin kept the network busy for the whole 60s timeout.
   await page.route("**/client-error-report", (route) =>
     route.fulfill({ status: 204, body: "" }),
   );

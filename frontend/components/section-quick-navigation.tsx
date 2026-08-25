@@ -36,13 +36,9 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
   const navigationId = useId();
   const isExpanded = isHovered || isPinned;
 
-  // An item whose section is not on the page is a dead link, and a page cannot
-  // be trusted to keep a hard-coded list in step with what it conditionally
-  // renders -- Rank Manipulation offered `Result` before any comparison had
-  // produced one. The DOM is the registry instead. Measuring only while the
-  // panel is open is enough, because that is the only state in which an item
-  // can be read or clicked, and it keeps the observer off the page the rest of
-  // the time; a section that arrives while the panel is open still appears.
+  // The DOM is the registry: a hard-coded item list drifts out of step with
+  // what a page conditionally renders. Measuring only while the panel is open
+  // is enough -- that is the only state in which an item can be clicked.
   useEffect(() => {
     if (!isExpanded) return;
     const measure = () => setRenderedAnchors(renderedAnchorsOf(items));
@@ -73,12 +69,9 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
       onMouseLeave={() => setIsHovered(false)}
       onBlurCapture={handleBlur}
     >
-      {/* The rail's height belongs to the tab, not to the panel. The tab is the
-          grab target and it must not move or resize as sections mount, so it
-          keeps the fixed height; `items-center` then lets the panel take its
-          own content height and sit centred against it. Stretching the panel
-          to match left roughly 100px empty even on the longest list here --
-          four entries need about 144px. */}
+      {/* The rail's height belongs to the tab, not the panel: the tab is the
+          grab target and must not resize as sections mount, so `items-center`
+          lets the panel take its own content height against it. */}
       <div className="flex h-[242px] items-center">
         <div className="vertical-gradient flex h-full w-10 items-center justify-center rounded-l-lg border-l border-y border-r-0 border-[#2f3640]">
           <button

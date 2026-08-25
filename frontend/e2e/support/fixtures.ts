@@ -1,12 +1,7 @@
 /**
- * The two API shapes every spec has to answer before it can test anything
- * else: the signed-in user behind `/auth/me`, and a tracked player.
- *
- * Both were written out in full at each site -- the user five times, the
- * player nine -- which is how `top-champions-pagination.spec.ts` ended up
- * being the only spec whose QA user has a connected Riot account, with no
- * sign that the difference was deliberate. Passing only the fields a spec
- * actually depends on puts that difference in the diff.
+ * The two API shapes every spec has to answer: the signed-in user behind
+ * `/auth/me`, and a tracked player. Specs override only the fields they
+ * depend on, so a deliberate difference stays visible.
  */
 
 const baseUser = (now: string) => ({

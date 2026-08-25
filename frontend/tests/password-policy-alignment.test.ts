@@ -7,19 +7,9 @@ import { describe, expect, it } from "vitest";
 import { isPasswordStrong } from "@/features/settings/settings-helpers";
 
 /**
- * The password policy is written twice, and nothing else notices when they
- * disagree.
- *
- * `validate_password_strength` is what actually rejects a password, but it is
- * a Pydantic `field_validator`, so its regexes never reach the OpenAPI
- * document -- `tests/api-contract-alignment.test.ts` compares field types and
- * cannot see them. `isPasswordStrong` exists to give the form inline feedback
- * before the request, and a narrower or wider client copy shows up as a form
- * that rejects a password the server would take, or accepts one it will 422.
- *
- * So this reads the backend and exercises the frontend. There is deliberately
- * no frontend literal in here: comparing two source files would go stale the
- * moment one of them is refactored without changing behaviour.
+ * The password policy is written twice and nothing else notices when they
+ * disagree: `validate_password_strength` is a Pydantic field validator, so its
+ * regexes never reach the OpenAPI document. This reads the backend source.
  */
 
 const BACKEND_SCHEMAS = join(

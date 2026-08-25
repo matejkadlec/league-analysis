@@ -300,10 +300,7 @@ def _new_team_total_bucket() -> dict[str, Any]:
 
     The one place the team-total key set is written down. `_new_participant_row`
     splats it and `_apply_team_totals_to_row` iterates it, so a new objective is
-    added here and nowhere else. It used to be spelled three times, and the
-    third copy had already drifted -- it omitted
-    `team_other_epic_monsters_slain`, which is why that one field needed its own
-    hand-written copy line.
+    added here and nowhere else.
     """
     return {
         "team_turrets_destroyed": 0,
@@ -720,27 +717,9 @@ async def replace_match_timeline_rows(
     match_id = match_dto.metadata.match_id
     await db.execute(delete(MatchTimeline).where(MatchTimeline.match_id == match_id))
 
-    # Write what is already pending before adding rows that point at it.
-    #
-    # These rows carry two foreign keys, to `core.matches` and `core.players`,
-    # and the session is `autoflush=False` -- so without this everything goes
-    # out in one flush at commit, in an order SQLAlchemy derives from
-    # `relationship()` alone. A `ForeignKey` in the DDL contributes nothing:
-    # actions with no relationship edge form the first layer and are emitted in
-    # `Mapper._sort_key` order, which is `"<module>.<ClassName>"`.
-    #
-    # `MatchTimeline` had `match` and `player` relationships until 2356d05
-    # deleted them as unread. They were unread, and they were also the only
-    # thing putting those two INSERTs first. Four consecutive Match Fetcher
-    # runs then died on `fk_match_timelines_puuid_players` for the first match
-    # containing a player row that did not already exist: sorted by key,
-    # `...matches.timeline.MatchTimeline` precedes `...players.models.Player`.
-    # `...matches.models.Match` sorts before both, which is the only reason the
-    # match FK held and this one did not.
-    #
-    # `merge_reprocess_player` now writes players with an immediate Core
-    # statement, so that half is no longer a bet -- but `core.matches` is still
-    # a pending merge, ordered before this by nothing but a module name.
+    # Write what is already pending before adding rows that point at it: with
+    # `autoflush=False` and no `relationship()` edges, SQLAlchemy orders the
+    # flush by `"<module>.<ClassName>"`, putting this table ahead of `core.players`.
     await db.flush()
 
     for row in rows:

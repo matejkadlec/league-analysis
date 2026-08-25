@@ -9,14 +9,8 @@ def transform_runes_payload(value: object) -> object:
     """Transform raw Riot API perks structure to flattened runes data.
 
     Anything that is not a Riot `styles` payload is handed back untouched for
-    Pydantic to validate — `None`, an already-flattened mapping, or a
-    `RunesData` instance read off the ORM. That pass-through is why the return
-    type is `object` and not `dict[str, Any] | None`: the declared dict was
-    only ever true for the one branch that flattens.
-
-    The stored column keeps Riot's whole perks tree, so this reads out only
-    the three values the match row renders. Widen `RunesData` and this
-    function together if a rune-page view ever needs the rest.
+    Pydantic to validate, which is why the return type is `object`. Widen
+    `RunesData` and this function together if a view ever needs more perks.
     """
     if not is_json_object(value):
         return value

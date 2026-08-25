@@ -103,9 +103,8 @@ async function renderCard() {
 
 /**
  * The thresholds are grouped into tabs, so typing into a field first opens
- * the tab that holds it -- exactly what a person has to do. Every group stays
- * mounted while inactive, which is why the querySelector below finds the
- * input either way; only the interaction needs the tab visible.
+ * the tab that holds it. Every group stays mounted while inactive, so the
+ * querySelector below finds the input either way.
  */
 function tabFor(name: string): string {
   if (/^a\d/.test(name)) {

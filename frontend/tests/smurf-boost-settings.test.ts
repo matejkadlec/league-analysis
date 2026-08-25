@@ -75,8 +75,7 @@ const LIVE_CATALOG = [
 /**
  * The backend owns every bound and exposes none of them over the API, so the
  * form carries its own copy. This reads the authority and fails on any drift,
- * which is the only thing standing between a silent edit there and a form here
- * that accepts a value the server will reject.
+ * so the form cannot accept a value the server will reject.
  */
 function backendBounds(): Map<string, { min: number; max: number; integer: boolean }> {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -91,17 +90,9 @@ function backendBounds(): Map<string, { min: number; max: number; integer: boole
   expect(block).not.toBeNull();
 
   const bounds = new Map<string, { min: number; max: number; integer: boolean }>();
-  // The backend declares the wire name explicitly, so read that rather than
-  // recomputing camelCase here — this compares the two contracts instead of
-  // comparing the frontend against its own guess at the rename. `\s*` spans
-  // newlines because `ruff format` wraps the longer declarations.
-  //
-  // `strict=True` is required, not optional: it is what makes the write
-  // contract reject `"20"` and `true` for these fields, and dropping it
-  // should fail here rather than pass quietly. It is declared once on the
-  // model now that the tolerant read model derives from this one, so assert
-  // it there. A zero-size result below means the declarations changed shape,
-  // not that a bound moved.
+  // Read the backend's declared wire name rather than recomputing camelCase, so
+  // this compares two contracts. A zero-size result below means the
+  // declarations changed shape, not that a bound moved.
   expect(block?.[1] ?? "").toContain("model_config = ConfigDict(strict=True)");
 
   const line =
@@ -134,8 +125,7 @@ describe("smurf and boost threshold catalog", () => {
   it("carries the backend's baseline floor, which is not on the wire", () => {
     // "Not enough data" is the majority outcome on this database, so its
     // arithmetic is the most-read sentence in the feature. The recent window
-    // comes from the run; this number does not, and nothing else would catch a
-    // change to it.
+    // comes from the run; this number does not.
     const here = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
       join(here, "../../backend/app/features/smurf_boost_detection/config.py"),

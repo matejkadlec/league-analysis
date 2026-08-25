@@ -234,16 +234,9 @@ def _average_kill_participation(
     )
 
 
-# Ten tags below read a metric that used to be a `MatchParticipant` column,
-# each one a copy of a single key from the `advanced_stats` blob stored beside
-# it. Revision `20260821_0027` dropped the copies; the blob still holds every
-# value, so the metric is read from there instead.
-#
-# This matters more than a normal rename because resolution is by name: a
-# metric with neither a column nor an entry here does not raise, it scores 0.0
-# for every player, and every threshold comparison against it quietly fails.
-# `test_playstyle_tag_config.py` refuses a threshold key that resolves to
-# neither, which is the check that was missing when the columns went.
+# Ten tags below read a metric out of the `advanced_stats` blob. Resolution is
+# by name, so a metric with neither a column nor an entry here does not raise --
+# it scores 0.0 for everyone, and `test_playstyle_tag_config.py` refuses it.
 _CHALLENGE_KEYS: Final[dict[str, str]] = {
     "roam_kills": "killsOnOtherLanesEarlyJungleAsLaner",
     "enemy_jungle_monster_kills": "enemyJungleMonsterKills",

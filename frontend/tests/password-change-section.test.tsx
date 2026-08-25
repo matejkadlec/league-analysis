@@ -86,9 +86,8 @@ describe("changing an account password", () => {
 
   it("will not send a new password that was typed differently twice", async () => {
     // The repeat field exists because this value cannot be read back. Send a
-    // mistyped one and the account's password becomes a string nobody knows,
-    // recoverable only by email. Nothing about the two fields differing is
-    // visible to the server, so this check has to happen here.
+    // mistyped one and the account's password becomes a string nobody knows.
+    // The server cannot see the two fields differ, so the check belongs here.
     const queryClient = renderSection();
 
     fill({ current: CURRENT, next: STRONG, repeat: "Str0ng!Pas" });
@@ -136,8 +135,7 @@ describe("changing an account password", () => {
   it("clears every field and re-hides them once the password has changed", async () => {
     // Two of these inputs can be switched to plain text, and this section
     // lives on a settings page that stays open. Leaving the new password
-    // visible after a successful change leaves it on screen for whoever walks
-    // past next.
+    // visible after a change leaves it on screen for whoever walks past.
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "Password changed" },
@@ -174,14 +172,9 @@ describe("changing an account password", () => {
   });
 
   it("stops a second submit while the first is still in flight", async () => {
-    // Each attempt is checked against the current password server-side, so a
-    // double-fire spends a second attempt on an endpoint that has every reason
-    // to rate-limit them.
-    //
-    // What holds this shut is the button's `disabled` while the mutation is
-    // pending, not the matching check inside the handler: removing that check
-    // leaves this green, because a disabled button never delivers the click.
-    // The check is a second lock on a door with no other way in.
+    // The button's `disabled` is what holds this shut, not the handler's own
+    // pending check -- a disabled button never delivers the click, so this
+    // stays green with that check deleted.
     let release: (value: unknown) => void = () => {};
     validatedPost.mockImplementation(
       () =>

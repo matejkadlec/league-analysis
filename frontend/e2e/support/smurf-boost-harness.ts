@@ -6,11 +6,8 @@ import { blockUpstreamRequests } from "./offline";
 
 /**
  * The mocked API surface the smurf-and-boost page needs, shared by the
- * behavioural spec and the mobile-layout spec.
- *
- * Both specs drive the same page against the same fixtures, so a fixture that
- * drifts from the real contract fails in both places at once rather than
- * leaving one spec quietly testing a shape the server stopped returning.
+ * behavioural spec and the mobile-layout spec, so a fixture that drifts from
+ * the real contract fails in both places at once.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
@@ -23,11 +20,9 @@ const player = trackedPlayer(NOW, {
 });
 
 /**
- * A second player, never tracked and never the account's current one.
- *
- * The whole point of the page's local search is that it can analyse somebody
- * the sidebar has never heard of, so the fixture has to be somebody the
- * sidebar has never heard of: `/players/context` returns only `player`.
+ * A second player, never tracked and never the account's current one: the
+ * page's local search exists to analyse somebody the sidebar has never heard
+ * of, so `/players/context` returns only `player`.
  */
 export const OTHER_PUUID = "rank-manipulation-other-puuid";
 
@@ -188,11 +183,9 @@ export interface HarnessState {
   /** Every PUUID an explicit game fetch was started for, in order. */
   synced: string[];
   /**
-   * How many times the run started by the last fetch has been polled.
-   *
-   * The first three polls answer `running`; the fourth answers `completed`.
-   * A mock that finished immediately would let a card that never shows the
-   * fetch at all pass, and the slack is explained at the handler.
+   * How many times the run started by the last fetch has been polled. The first
+   * three answer `running`, the fourth `completed`: a mock that finished
+   * immediately would let a card that never shows the fetch pass.
    */
   syncPolls: number;
   currentPlayer: typeof player | null;
@@ -348,8 +341,7 @@ export async function installSmurfBoostMocks(
 
     // The explicit per-player game fetch the run button starts. The
     // `/players/{puuid}` handlers above match on `endsWith`, so a longer sync
-    // path falls through to here regardless of order; the whole lifecycle is
-    // kept together so it reads in one place.
+    // path falls through to here regardless of order.
     const syncMatch = /\/players\/([^/]+)\/sync(\/active|\/(\d+))?$/.exec(path);
     if (syncMatch) {
       const target = syncMatch[1]!;
@@ -370,9 +362,8 @@ export async function installSmurfBoostMocks(
         await route.fulfill({
           contentType: "application/json",
           // Several polls of slack before the run ends. The assertion that no
-          // comparison has started yet is a plain, non-retrying one, and one
-          // poll of room on a starved shared runner is how that turns into a
-          // flake nobody can reproduce.
+          // comparison has started yet is plain and non-retrying, so one poll
+          // of room on a starved shared runner would flake.
           body: JSON.stringify(run(state.syncPolls > 3 ? "completed" : "running")),
         });
         return;
@@ -429,8 +420,7 @@ export async function installSmurfBoostMocks(
 
     // The stored ranked-solo pool the run card names above its button. Left
     // unanswered it is one more 404 on the global error toast, sitting beside
-    // whatever this suite asserts -- the failure mode `/settings/service-status`
-    // below already caused once.
+    // whatever this suite asserts.
     if (path.includes("/matches/player/") && path.endsWith("/stats")) {
       await route.fulfill({
         contentType: "application/json",
@@ -451,12 +441,9 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The three remaining `/player-overview` reads, which the first detection
-    // spec loads on its way to the Rank Manipulation page. Same reason as the
-    // `/stats` mock above: each is otherwise a catch-all 404 raising its own
-    // global error toast beside whatever a later step asserts. The specs assert
-    // nothing about these cards, so empty is the whole requirement -- and
-    // `/league` is nullable by design, an unranked player being a 200 of `null`.
+    // The three remaining `/player-overview` reads the first detection spec loads
+    // on its way here. Each is otherwise a 404 raising its own global error
+    // toast; `/league` is nullable by design, an unranked player being `null`.
     if (path.endsWith("/league")) {
       await route.fulfill({ contentType: "application/json", body: "null" });
       return;
@@ -489,8 +476,7 @@ export async function installSmurfBoostMocks(
 
     // Polled every 15s by `serviceStatusQueryOptions`. Unanswered it 404s on
     // that loop, and the global query-error toast it raises then sits beside
-    // whatever this suite is asserting -- which is how the a11y scan came to
-    // find two toasts where it expects one, on the slow shared runner only.
+    // whatever this suite is asserting.
     if (path.endsWith("/settings/service-status")) {
       await route.fulfill({
         contentType: "application/json",

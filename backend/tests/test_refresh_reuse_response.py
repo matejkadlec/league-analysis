@@ -1,19 +1,8 @@
 """What presenting an already-revoked refresh token gets you, and costs others.
 
-Production forensics (2026-08-25, `auth.refresh_tokens` on the Pi) showed
-every firing of reuse detection was an innocent client: two tabs refreshing
-one cookie 138ms apart, a rotation response lost around a deploy, a stale
-browser profile reopened with a week-old cookie. The old response --
-`revoke_all_refresh_tokens_for_user` -- answered each by signing the user out
-of every device.
-
-These tests pin the replacement contract of `_answer_reused_refresh_token`,
-driven through `rotate_refresh_token` because the call site is what matters:
-
-- an unused replacement means the innocent race heals into a fresh pair;
-- a used replacement means theft response: the descendant chain dies;
-- a token with no replacement recorded refuses without touching anything
-  else the user holds.
+Pins `_answer_reused_refresh_token` through `rotate_refresh_token`: an unused
+replacement heals the innocent race into a fresh pair, a used one kills the
+descendant chain, and one with no replacement refuses and touches nothing else.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -75,10 +64,8 @@ async def test_an_unused_replacement_heals_the_race_into_a_fresh_pair() -> None:
     """The lost-response and duplicate-refresh cases answer success.
 
     The presented token was rotated, but its replacement was never used --
-    which is exactly the state a lost Set-Cookie or the loser of a two-tab
-    race leaves behind, and exactly not the state an actively-ridden stolen
-    chain leaves. The unused replacement is revoked, a fresh one minted, and
-    the visitor stays signed in.
+    the state a lost Set-Cookie or the loser of a two-tab race leaves behind,
+    and exactly not the state an actively-ridden stolen chain leaves.
     """
     presented = _token("old", revoked_at=NOW - timedelta(minutes=5), replaced_by="succ")
     successor = _token("succ", revoked_at=None, replaced_by=None)
@@ -97,8 +84,7 @@ async def test_a_used_replacement_kills_the_descendant_chain() -> None:
 
     A replacement that was itself rotated means someone is actively using the
     chain -- the one state healing must not reward. The walk follows
-    `replaced_by_token_id` to the live tip and revokes it, so a stolen chain
-    dies the moment the victim's stale token collides with it.
+    `replaced_by_token_id` to the live tip and revokes it.
     """
     presented = _token("a", revoked_at=NOW - timedelta(hours=2), replaced_by="b")
     middle = _token("b", revoked_at=NOW - timedelta(hours=1), replaced_by="c")
@@ -117,8 +103,7 @@ async def test_an_expired_presented_token_never_heals() -> None:
 
     Rotation restarts the 30-day clock, so a predecessor can expire while
     its unused replacement is still valid -- and until cleanup deletes the
-    row, that expired credential is still presentable. Healing it would let
-    a token past its lifetime mint a fresh 30-day pair.
+    row, that expired credential is still presentable.
     """
     presented = _token(
         "old",
@@ -139,10 +124,8 @@ async def test_a_revoked_replacement_never_heals_a_logged_out_session() -> None:
     """Logout stays final; a pre-logout cookie must not resurrect.
 
     Logout revokes every row the user has, including a replacement that was
-    never used -- which is otherwise exactly the state the heal rewards. The
-    `successor.revoked_at is None` clause is the only line separating "heal
-    an innocent race" from "any old cookie undoes a logout"; this is the test
-    that fails if it goes.
+    never used -- otherwise exactly the state the heal rewards. The
+    `successor.revoked_at is None` clause is the only line separating them.
     """
     presented = _token("old", revoked_at=NOW - timedelta(hours=1), replaced_by="succ")
     successor = _token("succ", revoked_at=NOW - timedelta(minutes=30), replaced_by=None)
@@ -158,11 +141,8 @@ async def test_a_token_with_no_replacement_refuses_without_wider_revocation() ->
     """One zombie cookie no longer signs the user out of every device.
 
     A token revoked with no replacement recorded -- a logout, or a chain
-    already killed -- names no descendants. The old code answered it with
-    `revoke_all_refresh_tokens_for_user`; the observed production firing of
-    that was a stale profile reopened after a deploy, taking down the user's
-    two live sessions on other machines. Now: refuse the caller, touch
-    nothing else -- so the only query is the presented token's own lookup.
+    already killed -- names no descendants, so the answer is to refuse the
+    caller and touch nothing else: one query, the presented token's lookup.
     """
     presented = _token("dead", revoked_at=NOW - timedelta(days=2), replaced_by=None)
     service, added, db = _service([_lookup(presented)])

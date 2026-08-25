@@ -3,18 +3,9 @@
 import { useEffect } from "react";
 
 /**
- * The boundary of last resort, above the layout itself.
- *
- * `error.tsx` sits inside the layout and so only covers the page segment.
- * Everything the layout renders — the providers, the auth gate, the sidebar,
- * the cookie-consent manager — is above it, and a throw from any of those
- * unmounts the entire tree with no boundary to catch it. The visitor gets a
- * white page with nothing on it and no way to reset: the same symptom, and
- * the same dead end, as the blank page this whole change exists to remove.
- *
- * It replaces the document, so it has to bring its own `html` and `body`, and
- * it cannot rely on anything the layout would normally provide — no fonts, no
- * theme tokens, no stylesheet. The styles here are inline for that reason.
+ * The boundary of last resort: `error.tsx` sits inside the layout and cannot
+ * catch a throw from the providers, the auth gate or the sidebar. This one
+ * replaces the document, so it brings its own `html`/`body` and inline styles.
  */
 export default function GlobalError({
   error,
@@ -35,7 +26,10 @@ export default function GlobalError({
         message: error.message.slice(0, 240),
         source: "boundary",
       }),
-
+      // Nothing awaits this and the app has already failed: a same-origin log
+      // write that has not landed in three seconds never will, and holding the
+      // socket open on a crashed page buys nothing.
+      signal: AbortSignal.timeout(3000),
     }).catch(() => undefined);
   }, [error]);
 

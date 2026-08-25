@@ -257,9 +257,8 @@ async def test_a_failure_before_the_writers_still_terminates_the_run(
     """Loading the run and stamping it running sit inside the recovery net.
 
     A DB blip in either used to strand the row as `pending` until a restart,
-    which blocked only that player's next update -- but the up-front busy
-    check reads any active run as a held pipeline, so an unfinishable row
-    would now refuse every other player's clicks too.
+    and the up-front busy check reads any active run as a held pipeline, so an
+    unfinishable row would refuse every other player's clicks too.
     """
     finished: list[dict[str, object]] = []
 

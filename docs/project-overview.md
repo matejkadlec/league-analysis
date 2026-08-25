@@ -112,10 +112,12 @@ Three choices are not obvious from the manifests:
 - The database driver is split. `asyncpg` serves application I/O; APScheduler
   needs `psycopg2` because its job store is synchronous.
 - The frontend installs two TypeScript packages. `@typescript/native` is the
-  compiler; the aliased TypeScript 6 package exists only because ESLint still
-  consumes the older compiler API.
-- ESLint loads Next.js plugins through `@eslint/compat`, which adapts their
-  legacy rule API without suppressing any configured rule.
+  compiler; the aliased TypeScript 6 package is what the Next.js toolchain
+  resolves against.
+- The frontend linter is oxlint, pinned exactly like Ruff and Pyright, with
+  house rules under `frontend/.oxlint-plugins/`. Type-aware rules run through
+  `oxlint-tsgolint` and are silently inert without `--type-aware`, which is why
+  the `lint` script always passes it.
 
 ## Local Environment
 
@@ -252,7 +254,7 @@ and repository/project identifiers.
 ./test.sh -f
 ```
 
-This selects Node from `.nvmrc`, runs `npm ci`, ESLint with zero warnings,
+This selects Node from `.nvmrc`, runs `npm ci`, oxlint with zero warnings,
 TypeScript, Vitest regressions, and a Next.js production build.
 
 The browser suite runs as the last frontend step, against the production build
@@ -263,7 +265,7 @@ is intercepted with deterministic fixture responses, so it needs neither a Riot
 credential nor a local database.
 
 Use the workspace `get_errors` diagnostic on changed TypeScript files when it
-is available; it complements ESLint and TypeScript rather than replacing them.
+is available; it complements oxlint and TypeScript rather than replacing them.
 
 ### Backend
 

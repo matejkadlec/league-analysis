@@ -1,21 +1,12 @@
 """Refresh the vendored Match-V5 timeline schema from Riot's published spec.
 
-The schema is vendored rather than fetched at test time because the suite is
-offline by construction (`--disable-socket`), and because a network-dependent
-gate fails for reasons that have nothing to do with the change under review.
-Vendoring also makes a Riot API change arrive as a reviewable diff instead of a
-silent behaviour shift.
+Vendored rather than fetched at test time because the suite is offline by
+construction (`--disable-socket`). Source, regenerated daily from the Riot API
+Reference: https://github.com/MingweiSamuel/riotapi-schema, `gh-pages` branch.
 
-Source: https://github.com/MingweiSamuel/riotapi-schema, `gh-pages` branch,
-regenerated daily from the Riot API Reference.
-
-Usage, from the repository root:
-
+Example:
     curl -sSfL https://raw.githubusercontent.com/MingweiSamuel/riotapi-schema/gh-pages/openapi-3.0.0.json \
       | uv run --project backend python backend/tests/data/refresh_timeline_schema.py
-
-Then run the gate: `test_timeline_dto_matches_riot_schema` fails if the DTOs in
-`app/core/riot_api/models.py` no longer agree with what Riot documents.
 """
 
 from __future__ import annotations

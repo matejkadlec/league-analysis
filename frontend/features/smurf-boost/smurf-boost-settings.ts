@@ -1,13 +1,8 @@
 import type { CardId } from "@/lib/core/schemas";
 /**
  * The viewer-configurable thresholds of the smurf and boost detection card.
- *
- * The backend owns the ranges (`SmurfBoostDetectionMutableSettingsWriteV1` in
- * `backend/app/features/settings/schemas.py`) and rejects anything outside
- * them, but it exposes no endpoint that describes them, so the form needs its
- * own copy to label a field and to stop an impossible value before it becomes
- * a server error. `tests/smurf-boost-settings.test.ts` reads that file and
- * fails if any bound here drifts from it.
+ * The backend owns the ranges but exposes no endpoint describing them, so the
+ * form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
  */
 
 /** Typed against the API's own card-id enum, so a rename fails here. */
@@ -218,10 +213,8 @@ export function writableSettings(
   settings: Record<string, number>,
 ): Record<string, number> {
   // A loop, not `THRESHOLD_FIELDS.map(...)` into `Object.fromEntries`: that
-  // map infers `(string | number | undefined)[][]`, losing the tuple, so the
-  // narrowing predicate it then needs is an assertion the compiler cannot
-  // check. Widen the value type and this body fails to compile; that one does
-  // not, and posts a string typed as a number.
+  // map loses the tuple, so the narrowing it then needs is an assertion the
+  // compiler cannot check, and a widened value type would post a string.
   const payload: Record<string, number> = {};
   for (const field of THRESHOLD_FIELDS) {
     const value = settings[field.name];
@@ -233,29 +226,16 @@ export function writableSettings(
 }
 
 /**
- * The baseline floor the model treats as a correctness constraint.
- *
- * It is not configurable and the API never sends it, so this is a second copy
- * of a backend constant. `tests/smurf-boost-settings.test.ts` reads the
- * backend's own `config.py` and fails on any drift, because the number is what
- * the "Not enough data" state counts with and nothing else would catch it.
+ * The baseline floor the model treats as a correctness constraint. Not
+ * configurable and never sent by the API, so this is a second copy of a backend
+ * constant; `tests/smurf-boost-settings.test.ts` reads `config.py` for drift.
  */
 export const MINIMUM_BASELINE_GAMES = 15;
 
 /**
- * What a comparison still needs, said in one sentence.
- *
- * The recent window is taken first, so the earlier games the comparison needs
- * sit behind a full recent window. Reporting only the two sample floors would
- * understate the requirement whenever the recent window is the larger of them.
- *
- * One copy, because two surfaces say it: the run card while games are being
- * fetched, and the result card on a "Not enough data" reading. Two copies
- * would eventually quote two different numbers for the same shortfall.
- *
- * `fallbackRecentWindow` covers a run stored under an older threshold
- * contract, which may not carry the window at all; the caller's own recent
- * count is then the only honest stand-in.
+ * What a comparison still needs, said in one sentence, for the two surfaces
+ * that say it. The recent window is taken first, so quoting only the sample
+ * floors understates it; `fallbackRecentWindow` covers a run without a window.
  */
 export function gameShortfall(
   eligibleGames: number,

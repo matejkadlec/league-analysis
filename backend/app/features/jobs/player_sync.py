@@ -28,10 +28,9 @@ logger = structlog.get_logger(__name__)
 class SyncBusyError(Exception):
     """A sync start refused because another update holds the pipeline.
 
-    Raised instead of creating a run that the job layer would only fail with
-    SYNC_BUSY minutes later: the click that asked for it gets an immediate,
-    honest refusal and no failed run is left behind. `message` is the
-    client-safe sentence, naming the running player when one is known.
+    Raised instead of creating a run the job layer would only fail with
+    SYNC_BUSY minutes later. `message` is the client-safe sentence, naming
+    the running player when one is known.
     """
 
     def __init__(self, message: str) -> None:
@@ -43,11 +42,8 @@ async def _busy_message(db: AsyncSession, puuid: str) -> str | None:
     """The refusal sentence when the sync pipeline is held, else None.
 
     Two holders are visible before a run is created: another player's active
-    `PlayerSyncRun`, and the writers' runtime keys — which the scheduled
-    Match Fetcher claims too, so a click during its window is refused here
-    rather than producing a run doomed to fail as SYNC_BUSY. A race where two
-    cross-player starts both pass this check is accepted: the job layer's
-    `skipped_as_already_running` backstop still fails the loser honestly.
+    `PlayerSyncRun`, and the writers' runtime keys — which the scheduled Match
+    Fetcher claims too. A race past this check is caught by the job layer.
     """
     other_active = await db.scalar(
         select(PlayerSyncRun)
@@ -135,13 +131,9 @@ async def get_active_player_sync(db: AsyncSession, puuid: str) -> PlayerSyncRun 
 def _failure_from_job(job: BaseJob) -> tuple[str, str, str]:
     """Map an internal writer result to a stable client-safe terminal state.
 
-    Reads only the writer's cached scalars. A per-player Riot failure rolls the
-    job session back and the session is already closed here, so touching the
-    `JobExecution` instance would raise instead of classifying the failure.
-
-    Only a run the scheduler skipped is busy. A run whose start failed also has
-    no execution id, but it is a genuine failure and must not be reported as a
-    competing update.
+    Reads only the writer's cached scalars: the job session is already closed
+    here, so touching the `JobExecution` instance would raise. Only a run the
+    scheduler skipped is busy -- a failed start also has no execution id.
     """
     if job.skipped_as_already_running:
         return (
@@ -192,11 +184,9 @@ async def _finish_sync(
 ) -> None:
     """Persist one safe lifecycle update from the background orchestrator.
 
-    A terminal row is never reopened. Startup recovery cancels runs orphaned by
-    a restart and an operator may cancel one directly, while this orchestrator
-    is still mid-flight, so an unguarded write would revive a cancelled run and
-    could then collide with its replacement. The row lock makes the check hold
-    against a cancellation committing between the read and the write.
+    A terminal row is never reopened: startup recovery or an operator may
+    cancel a run while this orchestrator is mid-flight. The row lock makes the
+    check hold against a cancellation committing between read and write.
     """
     async with db_manager.get_session() as db:
         sync_run = await db.get(PlayerSyncRun, sync_id, with_for_update=True)
@@ -280,12 +270,9 @@ async def _finish_failed_writer(
 async def run_player_sync(sync_id: int) -> None:
     """Run Match Fetcher then Player Updater for one exact PUUID."""
     puuid: str | None = None
-    # Everything after the id is known sits inside the `try`, the loading and
-    # the first status write included: a failure anywhere here used to leave
-    # the row `pending` forever (until startup recovery), which once blocked
-    # only this player's next update — but the up-front busy check now reads
-    # any active run as a held pipeline, so an unfinishable row must not
-    # survive any failure this handler can catch.
+    # Loading and the first status write sit inside the `try` too: the up-front
+    # busy check reads any active run as a held pipeline, so a row left
+    # `pending` by a failure here would block the player until startup recovery.
     try:
         loaded = await _load_player_sync(sync_id)
         if loaded is None:

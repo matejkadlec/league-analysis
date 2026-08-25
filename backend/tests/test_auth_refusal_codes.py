@@ -1,17 +1,8 @@
 """A refusal has to name itself, because the browser cannot tell who answered.
 
 The client ends a session only when a 401 or 403 from `/auth/refresh` carries
-one of these codes (`token-manager.ts`). A status alone is not evidence: a
-Cloudflare challenge in front of this API answers 403 with an HTML body and
-the origin never sees the request, and a 403 from the API itself may be about
-something other than the session -- an authorization gate added to a shared
-dependency, say. Taking either for a refusal retracts the session hint while
-the refresh token stays live, unrevoked, and unreachable to JavaScript.
-
-So these codes are a contract with the frontend, and renaming one here would
-silently stop every genuine sign-out from working. That failure is quiet in
-the right direction -- visitors keep their session and get the retry surface
--- which is exactly why nothing else would catch it.
+one of these codes (`token-manager.ts`); a status alone is not evidence. These
+codes are a contract with the frontend, so renaming one breaks every sign-out.
 """
 
 import re
@@ -95,10 +86,7 @@ async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> No
 
     The tests above pin what the route raises; this pins what the browser
     actually receives, because the client reads `detail.code` out of a JSON
-    body. An error envelope added anywhere in the stack -- an RFC 7807
-    handler, a middleware wrapping errors -- would silently stop every genuine
-    sign-out from working, and it would do so quietly: visitors keep a dead
-    session and see the retry surface forever.
+    body. An envelope added anywhere in the stack silently breaks sign-out.
     """
     import httpx
 
@@ -112,10 +100,8 @@ async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> No
 
     assert response.status_code == 401
     # The same rule the client applies (`namesTheEndOfTheSession`): any JSON
-    # media type, because an RFC 9457 envelope is a fine thing to add and the
-    # client handles it -- but a body the browser cannot read as JSON, or one
-    # that no longer carries `detail.code`, silently ends every genuine
-    # sign-out.
+    # media type, but a body the browser cannot read as JSON, or one without
+    # `detail.code`, silently ends every genuine sign-out.
     assert re.match(r"^application/([\w.+-]+\+)?json", response.headers["content-type"])
     assert response.json()["detail"]["code"] == "INVALID_REFRESH_TOKEN"
 
@@ -124,16 +110,8 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     """An outage must not come back as "your session is over".
 
     `None` from `rotate_refresh_token` becomes 401 INVALID_REFRESH_TOKEN, and
-    the browser is required to end the session on that name. Catching a
-    database error anywhere under it and returning `None` -- the kind of
-    defensive edit that reads as robustness -- produces a refusal
-    byte-identical to a real one, so every client-side guard behaves correctly
-    and every visitor is signed out for the length of the blip, with their
-    refresh row live and unrevoked and its HttpOnly cookie still in the jar.
-
-    Every database touchpoint on the path, not just the first: an earlier
-    version of this test mocked the first `execute` only, and swallowing at
-    the commit or inside `get_user_by_id` passed the whole suite.
+    the browser ends the session on that name, so catching a database error
+    under it signs every visitor out for the length of the blip.
     """
     from sqlalchemy.exc import DBAPIError
 
@@ -151,9 +129,7 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
 
     # 2. The user lookup, driven through `rotate_refresh_token` rather than
     #    called directly -- the call site is what matters. Swallowing there
-    #    lands in the unknown-user branch, which revokes the still-valid row
-    #    on its way out, so a transient SELECT fault does not merely mint a
-    #    refusal: it makes one true.
+    #    lands in the unknown-user branch, which revokes the still-valid row.
     now = datetime.now(UTC)
     record = MagicMock()
     record.revoked_at = None
@@ -171,8 +147,7 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
 
     # 3. The revocation the reuse branch performs before refusing, again
     #    through the real path: a reused token is a refusal, but only once the
-    #    family really has been revoked. Swallowing there refuses while every
-    #    token stays live.
+    #    family really has been revoked.
     reused = MagicMock()
     reused.revoked_at = now
     reused.user_id = 5
@@ -207,14 +182,8 @@ async def test_a_fault_reaching_the_route_is_not_answered_as_a_refusal() -> None
     """The same laundering, one frame up, where the refusal is actually minted.
 
     The test above drives the database faults through `rotate_refresh_token`;
-    this drives one into the `await` in the route. Wrapping that call so a
-    rotation "never blows up into a 500" is the same defensive edit and reads
-    the same way -- and here it produces a 401 INVALID_REFRESH_TOKEN
-    byte-identical to a real refusal, so every guard on the client behaves
-    correctly and signs the visitor out for the length of the blip with the
-    refresh cookie live and unrevoked. It passed all 603 tests.
-
-    A 500 is the honest answer: nothing was learned about the session.
+    this drives one into the `await` in the route, where wrapping the call
+    mints a 401 indistinguishable from a real refusal. A 500 is honest.
     """
     from sqlalchemy.exc import DBAPIError
 

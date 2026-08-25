@@ -79,8 +79,7 @@ test("the rewritten curated 404 detail reaches the viewer without a PUUID", asyn
     }
 
     // Every data query fails with the rewritten players/service.py copy.
-    // The query-layer helpers rewrap errors, so the toast shows its own
-    // generic recovery copy — the assertion that matters here is that the
+    // The query-layer helpers rewrap errors, so what matters here is that the
     // failure is announced and no raw PUUID ever renders.
     await route.fulfill({
       status: 404,

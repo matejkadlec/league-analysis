@@ -2,10 +2,7 @@
 
 Owns the one question both mail flows ask -- is delivery configured? -- and
 the one blocking send they must offload to a thread. The envelope sender is
-transport configuration, not message content, so it is stamped here rather
-than read from settings a second time at each call site: the guard and the
-send then answer from the same settings object, which is what the two flows
-actually depend on.
+transport configuration, so it is stamped here, not at each call site.
 """
 
 import asyncio

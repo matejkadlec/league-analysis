@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `robots.txt`, the sitemap and the indexing opt-in had no test at all.
- *
- * This site is not to be crawled until Riot's review clears, and the whole
- * gate is one comparison in `lib/core/site-url.ts`. Loosening it to
- * `!== "false"` -- so a build that merely forgets the variable is indexable --
- * kept every one of the other 679 tests green.
- *
- * The two modules read `process.env` at import time, so each case stubs the
- * environment and then imports fresh.
+ * This site is not to be crawled until Riot's review clears, and the whole gate
+ * is one comparison in `lib/core/site-url.ts`. Both modules read `process.env`
+ * at import time, so each case stubs the environment and imports fresh.
  */
 async function loadRoutes() {
   vi.resetModules();

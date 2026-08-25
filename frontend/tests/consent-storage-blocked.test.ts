@@ -10,15 +10,9 @@ afterEach(() => {
 
 describe("clearing optional storage when the browser refuses", () => {
   it("does not throw", () => {
-    // A visitor with site data blocked makes every `localStorage` access
-    // throw a SecurityError. This runs in a mount effect in
-    // `CookieConsentManager`, which sits above every error boundary, so an
-    // unguarded throw unmounts the whole tree and hands them a blank page --
-    // the same symptom as the bug this branch exists to remove, from a
-    // completely unrelated cause.
-    // The getter, not `removeItem`: that is where a browser with site data
-    // blocked actually throws. Stubbing the method instead lets the property
-    // access be hoisted out of the guard and still pass.
+    // A visitor with site data blocked makes every `localStorage` access throw,
+    // and this runs in a mount effect above every error boundary. Stub the
+    // getter, not `removeItem`: that is where the browser actually throws.
     const original = Object.getOwnPropertyDescriptor(window, "localStorage");
     Object.defineProperty(window, "localStorage", {
       configurable: true,

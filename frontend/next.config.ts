@@ -4,10 +4,9 @@ const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const internalApiUrl = process.env.API_INTERNAL_URL || publicApiUrl;
 
 /**
- * Documents and RSC must not be stored at the edge or in the browser. A
- * hashed `/_next/static` file can live forever because its name changes when
- * its contents do; HTML still names those hashes, so a cached document after
- * a deploy asks for chunks the new origin no longer has.
+ * Documents and RSC must not be stored at the edge or in the browser: HTML
+ * names the hashed chunk filenames, so a document cached across a deploy asks
+ * for chunks the new origin no longer has.
  */
 export const DOCUMENT_CACHE_CONTROL =
   "private, no-cache, no-store, max-age=0, must-revalidate";

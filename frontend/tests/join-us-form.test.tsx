@@ -27,8 +27,7 @@ const {
 
 // `validatedPost`, not `api.post`: the helper closes over the module's own
 // axios instance, so replacing the exported `api` object leaves the real
-// request in place -- which is why the success cases here used to hang for
-// five seconds and the failure cases passed for the wrong reason.
+// request in place.
 vi.mock("@/lib/core/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/core/api")>();
   return { ...actual, validatedPost };
@@ -186,9 +185,8 @@ describe("what the join-us form refuses to send", () => {
 
   it("does not accept an empty string as a solved captcha", () => {
     // `captchaToken !== null` alone is not enough: the widget's callback
-    // hands back whatever it was given, and an empty token is a token the
-    // server will reject. The form must keep refusing rather than spend a
-    // submission on it.
+    // hands back whatever it was given, and an empty token is one the server
+    // will reject, so the form must keep refusing.
     render(<JoinUsForm />);
     fillIn();
     act(() => onSuccessRef.current?.(""));
@@ -235,9 +233,8 @@ describe("what the join-us form refuses to send", () => {
 describe("what happens after the send", () => {
   it("clears the form and the captcha on success", async () => {
     // A Turnstile token is single-use. Leaving the solved token in state means
-    // the next submission sends one the server has already consumed, and the
-    // second application of the session is rejected for a reason the sender
-    // cannot see.
+    // the next submission sends one the server has already consumed, rejected
+    // for a reason the sender cannot see.
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
@@ -297,11 +294,9 @@ describe("what happens after the send", () => {
   });
 
   it("does not send twice while the first send is still going", async () => {
-    // The button is disabled during the send, but the guard is what covers a
-    // second submit event arriving before React has re-rendered -- a double
-    // click, or Enter held down in the textarea.
-    // A holder rather than a bare `let`: TypeScript narrows a variable only
-    // assigned inside a closure to `never` at the call site below.
+    // The button is disabled during the send; the guard covers a second submit
+    // arriving before React has re-rendered. A holder rather than a bare `let`:
+    // TypeScript narrows a closure-only assignment to `never` at the call site.
     const pending: { release: (() => void) | null } = { release: null };
     validatedPost.mockImplementation(
       () =>

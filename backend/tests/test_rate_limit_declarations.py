@@ -1,13 +1,8 @@
 """The rate limits themselves, which nothing exercised.
 
-Every route test strips the decorator (`route_helpers.undecorated`), which is
-right for a unit test and left the limits with no coverage at all: raising
-login's `5/minute` to `5000/minute` -- brute force at a thousand times the
-intended rate -- kept the whole suite green.
-
-This asserts the declarations, not slowapi's counting. What is worth pinning
-is that each of these endpoints is still limited, and to what: a limit is a
-security decision, and a decision nothing records can be changed by accident.
+Every route test strips the decorator (`route_helpers.undecorated`), which
+left the limits with no coverage: raising login's `5/minute` to `5000/minute`
+kept the suite green. This asserts the declarations, not slowapi's counting.
 """
 
 from __future__ import annotations

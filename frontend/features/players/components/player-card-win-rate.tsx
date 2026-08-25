@@ -3,16 +3,15 @@ import { Trophy } from "lucide-react";
 import type { MatchStatsResponse, PlayerLeague } from "@/lib/core/schemas";
 
 import { formatFractionAsPercent, winRateColors } from "@/lib/core/format";
+import { cn } from "@/lib/core/utils";
 
 interface PlayerCardWinRateProps {
   league: PlayerLeague | null | undefined;
   stats: MatchStatsResponse | null | undefined;
   /**
    * Whether the ranked lookup failed, as opposed to answering "no league".
-   *
-   * Both arrive here as a falsy `league`, but only one of them licenses the
-   * "(unranked)" label below: that word is a claim about the player, and a
-   * failed request supports no claim at all. The toast reports the failure.
+   * Both arrive as a falsy `league`, but only one licenses the "(unranked)"
+   * label: that word is a claim, and a failed request supports no claim.
    */
   leagueFailed?: boolean;
 }
@@ -39,13 +38,13 @@ export function PlayerCardWinRate({
             <span className="text-xs text-muted-foreground">(unranked)</span>
           )}
         </div>
-        <span className={`text-lg font-bold ${colors.text}`}>
+        <span className={cn("text-lg font-bold", colors.text)}>
           {formatFractionAsPercent(source.win_rate)}
         </span>
       </div>
       <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
         <div
-          className={`absolute left-0 top-0 h-full duration-300 ${colors.bar}`}
+          className={cn("absolute left-0 top-0 h-full duration-300", colors.bar)}
           style={{ width: `${Math.min(source.win_rate, 1) * 100}%` }}
         />
       </div>

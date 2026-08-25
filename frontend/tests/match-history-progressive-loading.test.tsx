@@ -239,8 +239,7 @@ describe("Match History progressive loading", () => {
   it("stops claiming more matches once the match half of the run is done", async () => {
     // Still `running` -- but the backend stamps `match_execution_id` between
     // the Match Fetcher and the Player Updater, and the profile half that
-    // follows writes no matches. Promising more through it is a lie the row
-    // and the footer both tell.
+    // follows writes no matches.
     mockHistory(3, "running", 41);
     renderHistory();
 
@@ -268,8 +267,7 @@ describe("Match History progressive loading", () => {
   it("keeps the fetched rows when a poll of the list fails", async () => {
     // The 2s poll only exists while rows are arriving, so its failures land
     // exactly when the card has rows worth keeping. Replacing them with an
-    // error card throws away readable matches over a blip — the same mistake
-    // `MatchHistoryLoadingRow` exists to avoid.
+    // error card throws away readable matches over a blip.
     mockHistory(3, "running");
     renderHistory();
     await waitFor(() =>
@@ -374,9 +372,8 @@ describe("Match History progressive loading", () => {
 
   it("reports a failed page change instead of leaving the old page up", async () => {
     // Placeholder data keeps the previous page's rows on screen through the
-    // failed fetch, and this query is opted out of the global error toast --
-    // so without a report here the viewer reads page 1's matches under a
-    // pagination bar pointing at page 2, with nothing saying anything failed.
+    // failed fetch, and this query is opted out of the global error toast, so
+    // without a report here nothing says the page change failed.
     mockHistory(30, null);
     renderHistory();
     await waitFor(() =>
@@ -402,9 +399,8 @@ describe("Match History progressive loading", () => {
     await userEvent.click(screen.getByRole("button", { name: "2" }));
 
     // Reported, rather than silently reverted. The failed page-2 fetch carries
-    // no data, so the error card is the right shape here -- what must not
-    // happen is the card quietly returning to page 1 as though nothing was
-    // asked for.
+    // no data, so the error card is the right shape -- the card must not
+    // quietly return to page 1 as though nothing was asked for.
     await waitFor(() =>
       expect(
         screen.getByText(/Unable to reach the League Analysis/),

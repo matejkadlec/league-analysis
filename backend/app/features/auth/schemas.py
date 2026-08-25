@@ -92,16 +92,9 @@ class UserCreate(UserBase):
     def validate_password(cls, v: str) -> str:
         """Validate password meets security requirements.
 
-        Requirements:
-        - At least 8 characters
-        - At least one lowercase letter
-        - At least one uppercase letter
-        - At least one digit
-        - At least one special character (expanded set to support password managers)
-
-        Note: For more sophisticated strength checking (e.g., entropy-based validation),
-        consider integrating zxcvbn library in the future. Current validation uses
-        regex-based rules which are adequate for basic security requirements.
+        At least 8 characters, with a lowercase letter, an uppercase letter, a
+        digit, and one of an expanded special-character set that password
+        managers can produce.
         """
         return validate_password_strength(v)
 
@@ -110,11 +103,8 @@ class UserResponse(UserBase):
     """Schema for user responses (excludes sensitive data)."""
 
     # Deliberately looser than `UserBase`: FastAPI validates response models on
-    # the way out, so inheriting `DisplayName` would turn a row that predates
-    # the rule into a 500 on `GET /auth/me` -- the one page you would use to
-    # fix the name. The write models are where the rule belongs. `max_length`
-    # is the one constraint kept, because `String(128)` already guarantees it
-    # and dropping it would stop the document publishing the column's bound.
+    # the way out, so inheriting `DisplayName` would turn a row that predates the
+    # rule into a 500 on `GET /auth/me` -- the one page you would use to fix it.
     display_name: str = Field(max_length=128)
 
     id: int

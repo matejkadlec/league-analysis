@@ -1,20 +1,8 @@
 """Every URL the frontend asks for must be a URL this app answers.
 
-The two halves deploy separately and agree on nothing but strings. Rename a
-route here, or mistype a path there, and both suites stay green: every
-frontend test that touches an API module mocks it, so the path is never read
-by anything that knows what the real routes are. The failure surfaces as a
-404 in a browser, which is the most expensive place to find it.
-
-This test lives on the backend side because that is where the authority is --
-`app.openapi()` is the route table, not a copy of one -- so there is no
-snapshot to regenerate and nothing to fall out of date. It reads the frontend
-sources directly and resolves each `validatedGet`/`Post`/`Put`/`Delete`/
-`Patch` call to the (path, method) pair it will put on the wire.
-
-It does not check request or response shapes. Those are held by the Zod
-schemas on one side and the response models on the other, and pinning them
-here would be a second copy of both.
+The two halves deploy separately and agree on nothing but strings, and every
+frontend test that touches an API module mocks it, so a mistyped path stays
+green until it 404s in a browser. Request and response shapes are not checked.
 """
 
 from __future__ import annotations

@@ -171,9 +171,7 @@ class JobService:
             setattr(job, key, value)
 
         # After the merge and before the commit: config_json is merged rather
-        # than replaced, so only the resolved row can be checked. The scheduler
-        # used to be the first thing to notice, and it only logged -- leaving
-        # the DB and the running scheduler disagreeing behind a 200.
+        # than replaced, so only the resolved row can be checked.
         resolve_interval_seconds(
             name=job.name,
             schedule=job.schedule,
@@ -422,8 +420,7 @@ class JobService:
 
         Pause lives on the run's own runtime-control entry (test runs under
         the negated config ID), so a test run's pause and a concurrent
-        scheduled run's pause cannot interfere — and the flag dies with the
-        run instead of needing a clear-on-stop or a startup reset.
+        scheduled run's pause cannot interfere, and the flag dies with the run.
         """
         job = await self.get_job_configuration_model(job_id)
         if not job:

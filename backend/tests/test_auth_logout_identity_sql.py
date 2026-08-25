@@ -1,15 +1,8 @@
 """Who a refresh token names at logout, asserted by running the query.
 
-Every other test in this suite hands `db.execute` a canned result, which makes
-the WHERE clause invisible: the filter can say anything and the mock answers
-the row it was given either way. That is exactly the wrong shape here, because
-this filter is the whole behaviour -- one predicate deciding whether a Sign Out
-revokes the session or reports success having revoked nothing.
-
-So these run the real statement against a real database. SQLite in memory,
-with `auth` attached as a schema so the model's own table definition can be
-used unmodified; the rows go in through the ORM and come back through
-`AuthService.resolve_user_id_for_refresh_token` itself.
+A mocked `db.execute` makes the WHERE clause invisible, and that filter is the
+whole behaviour here. So these run the real statement against SQLite in memory,
+with `auth` attached as a schema so the model's table definition is unmodified.
 """
 
 from collections.abc import Iterator
@@ -108,12 +101,9 @@ async def test_a_token_this_server_rotated_out_still_names_its_owner(
 ) -> None:
     """The Sign Out that arrives one moment after a refresh.
 
-    The browser composes a request from the jar as it stands, so a logout
-    clicked while a refresh is in flight -- or after one whose response never
-    arrived, or from a second tab -- carries the superseded token. Answering
-    "no such user" there returns 200 "Successfully logged out" having revoked
-    nothing, and the replacement the server had just issued stays live for its
-    full 30 days with no browser left holding it to ever trip reuse detection.
+    A logout clicked while a refresh is in flight carries the superseded token.
+    Answering "no such user" there revokes nothing, and the replacement the
+    server just issued stays live for its full 30 days with no browser holding it.
     """
     service = _service(session)
     _store(session, service, "rotated", token_id="t1", revoked=True, replaced_by="t2")
@@ -126,11 +116,9 @@ async def test_a_token_revoked_without_a_replacement_names_nobody(
 ) -> None:
     """The other direction, and the reason this is not simply "any token".
 
-    A token revoked by a logout, or left at the tip of a chain reuse
-    detection killed, has no replacement recorded. That session is over, and
-    letting it name its owner would make a
-    dead credential a way to end whatever session the same person has since
-    started.
+    A token revoked by a logout, or left at the tip of a chain reuse detection
+    killed, has no replacement recorded. That session is over, and letting it
+    name its owner would make a dead credential a way to end the current one.
     """
     service = _service(session)
     _store(session, service, "dead", token_id="t1", revoked=True)
@@ -150,13 +138,9 @@ async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
 ) -> None:
     """The other half of the route, and it was mocked everywhere.
 
-    Ten tests reference `revoke_all_refresh_tokens_for_user`, and every one of
-    them replaces it with an AsyncMock and asserts it was awaited -- so "logout
-    revokes the session" was only ever checked as "logout calls something
-    named revoke". Its WHERE clause and its write were invisible: matching on
-    `id` instead of `user_id`, inverting the revoked filter, or never stamping
-    `revoked_at` at all each left all 615 tests green while the route answered
-    "Successfully logged out" with the session still live for 30 days.
+    Everywhere else `revoke_all_refresh_tokens_for_user` is an AsyncMock
+    asserted to have been awaited, so matching on `id` instead of `user_id`,
+    inverting the revoked filter, or never stamping `revoked_at` all stay green.
     """
     service = _service(session)
     _store(session, service, "live", row_id=1, token_id="t1")

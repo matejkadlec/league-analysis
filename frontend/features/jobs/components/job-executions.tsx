@@ -104,10 +104,9 @@ export function JobExecutions({
     );
   }
 
-  // Before this arm existed, a failed first load rendered the empty state
-  // below -- a scheduler whose API was down read as a scheduler that has
-  // never run. Later failures do not reach here: React Query keeps the pages
-  // it already has, so `allExecutions` is non-empty and the table stays up.
+  // Without this arm a failed first load renders the empty state below, so a
+  // scheduler whose API is down reads as one that has never run. Later failures
+  // keep their pages, so `allExecutions` is non-empty and the table stays up.
   if (isError && allExecutions.length === 0) {
     return (
       <Card>

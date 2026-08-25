@@ -16,14 +16,6 @@ import { JOBS_REFRESH_INTERVAL_MS } from "./refresh-interval";
 
 /**
  * The four caches the jobs surface reads, named once.
- *
- * They used to be inline literals across four files, with the invalidation
- * set copied by hand into the control hook — the same drift the matchmaking
- * feature already paid for once (see `matchmaking-query.ts`).
- *
- * The executions key is a prefix: each job card extends it with its job id,
- * and `invalidateJobsData` invalidates the bare prefix so every card's
- * history refreshes at once.
  */
 function jobsQueryKey() {
   return ["jobs"] as const;
@@ -48,19 +40,9 @@ function jobExecutionsInfiniteQueryKey() {
 const EXECUTIONS_PAGE_SIZE = 20;
 
 /**
- * Every job's executions, newest first, as an infinitely-scrolled list.
- *
- * Fixed-size pages, not one growing request: the backend caps `size` at
- * 100, so the old growing-`size` query 422'd on the sixth load-more.
- * Tradeoff accepted with the switch: `refetchInterval` refreshes every
- * loaded page each tick (N small requests instead of one big one).
- *
- * The failure envelope is deliberately re-thrown: returned as data, a
- * single failed 15-second poll would *replace* every loaded page and
- * truncate the list to page 1 until someone scrolls it back in. Thrown,
- * React Query keeps the previous pages (and their pageParams) stale and
- * retries on the next tick. It throws through `unwrap` rather than a bare
- * `Error` so the toast keeps the curated message -- see `ApiRequestError`.
+ * Every job's executions, newest first, infinitely scrolled. Fixed-size
+ * pages, because the backend caps `size` at 100. The failure envelope is
+ * re-thrown on purpose: returned as data it truncates the list to page 1.
  */
 export function jobExecutionsInfiniteQueryOptions() {
   return infiniteQueryOptions({
@@ -133,11 +115,9 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
 }
 
 /**
- * Refresh everything a job control action changes.
- *
- * No trailing `refetchQueries` on the jobs key: `invalidateQueries` already
- * refetches active queries, and the old inline copy's extra call only
- * aborted that fetch and reissued it.
+ * Refresh everything a job control action changes. No trailing
+ * `refetchQueries`: `invalidateQueries` already refetches active queries, and
+ * the old inline copy's extra call only aborted that fetch and reissued it.
  */
 export function invalidateJobsData(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: jobsQueryKey() });

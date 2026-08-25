@@ -10,19 +10,8 @@ import {
 
 /**
  * The display-name rule exists on both sides, so something has to hold it
- * equal -- the same problem `riot-id-alignment.test.ts` solves for Riot IDs.
- *
- * The settings form has always demanded three characters, a trim, and a
- * letters/marks/underscores/spaces pattern. `PATCH /auth/me` demanded one
- * character and nothing else, so the whole rule was browser-deep: any client
- * that was not the form set any 1-128 character string. The API now declares
- * all three, which puts them in the OpenAPI document -- and this reads them
- * back out.
- *
- * Needs `OPENAPI_JSON`, which `test.sh` produces for every `*-alignment` test;
- * without it there is nothing to compare against, so the check skips. What
- * keeps that skip honest is the convention check in
- * `api-contract-alignment.test.ts`, not this file.
+ * equal. Needs `OPENAPI_JSON`, which `test.sh` produces; without it the check
+ * skips, kept honest by the convention check in `api-contract-alignment`.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath
@@ -53,8 +42,7 @@ const spec = openapiPath
 /**
  * `UserProfileUpdate.display_name` is optional, so its constraints sit inside
  * `anyOf` beside the null branch; `UserBase.display_name` is required and
- * carries them directly. Reading only the top level would silently find
- * `undefined` on the optional one and compare nothing.
+ * carries them directly. Reading only the top level would compare nothing.
  */
 function displayNameConstraints(schemaName: string) {
   const property = spec?.components.schemas[schemaName]?.properties?.[

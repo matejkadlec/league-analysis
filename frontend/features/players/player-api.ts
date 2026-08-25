@@ -25,8 +25,7 @@ export interface SearchSuggestionsParams {
   q: string;
   // `Platform`, not `string`: both routes validate the query parameter
   // against the backend enum, so these two functions are the last place a
-  // "EUW" or a display name can enter the request. It compiled, shipped, and
-  // came back 422.
+  // "EUW" or a display name can enter the request.
   platform?: Platform;
   limit?: number;
 }

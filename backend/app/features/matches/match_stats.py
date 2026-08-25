@@ -72,9 +72,7 @@ def _accumulate_group_stats(
 
     `first_seen` supplies any fields copied off the first participant in a
     group rather than summed -- champion stats carry the champion id that way.
-    A participant whose group key is empty is skipped: a lane is genuinely
-    optional, and an empty champion name is a data defect that would otherwise
-    become a nameless row in the response.
+    A participant whose group key is empty is skipped.
     """
     grouped: dict[str, dict[str, int]] = {}
     for participant in participants:

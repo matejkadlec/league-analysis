@@ -8,16 +8,9 @@ export interface RankColors {
 }
 
 /**
- * Rank styling per tier, keyed by the tier itself.
- *
- * This was a ten-case switch with a `default` grey, over a `tier: string`.
- * `PlayerLeagueSchema.tier` is the API's own `Tier` enum now, so the default
- * was unreachable and the `toUpperCase()` in front of it was guarding against
- * a spelling the parse rejects. A `Record<Tier, …>` says the same thing in a
- * form the compiler checks: an eleventh tier is a type error here rather than
- * a silent grey badge.
- *
- * Keep aligned with PlayerCard rank styling.
+ * Rank styling per tier, keyed by the tier itself. `PlayerLeagueSchema.tier`
+ * is the API's own `Tier` enum, so a `Record<Tier, …>` makes an eleventh tier
+ * a type error here. Keep aligned with PlayerCard rank styling.
  */
 const RANK_COLORS: Record<Tier, RankColors> = {
   IRON: {

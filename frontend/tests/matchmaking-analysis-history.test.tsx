@@ -44,12 +44,9 @@ import { renderWithQueryClient } from "./render-support";
 const PUUID = "puuid-under-test";
 
 /**
- * Timestamps are written without a zone on purpose.
- *
- * `formatDateTime` reads the date back with `getHours()`/`getDate()`, so a
- * `Z`-suffixed fixture would render one clock in the Prague laptop and another
- * in the UTC gate container. A date-time with no offset is parsed as local
- * time, which makes the expected string the same in both.
+ * Timestamps are written without a zone on purpose: `formatDateTime` reads
+ * them back with `getHours()`, so a `Z`-suffixed fixture would render one
+ * clock on a Prague laptop and another in the UTC gate container.
  */
 const AHEAD = {
   created_at: "2026-03-04T14:07:00",
@@ -80,9 +77,8 @@ function renderHistory() {
 
 /**
  * The table half of the card. Both layouts render in jsdom -- the stacked
- * blocks are hidden by a Tailwind breakpoint, which no stylesheet applies
- * here -- so every figure is on screen twice and the queries have to say
- * which copy they mean.
+ * blocks are hidden by a Tailwind breakpoint no stylesheet applies here -- so
+ * every figure is on screen twice and the queries have to say which copy.
  */
 async function table() {
   return within(await screen.findByRole("table"));
@@ -101,16 +97,9 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("reads a player with no analyses as empty, not as a failure", async () => {
-    // A player who has never run an analysis is the normal first visit, and
-    // the API answers it with a 404. Letting that through turns the ordinary
-    // state into "Analysis history could not be loaded".
-    //
-    // This renders on the real provider client rather than a bare one,
-    // because the card alone cannot tell the two apart -- the empty branch
-    // and the error branch are both rendered from the same `if`. What
-    // separates them is the global `queryCache.onError`, which announces any
-    // failed query and is not silenced here: let the 404 through and every
-    // new player is told something broke on a page that is working.
+    // A player's first visit is a 404, and letting it through turns the
+    // ordinary empty state into "could not be loaded". Rendered on the real
+    // provider client: what separates the branches is `queryCache.onError`.
     getMatchmakingAnalysisHistory.mockResolvedValue({
       success: false,
       error: { status: 404, kind: "not_found" },
@@ -154,12 +143,9 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("colours each win rate by which side the gap favoured", async () => {
-    // The gap is printed as an absolute value, so the colour is the only
-    // thing on screen saying which team it favoured -- swap the comparison
-    // and the card tells someone their team was outmatched in the game where
-    // it was the stronger one. That is why a class is asserted here and not
-    // in the rows that treat styling as styling: this class carries the
-    // finding, and nothing else does.
+    // The gap is printed as an absolute value, so the colour is the only thing
+    // on screen saying which team it favoured -- swap the comparison and the card
+    // tells someone their team was outmatched in the game it was stronger in.
     const queryClient = renderHistory();
 
     const rows = await table();
@@ -188,8 +174,7 @@ describe("the matchmaking analysis history card", () => {
   it("reloads both sibling panels after a record is deleted", async () => {
     // The results panel beside this card is a separate query keyed on the
     // same player. Nothing else invalidates it, so without this the analysis
-    // someone just deleted stays on screen as the current result, and the
-    // only way back is a page reload.
+    // someone just deleted stays on screen as the current result.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -252,8 +237,7 @@ describe("the matchmaking analysis history card", () => {
   it("says so when a delete did not happen", async () => {
     // The row fades out the moment the button is clicked and comes back when
     // the request fails. Without the message that is all the viewer sees: a
-    // row that flickered and stayed, with nothing saying the deletion was
-    // refused rather than mis-clicked.
+    // row that flickered and stayed, with no sign the delete was refused.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
       error: { status: 500, kind: "server" },

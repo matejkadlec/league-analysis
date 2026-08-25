@@ -2,12 +2,16 @@
 
 import { Badge } from "@/components/ui/badge";
 
-import { detailedLogKey, formatJobTimestamp } from "./job-execution-format";
+import {
+  detailedLogKey,
+  formatJobTimestamp,
+  logFieldText,
+} from "./job-execution-format";
+import { cn } from "@/lib/core/utils";
 
 // The row renders these three in its own header, so listing them again as
-// extras would print each twice. Hoisted out of the map: it was rebuilt per
-// log line. Not the same policy as the set in `job-execution-format.ts` --
-// see the comment there.
+// extras would print each twice. Not the same policy as the set in
+// `job-execution-format.ts` -- see the comment there.
 const HEADER_FIELDS = new Set(["level", "timestamp", "event"]);
 
 interface JobExecutionLogsProps {
@@ -34,7 +38,8 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
             return (
               <div
                 key={detailedLogKey(log)}
-                className={`rounded border-l-4 border-y border-r bg-muted/20 p-2 space-y-1.5 ${
+                className={cn(
+                  "rounded border-l-4 border-y border-r bg-muted/20 p-2 space-y-1.5",
                   logLevel === "ERROR"
                     ? "border-l-destructive"
                     : logLevel === "WARNING"
@@ -43,12 +48,13 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
                         ? "border-l-blue-500"
                         : logLevel === "DEBUG"
                           ? "border-l-orange-500"
-                          : "border-l-muted"
-                }`}
+                          : "border-l-muted",
+                )}
               >
                 <div className="flex gap-2">
                   <span
-                    className={`shrink-0 font-bold ${
+                    className={cn(
+                      "shrink-0 font-bold",
                       logLevel === "ERROR"
                         ? "text-destructive"
                         : logLevel === "WARNING"
@@ -57,16 +63,16 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
                             ? "text-blue-600"
                             : logLevel === "DEBUG"
                               ? "text-orange-600"
-                              : "text-muted-foreground"
-                    }`}
+                              : "text-muted-foreground",
+                    )}
                   >
                     [{logLevel}]
                   </span>
                   <span className="shrink-0 text-muted-foreground">
-                    [{formatJobTimestamp(String(log.timestamp || ""))}]:
+                    [{formatJobTimestamp(logFieldText(log.timestamp || ""))}]:
                   </span>
                   <span className="flex-1 break-all">
-                    {String(log.event || "")}
+                    {logFieldText(log.event || "")}
                   </span>
                 </div>
 
@@ -75,9 +81,7 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
                     {extraFields.map(([key, value]) => (
                       <div key={key}>
                         {key.charAt(0).toUpperCase() + key.slice(1)}:{" "}
-                        {typeof value === "object"
-                          ? JSON.stringify(value)
-                          : String(value)}
+                        {logFieldText(value)}
                       </div>
                     ))}
                   </div>

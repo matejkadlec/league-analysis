@@ -20,11 +20,9 @@ export type PlayerTrackingFailureKind =
   | "unexpected";
 
 /**
- * Classify a failed player lookup from the error the API layer already
- * normalized. `normalizeApiError` has done the work of reading the status and
- * the structured code, so this only has to name the four outcomes the selector
- * words differently — no second error type, and no sniffing the message text
- * for "api key", which the backend now states as `RIOT_API_KEY_INVALID`.
+ * Classify a failed player lookup from the already-normalized error.
+ * `normalizeApiError` has read the status and the structured code, so this
+ * only names the four outcomes the selector words differently.
  */
 export function playerTrackingFailureKind(
   error: ApiError,

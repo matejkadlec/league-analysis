@@ -35,9 +35,6 @@ export function useJobCardControls(
 
   // Drop the optimistic flag once the server agrees, during render: the guard
   // is false on the immediate re-render, so it converges without a commit.
-  // `queueMicrotask` escaped React's render-phase-update tracking, so a render
-  // React discards -- StrictMode's double render, a concurrent render that
-  // loses to a higher-priority update -- still committed the reset.
   if (
     optimisticTestRunning !== null &&
     serverTestRunning === optimisticTestRunning
@@ -123,13 +120,9 @@ export function useJobCardControls(
     });
   }, [job.name, recentExecutions, toast]);
 
-  // No `onError` on any mutation in this file, deliberately: every
-  // mutationFn here is a bare `validatedPost`, and `validatedPost` catches
-  // its own failures and *resolves* with `{ success: false }` rather than
-  // rejecting — a contract pinned by tests/api-validated-helpers.test.ts.
-  // The failure is therefore always announced by the else-arm below, and an
-  // `onError` beside it is code that cannot run. If a mutationFn ever grows
-  // an `unwrap()` or a `throw`, it needs one again.
+  // No `onError` on any mutation in this file: every mutationFn is a bare
+  // `validatedPost`, which resolves with `{ success: false }` rather than
+  // rejecting, so an `onError` cannot run.
   const triggerMutation = useMutation({
     mutationFn: () =>
       validatedPost(JobTriggerResponseSchema, `/jobs/${job.id}/trigger`),
@@ -167,10 +160,8 @@ export function useJobCardControls(
     },
   });
 
-  // The six control endpoints answer the same shape and want the same
-  // toast-on-success / try-again-later-on-anything-else handling; only the
-  // request and the wording differ, so those are the only inputs. The
-  // mutationFn stays at each call site because the backend's
+  // The six control endpoints answer the same shape and want the same toast
+  // handling. The mutationFn stays at each call site because the backend's
   // test_frontend_api_paths.py reads the validatedPost URL literal there.
   function useControlMutation<TArg = void>(
     mutationFn: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,

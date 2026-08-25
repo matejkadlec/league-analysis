@@ -48,11 +48,9 @@ class RiotAPIKey(Base):
 
     __tablename__ = "riot_api_keys"
     __table_args__ = (
-        # `conv()` keeps the pre-convention name the baseline actually created;
-        # without it the `ck` convention would render
-        # `ck_riot_api_keys_check_riot_key_format` and drift from the database.
-        # A single `%` is correct here: SQLAlchemy escapes it for the DBAPI when
-        # it compiles the DDL, so spelling `%%` renders as `%%%%`.
+        # `conv()` keeps the pre-convention name the baseline actually created.
+        # A single `%` is correct: SQLAlchemy escapes it for the DBAPI when it
+        # compiles the DDL, so spelling `%%` renders as `%%%%`.
         CheckConstraint(
             "key_value LIKE 'RGAPI-%' AND length(key_value) = 42",
             name=conv("check_riot_key_format"),
@@ -161,14 +159,9 @@ async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
     """
     key_record = await _lock_newest_key(db)
     if key_record is None:
-        # `LIMIT 1 ... FOR UPDATE` chooses its row from the statement's own
-        # snapshot and only then blocks on the lock. When a concurrent save
-        # has deleted that row, the statement returns nothing at all -- not
-        # the replacement the save inserted, which that snapshot never saw.
-        # Reading empty here would report MISSING for a perfectly live key.
-        # A second statement takes a fresh snapshot under READ COMMITTED and
-        # sees the replacement; when the table really is empty it just costs
-        # one extra query on the already-degraded path.
+        # `LIMIT 1 ... FOR UPDATE` picks its row from the statement's own
+        # snapshot and only then blocks, so a concurrent save that deleted that
+        # row returns nothing -- not its replacement. A second snapshot sees it.
         key_record = await _lock_newest_key(db)
     return key_record
 
@@ -258,12 +251,9 @@ async def synchronize_riot_credential_health(
         _replace_generation(health, db_key_id=db_key_id, now=now)
 
     if expired and key_record is not None:
-        # Only now, and only the row the select above already locked. Deleting
-        # earlier would blank `db_key_id` through `ON DELETE SET NULL` and hide
-        # the very change the comparison is there to catch, leaving health
-        # reading `valid` for a credential that no longer exists. Taking no new
-        # lock after the health row also keeps this in the same order the save
-        # path uses, so the two cannot deadlock.
+        # Deleting earlier would blank `db_key_id` through `ON DELETE SET NULL`,
+        # leaving health reading `valid` for a dead credential. Taking no new
+        # lock here keeps the save path's order, so they cannot deadlock.
         logger.warning("riot_api_key_age_limit_reached", key_id=key_record.id)
         await db.execute(delete(RiotAPIKey).where(RiotAPIKey.id == key_record.id))
 

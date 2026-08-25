@@ -1,14 +1,8 @@
 """Every response field must admit the values its column is allowed to hold.
 
-A response schema is a promise about what the API sends. A column's
-`nullable=True` is a promise about what the database may store. When the
-second is wider than the first, the gap is not a style problem: one NULL row
-makes `model_validate` raise and turns every response carrying that row into a
-500, with nothing failing until the day such a row exists.
-
-That is not hypothetical -- `players.profile_icon_id` and
-`players.summoner_level` were nullable columns under required `int` fields
-until revision 20260820_0020 closed them.
+A response schema promises what the API sends; a column's `nullable=True`
+promises what the database may store. When the second is wider, one NULL row
+makes `model_validate` raise and 500s every response that carries that row.
 """
 
 from __future__ import annotations
@@ -96,24 +90,9 @@ def test_no_response_field_caps_a_column_the_database_does_not_cap(
 ) -> None:
     """A ceiling on a response field can only ever reject a real row.
 
-    A response model describes what the API sends; it does not get to decide
-    what the table may hold. An upper bound the database does not enforce turns
-    a stored value into a `ResponseValidationError`, which FastAPI serves as a
-    500 -- so the field is unreadable exactly when it is most interesting.
-
-    `PlayerLeagueResponse.league_points` was `le=100`, true of Iron through
-    Diamond and false of the three tiers above them, where LP has no ceiling.
-    Nothing clamps the writer and no CHECK backs it, so tracking one Master
-    player would have 500'd `GET /players/{puuid}/league`.
-
-    Lower bounds are left alone: `ge=0` on a count or an average states
-    something arithmetic already guarantees, and it reaches the OpenAPI
-    document where the frontend can read it. Fields that are not columns are
-    left alone too -- `win_rate`'s `le=1.0` bounds a ratio whose own definition
-    guarantees it, not a value the table stores.
-
-    No exception is carved out for a column with a CHECK ceiling, because no
-    column has one. If one ever does, that is the case to teach this test.
+    An upper bound the database does not enforce turns a stored value into a
+    `ResponseValidationError`, which FastAPI serves as a 500. Lower bounds and
+    fields that are not columns are left alone.
     """
     columns = {column.key for column in sa_inspect(model).columns}
 
@@ -134,15 +113,9 @@ def test_no_response_field_is_shorter_than_the_column_it_reads(
 ) -> None:
     """The string half of the same rule, where the column does set a ceiling.
 
-    `max_length` is not deleted the way a numeric cap is: a `String(78)` column
-    really is bounded, and repeating the bound puts it in the OpenAPI document
-    where the frontend can read it. What it may not do is claim a *tighter*
-    bound than the column, because then a value the table accepts is one the
-    response cannot serialise -- the same 500, reached through a stored string
-    instead of a stored number.
-
-    All nineteen agree today. This exists so the next `String(64)` widened to
-    `String(128)` does not leave its response model behind.
+    `max_length` is kept rather than deleted the way a numeric cap is: a
+    `String(78)` column really is bounded, and the bound reaches the OpenAPI
+    document. What it may not do is claim a *tighter* bound than the column.
     """
     columns = {column.key: column for column in sa_inspect(model).columns}
 

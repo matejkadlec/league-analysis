@@ -51,13 +51,9 @@ function setOptionalConsent(): void {
   document.cookie = `${CONSENT_COOKIE}=${value}; Path=/`;
 }
 
-// The match list scrolls sideways only from `lg` up (`lg:overflow-x-auto`),
-// so only from `lg` up does it need to be a named, keyboard-reachable region.
-// Below that a row reflows to fit and the container cannot move, which made
-// `tabIndex={0}` a focus stop on a phone that led nowhere.
-//
-// These render the real `MatchHistory`: pinning a local copy of the JSX would
-// stay green through exactly the revert they exist to catch.
+// The list scrolls sideways only from `lg` up, so only there does it need to be
+// a named keyboard-reachable region. These render the real `MatchHistory`; a
+// local copy of the JSX would survive the revert they exist to catch.
 
 function stubMatchMedia(matches: boolean): void {
   vi.stubGlobal("matchMedia", (query: string) => ({

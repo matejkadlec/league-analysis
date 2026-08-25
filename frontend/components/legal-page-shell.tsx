@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/features/auth";
 import { PublicBackButton } from "@/components/public-back-button";
 import { PublicPageFooter } from "@/components/public-page-footer";
+import { cn } from "@/lib/core/utils";
 
 interface LegalPageShellProps {
   title: string;
@@ -21,7 +22,7 @@ export function LegalPageShell({
   const contentSpacingClass = isSignedIn ? "py-8" : "pb-8 pt-0";
 
   const content = (
-    <div className={`container mx-auto max-w-4xl px-4 ${contentSpacingClass}`}>
+    <div className={cn("container mx-auto max-w-4xl px-4", contentSpacingClass)}>
       <Card id="header-card" className="py-2 text-white">
         <div className="flex flex-col">
           <div className="flex items-start justify-between px-8 pb-2 pt-4">

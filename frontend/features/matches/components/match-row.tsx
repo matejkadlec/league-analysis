@@ -23,6 +23,7 @@ import {
 import { formatDateTime } from "@/lib/core/format";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { formatRiotId } from "@/features/players";
+import { cn } from "@/lib/core/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -50,10 +51,8 @@ interface MatchSideParticipant {
   summoner2_id?: number | null | undefined;
   runes?: ParticipantRunes | null | undefined;
   // Optional because the two shapes this stands in for differ: the API
-  // identifies the lane opponent, but not the current player's own
-  // participant — that row's identity is the page you are already on. An
-  // unidentified side is therefore also an unswitchable one, which is exactly
-  // the rule the icons need.
+  // identifies the lane opponent but not the current player's own
+  // participant. An unidentified side is also an unswitchable one.
   puuid?: string | undefined;
   game_name?: string | undefined;
   tag_line?: string | undefined;
@@ -93,13 +92,9 @@ function startOfLocalDay(timestamp: number): number {
 }
 
 function getDaysAgo(timestamp: number): string {
-  // Calendar days apart, not elapsed 24-hour blocks. The absolute date
-  // printed directly above this label is a local calendar day
-  // (`formatDateTime`), and the two are meant to be two readings of one
-  // instant: counting 24-hour blocks made a game played at 23:00 read
-  // "Today" until the following midday, and stretched "Yesterday" into the
-  // day before. Rounding rather than flooring the difference keeps the
-  // 23- and 25-hour days either side of a DST change on whole numbers.
+  // Calendar days apart, not elapsed 24-hour blocks: the absolute date above
+  // is a local calendar day. Rounding rather than flooring keeps the 23- and
+  // 25-hour days either side of a DST change on whole numbers.
   const diffDays = Math.round(
     (startOfLocalDay(Date.now()) - startOfLocalDay(timestamp)) / 86_400_000,
   );
@@ -110,14 +105,9 @@ function getDaysAgo(timestamp: number): string {
 }
 
 /**
- * How the game went, decided once for both signals the row shows: the
- * background tint and the outcome word next to the duration (WCAG 1.4.1 —
- * colour is never the only carrier of meaning).
- *
- * The remake check comes before the win check on purpose: a remake is
- * annulled, so neither side won it. A missing participant is a data gap, not
- * a loss — neutral tint and no verdict word, rather than a row that reads as
- * a game the player lost.
+ * How the game went, decided once for both signals the row shows: the tint
+ * and the outcome word (WCAG 1.4.1 — colour is never the only carrier). A
+ * remake is annulled; a missing participant is a data gap, so no verdict word.
  */
 function getMatchOutcome(match: MatchWithPlayerData): {
   label: string;
@@ -134,16 +124,9 @@ function getMatchOutcome(match: MatchWithPlayerData): {
 }
 
 /**
- * Names a wordless icon on hover and on keyboard focus.
- *
- * Focus is the caller's job, not this component's: `asChild` hands the trigger
- * to whatever child it is given, and a plain `div` is not focusable, so the
- * icon-group callers pass `tabIndex={0}` — one stop per rune or spell group,
- * not per icon — and the two button callers need nothing. Each icon's name is
- * also its image's `alt`, so a screen reader that never opens the tooltip
- * still gets the name. The two participant triggers are buttons and do not
- * work that way: their label is the Riot ID, their `alt` is the champion, and
- * their accessible name is the `aria-label` that names both.
+ * Names a wordless icon on hover and on keyboard focus. Focus is the caller's
+ * job: `asChild` hands the trigger to its child and a `div` is not focusable,
+ * so icon-group callers pass `tabIndex={0}`, one stop per group.
  */
 function IconTooltip({
   label,
@@ -250,8 +233,7 @@ function renderRunes(
     ? getRuneStyleName(runes.sub_style)
     : null;
   // The top icon is the keystone whenever we have art for it, so its label
-  // has to be the keystone too — naming it "Precision" over a Conqueror icon
-  // is the bug this replaced. Both come out of the same keystone table, so
+  // has to be the keystone too. Both come out of the same keystone table, so
   // the label falls back to the tree exactly when the icon does.
   const primaryLabel = keystoneName || primaryStyleName || "Primary rune style";
   // The bottom icon really is the secondary tree, and keeps saying so.
@@ -296,11 +278,9 @@ function renderRunes(
 }
 
 /**
- * The 52px champion icon at the centre of the matchup.
- *
- * Switchable only for the lane opponent: the other side is the player whose
- * page this is, whom the API does not identify here and who has nowhere to
- * switch to anyway.
+ * The 52px champion icon at the centre of the matchup. Switchable only for
+ * the lane opponent: the other side is the player whose page this is, whom
+ * the API does not identify here and who has nowhere to switch to anyway.
  */
 function ChampionPortrait({
   participant,
@@ -348,7 +328,10 @@ function ChampionPortrait({
         type="button"
         aria-label={`${championName} — view ${target.riotId}`}
         onClick={() => onSelectPlayer(target.puuid)}
-        className={`${shell} cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]`}
+        className={cn(
+          shell,
+          "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]",
+        )}
       >
         {icon}
       </button>
@@ -388,12 +371,8 @@ function renderTeamChampIcon(
   );
 
   // The tooltip names the player, not the champion: the champion is what the
-  // icon already is, while whose game this was appeared nowhere in the row.
-  //
-  // The current player's own icon stays a plain div with no focus stop. It
-  // cannot switch anywhere — they are already here — and its tooltip only
-  // names the viewer themselves, which is not worth a tab stop on every row
-  // (the hover tooltip and the champion `alt` remain).
+  // icon already is. The current player's own icon stays a plain div with no
+  // focus stop -- it cannot switch anywhere.
   return isCurrentPlayer ? (
     <IconTooltip key={champ.puuid} label={riotId}>
       <div className={shell}>{icon}</div>
@@ -407,7 +386,10 @@ function renderTeamChampIcon(
         // used to say.
         aria-label={`${championName} — view ${riotId}`}
         onClick={() => onSelectPlayer(champ.puuid)}
-        className={`${shell} cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]`}
+        className={cn(
+          shell,
+          "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]",
+        )}
       >
         {icon}
       </button>
@@ -425,10 +407,8 @@ interface SideStatHighlight {
 
 /**
  * Whether this side wins one lane comparison. Compared on the canonical
- * numbers, never on the rendered strings, so two values that round to the
- * same text still separate. A value missing on either side — no lane
- * opponent, or a kill participation with no team kills to divide by — and an
- * exact tie both leave the pair unhighlighted.
+ * numbers, never the rendered strings, so two values that round to the same
+ * text still separate. A missing value or an exact tie leaves it unhighlighted.
  */
 function winsStat(
   mine: number | null | undefined,
@@ -453,22 +433,21 @@ function MatchSideStats({
   highlight: SideStatHighlight;
 }) {
   // Yellow marks the better side of the matchup; the other side keeps the
-  // normal foreground rather than being dimmed. Nothing is encoded in the
-  // colour that the numbers themselves do not say (WCAG 1.4.1) — it is a
-  // scan aid across two mirrored blocks, not a state.
+  // normal foreground. Nothing is encoded in the colour that the numbers
+  // themselves do not say (WCAG 1.4.1) — it is a scan aid, not a state.
   const lead = (wins: boolean) => (wins ? " text-yellow-500" : "");
   return (
     <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
       <span className={lead(highlight.kda).trim()}>
         <span className="font-medium">{kda.toFixed(2)}</span> KDA
       </span>
-      <span className={`mt-0.5${lead(highlight.cs)}`}>
+      <span className={cn("mt-0.5", lead(highlight.cs))}>
         <span className="font-medium">{totalCs}</span> CS ({csPerMinute}/min)
       </span>
-      <span className={`mt-0.5${lead(highlight.vision)}`}>
+      <span className={cn("mt-0.5", lead(highlight.vision))}>
         <span className="font-medium">{visionScore}</span> Vision Score
       </span>
-      <span className={`mt-0.5${lead(highlight.killParticipation)}`}>
+      <span className={cn("mt-0.5", lead(highlight.killParticipation))}>
         <span className="font-medium">
           {killParticipation !== null
             ? `${killParticipation.toFixed(0)}%`
@@ -578,10 +557,8 @@ function MatchTeamCompositions({
             </div>
           </div>
           {/* text-foreground/75 like the rest of the row: muted-foreground
-              composites to 3.1-4.4:1 on the win/loss tints, under the 4.5:1
-              the earlier contrast fix cites. axe filed these under
-              results.incomplete (alpha-stacked backgrounds), which the spec
-              does not assert, so the green gate proved nothing here. */}
+              composites to 3.1-4.4:1 on the win/loss tints, under 4.5:1. axe
+              filed these under results.incomplete (alpha-stacked backgrounds). */}
           <div className="text-center text-xs text-foreground/75">Vs</div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">
@@ -650,9 +627,7 @@ export function MatchRow({
 
   // Decided here because only the row sees both sides. CS compares the raw
   // `total_cs` integers rather than the `/min` strings: both participants
-  // played the same `game_duration`, so the CS ordering is the CS/min
-  // ordering, and the parenthetical is highlighted with the total it came
-  // from.
+  // played the same `game_duration`, so the two orderings are the same.
   const playerStatHighlight: SideStatHighlight = {
     kda: winsStat(participant?.kda, opponent?.kda),
     cs: winsStat(participant?.total_cs, opponent?.total_cs),
@@ -668,13 +643,14 @@ export function MatchRow({
 
   return (
     <div
-      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${outcome.bgClass}`}
+      className={cn(
+        "px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0",
+        outcome.bgClass,
+      )}
     >
-      {/*
-        Below `lg` the blocks wrap instead of holding their desktop widths, and
-        the matchup jumps to the front so the two stat blocks end up adjacent —
-        left one the player's, right one the opponent's, same as on desktop.
-      */}
+      {/* Below `lg` the blocks wrap instead of holding their desktop widths,
+          and the matchup jumps to the front so the two stat blocks end up
+          adjacent -- left the player's, right the opponent's, as on desktop. */}
       <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
         <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-35 lg:shrink-0">
           <span className="text-sm font-medium text-center">
@@ -694,10 +670,9 @@ export function MatchRow({
           </span>
         </div>
 
-        {/* Full width below `lg`: every other stacked cell is a half, so a
-            half here would pair the duration with the player's stat block and
-            push the opponent's onto the next row, breaking the side-by-side
-            reading the wrap order above exists for. */}
+        {/* Full width below `lg`: a half here would pair the duration with the
+            player's stat block and push the opponent's onto the next row,
+            breaking the side-by-side reading the wrap order above exists for. */}
         <div className="w-full shrink-0 text-center flex flex-col justify-center lg:w-16">
           {/* The row's tint is the only other outcome signal; colourblind
               players need the word (WCAG 1.4.1: no colour-only meaning). */}
@@ -718,12 +693,9 @@ export function MatchRow({
           />
         )}
 
-        {/* 484px, not 420: the LP cell took `w-12` + `mr-2` + one of the
-            row's `gap-2` gaps with it (3 + 0.5 + 0.5rem = 4rem), and both
-            champion columns grew by half of that each (`lg:w-40` →
-            `lg:w-48`). The wrapper has to grow by the whole 4rem or the two
-            columns take the space out of the swords divider instead, and the
-            row's total desktop width is unchanged. */}
+        {/* 484px, not 420: the LP cell took `w-12` + `mr-2` + one `gap-2`
+            (4rem) with it. The wrapper has to grow by the whole 4rem or the
+            columns take the space out of the swords divider instead. */}
         <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-[484px]">
           <MatchSideColumn
             participant={participant}
@@ -757,13 +729,9 @@ export function MatchRow({
           />
         )}
 
-        {/* No per-match LP column here any more: reliable historical
-            per-match LP is not obtainable under the current Riot
-            developer-key constraints, so the row was showing a number it
-            could not stand behind. `match.lp_change` is still stored and
-            still served — this is a UI hide pending a trustworthy source, not
-            a feature deletion. The width it held went to the two champion
-            columns in the matchup block above. */}
+        {/* No per-match LP column: reliable historical per-match LP is not
+            obtainable under the current Riot developer-key constraints.
+            `match.lp_change` is still stored and still served. */}
 
         <MatchTeamCompositions
           teamComps={teamComps}

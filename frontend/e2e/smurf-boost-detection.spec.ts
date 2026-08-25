@@ -117,9 +117,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   ).toHaveCount(0);
 
   // The panel is sized by its entries, while the tab that opens it keeps the
-  // fixed rail height. Stretching the panel to the rail left about 100px of
-  // empty card under a three-entry list. Measured rather than asserted on a
-  // class, so a future height lands here rather than passing silently.
+  // fixed rail height. Measured rather than asserted on a class, so a future
+  // height lands here rather than passing silently.
   const panel = quickNavigation.getByRole("navigation", {
     name: "Page sections",
   });
@@ -128,9 +127,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   // and counting it would loosen the bound below by a whole entry.
   const entryCount = await panel.getByRole("button").count();
   // Measured: three entries render 132px, against the 242px the fixed rail
-  // height used to force. ~40px an entry plus the nav's `py-2`, with a little
-  // slack -- loose enough to survive a font change, tight enough that a
-  // return to 242px lands here.
+  // height used to force. ~40px an entry plus the nav's `py-2`, loose enough
+  // to survive a font change, tight enough that a return to 242px lands here.
   expect(panelBox!.height).toBeLessThanOrEqual(entryCount * 40 + 16 + 8);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
@@ -237,8 +235,7 @@ test("renders the page at the sizes the layout was specified in", async ({
     .getByRole("button", { name: "Detection Settings", exact: true })
     .click();
 
-  // Muted helper copy was 12px against a dark background, which is the whole
-  // complaint the readability ticket opens with. These are measured rather
+  // Muted helper copy was 12px against a dark background. Measured rather
   // than asserted as class names: a utility that stops resolving still leaves
   // the class in the markup.
   const helper = page.locator("#smurf-boost-recentWindowSize-help");
@@ -261,10 +258,8 @@ test("renders the page at the sizes the layout was specified in", async ({
   }
 
   // Counting the resolved template catches a breakpoint that never applies,
-  // which a class-name check cannot. Each threshold group sizes its own grid
-  // so every tab fits without scrolling the dialog: the two window fields
-  // sit side by side, and the seven-field Playing Pattern group spreads
-  // across four columns at this width.
+  // which a class-name check cannot. Each threshold group sizes its own grid so
+  // every tab fits without scrolling the dialog.
   const columnsOf = (testId: string) =>
     page
       .getByTestId(testId)
@@ -329,11 +324,8 @@ test("renders the page at the sizes the layout was specified in", async ({
 
 /**
  * The reason the page has a search of its own: analysing somebody who is not
- * the account's player, without becoming that player.
- *
- * Nothing else covers it. The other spec asserts the control is on screen and
- * stops there, which passed just as well when choosing a player meant leaving
- * for Player Overview.
+ * the account's player, without becoming them. The other spec asserts only
+ * that the control is on screen.
  */
 test("compares a player the account has never tracked, and stays itself", async ({
   page,
@@ -407,11 +399,9 @@ test("does not carry one player's fetch report onto another", async ({
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
   await expect(runCard).toContainText("The last fetch");
 
-  // Pointing the card at somebody else must leave that sentence behind: it
-  // reports a fetch made for the previous player, and the card holds it in
-  // its own state where no query key can invalidate it. The `key` on this
-  // card is the whole mechanism -- without it React keeps the same instance
-  // across the switch and the stranger inherits a fetch nobody ran for them.
+  // The card holds that sentence in its own state, where no query key can
+  // invalidate it, so the `key` on this card is the whole mechanism: without it
+  // React keeps the instance and the stranger inherits a fetch nobody ran.
   const search = runCard.getByLabel("Choose player for comparison");
   await search.fill("Stranger");
   await page.getByRole("option", { name: /Stranger#TWO/ }).click();
@@ -428,14 +418,9 @@ test("seeds the card's search with the first player an empty account picks", asy
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  // The account that has never chosen a player. `useAnalyzedPlayer` resolves
-  // to none here -- no `?puuid=`, and no current player to seed one from --
-  // which is the one state in which the card's `key` does real work. Under it
-  // `PlayerSelector` starts with an empty `initialSearchValue`, so choosing a
-  // player empties the box rather than keeping the name; only the remount the
-  // changed key forces re-seeds it with who was chosen. Un-key the card, or
-  // stop passing the name in, and the box is left blank next to a result that
-  // is about somebody.
+  // The account that has never chosen a player: the one state where the card's
+  // `key` does real work. `PlayerSelector` starts with an empty
+  // `initialSearchValue` here, so only the remount re-seeds the box.
   await installSmurfBoostMocks(page, { currentPlayer: null });
 
   await page.goto("/rank-manipulation");
@@ -458,8 +443,7 @@ test("seeds the card's search with the first player an empty account picks", asy
 /**
  * `accessibility.spec.ts` scans the three routes the populated-player harness
  * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.
- * The result card is included on purpose -- it is the widest, densest markup
- * in the feature and the part a scan of an unrun page would never reach.
+ * The result card is included on purpose -- a scan of an unrun page misses it.
  */
 test("has no WCAG A/AA violations, before or after a comparison", async ({
   page,
@@ -499,11 +483,9 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
 
-  // The success toast is scanned rather than excluded, but only once it has
-  // finished fading in. Axe measures whatever opacity it finds, and the
-  // exclusion this replaces was hiding a `color-contrast` failure recorded at
-  // opacity 0.03 mid-animation -- the settled colours are near-black on a
-  // pale tint.
+  // The success toast is scanned once it has finished fading in: axe measures
+  // whatever opacity it finds, and the exclusion this replaces was hiding a
+  // `color-contrast` failure recorded at opacity 0.03 mid-animation.
   await expect(page.locator("[data-sonner-toast]")).toHaveCSS("opacity", "1");
 
   await scan("with a result on screen");

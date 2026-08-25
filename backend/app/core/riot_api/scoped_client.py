@@ -1,9 +1,8 @@
 """One scope around the tracked Riot client.
 
-Every Riot-writing caller needs the same two things: a missing durable
-credential translated into ``AuthenticationError``, and a client whose
-session opens and closes with the scope. This module owns both once;
-each seam maps ``AuthenticationError`` onto its native error mode.
+Every Riot-writing caller needs a missing durable credential translated
+into ``AuthenticationError`` and a client whose session opens and closes
+with the scope; each seam maps ``AuthenticationError`` onto its own mode.
 """
 
 from collections.abc import AsyncGenerator, Callable

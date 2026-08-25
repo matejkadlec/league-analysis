@@ -59,11 +59,8 @@ async def update_riot_api_key(
     """
     Update the Riot API key.
 
-    The new key is validated against the Riot API before being saved.
-    If validation fails, the update is rejected.
-
-    Database-backed changes take effect immediately. Environment-backed changes
-    require updating the process environment and restarting the backend.
+    The key is validated against the Riot API before being saved. A database-backed
+    key takes effect immediately; an environment-backed one needs a restart.
     """
     try:
         # No first-store branch: `update_setting` creates the key row when the
@@ -93,10 +90,7 @@ async def test_riot_api_key(
     """
     Test a Riot API key without saving it.
 
-    This endpoint validates the provided API key by making a test
-    request to the Riot API. The key is not saved to the database.
-
-    Use this to verify a new key before committing the change.
+    Validates the key with a test request to the Riot API; nothing is stored.
     """
     test_result = await settings_service.test_riot_api_key(update.value)
 

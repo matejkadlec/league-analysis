@@ -117,11 +117,9 @@ const MATCH: MatchWithPlayerData = {
       champ("Elise", "r5"),
     ],
   },
-  // The two sides carry different kill totals on purpose: every one of the
-  // four ways the two stat blocks could be wired to them produces a distinct
-  // percentage, so an assertion on the number says which team it was read
-  // from. Player 10 of blue's 20 = 50%; opponent 8 of red's 40 = 20%; the
-  // crossed wiring would read 25% and 40%.
+  // Different kill totals on purpose: each of the four ways the stat blocks
+  // could be wired gives a distinct percentage. 10 of blue's 20 = 50%, 8 of
+  // red's 40 = 20%; crossed reads 25% and 40%.
   team_stats: {
     blue_team: { ...TEAM_STATS, kills: 20 },
     red_team: { ...TEAM_STATS, kills: 40 },
@@ -148,11 +146,9 @@ afterEach(() => {
 
 describe("a match history row", () => {
   it("measures kill participation against the player's own team, not the enemy's", () => {
-    // `playerTeamStats` picks blue or red off `participant.team_id`, and the
-    // opponent's block reads the mirror. Cross the two and both numbers stay
-    // plausible — they are percentages in range, on the right screen — while
-    // telling the player they carried a fight they sat out of. There is
-    // nothing else on the row to notice it against.
+    // `playerTeamStats` picks blue or red off `participant.team_id` and the
+    // opponent's block reads the mirror. Crossed, both numbers stay plausible
+    // percentages and nothing else on the row contradicts them.
     renderRow();
 
     expect(screen.getByText("50%")).toBeTruthy();
@@ -178,11 +174,9 @@ describe("a match history row", () => {
     expect(screen.getByText("20%")).toBeTruthy();
   });
 
-  // A Tailwind class is asserted here for the same reason the matchmaking
-  // history row asserts one: the tint carries the outcome for sighted
-  // players, and `getMatchOutcome` derives it and the text label from one
-  // branch — so the class and the word are pinned together, and a row whose
-  // tint and label disagree cannot pass.
+  // A Tailwind class is asserted because the tint carries the outcome for
+  // sighted players, and `getMatchOutcome` derives it and the label from one
+  // branch -- so a row whose tint and label disagree cannot pass.
   const tint = (container: HTMLElement) =>
     container.firstElementChild?.className ?? "";
 
@@ -232,8 +226,7 @@ describe("a match history row", () => {
   it("treats an early surrender as a remake even when the participant flag is not set", () => {
     // The two flags come from different places — `remake` off the
     // participant, `early_surrender` off the match — and either one alone
-    // means the game was voided. Dropping the match-level half tints a
-    // three-minute AFK game as a real defeat.
+    // means the game was voided.
     const { container } = renderRow({
       early_surrender: true,
       player_participant: { ...PARTICIPANT, win: false, remake: false },
@@ -246,8 +239,7 @@ describe("a match history row", () => {
   it("falls back to a neutral tint when the player is not in the match", () => {
     // A row with no `player_participant` is a data gap, not a loss. Without
     // the guard the cascade falls through to the defeat colour and the row
-    // reads as a game the player lost — in the tint and, since the outcome
-    // word was added, in text too.
+    // reads as a game the player lost — in the tint and in text.
     const { container } = renderRow({ player_participant: null });
 
     expect(tint(container)).toContain("bg-muted/30");
@@ -256,12 +248,9 @@ describe("a match history row", () => {
   });
 
   it("shows the game length but never a per-match LP number", () => {
-    // Per-match LP is not obtainable reliably under the current Riot
-    // developer-key constraints, so the column is hidden rather than filled
-    // with a guess — `lp_change` still arrives on the match and must not
-    // reach the screen. The duration took its place beside the date, and it
-    // carries the outcome word, which is the row's only non-colour outcome
-    // signal (WCAG 1.4.1): losing the cell in the move would lose that too.
+    // Per-match LP is not reliably obtainable under a Riot developer key, so
+    // the column is hidden rather than guessed -- `lp_change` still arrives
+    // and must not reach the screen. The outcome word is the non-colour signal.
     const { container } = renderRow({ lp_change: 18 });
 
     expect(container.textContent).not.toContain("LP");
@@ -292,8 +281,7 @@ describe("a match history row", () => {
     (_side, bluePuuid, redPuuid, expectedChampion) => {
       // Ten icons, and the only thing saying which one is the viewer is the
       // yellow ring. Compare the wrong field and either nobody is highlighted
-      // or — worse — the ring lands on a stranger and the row reads as
-      // somebody else's game.
+      // or — worse — the ring lands on a stranger.
       const { container } = renderRow({
         team_compositions: {
           blue_team: [
@@ -309,10 +297,9 @@ describe("a match history row", () => {
 
       const ringed = container.querySelectorAll(".ring-yellow-400");
       expect(ringed).toHaveLength(1);
-      // The champion now travels on the image's `alt` rather than a `title`
-      // on the wrapper: these icons carry a Riot ID tooltip, and the champion
-      // would otherwise be readable by neither sighted nor screen-reader
-      // users.
+      // The champion travels on the image's `alt` rather than a `title` on
+      // the wrapper: these icons carry a Riot ID tooltip, so it would
+      // otherwise be readable by neither sighted nor screen-reader users.
       expect(ringed[0]?.querySelector("img")?.getAttribute("alt")).toBe(
         expectedChampion,
       );
@@ -328,8 +315,7 @@ describe("a match history row", () => {
   );
 
   it("draws a dash instead of a lineup when the match has no team compositions", () => {
-    // Older rows predate composition capture. The `—` placeholder is what
-    // keeps the row's columns from collapsing; without the guard the two
+    // Older rows predate composition capture. Without the guard the two
     // `.map` calls run on `undefined` and the whole row throws, taking the
     // rest of the match list down with it.
     const { container } = renderRow({ team_compositions: null });
@@ -350,10 +336,9 @@ describe("a match history row", () => {
   });
 
   it.each([
-    // Midnight is the one hour `hours % 12` turns into 0, which is what the
-    // `hours ? hours : 12` line exists for, and noon is the only hour where
-    // `>= 12` and `> 12` disagree. Every other hour reads correctly with
-    // either line deleted.
+    // Midnight is the one hour `hours % 12` turns into 0, and noon is the
+    // only hour where `>= 12` and `> 12` disagree. Every other hour reads
+    // correctly with either line deleted.
     [new Date(2026, 2, 4, 0, 0), "4.3.2026 12:00 AM"],
     [new Date(2026, 2, 4, 12, 0), "4.3.2026 12:00 PM"],
     [new Date(2026, 2, 4, 23, 59), "4.3.2026 11:59 PM"],
@@ -384,11 +369,9 @@ describe("a match history row", () => {
   ])(
     "puts a game played at %s in the band its own date is in",
     (playedAt, expected) => {
-      // The boundary the label used to get wrong. Counting elapsed 24-hour
-      // blocks from 10:00 made last night's 23:00 game "Today" — under a
-      // printed date reading the 9th — and pushed "Yesterday" into the 8th.
-      // The label and the date above it are two readings of one instant, so
-      // they change over at the same local midnight.
+      // Counting elapsed 24-hour blocks from 10:00 makes last night's 23:00
+      // game "Today" under a printed date reading the 9th. The label and that
+      // date are one instant, so they change over at the same local midnight.
       vi.useFakeTimers();
       vi.setSystemTime(new Date(2026, 2, 10, 10, 0));
       renderRow({ game_start_timestamp: playedAt.getTime() });
@@ -413,9 +396,8 @@ describe("a match history row", () => {
   });
 
   // The stat spans in document order: the player's block is rendered before
-  // the opponent's, so index 0 is the player's reading of that statistic.
-  // `selector` keeps the ancestor `div` -- whose text also ends in "Kill
-  // Particip." -- out of the match.
+  // the opponent's, so index 0 is the player's reading. `selector` keeps the
+  // ancestor `div` -- whose text also ends in "Kill Particip." -- out.
   const statClasses = (pattern: RegExp) =>
     screen
       .getAllByText(pattern, { selector: "span" })
@@ -424,8 +406,7 @@ describe("a match history row", () => {
   it("colours the better side of each stat and neither side of a tie", () => {
     // The comparison has to see both sides at once: derived from one side
     // alone it would highlight whatever the player happened to have, and a
-    // tie -- both laners on 210 CS here -- would light up both blocks and
-    // tell the reader nothing. Equal values are the case the `>` is for.
+    // tie -- both laners on 210 CS here -- would light up both blocks.
     renderRow({
       lane_opponent: { ...OPPONENT, total_cs: PARTICIPANT.total_cs },
     });
@@ -447,10 +428,9 @@ describe("a match history row", () => {
   });
 
   it("labels the rune icons with the keystone and the secondary tree", () => {
-    // The primary icon is the keystone, so labelling it with its tree put
+    // The primary icon is the keystone, so labelling it with its tree puts
     // "Sorcery" on a Summon Aery icon -- a name for a rune the player did not
-    // take. The secondary icon really is a tree and must keep saying so, and
-    // the spells had no name at all beyond "Summoner Spell".
+    // take. The secondary icon really is a tree and must keep saying so.
     renderRow();
 
     expect(screen.getByAltText("Summon Aery")).toBeTruthy();
@@ -466,12 +446,9 @@ describe("a match history row", () => {
   });
 
   it("offers one keyboard stop per rune or spell group, not per icon", () => {
-    // Nine non-interactive stops per row made tabbing a page of rows mostly
-    // decoration (LGA-91 review), while LGA-93 wants the names keyboard-
-    // reachable. The middle: each side's rune pair and spell pair is one
-    // focusable group whose tooltip names both, so 2 sides x 2 groups. The
-    // champion portraits and other participants stay real buttons and are
-    // counted by the lineup test above; nothing else may grab a stop.
+    // Nine non-interactive stops per row made tabbing mostly decoration, but
+    // the names must stay keyboard-reachable: each side's rune pair and spell
+    // pair is one focusable group, so 2 sides x 2 groups and nothing else.
     const { container } = renderRow();
 
     expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);

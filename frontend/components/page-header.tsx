@@ -3,10 +3,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/core/utils";
 
 /**
- * The branded header card every primary page opens with.
- *
- * `titleSub` renders directly under the heading inside the title row (the
- * jobs page's refresh countdown); `children` render below the whole row.
+ * The branded header card every primary page opens with. `titleSub` renders
+ * under the heading inside the title row; `children` render below the row.
  */
 export function PageHeader({
   title,

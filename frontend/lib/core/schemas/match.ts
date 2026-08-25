@@ -57,12 +57,9 @@ export const PlayerMatchParticipantSchema = z.object({
   runes: ParticipantRunesSchema.optional().nullable(),
 });
 
-// Enemy Lane Opponent Schema
 // The three identity fields live here and not on
-// `PlayerMatchParticipantSchema`: the backend only publishes them on the
-// opponent, and the player card already knows whose page it is. Adding them
-// to the omit base instead would have claimed a shape the player participant
-// never sends.
+// `PlayerMatchParticipantSchema`: the backend publishes them only on the
+// opponent, so the omit base would claim a shape the player never sends.
 export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
   team_position: true,
   team_id: true,
@@ -123,7 +120,6 @@ export const MatchWithPlayerDataSchema = MatchSchema.extend({
 // The four counters every paginated endpoint answers with, mirroring the
 // backend's `PaginatedResponse`. Spelled once so a page cannot mean `size`
 // here and `page_size` there.
-// Detailed Match List Response Schema
 export const MatchListWithPlayerDataResponseSchema = z.object({
   matches: z.array(MatchWithPlayerDataSchema),
   total_analyzed: z.number().int().optional().default(0),

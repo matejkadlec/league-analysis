@@ -350,9 +350,7 @@ def generate_summary_stats(
     """Generate summary statistics for the player.
 
     Never called with no participants: `analyze_playstyle` stores a null
-    summary before it builds an engine, so the zero-division guard this used
-    to open with -- returning `{}`, a shape nothing downstream could read --
-    had no caller.
+    summary before it builds an engine, so `game_count` is always non-zero.
     """
     wins = sum(1 for p in participants if p.win)
     losses = game_count - wins

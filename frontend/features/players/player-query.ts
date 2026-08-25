@@ -22,10 +22,9 @@ export function playerContextQueryKey(userId: number | null | undefined) {
   return ["player-context", userId] as const;
 }
 
-/** The suggestion caches `player-selector.tsx` reads; it keys full searches
- * on this prefix and invalidates the whole family by it after a selection.
- * An array, not a bare string, so query-key-scope-contract.test.ts can read
- * the namespace here. */
+/** The suggestion caches `player-selector.tsx` reads; it keys full searches on
+ * this prefix and invalidates the whole family by it. An array, not a bare
+ * string, so query-key-scope-contract.test.ts can read the namespace here. */
 export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
 /** Invalidate everything that reflects whether a player is tracked. Track and
@@ -47,26 +46,16 @@ export function invalidateTrackingQueries(
 export function playerQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: playerQueryKey(puuid),
-    // `skipToken` rather than `enabled: !!puuid` plus an unreachable throw:
-    // `enabled` is an ordinary option, so a caller spreading these options and
-    // setting its own `enabled` drops the guard -- `player-context.tsx` does
-    // exactly that, and only re-establishes it by coincidence. On `queryFn`
-    // the guard cannot be spread away.
+    // `skipToken` rather than `enabled: !!puuid`: `enabled` is an ordinary
+    // option, so a caller spreading these options and setting its own drops
+    // the guard -- on `queryFn` the guard cannot be spread away.
     queryFn: puuid
       ? async () =>
           unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
       : skipToken,
     // The copy `player-context.tsx` seeds from `/players/context` is only
-    // worth seeding while it counts as fresh: at `staleTime: 0` the seeded row
-    // is stale the instant it lands and every route refetches a player it was
-    // just handed. `components/providers.tsx` already defaults queries to a
-    // minute, so this changes nothing today -- it is here because that default
-    // is now load-bearing for a behaviour two files away, and lowering it
-    // would quietly reintroduce the request without failing anything.
-    //
-    // Correctness does not depend on the window: a sync invalidates and
-    // refetches every key carrying the PUUID, and tracking changes invalidate
-    // this key by name. Invalidation beats `staleTime`.
+    // worth seeding while it counts as fresh: at `staleTime: 0` every route
+    // refetches a player it was just handed. Invalidation beats `staleTime`.
     staleTime: 60_000,
     retry: false,
   });
@@ -74,12 +63,8 @@ export function playerQueryOptions(puuid: string | null) {
 
 /**
  * Ranked Solo/Duo stats for one player, over their whole history or the last
- * `limit` games.
- *
- * The player card and the recent-performance card both mount on the overview
- * page, and their unlimited variants were two query keys issuing the byte-
- * identical request -- so every visit to that page fetched the same
- * aggregate twice. One key, one round trip.
+ * `limit` games. The player card and the recent-performance card share this
+ * key, so their unlimited variants are one round trip.
  */
 export function playerStatsQueryOptions(puuid: string, limit?: number) {
   return queryOptions({
@@ -90,11 +75,9 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
           {
-            // `queues`, not the scalar `queue` this endpoint used to accept as
-            // well. A single-member union is the same filter -- the parser
-            // answers `(420,)` either way -- and a name the endpoint does not
-            // declare is dropped rather than refused, which would have made
-            // this card quietly average every queue.
+            // `queues`, not the scalar `queue`: a name this endpoint does not
+            // declare is dropped rather than refused, which would leave the
+            // card averaging every queue.
             queues: String(RANKED_SOLO_QUEUE_ID),
             ...(limit !== undefined && { limit }),
           },

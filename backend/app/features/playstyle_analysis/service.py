@@ -30,13 +30,10 @@ class TagEngine:
     """Engine for processing match data and generating playstyle tags."""
 
     def __init__(self, participants: list[MatchParticipant], matches: list[Match]):
-        """
-        Initialize the tag engine.
+        """Initialize the tag engine.
 
-        :param participants: List of MatchParticipant objects for the player.
-                             Should be sorted by game creation time (descending).
-        :param matches: List of Match objects corresponding to participants.
-                        Used for game duration, mode, etc.
+        :param participants: The player's participants, newest game first.
+        :param matches: The Match rows those participants belong to.
         """
         self.participants = participants
         self.matches = {m.match_id: m for m in matches}
@@ -86,13 +83,7 @@ class PlaystyleAnalysisService:
     async def analyze_playstyle(
         self, puuid: str, force: bool = False
     ) -> PlaystyleAnalysis:
-        """
-        Perform playstyle analysis for a player.
-
-        1. Fetch recent match participants.
-        2. Run TagEngine.
-        3. Save results.
-        """
+        """Perform playstyle analysis for a player."""
         # 1. Fetch data
         stmt = (
             select(MatchParticipant)
@@ -142,20 +133,15 @@ class PlaystyleAnalysisService:
         player = result_player.scalar_one_or_none()
         if player:
             player.last_playstyle_analysis = current_time
-            # Also set fully_analyzed if matches_analyzed condition met?
-            # For now, we trust the caller/logic elsewhere or just set playstyle time
+            # Only the analysis timestamp is a player column; `fully_analyzed`
+            # belongs to `Match` and is set for this player's matches below.
             self.db.add(player)
         else:
             logger.warning("playstyle_analysis_player_row_missing", puuid=puuid)
 
-        # Update matches attached to analysis to be fully_analyzed
-        # Logic: We just analyzed specific matches. But here we don't have the list of match_ids easily available
-        # without passing it or re-querying.
-        # Ideally, we should update the matches that were used.
-        # The simplest approach is to fetch the latest 100 match IDs for the player (same as used in analysis)
-        # and update them.
-
-        # Re-fetch relevant match IDs for this player to update status
+        # Marks the player's newest 100 matches analysed. Ordering by match ID
+        # rather than `game_start_timestamp` can mark a boundary match the
+        # analysis never read, and `fully_analyzed` stops a Riot re-fetch.
         subquery = (
             select(MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
@@ -169,10 +155,9 @@ class PlaystyleAnalysisService:
         )
         await self.db.execute(stmt_update_matches)
 
-        # One statement rather than select-then-insert. Two concurrent first
-        # analyses of the same player both miss a select and both insert, which
-        # `ix_playstyle_analyses_puuid` -- unique since 20260816_0014 -- now
-        # rejects outright instead of quietly storing a duplicate.
+        # One statement rather than select-then-insert: two concurrent first
+        # analyses would both miss the select and both insert, which the unique
+        # `ix_playstyle_analyses_puuid` rejects outright.
         insert_analysis = pg_insert(PlaystyleAnalysis).values(
             puuid=puuid,
             tags=tags,

@@ -12,8 +12,7 @@ interface TurnstileCaptchaOptions {
 /**
  * The captcha plumbing both auth forms need: the widget, the token it hands
  * back, and the reset a rejected submission has to perform (a Turnstile token
- * is single-use). The site key is read per render, not at module scope, so
- * tests can stub the env after importing the form.
+ * is single-use). The site key is read per render so tests can stub the env.
  */
 export function useTurnstileCaptcha({
   action,

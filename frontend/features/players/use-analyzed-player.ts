@@ -11,14 +11,8 @@ import { playerQueryKey, playerQueryOptions } from "./player-query";
 
 /**
  * A tab-local player scope for pages that analyze a player of their own
- * choosing without touching global context or tracking.
- *
- * The analyzed PUUID is the explicit `?puuid=` when present, otherwise the
- * account's saved current player as the initial default. Seeding the default
- * into the URL goes through `router.replace`, not `window.history.replaceState`:
- * a raw history write hides the PUUID from every other `useSearchParams`
- * reader, so sidebar links and route state silently disagree with the address
- * bar. The effect cannot loop -- it returns early once the URL carries one.
+ * choosing without touching global context or tracking. Seed the URL through
+ * `router.replace`; a raw `history.replaceState` hides it from other readers.
  */
 export function useAnalyzedPlayer(): {
   analyzedPlayer: Player | null;

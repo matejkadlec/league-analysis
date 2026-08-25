@@ -97,11 +97,9 @@ describe("the recent performance card", () => {
   });
 
   it("reads fewer deaths as improvement, not decline", async () => {
-    // Deaths are the one stat on this card where down is good, and they are
-    // the only call that passes `higherIsBetter: false`. Lose that and the
-    // card tells a player who has cut their deaths in half that they are
-    // declining -- a verdict that is not merely missing but backwards, on the
-    // page they open to see whether they are getting better.
+    // Deaths are the one stat on this card where down is good, and the only call
+    // passing `higherIsBetter: false`. Lose it and the card tells a player who
+    // halved their deaths that they are declining -- backwards, not just missing.
     const queryClient = renderCard();
 
     await waitFor(() => expect(verdictFor("Avg Deaths")).toBe("improving"));
@@ -112,8 +110,7 @@ describe("the recent performance card", () => {
   it("reads every other stat the other way round", async () => {
     // The mirror of the case above: with the same fixture, kills, assists,
     // CS, vision, KDA and win rate all went up and all must read as
-    // improvement. Without this a blanket `higherIsBetter: false` would pass
-    // the deaths test on its own.
+    // improvement, which a blanket `higherIsBetter: false` would not give.
     const queryClient = renderCard();
 
     await waitFor(() => expect(verdictFor("Win Rate")).toBe("improving"));
@@ -132,9 +129,8 @@ describe("the recent performance card", () => {
 
   it("compares the last ten games against the whole history", async () => {
     // The card's entire claim is a comparison, and the only thing making the
-    // two requests different is the `limit` on one of them. Drop it and both
-    // queries fetch the same numbers, every stat reads "stable" forever, and
-    // nothing on screen looks broken.
+    // two requests different is the `limit` on one of them. Drop it and every
+    // stat reads "stable" forever, with nothing on screen looking broken.
     const queryClient = renderCard();
 
     await waitFor(() => expect(validatedGet).toHaveBeenCalledTimes(2));
@@ -148,8 +144,7 @@ describe("the recent performance card", () => {
   it("calls a small wobble stable rather than a trend", async () => {
     // Ten games is a small sample and the numbers move on their own. The
     // bands exist so the card does not announce a direction every time
-    // someone plays an evening; without them "improving" and "declining"
-    // stop meaning anything, because one of them is always on screen.
+    // someone plays an evening.
     respondWith(
       {
         ...OVERALL,
@@ -182,11 +177,9 @@ describe("the recent performance card", () => {
   });
 
   it("scales the band to the stat rather than using one number for all of them", async () => {
-    // CS is counted in the hundreds and win rate in fractions of one, so a
-    // fixed threshold cannot serve both: five hundredths is a fifth of a CS
-    // and half a win rate. This player is up four CS on an average of 180 --
-    // inside the 5% band and therefore stable -- while a fixed 0.05 would
-    // call it a trend.
+    // CS is counted in the hundreds and win rate in fractions of one, so a fixed
+    // threshold cannot serve both. Four CS up on an average of 180 is inside the
+    // 5% band; a fixed 0.05 would call it a trend.
     respondWith({ ...OVERALL, total_matches: 10, avg_cs: 184 }, OVERALL);
     const queryClient = renderCard();
 
@@ -197,9 +190,8 @@ describe("the recent performance card", () => {
 
   it("says there is not enough data instead of a card full of zeros", async () => {
     // A player whose ranked history is empty gets stats back, all of them
-    // zero. Without the `total_matches` check the card renders in full: 0%
-    // recent against 0% overall, six "stable" verdicts, and a badge
-    // announcing a comparison with 0 games.
+    // zero. Without the `total_matches` check the card renders in full: six
+    // "stable" verdicts and a badge announcing a comparison with 0 games.
     const empty: Stats = {
       total_matches: 0,
       win_rate: 0,

@@ -31,10 +31,8 @@ class MatchBase(BaseModel):
     queue_id: int = Field(..., description="Queue type ID")
     game_version: str = Field(..., max_length=32, description="Game version")
     map_id: int = Field(..., description="Map ID")
-    # These five are NOT NULL columns. Declaring them optional here published
-    # a `null` the database cannot produce, which zod then mirrored as
-    # `.optional().nullable()` -- so dropping or renaming any of them on the
-    # backend would have left every frontend parse passing.
+    # These five are NOT NULL columns; declaring them optional would publish
+    # a `null` the database cannot produce.
     game_mode: str = Field(..., max_length=32, description="Game mode")
     game_type: str = Field(..., max_length=32, description="Game type")
     game_end_timestamp: int = Field(
@@ -214,9 +212,8 @@ class TeamStatsComposition(BaseModel):
     """Schema for both team statistics."""
 
     # Required, not defaulted: `match_history.py` is the only construction
-    # site and it passes both. The `default_factory` was an empty-dict round
-    # trip that has never fired, and it made the response schema claim a shape
-    # no response has.
+    # site and it passes both, so a default would make the response schema
+    # claim a shape no response has.
     blue_team: TeamStats = Field(description="Blue team stats")
     red_team: TeamStats = Field(description="Red team stats")
 

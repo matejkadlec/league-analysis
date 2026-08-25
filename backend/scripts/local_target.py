@@ -1,18 +1,8 @@
 """The one answer to "is this database on this machine and nowhere else?".
 
-Two reviewed commands mutate a database only because they have proved the
-target is loopback-only: `cleanse_local_riot_data.py` deletes every Riot row,
-`reconcile_admin_account.py` rewrites the administrator credential. They asked
-that question in two different ways, and the answers had already diverged --
-one accepted the three exact strings `localhost`, `127.0.0.1` and `::1`, the
-other accepted any address in the loopback range, so `127.0.0.2` passed one
-gate and failed the other. `ipaddress` is the answer that is right about the
-whole range, about CIDR notation as PostgreSQL reports it, and about spellings
-like `::ffff:127.0.0.1`.
-
-`mirror_pi_postgres_to_local.py` keeps its own copy on purpose: the installer
-copies that file alone to `~/.local/share`, where it runs under `/usr/bin/
-python3` with no repository on `sys.path`, so it cannot import this module.
+Two mutating commands -- `cleanse_local_riot_data.py` and
+`reconcile_admin_account.py` -- gate on this. `mirror_pi_postgres_to_local.py`
+keeps its own copy: it is installed alone, with no repository on `sys.path`.
 """
 
 from __future__ import annotations

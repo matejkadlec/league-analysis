@@ -77,8 +77,7 @@ describe("changing the address an account is identified by", () => {
   it("normalises the address it sends, and keeps the normalised one", async () => {
     // What the server stores becomes the identity this account signs in with,
     // so the spacing and case a person happens to type must not survive into
-    // it. The resend path reuses this stored value, which is the second reason
-    // it has to be the normalised one.
+    // it. The resend path reuses that stored value.
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "sent", expires_in_minutes: 10 },

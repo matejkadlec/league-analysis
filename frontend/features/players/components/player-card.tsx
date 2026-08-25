@@ -15,6 +15,7 @@ import { oldestCompleteFreshness } from "@/lib/core/relative-time";
 import { Player } from "@/lib/core/schemas";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { playerStatsQueryOptions } from "../player-query";
+import { cn } from "@/lib/core/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,11 +92,11 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                 </CardTitle>
                 {league && (
                   <>
-                    <span className={`font-semibold ${leagueColors?.text}`}>
+                    <span className={cn("font-semibold", leagueColors?.text)}>
                       {league.display_rank}
                     </span>
                     <Badge
-                      className={`font-mono ${leagueColors?.badge} border-0`}
+                      className={cn("font-mono", leagueColors?.badge, "border-0")}
                     >
                       {league.league_points} LP
                     </Badge>

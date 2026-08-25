@@ -74,13 +74,7 @@ async def get_player_suggestions(
     """
     Get autocomplete suggestions for player search.
 
-    This endpoint is optimized for autocomplete/typeahead functionality
-    and returns a smaller set of top matches (default: 5) for quick response.
-
-    Search patterns:
-    - "Name#TAG" → Search for Riot ID (exact match gets highest priority)
-    - "#TAG" → Search for tag only
-    - "Name" → Search for game name
+    Matches "Name#TAG" as a Riot ID first, then "#TAG" or "Name" on its own.
 
     Args:
         q: Search string (0-100 characters)
@@ -136,10 +130,8 @@ async def discover_player(
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     current_user: CurrentUserDep,
-    # The four Riot ID rules used to be 39 lines of imperative checks here
-    # and four constants in `frontend/.../riot-id.ts`, with the OpenAPI
-    # document publishing neither. Declared, they reach the document and the
-    # frontend can be checked against them.
+    # Declared rather than checked imperatively, so the four Riot ID rules
+    # reach the OpenAPI document and the frontend can be checked against them.
     game_name: Annotated[
         str,
         Query(
@@ -257,11 +249,9 @@ async def read_player_sync(
 
 
 @router.post("/{puuid}/track")
-# Same ceiling as POST /{puuid}/sync, because this now starts the same run.
+# Same ceiling as POST /{puuid}/sync, because this starts the same run.
 # Deduplication in create_or_get_player_sync caps concurrency per PUUID, not
-# rate: tracking several players, or cycling untrack/track after each run
-# finishes, would otherwise spend Riot quota past the limit that endpoint was
-# deliberately given.
+# rate: cycling untrack/track would otherwise spend Riot quota past that limit.
 @rate_limit("10/minute")
 async def track_player(
     request: Request,
@@ -273,13 +263,8 @@ async def track_player(
     """
     Mark a player for automated tracking and monitoring.
 
-    Tracking alone only adds the player to the Match Fetcher's set, so their
-    matches and rank would not arrive until its next scheduled pass — a
-    runtime setting, 900s in production at the time of writing. That is a long
-    time to look at an empty profile you just added, so this starts the same
-    explicit update the Update button does: one claimed PlayerSyncRun, writers
-    via BaseJob. If a fleet-wide writer is already running the run reports
-    SYNC_BUSY and the scheduler picks the player up on its next pass anyway.
+    Tracking alone only adds the player to the Match Fetcher's set, so this also
+    starts the Update button's explicit sync; a SYNC_BUSY run defers to the scheduler.
 
     Returns:
         Updated player data with is_tracked=True
@@ -300,11 +285,9 @@ async def track_player(
     except TrackingLimitReachedError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # The tracking row is committed by here, so claiming the run sits outside
-    # the block above on purpose. The sync only saves the viewer from waiting
-    # for the Match Fetcher; failing to claim it is no reason to answer that
-    # the tracking failed, when it did not and the scheduler will still pick
-    # the player up.
+    # The tracking row is committed by here, so claiming the run sits outside the
+    # block above on purpose: the sync only saves the viewer from waiting for the
+    # Match Fetcher, and failing to claim it must not report tracking as failed.
     try:
         sync_run, created = await create_or_get_player_sync(
             player_service.db,

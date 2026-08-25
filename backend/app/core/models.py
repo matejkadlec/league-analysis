@@ -53,10 +53,8 @@ def id_column(
 ) -> MappedColumn[int]:
     """A surrogate `BIGINT` primary key.
 
-    Four tables spelled this out identically and a fifth -- `jobs.user_jobs`
-    -- wrote the same column as a one-liner with no comment at all, which is
-    the drift a shared declaration removes. That one passes `None` rather than
-    silently gaining a comment, so the emitted DDL does not move.
+    Pass `None` for a table that never carried a column comment, so the
+    emitted DDL does not move.
     """
     return mapped_column(
         BigInteger,
@@ -69,10 +67,8 @@ def id_column(
 def created_at_column(comment: str | None = None) -> MappedColumn[datetime]:
     """The row's creation stamp, written by the database.
 
-    Twelve tables declared this identically and differed only in what their
-    `comment` said, so the comment is the argument. Passing `None` is what
-    SQLAlchemy already does when `comment` is omitted, which keeps the three
-    tables that never had one byte-identical in the emitted DDL.
+    Passing `None` is what SQLAlchemy already does when `comment` is omitted,
+    which keeps a table that never had one byte-identical in the emitted DDL.
     """
     return mapped_column(
         SQLDateTime(timezone=True),

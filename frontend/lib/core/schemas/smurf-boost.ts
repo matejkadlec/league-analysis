@@ -21,10 +21,9 @@ export const SmurfBoostBandSchema = z.enum([
 
 export const SmurfBoostConfidenceBandSchema = z.enum(["low", "medium", "high"]);
 
-// The v1 engine emits exactly two families, but the wire contract types the
-// field as a plain string. Rejecting an unknown family would fail the whole
-// response and hide a valid result, so an unknown id is carried through and
-// rendered as itself, the same way an unknown data-quality note is.
+// The wire contract types the field as a plain string. Rejecting an unknown
+// family would fail the whole response and hide a valid result, so an unknown
+// id is carried through and rendered as itself.
 export const SmurfBoostFamilyIdSchema = z.string();
 
 export const SmurfBoostStatusSchema = z.enum([
@@ -78,11 +77,9 @@ export const SmurfBoostResultsSchema = z.object({
 
 export type SmurfBoostResults = z.infer<typeof SmurfBoostResultsSchema>;
 
-// Smurf Boost Analysis Response Schema. Parsed permissively, then split on
-// the lifecycle the same way a matchmaking run is: only the `completed`
-// variant carries `results`, so rendering one without narrowing on `status`
-// does not compile. See `splitRunOnLifecycle` in ./run-lifecycle for why a
-// `completed` run with no results is reported as `failed` instead of rejected.
+// Parsed permissively, then split on the lifecycle the way a matchmaking run
+// is: only the `completed` variant carries `results`. See `splitRunOnLifecycle`
+// in ./run-lifecycle for the `completed`-with-no-results case.
 export const SmurfBoostAnalysisResponseSchema = z
   .object({
     puuid: z.string(),

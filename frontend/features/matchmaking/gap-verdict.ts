@@ -1,12 +1,7 @@
 /**
  * Which side of a win-rate gap counts as good news, and how big it has to be.
- *
- * Two surfaces of this feature answered that question separately and answered
- * it differently: the results card treats a gap under three points as fair and
- * leaves it uncoloured, the history table colours every gap. Both are
- * deliberate today -- the history file said so in a comment -- but the
- * disagreement was buried in two files that each rebuilt the same green/red
- * pair. Here it is one argument.
+ * The two surfaces answer it differently on purpose -- the results card leaves
+ * a gap under three points uncoloured, the history table colours every gap.
  */
 export const GAP_FAIRNESS_THRESHOLD = 0.03;
 

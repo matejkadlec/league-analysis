@@ -27,9 +27,7 @@ BASE_TIME = datetime(2026, 8, 15, 12, tzinfo=UTC)
 
 # The three doubles below mirror one column group each, with the column's own
 # `Mapped[...]` type. Real ORM instances are not usable here: constructing one
-# configures every mapper in the registry, which would drag the entire model
-# universe into a pure-arithmetic test. Each factory casts once, so the seam is
-# named in exactly one place per type.
+# configures every mapper, dragging the model universe into an arithmetic test.
 
 
 @dataclass
@@ -327,10 +325,8 @@ def test_a_win_that_lost_lp_is_refused_rather_than_recorded() -> None:
     """A signed LP change must agree with the result it is attached to.
 
     The counters can transition by exactly one while the LP moved the other
-    way -- a decay, a promotion adjustment, or a snapshot pair that quietly
-    spans more than the one match. None of those are this match's LP, and
-    persisting the number anyway puts a negative LP change on a victory in
-    the match history, which is a wrong number rather than a missing one.
+    way -- a decay, a promotion adjustment, or a snapshot pair spanning more
+    than one match. Persisting it puts a negative LP change on a victory.
     """
     before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
     after = _snapshot(
@@ -367,10 +363,9 @@ def test_a_match_outside_the_snapshot_pair_proves_nothing(
 ) -> None:
     """LP is only attributable when the two snapshots bracket the match.
 
-    Both snapshots and the counters can look perfect while the match they are
-    being credited to happened outside them -- the LP then belongs to some
-    other game in the window. The bracket is what makes the attribution a
-    proof instead of a guess.
+    Both snapshots and the counters can look perfect while the match happened
+    outside them -- the LP then belongs to some other game in the window. The
+    bracket is what makes the attribution a proof instead of a guess.
     """
     before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
     after = _snapshot(
@@ -396,11 +391,8 @@ def test_a_win_and_a_loss_between_snapshots_prove_neither() -> None:
     """Both counters moving means the window holds more than this match.
 
     `progression_match_count` only counts the matches in the batch being
-    persisted, not the games that happened between the two snapshots. An hour
-    of play can put a win and a loss inside one window, and then the LP delta
-    is the sum of two results. Requiring the *other* counter to have stayed
-    still is what refuses that -- checking only the counter matching the
-    result would credit one match with both games' LP.
+    persisted, not the games between the two snapshots. Requiring the *other*
+    counter to have stayed still refuses a window holding a win and a loss.
     """
     before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
     after = _snapshot(
@@ -445,9 +437,8 @@ def test_a_remake_is_initialized_as_a_certain_zero() -> None:
     """A remake's LP is known to be zero before any league snapshot arrives.
 
     Riot marks it ineligible for progression, so nothing was won or lost.
-    Leaving it pending instead means the next observation window sees a match
-    it thinks is unattributed, and a real LP change from a different game can
-    land on a remake that moved nobody's rank.
+    Left pending, the next observation window sees an unattributed match and
+    a real LP change from a different game can land on it.
     """
     participant = _participant(win=False, remake=True)
 
@@ -463,9 +454,8 @@ def clock_far_from_utc() -> Iterator[None]:
     """Run a test under a zone 14 hours from UTC, then restore the real one.
 
     The gate container runs UTC, so a bug that reads a stored timestamp in
-    local time is invisible there and wrong by hours on the Prague host that
-    actually runs this. Forcing a zone makes the difference observable
-    wherever the suite runs.
+    local time is invisible there and wrong by hours on the Prague host.
+    Forcing a zone makes the difference observable wherever the suite runs.
     """
     previous = os.environ.get("TZ")
     os.environ["TZ"] = "Pacific/Kiritimati"
@@ -487,11 +477,7 @@ def test_a_stored_timestamp_without_a_zone_is_read_as_utc(
 
     Every other time in this module is UTC, and the comparison that decides
     whether a match sits between two snapshots mixes them. Reading a naive
-    value as local time shifts it by the host offset, which silently moves
-    matches in and out of the window -- and reads correctly in a UTC gate
-    while being hours wrong in production.
-
-    The fixture argument is unused in the body: it is the forced zone.
+    value as local time silently moves matches in and out of the window.
     """
     del clock_far_from_utc
     naive = _snapshot(

@@ -46,16 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cachedAccountRef = useRef<number | null>(null);
 
   // Adopt whoever the server says is signed in, dropping the previous
-  // account's cached data first.
-  //
-  // Clearing used to be attached to the transitions this context performs --
-  // login, logout, a refused refresh -- and never to the identity actually
-  // returned. Cookies are jar-wide, so signing in as somebody else in a second
-  // tab changes who this tab is without any of those transitions running here:
-  // the next `checkAuth`, from a settings save or the auth gate's retry,
-  // adopted the new account while every query key that carries no account
-  // dimension -- `["card-preferences"]`, `["user"]`, `["player", puuid]` and
-  // both analysis features -- still held the previous one's answers.
+  // account's cached data first: cookies are jar-wide, so a second tab can
+  // change who this tab is without any transition running here.
   const adoptUser = useCallback(
     (next: User) => {
       if (
@@ -72,23 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
-    // Deliberately does NOT raise `isLoading`. Four consumers unmount their
-    // whole subtree while it is true — the gate, the sidebar, the header, the
-    // player context — so raising it on a re-check would blank the settings
-    // page mid-edit every time a display-name or email change calls back here,
-    // and would blank the retry surface itself for the whole probe timeout.
-    // The re-render a completed re-check needs comes from `forceRecheck` in
-    // `auth-gate.tsx` instead, which costs nobody their screen.
+    // Deliberately does NOT raise `isLoading`: four consumers unmount their
+    // whole subtree while it is true, so a re-check would blank the settings
+    // page mid-edit. `forceRecheck` in `auth-gate.tsx` drives the re-render.
     const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: "include",
-        // A backend that accepts the connection and then never answers is not
-        // hypothetical on a small host, and without a deadline this promise
-        // never settles: `isLoading` stays true and every surface that gates
-        // on it — this gate, the sidebar, the header — renders nothing. A
-        // white screen with no spinner and no way out is the symptom this
-        // whole change exists to remove, so it must not be reachable by
-        // simply waiting.
+        // A backend that accepts the connection and never answers is not
+        // hypothetical on a small host; without a deadline `isLoading` stays
+        // true and every surface gated on it renders a white screen for good.
         signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
       }).catch((fetchError) => {
         if (process.env.NODE_ENV === "development") {
@@ -101,9 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     // No session hint means the backend never issued one, or cleared it on
-    // logout or a rejected refresh. Asking anyway costs two requests to be
-    // told what we already know, and the browser logs each 401 as a console
-    // error that reads like a fault to anyone with devtools open.
+    // logout or a rejected refresh. Asking anyway costs two requests and logs
+    // a 401 that reads like a fault to anyone with devtools open.
     if (!hasAuthStateCookie()) {
       removeAuthTokens();
       setUser(null);
@@ -127,9 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (refresh.outcome !== "refreshed") {
           // No `removeAuthTokens()` here: only the refresh call can tell a
           // rejected session from one it never reached, and it already tears
-          // down in the first case. Clearing here too would turn a network
-          // blip into a real sign-out, with a valid refresh cookie still in
-          // the jar and the hint gone that would have let it be used.
+          // down in the first case. Clearing here strands a valid cookie.
           setUser(null);
           queryClient.clear();
           return;
@@ -139,20 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response && response.ok) {
           adoptUser(UserResponseSchema.parse(await response.json()));
         } else {
-          // Only a refusal ends the session, and only 401/403 is a refusal.
-          // A null response is a network failure and a 5xx is a redeploy or a
-          // blip -- neither is evidence about this session, and this is the
-          // worst possible moment to guess: the server honoured the refresh a
-          // fraction of a second ago, so it just issued a fresh 30-day token
-          // that is now in the jar. Tearing down here clears the hint, bounces
-          // the visitor to /sign-in, and leaves that brand-new HttpOnly
-          // credential live with nothing asking the server to revoke it. The
-          // first probe's own 5xx branch below already declines to guess;
-          // these two agreeing is the point.
-          // The same rule the refresh call uses: a status is not evidence
-          // unless the body names one of this API's session-ending codes.
-          // An edge challenge and a 403 about something other than the
-          // session both arrive here looking identical to a refusal.
+          // Only a refusal ends the session, and only when the body names one
+          // of this API's session-ending codes: the refresh succeeded a moment
+          // ago, so a fresh 30-day token is in the jar and a guess strands it.
           if (
             response &&
             (response.status === 401 || response.status === 403) &&
@@ -179,13 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      // Reaching here means the request itself came back but reading it did
-      // not work -- a body truncated mid-stream, a captive portal answering
-      // with HTML, a bad gzip. That says nothing about whether the session is
-      // valid, so it gets the same treatment as an unreachable server: no
-      // teardown. Tearing down here signed people out over a parse blip while
-      // their refresh cookie was still good, and because that also bumps the
-      // session epoch it could end the session on every other device too.
+      // The request came back but reading it did not work -- a truncated body,
+      // a captive portal, a bad gzip. That says nothing about the session, so
+      // no token teardown: that would sign the account out on every device.
       if (process.env.NODE_ENV === "development") {
         console.warn("Auth check failed:", error);
       }
@@ -198,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state on mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Authentication initializes from browser token state after hydration.
+    // oxlint-disable-next-line react/set-state-in-effect -- Authentication initializes from browser token state after hydration.
     void checkAuth();
   }, [checkAuth]);
 
@@ -271,27 +237,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(
     async (options?: { evenIfTheServerCannotBeReached?: boolean }) => {
-      // The default is safe, and that is the whole point of the option.
-      //
-      // Eight adversarial audits have now walked past the guard on "only the
-      // refresh call may end a session", and the last one did it by mounting a
-      // keep-alive that called `logout()` on a timer when a refresh failed.
-      // `logout()` is reached through React context, so no import rule can see
-      // it, and it tore the session down even when its own request never
-      // reached the server -- clearing the hint while the 30-day refresh cookie
-      // stayed live and unrevoked in the jar. Every lint rule stayed green.
-      //
-      // Nothing stops a future component calling this. So the unconditional
-      // teardown stopped being the default: a caller that just writes
-      // `logout()` now sends the request and, if the server never answered,
-      // changes nothing locally. That is the right answer for a machine, and
-      // it is the shape a machine will naturally write.
-      //
-      // Only a visitor who asked gets the other behaviour, because only for
-      // them is a stranded local session worse than a stranded remote one --
-      // being left staring at an account they just asked to leave. Both call
-      // sites that pass this flag are a button under someone's finger, and a
-      // timer passing it is a lie visible at the call site.
+      // The default is safe, and that is the whole point of the option: a
+      // plain `logout()` changes nothing locally when the server never
+      // answered, and only a button under someone's finger passes the flag.
       let serverAnswered = false;
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
@@ -303,11 +251,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
         });
         // Success only. `/auth/logout` carries no auth dependency and cannot
-        // answer 401 itself, so counting one as "already signed out" would
-        // only ever be trusting an edge -- and a maintenance Worker sits in
-        // front of this route. A 401 minted there during a deploy would let an
-        // automatic logout tear the session down with nothing revoked, which
-        // is the exact failure the opt-in above exists to prevent.
+        // answer 401 itself; a 401 minted by the maintenance Worker during a
+        // deploy would tear the session down with nothing revoked.
         serverAnswered = response.ok;
         if (!response.ok) {
           // `fetch` only rejects on network failure, so a 5xx arrives here
