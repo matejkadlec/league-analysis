@@ -249,3 +249,31 @@ async def test_the_start_endpoint_maps_a_busy_refusal_to_a_structured_409(
         "message": "An update for Faker#KR1 is running.",
     }
     assert not background_tasks.tasks
+
+
+async def test_a_failure_before_the_writers_still_terminates_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loading the run and stamping it running sit inside the recovery net.
+
+    A DB blip in either used to strand the row as `pending` until a restart,
+    which blocked only that player's next update -- but the up-front busy
+    check reads any active run as a held pipeline, so an unfinishable row
+    would now refuse every other player's clicks too.
+    """
+    finished: list[dict[str, object]] = []
+
+    async def load_boom(sync_id: int) -> None:
+        raise RuntimeError("database unavailable")
+
+    async def record_finish(sync_id: int, **kwargs: object) -> None:
+        finished.append({"sync_id": sync_id, **kwargs})
+
+    monkeypatch.setattr(player_sync_module, "_load_player_sync", load_boom)
+    monkeypatch.setattr(player_sync_module, "_finish_sync", record_finish)
+
+    await player_sync_module.run_player_sync(9)
+
+    assert finished
+    assert finished[0]["sync_id"] == 9
+    assert finished[0]["status"] == "failed"

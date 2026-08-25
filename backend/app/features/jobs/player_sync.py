@@ -279,21 +279,28 @@ async def _finish_failed_writer(
 
 async def run_player_sync(sync_id: int) -> None:
     """Run Match Fetcher then Player Updater for one exact PUUID."""
-    loaded = await _load_player_sync(sync_id)
-    if loaded is None:
-        return
-    puuid, match_config, profile_config = loaded
-    if match_config is None or profile_config is None:
-        await _finish_sync(
-            sync_id,
-            status="failed",
-            error_code="SYNC_CONFIGURATION_MISSING",
-            error_message="Player data updates are temporarily unavailable.",
-        )
-        return
-
-    await _finish_sync(sync_id, status="running")
+    puuid: str | None = None
+    # Everything after the id is known sits inside the `try`, the loading and
+    # the first status write included: a failure anywhere here used to leave
+    # the row `pending` forever (until startup recovery), which once blocked
+    # only this player's next update — but the up-front busy check now reads
+    # any active run as a held pipeline, so an unfinishable row must not
+    # survive any failure this handler can catch.
     try:
+        loaded = await _load_player_sync(sync_id)
+        if loaded is None:
+            return
+        puuid, match_config, profile_config = loaded
+        if match_config is None or profile_config is None:
+            await _finish_sync(
+                sync_id,
+                status="failed",
+                error_code="SYNC_CONFIGURATION_MISSING",
+                error_message="Player data updates are temporarily unavailable.",
+            )
+            return
+
+        await _finish_sync(sync_id, status="running")
         match_job = await _run_sync_writer(MatchFetcherJob, match_config.id, puuid)
         match_execution_id = match_job.job_execution_id
         if _writer_is_unsuccessful(match_job):

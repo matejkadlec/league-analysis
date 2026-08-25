@@ -387,6 +387,34 @@ describe("choosing a player from the picker", () => {
     expect(queryClient.getQueryData(["player", "url-puuid"])).toEqual(FROM_URL);
   });
 
+  it("does not let the stale URL revert an explicit choice", async () => {
+    // `selectPlayer` persists first and navigates second, so there is a
+    // commit where the context already names the chosen player while the URL
+    // still names the previous one. The persist effect used to read that
+    // stale URL as a link naming somebody else and PUT the previous player
+    // straight back — the dialog choice was silently reverted (and then
+    // accidentally re-corrected by a third PUT once the URL caught up, which
+    // is why three PUTs looked like success). The mocked URL never advances
+    // here, so the stale window lasts the whole test: exactly one PUT, for
+    // the chosen player, may happen.
+    search.current = "puuid=saved-puuid";
+    validatedGet.mockImplementation((_schema: unknown, url: string) =>
+      Promise.resolve(
+        url === "/players/saved-puuid"
+          ? { success: true, data: SAVED }
+          : answer(url),
+      ),
+    );
+    const { result } = renderContext();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await result.current.selectPlayer(FROM_URL);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(validatedPut).toHaveBeenCalledTimes(1);
+    expect(validatedPut.mock.calls[0]?.[2]).toEqual({ puuid: "url-puuid" });
+  });
+
   it("sends a picker choice made off a player page to the overview", async () => {
     // `playerRoute` redirects anything that is not a player-centric path, so
     // picking a player from the settings sidebar lands somewhere that shows
