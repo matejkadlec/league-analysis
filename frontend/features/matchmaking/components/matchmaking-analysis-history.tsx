@@ -213,17 +213,15 @@ export function MatchmakingAnalysisHistory({
       </CardHeader>
       <CardContent>
         {/* Tailwind's reset removes the list marker, and WebKit then drops the
-            list role — which would leave this labelled group unannounced on the
-            one platform that ever sees it. `role="list"` puts the semantics
-            back. */}
+            list role — which would leave this labelled group unannounced.
+            `role="list"` puts the semantics back. */}
         <ul
           role="list"
           aria-label="Analysis history"
           data-testid="matchmaking-analysis-history-stacked"
-          // No cap, unlike the table: 490px is eleven rows but only about four
-          // blocks, and a short scroll region nested inside a scrolling page is
-          // worse to use than a page that simply runs longer. The history is
-          // paged to `HISTORY_FETCH_LIMIT`, so the run is bounded.
+          // No cap, unlike the table: a short scroll region nested inside a
+          // scrolling page is worse to use than a page that simply runs longer.
+          // The history is paged to `HISTORY_FETCH_LIMIT`, so the run is bounded.
           className="space-y-3 sm:hidden"
         >
           {data.items.map((item) => (
@@ -270,10 +268,8 @@ export function MatchmakingAnalysisHistory({
                 return (
                   <TableRow
                     key={item.created_at}
-                    // `h-0` on the deleting branch used to lose to the static
-                    // `h-11` and do nothing, so the row held its space while
-                    // scaling to nothing. Stated per branch it applies, and
-                    // the gap closes with the animation rather than after it.
+                    // Height stated per branch it applies to, so the gap closes
+                    // with the animation rather than after it.
                     className={cn(
                       "border-b border-border/30 hover:bg-muted/50 transition-all duration-300",
                       isDeleting

@@ -1,11 +1,8 @@
 """How a job configuration names its interval, for writers and the scheduler.
 
-This used to live in `scheduler.py`, where every caller wrapped it in
-`except Exception: logger.error(...)`. So `PUT /api/v1/jobs/{id}` with an
-interval the code cannot resolve answered 200 with the new config echoed
-back, committed it, and left APScheduler running the old one. It lives here
-so `JobService.update_job_configuration` can refuse the value before the
-commit rather than the scheduler shrugging at it afterwards.
+Resolving here rather than in the scheduler lets
+`JobService.update_job_configuration` refuse an unusable interval before the
+commit, instead of committing a config the scheduler then ignores.
 """
 
 from collections.abc import Mapping
@@ -53,10 +50,8 @@ def resolve_interval_seconds(
 ) -> int:
     """Return the interval a job should run on.
 
-    `config_json["interval_seconds"]` wins when it is set. A key that is
-    present but unusable -- `0`, `-1`, `"5m"` -- is a configuration error and
-    not an absent override: falling through to the schedule string would run
-    the job on a source the operator did not choose. JSON `null` is absent.
+    `config_json["interval_seconds"]` wins when set; a present but unusable
+    value -- `0`, `-1`, `"5m"` -- is a configuration error, and `null` is absent.
 
     :raises JobIntervalError: When neither source yields an interval.
     """

@@ -12,10 +12,9 @@ import {
 import { isPublicRoute as pathnameIsPublic } from "@/features/auth/utils/public-routes";
 
 /**
- * How long the screen may stay empty before it owes the visitor a word.
- *
- * Long enough that a healthy probe never reaches it, short enough that
- * nobody concludes the page is broken.
+ * How long the screen may stay empty before it owes the visitor a word: long
+ * enough that a healthy probe never reaches it, short enough that nobody
+ * concludes the page is broken.
  */
 export const SLOW_PROBE_NOTICE_MS = 600;
 
@@ -61,10 +60,9 @@ function SessionUnverified({
   onRetry: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
-  // Both actions regularly run the whole ten-second probe deadline, and
-  // neither moves anything on screen while they do -- `checkAuth` never
-  // raises `isLoading`, `logout` clears nothing until its request settles.
-  // Without a pending state the visitor stacks a probe per impatient click.
+  // Both actions regularly run the whole ten-second probe deadline without
+  // moving anything on screen, so without a pending state the visitor stacks
+  // a probe per impatient click.
   const [pending, setPending] = useState<"retry" | "signOut" | null>(null);
   const run = (which: "retry" | "signOut", action: () => Promise<void>) => {
     setPending(which);
@@ -90,10 +88,9 @@ function SessionUnverified({
           >
             {pending === "retry" ? "Checking…" : "Try again"}
           </button>
-          {/* The only way out of a permanent failure (a 500 on this one
-              account): retry takes the same branch forever, `proxy.ts` sends
-              /sign-in back here while the hint lives, and the sidebar's Sign
-              Out is not drawn for a visitor who is not authenticated. */}
+          {/* The only way out of a permanent failure: retry takes the same
+              branch forever, and `proxy.ts` sends /sign-in back here while
+              the hint lives. */}
           <button
             type="button"
             onClick={() => run("signOut", onSignOut)}
@@ -111,8 +108,7 @@ function SessionUnverified({
 /**
  * Client render gate; route-level redirects live in `proxy.ts`. Every branch
  * below reads the hint cookie as well as React state, because the edge decides
- * on that cookie alone, and where the two disagree this used to render a
- * permanently blank page.
+ * on that cookie alone.
  */
 export function AuthGate({ children }: AuthGateProps) {
   const { isAuthenticated, isLoading, checkAuth, logout } = useAuth();
@@ -124,9 +120,8 @@ export function AuthGate({ children }: AuthGateProps) {
   const [recheckCount, forceRecheck] = useReducer((n: number) => n + 1, 0);
 
   // Subscribed rather than read during render: the cookie changes without any
-  // React state changing, so a gate that only read it at render time kept
-  // drawing the signed-in shell after the interceptor had given the session
-  // up.
+  // React state changing, so reading it at render time keeps the signed-in
+  // shell drawn after the interceptor has given the session up.
   const hasSessionHint = useSyncExternalStore(
     subscribeToAuthStateCookie,
     hasAuthStateCookie,
@@ -143,8 +138,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   // Redirect only once the hint is gone. While it is set, `proxy.ts` sends
   // /sign-in back to / on that same cookie, so redirecting now would bounce
-  // the visitor between the two forever. Waiting for the hint is also what
-  // separates a rejected session from a server that could not be reached.
+  // the visitor between the two forever.
   const isSignedOutOnProtectedRoute =
     !isLoading && !hasSessionHint && !isPublicRoute && !isSignInRoute;
 
@@ -172,9 +166,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (isLoading || isSignedOutOnProtectedRoute) {
     // Still resolving, or the effect above is navigating away. A backend that
-    // accepts and then hangs burns the full ten-second deadline, twice that
-    // when a refresh is honoured -- and this gate wraps the whole layout, so
-    // that is a white page. Time-box the silence rather than serve it whole.
+    // accepts and then hangs burns the full ten-second deadline, and this gate
+    // wraps the whole layout -- so time-box the silence rather than serve it.
     return <SlowProbe />;
   }
 

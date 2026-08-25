@@ -30,8 +30,7 @@ const DialogOverlay = React.forwardRef<
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 // Deliberate deviation from the shadcn primitive: `dialog-white-border` is
-// baked in rather than repeated per call site, where one omission left a
-// dialog edgeless against the dark background. Re-adding `dialog` from the
+// baked in rather than repeated per call site. Re-adding `dialog` from the
 // CLI reverts it; `dialog-white-border.test.tsx` fails when it does.
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,

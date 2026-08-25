@@ -5,10 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `not-found`, `loading`, `error` and `global-error` each rendered `null`
- * unless `useAuth()` said the visitor was authenticated -- the blank page in
- * the report. These render with no provider mounted at all, which is the
- * assertion: none of them may consult session state.
+ * `not-found`, `loading`, `error` and `global-error` render with no provider
+ * mounted at all, which is the assertion: none of them may consult session
+ * state.
  */
 
 import ErrorBoundary from "@/app/error";
@@ -77,9 +76,8 @@ describe("the shells shown when there is no page to show", () => {
 
   it("brings its own document, because it replaces the one that threw", () => {
     // Next renders `global-error.tsx` in place of the root layout, so what it
-    // returns *is* the document: without its own `html` and `body` there is
-    // nothing to render into. jsdom will not nest an `html`, so this is asserted
-    // against server markup.
+    // returns *is* the document. jsdom will not nest an `html`, so this is
+    // asserted against server markup.
     const markup = renderToStaticMarkup(
       <GlobalError error={thrown} reset={() => {}} />,
     );

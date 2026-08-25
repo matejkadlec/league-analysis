@@ -242,9 +242,8 @@ describe("Match History controls", () => {
 
   it("reports a failed load inline, and retries when asked", async () => {
     // This query sets `silenceErrorToast`, so the card below is the only thing
-    // telling the viewer anything went wrong -- `if (false)` there kept 362 tests
-    // green. The network-shaped rejection also pins the component's own `retry`
-    // predicate.
+    // telling the viewer anything went wrong. The network-shaped rejection also
+    // pins the component's own `retry` predicate.
     const networkFailure = new axios.AxiosError("Network Error");
     validatedGet.mockReset();
     validatedGet.mockRejectedValue(networkFailure);

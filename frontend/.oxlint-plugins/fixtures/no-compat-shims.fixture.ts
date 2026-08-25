@@ -1,9 +1,8 @@
 // Regression fixture for `house/no-compat-shims`.
 
 // Every `oxlint-disable-next-line` below sits above a shape the rule MUST
-// report: the comment markers, and each of the five declaration positions the
-// name check visits. An accepted case carries no directive, so a rule that
-// widens into string literals or non-declarations fails the run.
+// report. An accepted case carries no directive, so a rule that widens into
+// string literals or non-declarations fails the run.
 
 // MUST flag: the marker that announces a second way to do the same thing.
 // oxlint-disable-next-line house/no-compat-shims

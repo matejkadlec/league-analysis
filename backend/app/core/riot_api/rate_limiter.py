@@ -63,17 +63,9 @@ class _RateWindow:
 class RateLimiter:
     """Track Riot application and method limits per routing scope.
 
-    Riot windows begin with the first request in a window. Repeated responses
-    therefore update the observed count without extending the reset deadline.
-    Application windows are isolated by routing host, while method windows are
-    isolated by routing host and normalized endpoint.
-
-    Riot's requests-per-second application ceiling belongs to the API key, not
-    to one client, and `RiotAPIClient` builds a limiter per client -- one per
-    HTTP request in the request path. Burst spacing therefore lives on the
-    class, so concurrent clients queue behind each other instead of each
-    helping itself to a full 20 requests a second. The observed windows stay
-    per-instance: those are learned from the responses one client actually saw.
+    Application windows are isolated by routing host, method windows by routing
+    host and normalized endpoint. Burst spacing lives on the class because the
+    requests-per-second ceiling belongs to the API key, not to one client.
     """
 
     _burst_lock = asyncio.Lock()

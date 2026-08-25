@@ -5,8 +5,7 @@ import { useEffect } from "react";
 /**
  * The boundary of last resort: `error.tsx` sits inside the layout and cannot
  * catch a throw from the providers, the auth gate or the sidebar. This one
- * replaces the document, so it brings its own `html`/`body` and inline styles
- * -- no font, theme token or stylesheet from the layout is available here.
+ * replaces the document, so it brings its own `html`/`body` and inline styles.
  */
 export default function GlobalError({
   error,

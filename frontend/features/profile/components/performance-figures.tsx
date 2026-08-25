@@ -8,9 +8,7 @@ import type { PerformanceStats } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 /**
- * The KDA and win-rate columns every stats grouping ends with. The two
- * renderers had converged down to the `w-16` and the `{wins}W {losses}L`,
- * differing only in `font-medium` on the KDA line; they agree here. Each card
+ * The KDA and win-rate columns every stats grouping ends with. Each card
  * keeps its own layout around this and shares the figures themselves.
  */
 export function PerformanceFigures({ stats }: { stats: PerformanceStats }) {

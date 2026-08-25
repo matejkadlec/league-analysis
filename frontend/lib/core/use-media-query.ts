@@ -4,15 +4,13 @@ import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Whether a CSS media query currently matches. `useSyncExternalStore` rather
- * than state-plus-effect: it subscribes to the `MediaQueryList` and takes a
- * server snapshot, so there is no first-paint flash and no hydration mismatch.
- * That snapshot is `false` -- treat the matched branch as the enhancement.
+ * than state-plus-effect: it subscribes and takes a server snapshot, so there
+ * is no hydration mismatch. That snapshot is `false` -- match is enhancement.
  */
 export function useMediaQuery(query: string): boolean {
   // Memoised on the query: an inline subscribe would be a new function every
   // render, and `useSyncExternalStore` tears the listener down and re-creates
-  // it whenever it changes identity. Consumers here re-render on every
-  // keystroke of a debounced search.
+  // it whenever it changes identity.
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       const list = window.matchMedia(query);

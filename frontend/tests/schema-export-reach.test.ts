@@ -8,16 +8,14 @@ import { allSourceFiles, allTestFiles } from "./source-scan-support";
 /**
  * Every export of `lib/core/schemas/` is reached by something -- which knip
  * cannot answer, because a namespace import counts as a use of every export.
- * Text is matched whole-file and comment-stripped: Prettier wraps the longer
- * aliases, and prose naming a schema is not a reader.
+ * Text is matched whole-file and comment-stripped: prose is not a reader.
  */
 const SCHEMA_DIRECTORY = "lib/core/schemas";
 
 /**
  * Request-body schemas whose only reader is the contract test, by design:
  * `validatedPost` takes the body as `unknown`, so a request schema has no call
- * site to be named at. A name leaves this list by gaining a reader, not by
- * being added to it.
+ * site to be named at. A name leaves this list by gaining a reader.
  */
 const PAIRED_BY_THE_CONTRACT_TEST = new Set([
   "CardPreferenceUpdateSchema",

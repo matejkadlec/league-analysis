@@ -35,11 +35,7 @@ def claim_runtime_control(
     """Take the key for a run, or report that another run already holds it.
 
     Check and set with no `await` between them, so a single event loop makes
-    this the mutual exclusion the callers assumed they had. Registering
-    unconditionally after an awaited check let two runs of one configuration
-    both start: the second overwrote the first's control, so stop requests
-    reached only one of them and the first to finish unregistered the other's
-    key -- after which the next run declared the live execution orphaned.
+    this the mutual exclusion the callers assumed they had.
 
     Returns:
         bool: True when the key was free and is now held by this run.

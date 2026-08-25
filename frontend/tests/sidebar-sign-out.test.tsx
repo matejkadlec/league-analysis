@@ -70,9 +70,8 @@ describe("the sidebar Sign Out button", () => {
 
   it("goes dead while the request is in flight", async () => {
     // Sign Out waits for the server, because only the server can revoke.
-    // Against a backend that hangs that is the full ten-second deadline with
-    // nothing on screen moving, so without the pending state the button reads
-    // as broken and every further click stacks another request.
+    // Against a backend that hangs that is the full ten-second deadline, so
+    // without the pending state every further click stacks another request.
     let releaseServer: (() => void) | undefined;
     auth.logout.mockImplementation(
       () =>

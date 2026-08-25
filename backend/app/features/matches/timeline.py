@@ -300,10 +300,7 @@ def _new_team_total_bucket() -> dict[str, Any]:
 
     The one place the team-total key set is written down. `_new_participant_row`
     splats it and `_apply_team_totals_to_row` iterates it, so a new objective is
-    added here and nowhere else. It used to be spelled three times, and the
-    third copy had already drifted -- it omitted
-    `team_other_epic_monsters_slain`, which is why that one field needed its own
-    hand-written copy line.
+    added here and nowhere else.
     """
     return {
         "team_turrets_destroyed": 0,
@@ -722,8 +719,7 @@ async def replace_match_timeline_rows(
 
     # Write what is already pending before adding rows that point at it: with
     # `autoflush=False` and no `relationship()` edges, SQLAlchemy orders the
-    # flush by `"<module>.<ClassName>"`, putting this table ahead of
-    # `core.players`. The four dead Match Fetcher runs: `.claude/pitfalls.md`.
+    # flush by `"<module>.<ClassName>"`, putting this table ahead of `core.players`.
     await db.flush()
 
     for row in rows:

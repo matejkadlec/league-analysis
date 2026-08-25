@@ -5,8 +5,7 @@ import { describe, expect, it } from "vitest";
 /**
  * The cookie policy promises a "Cookie settings" link in the footer, and both
  * shells have to keep it. `LegalNotice` takes the trigger as `children`, so
- * every call site decides separately -- which is the only form the promise
- * can take.
+ * every call site decides separately -- the only form the promise can take.
  */
 
 /** Every file that renders the shared legal footer. */

@@ -45,10 +45,7 @@ async def ensure_user_settings(db: AsyncSession, user_id: int) -> UserSettings:
 
     The insert is `ON CONFLICT DO NOTHING` because `user_id` is the primary
     key and two requests for one brand-new account do reach here together --
-    two tabs opened on a fresh sign-in both load the app shell, which reads
-    the player context. Select-then-`add` made the loser raise IntegrityError
-    out of a plain GET, and nothing catches that: a 500 on the shell path,
-    which renders the error boundary instead of the player selector.
+    select-then-`add` makes the loser raise IntegrityError out of a plain GET.
     """
     settings = await db.scalar(
         select(UserSettings).where(UserSettings.user_id == user_id)

@@ -3,8 +3,7 @@ import { z } from "zod";
 /**
  * Same-origin POST so a client failure shows up in the frontend container log.
  * Outside the `/api/*` prefix on purpose, since that is rewritten to the
- * backend. Must stay identical to the literal in `proxy.ts`;
- * `tests/client-error-report.test.ts` reads both.
+ * backend. Must stay identical to the literal in `proxy.ts`.
  */
 export const CLIENT_ERROR_REPORT_PATH = "/client-error-report";
 

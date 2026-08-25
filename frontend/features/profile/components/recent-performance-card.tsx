@@ -23,8 +23,7 @@ interface RecentPerformanceCardProps {
 
 // A performance trend indicator. `threshold` defaults to 5% of the overall
 // value, because CS counted in the hundreds and a 0-1 win rate cannot share a
-// fixed band. `higherIsBetter` has no default on purpose: the single call that
-// needs `false` is the one a silent default would get wrong.
+// fixed band. `higherIsBetter` has no default: a silent one would be wrong.
 function getTrendIndicator(
   recent: number,
   overall: number,

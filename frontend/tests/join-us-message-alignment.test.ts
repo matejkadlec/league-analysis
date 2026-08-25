@@ -20,8 +20,7 @@ const BACKEND_ROOT = join(
 );
 
 // Where the constant lives, not where the flow lives: it moved from
-// `service.py` to `join_us.py` with the Join Us extraction, and the check
-// failed as a missing literal rather than as a mismatch. The error below is
+// `service.py` to `join_us.py` with the Join Us extraction. The error below is
 // the only thing that says which file to look in.
 const MINIMUM_SOURCE = "app/features/auth/join_us.py";
 

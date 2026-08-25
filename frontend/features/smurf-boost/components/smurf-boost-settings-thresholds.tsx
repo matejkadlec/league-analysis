@@ -12,9 +12,8 @@ const CROSS_FIELD_NAMES = ["recentWindowSize", "a3MinimumNovelGames"];
 
 /**
  * The fifteen thresholds grouped by what they tune, one tab each. Every group
- * stays mounted (`forceMount`) and is only visually hidden: the values live
- * in one draft, the cross-field rule spans two groups, and an
- * `aria-describedby` must never point at an unmounted element.
+ * stays mounted (`forceMount`) and is only visually hidden: the cross-field
+ * rule spans two groups, and `aria-describedby` needs a mounted target.
  */
 const GROUPS = [
   {
@@ -83,10 +82,9 @@ export function SmurfBoostSettingsThresholds({
             </TabsTrigger>
           ))}
         </TabsList>
-        {/* From `sm` up every group occupies the same grid cell, so the
-            dialog stands at the tallest group's height and switching tabs
-            cannot move the tab row out from under the pointer. On a phone the
-            dialog scrolls, so an inactive group stays fully hidden. */}
+        {/* From `sm` up every group occupies the same grid cell, so switching
+            tabs cannot move the tab row out from under the pointer. On a phone
+            the dialog scrolls, so an inactive group stays fully hidden. */}
         <div className="sm:grid">
           {GROUPS.map((group, index) => (
             <TabsContent

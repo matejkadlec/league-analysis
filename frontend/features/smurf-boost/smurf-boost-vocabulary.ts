@@ -6,8 +6,7 @@ import type {
 /**
  * The wording the model fixes -- band vocabulary, family titles, confidence
  * labels, note readings, disclaimer -- in its only frontend copy, so nothing
- * drifts from the specification or reaches for a forbidden word. Ordinary
- * page copy is written where it is used.
+ * drifts from the specification or reaches for a forbidden word.
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
@@ -68,9 +67,8 @@ export const CONFIDENCE_LABELS: Record<SmurfBoostConfidenceBand, string> = {
 };
 
 /**
- * Plain-language readings of the identifiers the backend emits.
- *
- * An unrecognised identifier is rendered as itself rather than hidden, because
+ * Plain-language readings of the identifiers the backend emits. An
+ * unrecognised identifier is rendered as itself rather than hidden, because
  * the specification requires every data-quality limit to stay visible.
  */
 export const NOTE_LABELS: Record<string, string> = {

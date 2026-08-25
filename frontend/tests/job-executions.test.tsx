@@ -75,10 +75,9 @@ const MATCH_FETCHER: JobConfiguration = {
 };
 
 /**
- * The component owns its query now, so a fixture is installed on the mocked
- * `validatedGet` rather than handed in as a prop -- taking both meant two
- * requests for the identical first page, and a failed seed left an infinite
- * query that never started behind a tidy "No job executions found".
+ * The component owns its query, so a fixture is installed on the mocked
+ * `validatedGet` rather than handed in as a prop -- taking both means two
+ * requests for the identical first page.
  */
 function renderExecutions(props: {
   executions: JobExecutionListResponse | null;
@@ -115,10 +114,9 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("keeps the rows on screen when the 15-second poll fails", async () => {
-    // This query re-runs every 15 seconds behind a table someone is reading, and
-    // the queryFn re-throws rather than returning a failure envelope, so React
-    // Query keeps the pages it already has. A single failed poll must not empty
-    // the table.
+    // This query re-runs every 15 seconds behind a table someone is reading,
+    // and the queryFn re-throws rather than returning a failure envelope, so
+    // React Query keeps the pages it already has.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 41 })]),
     });
@@ -167,9 +165,8 @@ describe("the executions table on the jobs page", () => {
 
   it("opens the dialog for a deep link and stays shut for one that no longer resolves", async () => {
     // `selectedExecutionId` comes from the URL, so it can name an execution
-    // that is not in the loaded page -- an old link, or a row past the end of
-    // what has been paged in. That has to resolve to a closed dialog rather
-    // than throwing on a missing row.
+    // that is not in the loaded page. That has to resolve to a closed dialog
+    // rather than throwing on a missing row.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: 42,

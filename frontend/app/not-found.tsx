@@ -3,10 +3,9 @@
 import Link from "next/link";
 
 /**
- * Rendered for signed-out visitors too. Returning null unless authenticated
- * made every unmatched path under a public prefix a blank page, and
- * `/sign-in/anything` is reachable with no setup at all. A 404 notice reveals
- * nothing worth gating.
+ * Rendered for signed-out visitors too: gating it would make every unmatched
+ * path under a public prefix a blank page, and a 404 notice reveals nothing
+ * worth gating.
  */
 export default function NotFound() {
   return (

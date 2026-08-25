@@ -69,10 +69,7 @@ class _TestRunnerJob(BaseJob):
     """The loop both test runners share: call endpoints, log, wait, repeat.
 
     A test run exercises exactly the endpoints its real counterpart uses and
-    keeps none of the answers, so everything except *which* endpoints to call
-    was written out twice -- puuid resolution, the client, the iteration loop,
-    the control-state check, the error classification, the wait, and the final
-    metrics reset. Subclasses supply a label and `call_endpoints`.
+    keeps none of the answers. Subclasses supply a label and `call_endpoints`.
     """
 
     #: Human name used in this job's log lines, e.g. "Test Match Fetcher".
@@ -142,14 +139,7 @@ class _TestRunnerJob(BaseJob):
 
 
 class TestMatchFetcherJob(_TestRunnerJob):
-    """Test runner for Match Fetcher — calls 4 endpoints once per minute.
-
-    Endpoints per iteration:
-      1. match list by puuid
-      2. match detail  (first match from list)
-      3. match timeline (same match)
-      4. league entries by puuid
-    """
+    """Test runner for Match Fetcher — calls 4 endpoints once per minute."""
 
     label = "Test Match Fetcher"
 

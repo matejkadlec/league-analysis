@@ -1,21 +1,19 @@
 // Regression fixture for `house/no-long-comments`.
 
-// Every `oxlint-disable-next-line` below suppresses a comment the rule MUST
-// flag; the accepted shapes carry no directive, so a false positive fails the
-// run too. The directives are block comments on purpose: a `//` directive
-// would join the run it guards and drag the report onto its own line.
+// Every `oxlint-disable-next-line` suppresses a comment the rule MUST flag;
+// accepted shapes carry no directive, so a false positive fails the run too.
+// The directives are block comments: a `//` one would join the run it guards.
 
-// MUST flag: five consecutive `//` lines are one comment, not five.
+// MUST flag: four consecutive `//` lines are one comment, not four.
 
 /* oxlint-disable-next-line house/no-long-comments */
 // one
 // two
 // three
 // four
-// five
 export const afterLongRun = 1;
 
-// MUST flag: the same five lines as a JSDoc block.
+// MUST flag: the same four lines as a JSDoc block.
 
 /* oxlint-disable-next-line house/no-long-comments */
 /**
@@ -23,7 +21,6 @@ export const afterLongRun = 1;
  * two
  * three
  * four
- * five
  */
 export const afterLongJsdoc = 2;
 
@@ -36,26 +33,23 @@ export const afterLongJsdoc = 2;
  * two
  *
  * three
- * four
  */
 export const afterSplitJsdoc = 3;
 
-// Accepted: four `//` lines sit exactly at the ceiling.
+// Accepted: three `//` lines sit exactly at the ceiling.
 
 // one
 // two
 // three
-// four
 export const atCeilingRun = 4;
 
-// Accepted: the same four lines as JSDoc -- the delimiters carry no words, so
-// they must not push a comment that fits over the ceiling.
+// Accepted: the same three lines as JSDoc -- the delimiters carry no words,
+// so they must not push a comment that fits over the ceiling.
 
 /**
  * one
  * two
  * three
- * four
  */
 export const atCeilingJsdoc = 5;
 
@@ -82,10 +76,9 @@ export const firstRun = 7;
 export const secondRun = 8;
 
 // Accepted: a `// why` trailing a statement opens its own block, so it does
-// not extend the four-line run immediately above it.
+// not extend the three-line run immediately above it.
 
 // one
 // two
 // three
-// four
 export const trailingAfterRun = 9; // why

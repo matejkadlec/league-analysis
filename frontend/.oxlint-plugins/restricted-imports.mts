@@ -1,7 +1,6 @@
 // An override REPLACES this rule's whole configuration for the files it
 // matches, so a block that sets it and forgets these lists exempts those files
-// silently. `tests/oxlint-config-contract.test.ts` fails when one does -- twice
-// already, once scoped to `proxy.ts` and once to the route handlers.
+// silently. `tests/oxlint-config-contract.test.ts` fails when one does.
 
 export type ImportRestriction = {
   group: string[];
@@ -10,9 +9,8 @@ export type ImportRestriction = {
 };
 
 // Only the refresh call can tell a rejected session (401/403) from a server it
-// could not reach. Everywhere else sees the same failed request either way, so
-// a teardown from anywhere else signs people out over a redeploy, with a valid
-// refresh cookie still in the jar.
+// could not reach. A teardown from anywhere else signs people out over a
+// redeploy, with a valid refresh cookie still in the jar.
 export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
   {
     // Trailing `*` because a specifier may carry an extension:
@@ -47,9 +45,8 @@ export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
   },
 ];
 
-// Cross-feature deep imports are how untracked package cycles happen --
-// `players` reaching `matches/queue-catalog` closed one nothing else could
-// see. Same-feature code imports relatively, so an absolute two-segment-plus
+// Cross-feature deep imports are how untracked package cycles happen. Code in
+// the same feature imports relatively, so an absolute two-segment-plus
 // specifier is always crossing a feature edge.
 export const FEATURE_BARREL_IMPORTS: readonly ImportRestriction[] = [
   {
@@ -69,10 +66,9 @@ export const EDGE_CLIENT_IMPORTS: readonly ImportRestriction[] = [
   },
 ];
 
-// Server code that can write cookies. A sweep over `getAll()` names nothing a
-// selector can see and takes the HttpOnly refresh cookie with it, not just the
-// hint. Scoping this to route handlers, then to `app/**`, was each one
-// spelling short: a Server Action is a `"use server"` directive, not a path.
+// Server code that can write cookies. A sweep over `getAll()` takes the
+// HttpOnly refresh cookie with it, not just the hint, and scoping the ban by
+// path spells short: a Server Action is a `"use server"` directive, not a path.
 export const SERVER_COOKIE_STORE_PATHS = [
   {
     name: "next/headers",

@@ -117,10 +117,9 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("stamps the stored key in the viewer's clock, not UTC", async () => {
-    // This surface rendered its own UTC `toLocaleString`, so an operator
-    // comparing "last updated" against a job run read two different clocks.
-    // `formatDateTime` is the one clock, and nothing else stops a fifth copy
-    // reappearing.
+    // An operator comparing "last updated" against a job run must not read two
+    // different clocks. `formatDateTime` is the one clock, and nothing else
+    // stops another copy reappearing.
     const queryClient = renderCard();
 
     await screen.findByText(
@@ -132,9 +131,8 @@ describe("the card that swaps the Riot API key", () => {
 
   it("refuses to save a key that is not shaped like a Riot key", async () => {
     // The key this writes is what every ingestion job authenticates with, and
-    // saving activates it with no restart. A paste that picked up the wrong
-    // string should not become the live credential; the prefix check is the
-    // only thing standing between the two, and it costs no request.
+    // saving activates it with no restart. The prefix check is all that keeps a
+    // mis-pasted string from becoming the live credential.
     const queryClient = renderCard();
 
     await typeKey("not-a-riot-key");
@@ -147,10 +145,9 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("says so when the save request itself fails", async () => {
-    // Both mutations used to return the `ApiResponse` envelope, which cannot
-    // reject -- so their `onError` arms were dead and the global
-    // `MutationCache.onError` never saw a failed key save. Every other mock
-    // here resolves a success, so only this case fails on the envelope.
+    // A mutation returning the `ApiResponse` envelope cannot reject, which
+    // leaves `onError` dead and hides a failed key save from the global
+    // `MutationCache.onError`.
     validatedPut.mockResolvedValue({
       success: false,
       error: {
@@ -235,9 +232,8 @@ describe("the card that swaps the Riot API key", () => {
     // answer and the card renders it as a prompt.
 
     // On the real provider wiring, because the DOM cannot tell the two apart:
-    // `setting` is null either way. The global `queryCache.onError` is what
-    // separates them, so letting the 404 through raises "Could not load this
-    // data" over a card working exactly as intended.
+    // `setting` is null either way. The global `queryCache.onError` separates
+    // them, so letting the 404 through raises an error over a working card.
     respondWith({
       setting: { success: false, error: { status: 404, kind: "not_found" } },
       status: status({ credential_status: "missing", evidence: "missing" }),

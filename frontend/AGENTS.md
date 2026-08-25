@@ -34,7 +34,7 @@ but not the `typescript/bin/tsc` CLI path the Next.js toolchain expects.
   assets. Keep the reviewed fallback and null behavior for unknown IDs.
 - Features expose public APIs via `index.ts`.
 - Use Next.js `proxy.ts` file convention (not `middleware.ts`).
-- A comment carries at most four lines of prose, and a run of `//` lines is
+- A comment carries at most three lines of prose, and a run of `//` lines is
   one comment. Say what the constraint is; drop the narration.
 - House lint rules live in `.oxlint-plugins/` — read its `AGENTS.md` before
   adding one. Each rule states what it is for in its own report message.

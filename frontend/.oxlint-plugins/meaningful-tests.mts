@@ -1,17 +1,14 @@
 // Two test shapes that stay green while the behaviour they name is broken: a
 // test whose every assertion is a mock-call check, and `toThrow()` with no
-// argument, which the TypeError from the bug satisfies exactly as well as the
-// error the test claims to pin.
+// argument, which any TypeError satisfies as well as the error it claims to pin.
 
 // Flagged: an `it`/`test` body whose every `expect` matcher is a call matcher;
-// a bare `toThrow()` / `toThrowError()`.
-// Accepted: call assertions standing next to an outcome assertion;
-// `not.toThrow()`, which has nothing to name; hooks and `describe`.
+// a bare `toThrow()` / `toThrowError()`. Accepted: call assertions next to an
+// outcome assertion; `not.toThrow()`, which has nothing to name; hooks.
 
-// The boundary: syntax cannot tell an assertion from a tautology. A test that
-// asserts a mocked return value, or an expected value read off the code under
-// test, reads as fine here, and a test with no assertions at all is left to
-// the suite's own "0 assertions" report. Two mechanical shapes, not a verdict.
+// The boundary: syntax cannot tell an assertion from a tautology. A test
+// asserting a mocked return value reads as fine here, and one with no
+// assertions at all is left to the suite's own "0 assertions" report.
 
 type Node = {
   type: string;

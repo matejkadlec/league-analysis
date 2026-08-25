@@ -1,9 +1,7 @@
 """What `score_player_match` ranks, and which fields each search type reads.
 
-The scoring path had no test at all, which is why four one-caller helpers could
-be collapsed into two without anything going red. These pin the parts that are
-choices rather than arithmetic: the exact-match short circuit, and the three
-deliberately different field sets.
+These pin the parts that are choices rather than arithmetic: the exact-match
+short circuit, and the three deliberately different field sets.
 """
 
 import pytest

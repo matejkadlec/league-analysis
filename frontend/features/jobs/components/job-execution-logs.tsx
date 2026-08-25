@@ -10,9 +10,8 @@ import {
 import { cn } from "@/lib/core/utils";
 
 // The row renders these three in its own header, so listing them again as
-// extras would print each twice. Hoisted out of the map: it was rebuilt per
-// log line. Not the same policy as the set in `job-execution-format.ts` --
-// see the comment there.
+// extras would print each twice. Not the same policy as the set in
+// `job-execution-format.ts` -- see the comment there.
 const HEADER_FIELDS = new Set(["level", "timestamp", "event"]);
 
 interface JobExecutionLogsProps {

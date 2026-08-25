@@ -2,8 +2,7 @@
 
 Both routes used to classify by `"not found" in str(e).lower()`, so the status
 code was a property of the English sentence: rewording a service message moved
-the response between 404 and 400, and an unrelated `ValueError` from anywhere
-below became a 400 "validation error". These pin the mapping to the types.
+the response between 404 and 400. These pin the mapping to the types.
 """
 
 from unittest.mock import AsyncMock, MagicMock

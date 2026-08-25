@@ -1,16 +1,8 @@
 """Pin the contract of the two shared timestamp column helpers.
 
-`created_at_column` and `updated_at_column` are now the single declaration
-behind twenty-five columns across thirteen tables, so a change to either edits
-every one of them at once. The difference that matters is one keyword:
-`updated_at` carries `onupdate`, `created_at` must not. Swap or drop it and
-nothing else complains -- `onupdate` is a SQLAlchemy-side default, so it emits
-no DDL, `alembic check` sees no drift, and the only symptom is a creation stamp
-that quietly moves or a modification stamp that quietly stops.
-
-These read `Base.metadata` rather than the helpers directly, so they also cover
-the call sites: a column that goes back to a hand-written `mapped_column` is
-held to the same contract.
+The difference that matters is one keyword: `updated_at` carries `onupdate`,
+`created_at` must not. Being a SQLAlchemy-side default it emits no DDL, so
+swapping or dropping it leaves `alembic check` seeing no drift.
 """
 
 from typing import Any

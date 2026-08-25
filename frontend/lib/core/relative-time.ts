@@ -2,8 +2,7 @@ import { formatDateTime } from "./format";
 
 // The bucket ladder below stays hand-written: Intl.RelativeTimeFormat takes a
 // unit already chosen and does no unit selection. `numeric: "always"` is
-// deliberate — "auto" would turn day = 1 into "yesterday" and change copy in
-// every consumer of useRelativeTime.
+// deliberate — "auto" would turn day = 1 into "yesterday".
 const relativeFormatter = new Intl.RelativeTimeFormat("en-US", {
   numeric: "always",
 });

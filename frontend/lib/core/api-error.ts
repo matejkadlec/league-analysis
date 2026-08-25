@@ -25,8 +25,7 @@ export interface ApiError {
 /**
  * A rejected request carrying the normalized error rather than only its text.
  * A plain `Error` loses `kind`/`code`/`status`, so the `QueryCache` handler
- * re-normalizes it to `kind: "unexpected"` and shows the generic fallback
- * instead of the curated message.
+ * re-normalizes it to `kind: "unexpected"` and shows the generic fallback.
  */
 export class ApiRequestError extends Error {
   readonly apiError: ApiError;
@@ -50,9 +49,8 @@ const TECHNICAL_MESSAGE_PATTERN =
 
 /**
  * FastAPI's structured `detail`, read defensively. Per-field
- * `.catch(undefined)` makes a wrong type read as absent rather than failing
- * the whole detail; the object-level `.catch({})` covers the 422 shape, where
- * `detail` is an array and not an object.
+ * `.catch(undefined)` makes a wrong type read as absent; the object-level
+ * `.catch({})` covers the 422 shape, where `detail` is an array.
  */
 const StructuredErrorDetailSchema = z
   .object({
@@ -272,8 +270,7 @@ export function normalizeApiError(error: unknown): ApiError {
 
     // A reachability failure may point at this application's own backend, and
     // never at the user's internet connection. The browser reached this code,
-    // so their connection demonstrably works; blaming it sends people to
-    // reboot a router over a service outage.
+    // so blaming their connection sends people to reboot a router.
     return {
       kind: "network",
       code: "NETWORK_ERROR",

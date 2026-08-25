@@ -6,8 +6,7 @@ import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 /**
  * The result carries the widest content in the feature -- a six-column table
  * needs roughly 450px against the 390px viewport this suite emulates. `main`
- * is a flex item with default `min-width: auto`, so anything too wide stretches
- * the document, which is why the width assertion below is on the document.
+ * has default `min-width: auto`, so too-wide content stretches the document.
  */
 
 const PHONE = { width: 390, height: 844 };

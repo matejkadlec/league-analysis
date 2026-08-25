@@ -21,16 +21,14 @@ interface UsePlayerSyncRunOptions {
   onCompleted?: (() => void | Promise<void>) | undefined;
   /**
    * Work that has to happen once the run stops, whatever it stopped as. The
-   * run comes with it, so a caller acting on a half-failed update can quote
-   * the backend's own sentence rather than inventing one that promises a
-   * retry which cannot work. `null` is a start refused outright: no run.
+   * run comes with it, so a caller can quote the backend's own sentence rather
+   * than inventing one. `null` is a start refused outright: no run.
    */
   onSettled?: ((run: PlayerSyncRun | null) => void | Promise<void>) | undefined;
   /**
    * Raise none of this hook's own toasts: the surface reports the run itself,
    * failures included, and two accounts of one click contradict each other.
-   * Poll failures are not covered -- those come from the queries, where the
-   * global query-error toast still reports them.
+   * Poll failures come from the queries, where the global toast reports them.
    */
   quiet?: boolean;
 }
@@ -48,18 +46,16 @@ interface ProfileUpdateStart {
 
 /**
  * Start one player's profile update, or attach to the run already going.
- * Split out of `usePlayerSyncRun` because switching player has to start the
- * *target* player's update before any hook exists for that PUUID; seeding
- * `player-sync-active` here is what lets the destination adopt it at once.
+ * Switching player has to start the *target* player's update before any hook
+ * exists for that PUUID; seeding `player-sync-active` here lets it adopt it.
  */
 export function usePlayerProfileUpdate({
   onStartRefused,
 }: {
   /**
    * The start was refused, so nothing will ever poll to a terminal status and
-   * a waiting caller is released here or not at all. An option on the
-   * mutation, not a callback passed to `mutate()`: React Query re-reads these
-   * from the latest render, while `mutate()`'s are captured at the call.
+   * a waiting caller is released here or not at all. An option on the mutation:
+   * React Query re-reads those from the latest render, `mutate()`'s are not.
    */
   onStartRefused?: ((puuid: string) => void) | undefined;
 } = {}) {
@@ -74,9 +70,8 @@ export function usePlayerProfileUpdate({
     },
     onSuccess: (syncRun, { puuid, quiet }) => {
       // The start endpoint attaches to an existing active run rather than
-      // erroring, so a second click returns a run this call did not start.
-      // The cached active run is the record of what was already running, so
-      // it has to be read before being overwritten.
+      // erroring, so the cached active run has to be read before it is
+      // overwritten to tell a second click from a first.
       const attached =
         queryClient.getQueryData<PlayerSyncRun | null>(
           playerSyncActiveQueryKey(puuid),
@@ -119,8 +114,7 @@ export function usePlayerProfileUpdate({
 /**
  * Track one player's explicit update from either surface: adopt, poll, start,
  * toast, invalidate. `isUpdating` is not read from run status alone -- the
- * last good status survives a failed poll, which left a surface reporting an
- * update forever.
+ * last good status survives a failed poll, which reports an update forever.
  */
 export function usePlayerSyncRun(
   puuid: string,
@@ -135,10 +129,9 @@ export function usePlayerSyncRun(
     puuid: string;
     id: number;
   } | null>(null);
-  // Only "this run reached a terminal status" is tracked. A failing poll used
-  // to be tracked too and settled the caller with `null`, but the poll does
-  // not stop on an error, so that fired on every blip. `tests/
-  // player-sync-poll-recovery.test.tsx` pins both halves.
+  // Only "this run reached a terminal status" is tracked. Tracking a failing
+  // poll too settled the caller with `null`, but the poll does not stop on an
+  // error, so that fired on every blip.
   const handledTerminalSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
@@ -183,9 +176,8 @@ export function usePlayerSyncRun(
     },
     enabled: observedSyncId !== null,
     // Polls until a terminal status is actually *read*, backing off rather
-    // than stopping once it fails. Backed off because `data` survives an
-    // error, so the status still reads `running`. Not stopped because this is
-    // the only thing that settles the run: a blipped first poll settled none.
+    // than stopping once it fails. Backed off because `data` survives an error;
+    // not stopped because this is the only thing that settles the run.
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       const readTerminalStatus =
@@ -205,8 +197,7 @@ export function usePlayerSyncRun(
 
   // An effect event, not the effect body: everything below reads
   // `activeSyncQuery`, `onCompleted`, `queryClient` and `toast`, none of which
-  // are stable, so as a dependency list they re-ran this effect on every
-  // render and only the Set below stopped it acting twice.
+  // are stable, so as a dependency list they re-run this effect on every render.
   const finishRun = useEffectEvent(async (syncRun: PlayerSyncRun) => {
     // The refetch and the settle are in the `finally` below rather than at
     // each exit, so a caller waiting on `onSettled` is released exactly once
@@ -273,17 +264,15 @@ export function usePlayerSyncRun(
       syncRun.status === "running" ||
       // The completion body refetches this very query. Structural sharing
       // usually hands back the identical object, but only while
-      // `PlayerSyncRunSchema` stays flat -- one field that moves after
-      // terminal status makes a toast-and-refetch loop. This Set forbids it.
+      // `PlayerSyncRunSchema` stays flat, so this Set forbids the loop.
       handledTerminalSyncIds.current.has(syncRun.id)
     ) {
       return;
     }
     handledTerminalSyncIds.current.add(syncRun.id);
     // Swallowed rather than released: the `finally` inside `finishRun` has
-    // already settled the caller by the time anything can reject here, so the
-    // only thing left to do with a rejection is keep it from surfacing as an
-    // unhandled one.
+    // already settled the caller by the time anything can reject here, so a
+    // rejection only needs keeping from surfacing as an unhandled one.
     void finishRun(syncRun).catch(() => {});
   }, [syncRun]);
 

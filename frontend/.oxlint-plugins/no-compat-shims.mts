@@ -1,12 +1,10 @@
 // This is an application, not a library: every caller lives in this repo, so
 // there is no "backward" to stay compatible with. A rename updates its call
-// sites in the same change, data migrates forward instead of growing a
-// tolerant reader, and the superseded path is deleted -- git is the archive.
+// sites in the same change, and the superseded path is deleted.
 
 // Two checks, one rule: the comment markers in the first pattern below, and a
-// declared identifier that names itself superseded. Accepted: the same words
-// as data -- a string literal is never scanned, and the name check visits the
-// five declaration positions only, not every mention of the word.
+// declared identifier that names itself superseded. The same words as data are
+// fine -- a string literal is never scanned, and only declarations are visited.
 
 type CommentContext = {
   sourceCode: {

@@ -1,6 +1,5 @@
 # APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the rule is
-# "none" project-wide in `pyproject.toml`; the `strict` header above resets it
-# to the strict default, so restore the project setting here.
+# "none" project-wide in `pyproject.toml`; the `strict` header above resets it.
 # pyright: reportMissingTypeStubs=false
 """Scheduler module for managing automated background jobs."""
 
@@ -37,9 +36,8 @@ class SchedulerLike(Protocol):
     """The slice of APScheduler's scheduler this module and the router drive.
 
     APScheduler is unannotated, so every call through the concrete class comes
-    back as `Unknown`. Naming the surface we actually use pins the argument and
-    return types at the boundary, and lets the test doubles that already stand
-    in for the scheduler be checked against the same shape.
+    back as `Unknown`. Naming the surface we actually use pins the argument
+    and return types at the boundary.
     """
 
     @property
@@ -53,8 +51,7 @@ class SchedulerLike(Protocol):
 
     # APScheduler funnels trigger arguments through `**trigger_args`, where they
     # collide with its own `jobstore`/`executor` keywords. Naming the two this
-    # module actually passes keeps the boundary typed: `seconds` for the
-    # recurring interval schedules, `run_date` for one-shot catch-up entries.
+    # module passes -- `seconds` and `run_date` -- keeps the boundary typed.
     def add_job(
         self,
         func: Callable[..., object],
@@ -139,16 +136,9 @@ class StartupRecoveryError(RuntimeError):
 async def _run_startup_recovery() -> None:
     """Reclassify persisted state left behind by a previous process.
 
-    Each step owns a separate session, and the whole block around each one is
-    shielded, so neither a step's own failure nor a failure while its session
-    rolls back or closes may skip the step that follows. Every step therefore
-    runs before any failure is raised.
-
-    Cancelling orphaned player syncs is mandatory. A stranded active row is
-    handed back to the next request with `created=False`, so no worker is
-    scheduled and the client polls `pending` forever without ever seeing a
-    terminal error. Failing startup is the honest outcome: production runs
-    `restart: unless-stopped`, so a transient fault gets a clean retry.
+    Every step runs before any failure is raised: a step's own fault, or one
+    while its session unwinds, may not skip the step that follows. Cancelling
+    orphaned player syncs is mandatory -- a stranded row polls `pending` forever.
 
     Raises:
         StartupRecoveryError: If a mandatory step failed.
@@ -185,24 +175,9 @@ async def _run_startup_recovery() -> None:
 async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
     """Close player sync runs whose in-process worker did not survive.
 
-    `jobs.player_sync_runs` is driven by an in-process worker, so no row left
-    active by a previous process can still be owned. The table allows one active
-    row per PUUID and `start_player_sync` hands back an existing active row
-    while the route schedules work only for a newly created one, so an orphan
-    blocks that player's updates until something closes it.
-
-    Startup is the only safe place to do this. A live process cannot tell an
-    abandoned row apart from one a running worker still owns, and no Riot
-    identity is involved here, so nothing has to be matched by Riot ID.
-
-    `core.matchmaking_analyses` is deliberately excluded. It has the opposite
-    contract: `start_analysis` attaches to an active row and relaunches its
-    worker, preserving completed progress across a restart. Cancelling it here
-    would discard that progress. See
-    [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
-
-    A failure rolls back and propagates, because serving with rows still
-    stranded looks healthy while every affected player polls forever.
+    One active row per PUUID and `start_player_sync` hands an existing one
+    back, so an orphan blocks that player forever. `core.matchmaking_analyses`
+    is excluded -- `start_analysis` resumes its row, so cancelling loses work.
 
     Args:
         db: Database session for updating the player sync records.
@@ -345,13 +320,9 @@ def _build_scheduler(settings: Settings) -> SchedulerLike:
 async def start_scheduler() -> SchedulerLike:
     """Initialize and start the APScheduler instance.
 
-    This function:
-    1. Checks if scheduler should be enabled via configuration
-    2. Creates scheduler with SQLAlchemy job store
-    3. Marks stale running jobs as failed
-    4. Starts the scheduler paused and replaces persisted scheduler entries
-       from authoritative job configurations
-    5. Queues each overdue job once, then resumes the scheduler
+    Starts paused so persisted scheduler entries are replaced from the
+    authoritative job configurations and every overdue job is queued once
+    before dispatch resumes.
 
     Returns:
         The initialized and started scheduler instance.
@@ -410,13 +381,7 @@ def _get_job_class(
     job_config: JobConfiguration,
     registry: dict[JobType, type[BaseJob]],
 ) -> type[BaseJob] | None:
-    """Get job class from registry.
-
-    :param job_type: Type of job to get.
-    :param job_config: Job configuration for logging.
-    :param registry: Job registry mapping.
-    :returns: Job class, or None if not found.
-    """
+    """Get job class from registry, or None when the type is unknown."""
     job_class = registry.get(job_type)
     if not job_class:
         logger.warning(
@@ -501,10 +466,8 @@ async def sync_job_configuration(job_config_id: int) -> None:
     if not job_class:
         return
 
-    # No blanket handler. The one caller commits the configuration first, so
-    # swallowing a fault here answered 200 for a row the scheduler had not
-    # accepted; the update route now validates the interval before it commits,
-    # which leaves only genuine scheduler faults -- worth a 500.
+    # No blanket handler. The update route validates the interval before it
+    # commits, so only genuine scheduler faults reach here -- worth a 500.
     _schedule_job(job_config, job_class, _resolve_interval_seconds(job_config))
 
 
@@ -602,14 +565,9 @@ def _queue_overdue_jobs(
 async def _check_and_run_overdue_jobs() -> None:
     """Check for overdue jobs and queue them once for immediate execution.
 
-    This handles the case where the server was offline longer than the job interval.
-    Jobs are considered overdue if:
-    - They have never run before (no executions), OR
-    - Their last execution was longer ago than their interval
-
-    The scheduler is still paused while this function runs. One-shot entries
-    are dispatched only after startup resumes the scheduler, so readiness does
-    not wait on provider traffic or a rate-limit window.
+    Overdue means never run, or last run longer ago than the interval. The
+    scheduler is still paused here, so one-shot entries dispatch only once
+    startup resumes it and readiness never waits on provider traffic.
     """
     try:
         logger.info("Checking for overdue jobs at startup")
@@ -700,13 +658,7 @@ async def _load_and_schedule_jobs() -> None:
 
 
 async def shutdown_scheduler() -> None:
-    """Stop accepting scheduled work without draining active executions.
-
-    This function:
-    1. Stops future scheduler dispatches
-    2. Returns without waiting for long-running Riot work
-    3. Lets startup recovery reconcile interrupted persisted executions
-    """
+    """Stop accepting scheduled work without draining active executions."""
     global _scheduler
 
     if _scheduler is None:
@@ -717,9 +669,8 @@ async def shutdown_scheduler() -> None:
         logger.info("Shutting down job scheduler")
 
         # Never wait. A Riot execution can run for many minutes, and draining
-        # one would stall every deployment for as long as it happens to have
-        # left. Startup recovery owns whatever persisted state an interrupted
-        # run leaves behind, so cutting it short is the recoverable choice.
+        # one would stall every deployment. Startup recovery owns whatever
+        # persisted state an interrupted run leaves behind.
         _scheduler.shutdown(wait=False)
 
         _scheduler = None

@@ -19,9 +19,7 @@ export function ProtectedRoute({
   }
 
   // Being refused is a state the visitor can be in for good, so it has to say
-  // so. Rendering nothing left a signed-in non-admin who opened /jobs with a
-  // sidebar and an empty pane, no redirect and no explanation — and unlike a
-  // missing session, nothing they can do will ever change it.
+  // so: unlike a missing session, nothing they can do will ever change it.
   if (requireAdmin && user && !user.is_admin) {
     return <AccessDenied reason="This page is limited to administrators." />;
   }

@@ -110,8 +110,7 @@ describe("the recent performance card", () => {
   it("reads every other stat the other way round", async () => {
     // The mirror of the case above: with the same fixture, kills, assists,
     // CS, vision, KDA and win rate all went up and all must read as
-    // improvement. Without this a blanket `higherIsBetter: false` would pass
-    // the deaths test on its own.
+    // improvement, which a blanket `higherIsBetter: false` would not give.
     const queryClient = renderCard();
 
     await waitFor(() => expect(verdictFor("Win Rate")).toBe("improving"));
@@ -130,9 +129,8 @@ describe("the recent performance card", () => {
 
   it("compares the last ten games against the whole history", async () => {
     // The card's entire claim is a comparison, and the only thing making the
-    // two requests different is the `limit` on one of them. Drop it and both
-    // queries fetch the same numbers, every stat reads "stable" forever, and
-    // nothing on screen looks broken.
+    // two requests different is the `limit` on one of them. Drop it and every
+    // stat reads "stable" forever, with nothing on screen looking broken.
     const queryClient = renderCard();
 
     await waitFor(() => expect(validatedGet).toHaveBeenCalledTimes(2));
@@ -146,8 +144,7 @@ describe("the recent performance card", () => {
   it("calls a small wobble stable rather than a trend", async () => {
     // Ten games is a small sample and the numbers move on their own. The
     // bands exist so the card does not announce a direction every time
-    // someone plays an evening; without them "improving" and "declining"
-    // stop meaning anything, because one of them is always on screen.
+    // someone plays an evening.
     respondWith(
       {
         ...OVERALL,
@@ -193,9 +190,8 @@ describe("the recent performance card", () => {
 
   it("says there is not enough data instead of a card full of zeros", async () => {
     // A player whose ranked history is empty gets stats back, all of them
-    // zero. Without the `total_matches` check the card renders in full: 0%
-    // recent against 0% overall, six "stable" verdicts, and a badge
-    // announcing a comparison with 0 games.
+    // zero. Without the `total_matches` check the card renders in full: six
+    // "stable" verdicts and a badge announcing a comparison with 0 games.
     const empty: Stats = {
       total_matches: 0,
       win_rate: 0,

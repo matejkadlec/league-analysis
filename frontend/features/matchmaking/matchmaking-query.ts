@@ -1,10 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
- * The four caches one matchmaking run touches, named once. Hand-copied across
- * five files they had already drifted, leaving the latest-run card offering a
- * record that no longer existed. The status key is a prefix, one entry per
- * watched run.
+ * The four caches one matchmaking run touches, named once. The status key is
+ * a prefix, one entry per watched run.
  */
 export function matchmakingAnalysisQueryKey(puuid: string) {
   return ["matchmaking-analysis", puuid] as const;

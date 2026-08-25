@@ -1,9 +1,8 @@
 """Shared log-then-raise tail for feature routers.
 
-Nearly every route's final except-block logs the unexpected error and
-answers a client-safe HTTPException. The tail lives here so its shape
-(error string, traceback, context kwargs) cannot drift between routers;
-each call site passes its own module logger to keep the log origin.
+Keeps the shape (error string, traceback, context kwargs) from drifting
+between routers; each call site passes its own module logger so the log
+records where it came from.
 """
 
 from typing import Any, NoReturn
@@ -11,10 +10,9 @@ from typing import Any, NoReturn
 import structlog
 from fastapi import HTTPException
 
-# One sentence for every unexpected server error. `normalizeApiError` in the
-# frontend only trusts a *structured* `{code, message}` detail, so a plain
-# string never reaches a viewer -- its `status >= 500` branch substitutes this
-# text. What tells the routes apart is the structured log event.
+# One sentence for every unexpected server error. The frontend's
+# `normalizeApiError` only trusts a *structured* `{code, message}` detail, so
+# this string never reaches a viewer; the structured log tells routes apart.
 SERVICE_ERROR_DETAIL = (
     "The League Analysis service could not complete the request. "
     "Please try again later."

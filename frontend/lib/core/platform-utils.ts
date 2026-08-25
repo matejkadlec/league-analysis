@@ -5,9 +5,8 @@
 
 /**
  * Every platform the API accepts, and what to call it on screen. The key order
- * IS the order of the server picker, which maps this object, so alphabetising
- * would silently move EUNE out of first place. The key set is asserted against
- * the OpenAPI `Platform` enum by `tests/api-contract-alignment.test.ts`.
+ * IS the order of the server picker, so alphabetising would move EUNE out of
+ * first place. `tests/api-contract-alignment.test.ts` pins the key set.
  */
 export const PLATFORM_DISPLAY_NAMES = {
   eun1: "EUNE",

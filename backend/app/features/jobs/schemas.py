@@ -114,9 +114,7 @@ class JobExecutionApiCall(BaseModel):
     """One endpoint's grouped calls, as `base.py:StoredAPICall` writes them.
 
     A single call keeps its whole params dict; a group keeps only the key that
-    varied and its first and last value. Measured against production on
-    2026-08-21: 4,586 stored entries, every field of every one of them this
-    shape.
+    varied and its first and last value.
     """
 
     endpoint: str
@@ -135,9 +133,7 @@ class JobExecutionDetailedLogs(BaseModel):
 
     Empty rather than absent, on purpose: a missing key and an empty list mean
     the same thing to the dialog that reads them, and `| None` would put a
-    `null` on the wire for every execution that has one of the two but not the
-    other. Rows written before this shape existed carry other keys and parse
-    to two empty lists, which is what the jobs dialog already did with them.
+    `null` on the wire for every execution that has one of the two but not both.
     """
 
     logs: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])

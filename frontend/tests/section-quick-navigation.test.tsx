@@ -11,9 +11,8 @@ import {
 
 const scrollIntoView = vi.fn();
 
-// Module level, exactly as `app/rank-manipulation/page.tsx` and
-// `app/player-overview/page.tsx` declare theirs: an array literal rebuilt on
-// each render is a new dependency every time, which re-runs the effect and
+// Module level, exactly as the pages declare theirs: an array literal rebuilt
+// on each render is a new dependency every time, which re-runs the effect and
 // hides whether the observer does anything.
 const ITEMS: SectionQuickNavigationItem[] = [
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
@@ -147,9 +146,8 @@ describe("SectionQuickNavigation", () => {
 
   it("does no watching while the panel is shut", async () => {
     // The observer is on `document.body` with `subtree: true`, so it sees
-    // every DOM change anywhere on the page -- on a surface that polls, that
-    // is a callback several times a minute for a list nobody can read while
-    // it is collapsed.
+    // every DOM change on the page -- on a surface that polls, a callback
+    // several times a minute for a list nobody can read while collapsed.
     const user = userEvent.setup();
     const observe = vi.spyOn(MutationObserver.prototype, "observe");
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");

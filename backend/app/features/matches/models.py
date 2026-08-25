@@ -27,9 +27,8 @@ class Match(Base):
 
     __tablename__ = "matches"
     __table_args__: Final = (
-        # Same canonical spelling as `core.players.platform`. This column was
-        # internally consistent at uppercase, but two columns of the same name
-        # disagreeing is a comparison bug waiting to be written.
+        # Same canonical spelling as `core.players.platform` -- two columns of
+        # the same name disagreeing is a comparison bug waiting to be written.
         # Spelled bare: the `ck` convention prefixes `ck_<table>_` itself.
         CheckConstraint(
             "platform = lower(platform)",
@@ -159,17 +158,15 @@ class Match(Base):
         comment="Whether this match has been processed for playstyle analysis",
     )
 
-    # The one relationship this application reads: `playstyle_analysis`
-    # eager-loads it with `selectinload`. `lazy="raise"` because without
-    # `AsyncAttrs` a lazy load from async code is a MissingGreenlet. No cascade:
-    # `match_participants.match_id` already cascades in the database.
+    # `playstyle_analysis` eager-loads this with `selectinload`. `lazy="raise"`
+    # because without `AsyncAttrs` a lazy load from async code is a
+    # MissingGreenlet. No cascade: `match_id` already cascades in the database.
     participants: Mapped[list[MatchParticipant]] = relationship(lazy="raise")
 
 
-# Indexes for common queries. None of these columns also carries `index=True`: a
-# btree on (a, b) already serves every lookup a btree on (a) would, so an index
-# on a leading column is pure write cost. `game_mode` and `game_type` do carry
-# `index=True`, because no composite here leads with either.
+# None of these columns also carries `index=True`: a btree on (a, b) already
+# serves every lookup a btree on (a) would. `game_mode` and `game_type` do
+# carry it, because no composite here leads with either.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)

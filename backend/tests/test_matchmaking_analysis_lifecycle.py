@@ -279,10 +279,9 @@ def test_a_run_that_measured_nothing_is_not_a_completed_run(
 ) -> None:
     """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
 
-    Every spine match failing to load returns None from the optional fetch,
-    so both averages fell back to 0.0 and the run was still stamped
-    `completed` with `last_matchmaking_analysis` set. The failure path already
-    persists a terminal diagnostic; an unmeasured run belongs on it.
+    Every spine match failing to load returns None from the optional fetch, so
+    both averages fell back to 0.0 and the run was still stamped `completed`.
+    The failure path already persists a terminal diagnostic.
     """
     with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
         analysis_service_module._build_completion_results(
@@ -308,9 +307,7 @@ async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
 
     `get_riot_client` refuses the whole request when no key is active, and
     injected into this feature's service it took down `latest-completed`,
-    `history` and `status` with it -- stored analyses became unreadable during
-    the 2026-08-25 prod key outage. Only the background instance talks to
-    Riot, with its own tracked client.
+    `history` and `status` with it. Only the background instance talks to Riot.
     """
     from app.features.auth.models import User
     from app.features.matchmaking_analysis.dependencies import (

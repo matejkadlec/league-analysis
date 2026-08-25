@@ -13,10 +13,9 @@ import {
 import { cn } from "@/lib/core/utils";
 
 /**
- * The always-visible explanation. The specification requires the disclaimer
- * to be plain and permanent, so it is never a tooltip and never collapsed.
- * Everything above it is drawn rather than narrated: the window comparison as
- * dot rows, the readings as the same colour ladder the result card uses.
+ * The always-visible explanation. The specification requires the disclaimer to
+ * be plain and permanent, so it is never a tooltip and never collapsed, and the
+ * readings wear the same colour ladder the result card uses.
  */
 
 // The readings a comparison can produce, in escalation order, wearing the

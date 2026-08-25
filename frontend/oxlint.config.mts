@@ -85,8 +85,7 @@ export default defineConfig({
 
     // `eslint-config-next` spread `eslint-plugin-react-hooks`'s recommended
     // set, which is not a category oxlint has -- so it is listed. Only
-    // `config` and `gating` are missing here, and both configure the React
-    // Compiler rather than check code.
+    // `config` and `gating` are missing, and both configure the Compiler.
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "error",
     "react-hooks/set-state-in-effect": "error",
@@ -135,9 +134,8 @@ export default defineConfig({
     ],
 
     // Three a11y rules `eslint-config-next` did not run, each of which this
-    // tree contradicts on purpose and says why at the call site: `tabIndex`
-    // makes a scrollable region reachable, `role="list"` puts back what
-    // Tailwind's reset takes from WebKit, and a Radix role IS the semantics.
+    // tree contradicts on purpose and says why at the call site: `tabIndex`,
+    // `role="list"` against Tailwind's reset, and a Radix role IS the semantics.
     "jsx-a11y/no-noninteractive-tabindex": "off",
     "jsx-a11y/no-redundant-roles": "off",
     "jsx-a11y/prefer-tag-over-role": "off",
@@ -289,8 +287,7 @@ export default defineConfig({
     },
     // A ratchet, not a sitting. Naming these files keeps the rule live for
     // every test written from here on; delete a name as its file grows an
-    // observable assertion. Never widen this to `tests/**` -- that is the
-    // rule's whole surface. Queued in .claude/IMPROVEMENTS.md.
+    // observable assertion. Never widen this to `tests/**`.
     {
       files: [
         "tests/api-error-logging.test.ts",

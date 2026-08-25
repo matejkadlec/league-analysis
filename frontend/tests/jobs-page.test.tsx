@@ -25,10 +25,9 @@ vi.mock("@/features/auth/context/auth-context", async (importOriginal) => ({
   useAuth,
 }));
 
-// The three children are stubbed because what is under test here is the
-// page's own wiring: which tab is showing, which of the four job-list states
-// is rendered, and whether a click inside a job card reaches the other tab.
-// Each stub keeps the one prop the page is responsible for passing.
+// The three children are stubbed because what is under test here is the page's
+// own wiring: which tab is showing, which job-list state is rendered, and
+// whether a click inside a job card reaches the other tab.
 vi.mock("@/features/jobs", async (importOriginal) => ({
   ...(await importOriginal()),
   JobCard: ({
@@ -106,10 +105,9 @@ describe("the background jobs page", () => {
     await waitFor(() =>
       expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
     );
-    // The inactive panel must be absent, not merely hidden. This is the only
-    // assertion touching `components/ui/tabs.tsx`: a `TabsContent` that always
-    // rendered would stack both panels, which no assertion about the active tab
-    // can see.
+    // The inactive panel must be absent, not merely hidden: a `TabsContent`
+    // that always rendered would stack both panels, which no assertion about
+    // the active tab can see.
     expect(screen.queryByText(/executions list/)).toBeNull();
 
     fireEvent.click(screen.getByText(/job card Match Fetcher/));

@@ -47,10 +47,9 @@ export const UserCookieConsentResponseSchema = z.object({
   consented_at: z.string(),
 });
 
-// One viewer's effective settings for one analytical card. `settings` carries
-// the card's fixed values beside its mutable ones, so a write must send back
-// only the fields the write contract accepts. Not all values are numbers --
-// Top Champions carries a role list -- and this response returns every card.
+// One viewer's effective settings for one analytical card. `settings` mixes
+// the card's fixed values with its mutable ones, of mixed types, so a write
+// must send back only the fields the write contract accepts.
 /** The three analytical cards the settings API answers for, by its own ids. */
 export const CardIdSchema = z.enum([
   "profile.top-champions",
@@ -70,10 +69,9 @@ export const CardPreferenceSchema = z.object({
 
 export type CardPreference = z.infer<typeof CardPreferenceSchema>;
 
-// Riot credential health, read by both the header banner and the
-// settings card. Declaring it here rather than beside each component is what
-// puts it inside `tests/api-contract-alignment.test.ts`; both private copies
-// said `z.number()` for a `health_revision` the API declares as an integer.
+// Riot credential health, read by both the header banner and the settings
+// card. Declaring it here rather than beside each component is what puts it
+// inside `tests/api-contract-alignment.test.ts`.
 const credentialStatus = z.enum(["missing", "unknown", "valid", "invalid"]);
 
 export const ServiceStatusSchema = z.object({

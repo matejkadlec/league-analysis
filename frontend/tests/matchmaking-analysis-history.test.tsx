@@ -77,9 +77,8 @@ function renderHistory() {
 
 /**
  * The table half of the card. Both layouts render in jsdom -- the stacked
- * blocks are hidden by a Tailwind breakpoint, which no stylesheet applies
- * here -- so every figure is on screen twice and the queries have to say
- * which copy they mean.
+ * blocks are hidden by a Tailwind breakpoint no stylesheet applies here -- so
+ * every figure is on screen twice and the queries have to say which copy.
  */
 async function table() {
   return within(await screen.findByRole("table"));
@@ -98,10 +97,9 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("reads a player with no analyses as empty, not as a failure", async () => {
-    // A player's first visit is a 404, and letting it through turns the ordinary
-    // empty state into "could not be loaded". Rendered on the real provider
-    // client: the empty and error branches share an `if`, and what separates them
-    // is the global `queryCache.onError`.
+    // A player's first visit is a 404, and letting it through turns the
+    // ordinary empty state into "could not be loaded". Rendered on the real
+    // provider client: what separates the branches is `queryCache.onError`.
     getMatchmakingAnalysisHistory.mockResolvedValue({
       success: false,
       error: { status: 404, kind: "not_found" },
@@ -176,8 +174,7 @@ describe("the matchmaking analysis history card", () => {
   it("reloads both sibling panels after a record is deleted", async () => {
     // The results panel beside this card is a separate query keyed on the
     // same player. Nothing else invalidates it, so without this the analysis
-    // someone just deleted stays on screen as the current result, and the
-    // only way back is a page reload.
+    // someone just deleted stays on screen as the current result.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -240,8 +237,7 @@ describe("the matchmaking analysis history card", () => {
   it("says so when a delete did not happen", async () => {
     // The row fades out the moment the button is clicked and comes back when
     // the request fails. Without the message that is all the viewer sees: a
-    // row that flickered and stayed, with nothing saying the deletion was
-    // refused rather than mis-clicked.
+    // row that flickered and stayed, with no sign the delete was refused.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
       error: { status: 500, kind: "server" },

@@ -21,9 +21,8 @@ import {
 } from "@/features/smurf-boost";
 
 // `Result` is listed unconditionally on purpose: `SectionQuickNavigation`
-// keeps only the entries whose section is actually on the page, so the item
-// appears with the result card and not before it. Detection Settings is not
-// here because it is a dialog now, not a section to scroll to.
+// keeps only the entries whose section is on the page. Detection Settings is
+// absent because it is a dialog, not a section to scroll to.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
@@ -64,8 +63,7 @@ function RankManipulationContent() {
             <>
               {/* Rendered with no player too: a "select a player" card would
                   send people to the sidebar search, which navigates away from
-                  this non-player-centric route. Keyed by player so one
-                  player's transient failure never survives into the next. */}
+                  this route. Keyed by player so failures do not carry over. */}
               <SmurfBoostDetection
                 key={analyzedPlayer?.puuid ?? "no-player"}
                 puuid={analyzedPlayer?.puuid ?? null}

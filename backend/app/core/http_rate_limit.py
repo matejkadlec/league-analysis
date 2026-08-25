@@ -15,9 +15,8 @@ class _SupportsLimit[**P, R](Protocol):
     """``Limiter.limit`` as it actually behaves, stated for one decoration.
 
     slowapi annotates the method as returning a bare ``Callable``, which makes
-    both the decorator and every endpoint it wraps untyped. Casting the limiter
-    to this protocol restores the contract at the member access itself, so no
-    part of the expression is left unknown.
+    both the decorator and every endpoint it wraps untyped. Casting to this
+    protocol restores the contract at the member access itself.
     """
 
     def limit(self, limit_value: str) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
@@ -26,9 +25,8 @@ class _SupportsLimit[**P, R](Protocol):
 def rate_limit[**P, R](limit_value: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Rate-limit an endpoint against the application-wide limiter.
 
-    slowapi annotates ``Limiter.limit`` as returning a bare ``Callable``, so
-    applying it directly erases the type of every endpoint it decorates. The
-    cast restates the decorator's real contract — it hands back the same
-    function it was given — so routers keep their checked signatures.
+    Applying ``Limiter.limit`` directly erases the type of every endpoint it
+    decorates. The cast restates the decorator's real contract — it hands back
+    the same function it was given — so routers keep their checked signatures.
     """
     return cast("_SupportsLimit[P, R]", limiter).limit(limit_value)

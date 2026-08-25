@@ -60,10 +60,9 @@ beforeEach(() => {
 
 describe("the last matchmaking analysis result", () => {
   it("tells a player who has never run one apart from one that failed to load", async () => {
-    // The endpoint answers 404 when this player has simply never run an
-    // analysis, which the query turns into `null` rather than an error. Both
-    // states render the same card, so the sentence inside it is the only
-    // thing that says whether to press the button or to try again later.
+    // The endpoint answers 404 when this player has never run an analysis,
+    // which the query turns into `null` rather than an error. Both states
+    // render the same card, so only the sentence inside it tells them apart.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: false,
       error: { status: 404, kind: "not_found" },
@@ -149,8 +148,7 @@ describe("the last matchmaking analysis result", () => {
   it("colours the two rows against each other, not the same way", async () => {
     // The two cells carry mirror-image ternaries over the same pair of
     // booleans. Copy one into the other and both teams turn green on a
-    // favourable result, which says nothing at a glance and quietly loses the
-    // only signal in the table.
+    // favourable result, quietly losing the only signal in the table.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.6,
@@ -174,8 +172,7 @@ describe("the last matchmaking analysis result", () => {
   it("calls a gap of exactly three points against the player unfavourable", async () => {
     // The mirror of the favourable boundary, and it needs its own exact pair
     // for the same floating-point reason: `0 - 0.03` is the same double as
-    // `-0.03`. Without it, `<=` can be narrowed to `<` and only a player
-    // exactly on the line is told the wrong thing.
+    // `-0.03`. Without it, `<=` can be narrowed to `<` unnoticed.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0,
@@ -229,9 +226,8 @@ describe("the last matchmaking analysis result", () => {
     expect(screen.getByText("5%")).toBeTruthy();
     expect(screen.queryByText(/teammates had higher/)).toBeNull();
     // The three verdicts are three independent conditions rather than one
-    // cascade, so nothing structural stops two of them rendering at once.
-    // Dropping `!isUnfavorable` from `isFair` prints "matchmaking relatively
-    // fair" directly under the sentence saying it was not.
+    // cascade, so nothing structural stops two of them rendering at once:
+    // dropping `!isUnfavorable` from `isFair` prints both contradictions.
     expect(screen.queryByText(/relatively fair/)).toBeNull();
     queryClient.clear();
   });
@@ -274,8 +270,7 @@ describe("the last matchmaking analysis result", () => {
     [new Date(2026, 2, 4, 14, 7), "4.3.2026 2:07 PM"],
     // Midnight is the one `hours % 12` turns into 0, which is what the
     // `|| 12` in the shared formatter exists for. Without a midnight fixture
-    // that expression can be deleted and every other hour still reads
-    // correctly.
+    // that expression can be deleted and every other hour still reads right.
     [new Date(2026, 2, 4, 0, 5), "4.3.2026 12:05 AM"],
     // Noon is the only hour where `>= 12` and `> 12` disagree, so it is the
     // only fixture that pins the meridiem boundary.

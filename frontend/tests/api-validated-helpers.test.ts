@@ -92,8 +92,7 @@ describe("the validated request helpers", () => {
   it("refuses a payload the schema rejects instead of passing it through", async () => {
     // The single guard the module exists for. Returning the parsed value or
     // the raw one is indistinguishable on a valid payload -- same object -- so
-    // only an invalid one separates a check from unvalidated server data
-    // rendered as if it had been checked.
+    // only an invalid one separates a check from unvalidated server data.
     vi.spyOn(console, "error").mockImplementation(() => {});
     reply = { status: 200, data: { id: "not a number", secret: "leak" } };
 
@@ -125,8 +124,7 @@ describe("the validated request helpers", () => {
     expect(error).toHaveBeenCalledTimes(1);
     // Read the logged object rather than searching its JSON: `toContain("id")`
     // passed against blanked issue paths, because Zod's `invalid_type` code
-    // contains "id". A substring over a serialised object matches
-    // coincidences.
+    // contains "id". A substring over a serialised object matches coincidences.
     const [message, payload] = error.mock.calls[0] as [
       string,
       { url: string; issues: { code: string; path: string }[] },
@@ -137,10 +135,9 @@ describe("the validated request helpers", () => {
       "id",
       "profile.email",
     ]);
-    // The code says *how* each field failed. Asserted as non-empty rather
-    // than by value: the literals are Zod's own vocabulary, and pinning them
-    // would turn a library upgrade that changed nothing about this app into a
-    // failing test, while a blanked code is what actually loses the reader.
+    // The code says *how* each field failed. Asserted as non-empty rather than
+    // by value: the literals are Zod's own vocabulary, and pinning them would
+    // fail on a library upgrade that changed nothing about this app.
     for (const issue of payload.issues) {
       expect(issue.code.length).toBeGreaterThan(0);
     }
@@ -159,9 +156,8 @@ describe("the validated request helpers", () => {
     "answers a failed %s rather than throwing out of the helper",
     async (_method, call) => {
       // Callers branch on `result.success`; turning a failure into a throw is
-      // `unwrap`'s separate step. A helper that rejected instead would take
-      // the failure past every `if (!result.success)` and into an unhandled
-      // rejection. All five carry their own `catch`, so all five are covered.
+      // `unwrap`'s separate step. A helper that rejected instead would take the
+      // failure past every `if (!result.success)` into an unhandled rejection.
       reply = { status: 500, data: { detail: "boom" } };
 
       const result = await call(Schema, "/players/context");
@@ -173,10 +169,9 @@ describe("the validated request helpers", () => {
   it.each(HELPERS)(
     "sends %s over the matching HTTP method",
     async (method, call) => {
-      // Five near-identical wrappers written by copy and paste, and the only
-      // difference between them is the axios call in the middle. A `validatedPut`
-      // that issues a GET reads correctly at every call site, type-checks, and
-      // returns a plausible answer — the write simply never happens.
+      // Five near-identical wrappers, and the only difference between them is
+      // the axios call in the middle. A `validatedPut` that issues a GET reads
+      // correctly at every call site and type-checks — the write never happens.
       await call(Schema, "/players/context");
 
       expect(seen).toHaveLength(1);
@@ -186,9 +181,8 @@ describe("the validated request helpers", () => {
 
   it("forwards query parameters to the request", async () => {
     // `validatedGet` is the only one of the five that takes params, and the
-    // argument is optional, so dropping it is silent. Every filtered list in
-    // the app then asks for the unfiltered one and renders whatever comes
-    // back as if it had been filtered.
+    // argument is optional, so dropping it is silent. Every filtered list would
+    // then ask for the unfiltered one and render it as if it had been filtered.
     await validatedGet(Schema, "/players/suggestions", {
       q: "faker",
       limit: 5,
@@ -243,9 +237,8 @@ describe("the response interceptor", () => {
 
   it("reports an invalid Riot key found on a failed response, not just a 200", async () => {
     // The key can fail on any endpoint that reaches Riot, and those come back
-    // as errors. Watching only the success interceptor leaves the header
-    // saying the credentials are healthy for exactly the requests that prove
-    // they are not.
+    // as errors. Watching only the success interceptor calls the credentials
+    // healthy for exactly the requests that prove they are not.
     reply = {
       status: 503,
       data: { detail: { code: "RIOT_API_KEY_INVALID" } },

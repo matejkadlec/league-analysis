@@ -177,15 +177,13 @@ class MatchInfoDTO(RiotDTO):
     # from the trust boundary to a NOT NULL violation at flush.
     game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
-    # `min_length=1`: production stored `EUN1_3990695865` on 2026-08-16 with no
-    # participants and zeroed `queueId`/`mapId`/`gameStartTimestamp`, all
-    # written as fact and marked `fully_analyzed`. The refusal is per-match and
-    # recoverable -- `process_queue_sync_match` logs it and the run continues.
+    # `min_length=1`: a participant-less match would otherwise be stored as fact
+    # and marked `fully_analyzed`. The refusal is per-match and recoverable --
+    # `process_queue_sync_match` logs it and the run continues.
     participants: list[ParticipantDTO] = Field(..., min_length=1)
     # `min_length=1`, so an empty `platformId` is refused rather than standing
-    # in for a real one: a KR or NA participant first seen through a substituted
-    # "EUN1" got `platform='eun1'` on their player row, and every later Riot
-    # call for them was routed to the wrong region forever.
+    # in for a real one: a substituted platform pins the player row to the wrong
+    # region, and every later Riot call for them is misrouted forever.
     platform: str = Field(..., alias="platformId", min_length=1)
 
 
@@ -220,9 +218,8 @@ class LeagueEntryDTO(RiotDTO):
     wins: int
     losses: int
     # leagueId, veteran, inactive, freshBlood and hotStreak are deliberately
-    # absent: nothing read them, and declaring them required meant a response
-    # omitting one -- which the live by-PUUID route does for leagueId -- would
-    # have failed the whole league sync. `extra="ignore"` drops them.
+    # absent: nothing reads them, and requiring them would fail the whole league
+    # sync when a response omits one (the by-PUUID route omits leagueId).
 
     @property
     def win_rate(self) -> float:
@@ -237,10 +234,9 @@ class LeagueEntryDTO(RiotDTO):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
-# Match-V5 timeline, generated from Riot's published OpenAPI specification; the
-# slice these mirror is vendored at `tests/data/riot_match_v5_timeline_schema.json`
-# (refresh both with `tests/data/refresh_timeline_schema.py`). Only the
-# structural spine is required -- Riot's spec marks leaves required in error.
+# Match-V5 timeline mirroring `tests/data/riot_match_v5_timeline_schema.json`
+# (refresh with `tests/data/refresh_timeline_schema.py`). Only the structural
+# spine is required -- Riot's spec marks leaves required in error.
 class MatchTimelinePositionDTO(RiotDTO):
     """A map coordinate."""
 

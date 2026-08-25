@@ -42,9 +42,8 @@ export function CookieConsentManager() {
 
   const lastSyncedKeyRef = useRef<string | null>(null);
   // Who answered the banner in this page session: the account id at the time,
-  // or `null` for a visitor. The id matters, not just the fact of a choice --
-  // this component is never remounted across a sign-out, so a bare boolean
-  // would write A's level into B's audit trail.
+  // or `null` for a visitor. This component is never remounted across a
+  // sign-out, so a bare boolean would write A's level into B's audit trail.
   const choiceOwnerRef = useRef<{ userId: number | null } | null>(null);
 
   const syncConsentForUser = useCallback(
@@ -106,9 +105,8 @@ export function CookieConsentManager() {
   }, []);
 
   // Reconcile the browser cookie against the account actually signed in. The
-  // jar is shared, so a second account inherits the first's choice, and this
-  // used to record it as `consent_source: "banner"` -- a record that somebody
-  // clicked a banner they never saw.
+  // jar is shared, so a second account inherits the first's choice, which must
+  // not be recorded as `consent_source: "banner"`.
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       return;
@@ -136,8 +134,7 @@ export function CookieConsentManager() {
       if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
         // This account has decided before, so its record is the answer
         // whatever the browser is carrying. `writeCookieConsent` restamps the
-        // cookie's own timestamp; the true `consented_at` lives on the record
-        // this just read, which is what the audit trail is.
+        // cookie's timestamp; the true `consented_at` lives on the record.
         const adopted = writeCookieConsent(stored.consent_level);
         if (stored.consent_level !== "all") {
           clearOptionalBrowserStorage();

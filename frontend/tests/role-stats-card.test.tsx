@@ -55,10 +55,9 @@ function iconSources(): string[] {
 
 describe("the role performance card", () => {
   it("gives every lane the backend can send its own icon", () => {
-    // Two maps face each other across the API and neither names the other, and the
-    // card's lookup ends in `|| position-middle.svg` -- so a rename draws the mid
-    // icon under alt text that still reads "Support". Distinctness catches that;
-    // "not the fallback" cannot, Mid's own icon being it.
+    // The card's lookup ends in `|| position-middle.svg`, so a rename draws the
+    // mid icon under alt text that still reads "Support". Distinctness catches
+    // that; "not the fallback" cannot, Mid's own icon being it.
     const names = backendLaneNames();
     expect(names.length).toBeGreaterThan(1);
 
@@ -84,9 +83,8 @@ describe("the role performance card", () => {
 
   it("colours the win rate figure and the bar under it the same way", () => {
     // Two separate functions carry the same three thresholds, and the two
-    // things they colour sit one above the other. A threshold that drifts in
-    // one shows a rate written in green over a bar drawn in yellow, which
-    // reads as a rendering fault rather than as data.
+    // things they colour sit one above the other. A threshold that drifts in one
+    // shows a rate in green over a bar in yellow, which reads as a fault.
     const hue = (className: string) =>
       /(green|yellow|rose)-500/.exec(className)?.[1];
 
@@ -112,8 +110,7 @@ describe("the role performance card", () => {
   it("does not size the bar to NaN when no lane has been played", () => {
     // Without the `totalGames > 0` guard the division is 0/0, and the browser
     // drops `width: NaN%` -- a full-width bar saying the player mains every role
-    // equally. The count is asserted first: a loop over a selector that matched
-    // nothing asserts nothing, which is how the first version passed.
+    // equally. The count is asserted first so an empty loop cannot pass.
     const { container } = renderCard([
       lane("Top", { games_played: 0, wins: 0, losses: 0 }),
       lane("Mid", { games_played: 0, wins: 0, losses: 0 }),

@@ -34,9 +34,8 @@ async def start_analysis(
     """
     Start a new matchmaking analysis for a player.
 
-    The endpoint only creates or attaches to the persisted run. All Riot calls,
-    including the minimum-match preflight, happen in the background so a valid
-    long-running analysis is never tied to the HTTP request timeout.
+    The endpoint only creates or attaches to the persisted run. All Riot calls
+    happen in the background, so it is never tied to the HTTP request timeout.
     """
     try:
         return await service.start_analysis(payload.puuid)
@@ -104,9 +103,8 @@ async def get_analysis_history(
 ) -> MatchmakingAnalysisHistoryResponse:
     """Get history of completed analyses for a player.
 
-    The bound is not decoration: the value reached `.limit()` unchecked, and
-    `?limit=-1` renders as `LIMIT -1`, which PostgreSQL rejects -- a 500 from
-    a query string. 100 is the ceiling because the only production caller,
+    The bound is not decoration: `?limit=-1` renders as `LIMIT -1`, which
+    PostgreSQL rejects. 100 is the ceiling because the only production caller,
     `matchmaking-analysis-history.tsx`, asks for exactly that many.
     """
     return await service.get_analysis_history(puuid, limit=limit)

@@ -12,10 +12,9 @@ import {
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
 
-// The session hint survives every failure that is not a refusal. The lint
-// rules recognise shapes of code and four audits walked past four generations
-// of them, so these assert the effect instead: each surface put where a
-// refusal and an outage look alike, hint still there.
+// The session hint survives every failure that is not a refusal. Lint rules
+// recognise shapes of code, so these assert the effect instead: each surface
+// put where a refusal and an outage look alike, hint still there.
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 
@@ -60,10 +59,8 @@ afterEach(() => {
 
 describe("the axios interceptor", () => {
   it("leaves the session alone when a refresh cannot reach the server", async () => {
-    // The file the original regression lived in, and the file an audit put it
-    // back into while every lint rule stayed green. A 401 on a request, then
-    // a refresh that fails because the API is being redeployed: nothing here
-    // has been told the session is over.
+    // A 401 on a request, then a refresh that fails because the API is being
+    // redeployed: nothing here has been told the session is over.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 502 }),
@@ -84,8 +81,7 @@ describe("the axios interceptor", () => {
   it("reports a rate limit as a rate limit, not as an outage", async () => {
     // `/auth/refresh` is rate limited and browser traffic arrives through one
     // rewrite with --no-proxy-headers, so every user shares one bucket and a
-    // 429 is ordinary. Reporting the outcome without its status told those
-    // visitors to "check that the backend is running" while it was answering.
+    // 429 is ordinary.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 429 }),
@@ -110,9 +106,8 @@ describe("the axios interceptor", () => {
 
   it("stops calling an unreachable server an authentication failure", async () => {
     // The 401 is true of the expired access token and nothing else, so
-    // forwarding it makes a redeploy read as a refusal: `queryErrorToast`
-    // stays silent because the gate "already redirects on these", the gate
-    // does not, and the viewer gets no toast, no navigation and no error.
+    // forwarding it makes a redeploy read as a refusal: the viewer then gets
+    // no toast, no navigation and no error.
     setHint();
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
     api.defaults.adapter = async (config) => {
@@ -150,9 +145,8 @@ describe("the axios interceptor", () => {
 
   it("retries a 401 once, never in a loop", async () => {
     // `_retry` is the only thing stopping this interceptor re-entering itself:
-    // a 401 that survives a refresh loops, rotating the token every turn.
-    // `/auth/refresh` is 20/minute against one site-wide bucket, so one tab
-    // spends everyone's budget in a second.
+    // a 401 that survives a refresh loops, rotating the token every turn
+    // against a 20/minute site-wide bucket.
     setHint();
     let refreshes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -184,9 +178,8 @@ describe("the axios interceptor", () => {
 
   it("still calls a refused session an authentication failure", async () => {
     // The other direction, and the reason the interceptor forwards what the
-    // refresh reported rather than guessing. A server that answers 401 to the
-    // refresh has refused; relabelling that would leave a dead session looking
-    // transient and retryable forever.
+    // refresh reported rather than guessing: relabelling a refusal would leave
+    // a dead session looking transient and retryable forever.
     setHint();
     // The refusal this API actually issues, code and all: a bare 401 with no
     // body is what a challenge in front of the API sends, and the client no
@@ -224,10 +217,9 @@ describe("the can't-reach-the-server surface", () => {
   });
 
   it("does not sign the visitor out on its own", async () => {
-    // Sitting on this screen is not evidence of anything. An audit added an
-    // effect that gave up after a few retries and called `logout()`, so a
-    // redeploy retracted the hint and left the refresh token live -- and no
-    // import rule sees that call, because it arrives by React context.
+    // Sitting on this screen is not evidence of anything. An effect that gave
+    // up after a few retries and called `logout()` would retract the hint on a
+    // redeploy and leave the refresh token live.
     setHint();
 
     render(<AuthGate>protected content</AuthGate>);
@@ -247,8 +239,7 @@ describe("the can't-reach-the-server surface", () => {
   it("still signs the visitor out when they press the button here", async () => {
     // Why `logout` takes a flag rather than never tearing down: this screen
     // exists for the server that is not answering, so its Sign out is the one
-    // caller that must act anyway. Dropping the flag -- one word no lint rule
-    // sees -- leaves the way out being a button that does nothing.
+    // caller that must act anyway.
     setHint();
 
     render(<AuthGate>protected content</AuthGate>);
@@ -268,14 +259,11 @@ describe("the can't-reach-the-server surface", () => {
 
 describe("cookie consent", () => {
   // The one file allowed to write cookies by hand, so no lint rule covers it.
-  // A sweep that clears cookies as well as localStorage, keeping a "necessary"
-  // list without the session hint, signs out every visitor the moment
-  // COOKIE_CONSENT_VERSION is bumped.
+  // A sweep keeping a "necessary" list without the session hint signs out every
+  // visitor the moment COOKIE_CONSENT_VERSION is bumped.
 
-  // Each branch that can reach a sweep, not one: an audit split the mount
-  // effect's "missing or stale" condition in two and put the sweep on the
-  // stale half, which nothing exercised. So: no consent, stale consent, and
-  // the button that writes one.
+  // Each branch that can reach a sweep, not one: no consent, stale consent,
+  // and the button that writes one.
   it.each([
     ["no consent at all", ""],
     ["consent given under an earlier policy version", "v0|all|2026-01-01T00:00:00.000Z"],

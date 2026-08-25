@@ -341,8 +341,7 @@ export async function installSmurfBoostMocks(
 
     // The explicit per-player game fetch the run button starts. The
     // `/players/{puuid}` handlers above match on `endsWith`, so a longer sync
-    // path falls through to here regardless of order; the whole lifecycle is
-    // kept together so it reads in one place.
+    // path falls through to here regardless of order.
     const syncMatch = /\/players\/([^/]+)\/sync(\/active|\/(\d+))?$/.exec(path);
     if (syncMatch) {
       const target = syncMatch[1]!;
@@ -363,9 +362,8 @@ export async function installSmurfBoostMocks(
         await route.fulfill({
           contentType: "application/json",
           // Several polls of slack before the run ends. The assertion that no
-          // comparison has started yet is a plain, non-retrying one, and one
-          // poll of room on a starved shared runner is how that turns into a
-          // flake nobody can reproduce.
+          // comparison has started yet is plain and non-retrying, so one poll
+          // of room on a starved shared runner would flake.
           body: JSON.stringify(run(state.syncPolls > 3 ? "completed" : "running")),
         });
         return;
@@ -422,8 +420,7 @@ export async function installSmurfBoostMocks(
 
     // The stored ranked-solo pool the run card names above its button. Left
     // unanswered it is one more 404 on the global error toast, sitting beside
-    // whatever this suite asserts -- the failure mode `/settings/service-status`
-    // below already caused once.
+    // whatever this suite asserts.
     if (path.includes("/matches/player/") && path.endsWith("/stats")) {
       await route.fulfill({
         contentType: "application/json",
@@ -445,9 +442,8 @@ export async function installSmurfBoostMocks(
     }
 
     // The three remaining `/player-overview` reads the first detection spec loads
-    // on its way here. Each is otherwise a catch-all 404 raising its own global
-    // error toast; the specs assert nothing about these cards, and `/league` is
-    // nullable by design, an unranked player being a 200 of `null`.
+    // on its way here. Each is otherwise a 404 raising its own global error
+    // toast; `/league` is nullable by design, an unranked player being `null`.
     if (path.endsWith("/league")) {
       await route.fulfill({ contentType: "application/json", body: "null" });
       return;
@@ -480,8 +476,7 @@ export async function installSmurfBoostMocks(
 
     // Polled every 15s by `serviceStatusQueryOptions`. Unanswered it 404s on
     // that loop, and the global query-error toast it raises then sits beside
-    // whatever this suite is asserting -- which is how the a11y scan came to
-    // find two toasts where it expects one, on the slow shared runner only.
+    // whatever this suite is asserting.
     if (path.endsWith("/settings/service-status")) {
       await route.fulfill({
         contentType: "application/json",

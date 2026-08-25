@@ -1,9 +1,8 @@
 // Regression fixture for `house/no-deferral-comments`.
 
 // Every `oxlint-disable-next-line` below sits above a comment the rule MUST
-// report. If a branch stops matching, its directive turns into an unused one
-// and `--report-unused-disable-directives-severity=error` fails the run; the
-// accepted cases carry no directive, so widening fails it too.
+// report. A branch that stops matching turns its directive into an unused one
+// and fails the run; the accepted cases carry no directive, so widening fails too.
 
 // MUST flag: the three classic markers.
 // oxlint-disable-next-line house/no-deferral-comments

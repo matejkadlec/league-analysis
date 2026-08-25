@@ -11,8 +11,7 @@ import {
 /**
  * One refresh per tab, however many 401s arrive at once. Without the shared
  * promise each parallel 401 replays the same refresh cookie; the server heals
- * the first replay and reads the second as reuse, revoking the chain. Deleting
- * the guard left all 320 tests green.
+ * the first replay and reads the second as reuse, revoking the chain.
  */
 
 beforeEach(() => {

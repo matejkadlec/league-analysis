@@ -8,10 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 def is_json_object(value: object) -> TypeIs[dict[str, Any]]:
     """Narrow a blob whose declared type is a claim rather than a guarantee.
 
-    Riot payloads off the wire and JSONB columns written by an older
-    contract both reach Python as `object`. The runtime check is
-    load-bearing at each of those boundaries, and narrowing through it is
-    what keeps the read typed afterwards.
+    Riot payloads off the wire and JSONB columns written by an older contract
+    both reach Python as `object`, so the runtime check is load-bearing at
+    each of those boundaries.
     """
     return isinstance(value, dict)
 
@@ -43,11 +42,5 @@ class PaginatedResponse(BaseModel):
     @computed_field(description="Total number of pages")
     @property
     def pages(self) -> int:
-        """Derived, not supplied.
-
-        Three call sites each computed this from `total` and `size`, in three
-        spellings, and any one of them could have disagreed with the other two
-        while every test stayed green. A caller cannot pass a wrong value for
-        it any more, because there is nowhere to pass one.
-        """
+        """Derived from `total` and `size`, so no caller can pass a wrong value."""
         return -(-self.total // self.size) if self.size > 0 else 0

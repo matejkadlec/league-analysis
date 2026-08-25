@@ -1,26 +1,8 @@
 """Prove `import_all_models()` names every module that maps a table.
 
-`alembic/env.py` builds `Base.metadata` by calling `import_all_models()`. A
-model module missing from that list is absent from the metadata *and*, because
-nobody wrote a migration for it either, absent from the database — the two
-agree, `alembic check` reports nothing, and the table simply does not exist
-until a query fails in production.
-
-Walking the package is the obvious guard and the wrong one to put in `env.py`:
-discovery means importing, so every router and service would execute during a
-migration. Here in a test that cost is fine, so the walk lives on this side and
-the migration path keeps the explicit list.
-
-Both halves run in subprocesses. In-process they would contaminate each other,
-since the pytest session has already imported much of `app` and
-`Base.metadata` is global.
-
-What this compares is reachable *tables*, not lines in the registry. Deleting
-an entry that some other imported module pulls in transitively will not fail
-this test, and should not: the table still reaches the metadata, so Alembic
-still sees it. What does fail is a mapped table nothing imports at all — the
-new feature whose models module was never wired up, which is the case that
-reaches production broken.
+`alembic/env.py` builds `Base.metadata` from `import_all_models()`, so a model
+module missing from that list is invisible to Alembic and to the database. The
+walk lives here, in subprocesses, and compares reachable *tables*, not entries.
 """
 
 from __future__ import annotations
@@ -85,9 +67,8 @@ def test_registry_lists_every_mapped_model() -> None:
         "so Alembic cannot see them: " + ", ".join(sorted(missing))
     )
     # The comparison above is only as good as the walk: if it stops finding
-    # models -- a renamed package, a changed `app.__path__` -- it yields nothing,
-    # `walked - registered` is trivially empty, and the assertion passes while
-    # checking nothing. Only a broken walk can be outrun by the registry.
+    # models -- a renamed package, a changed `app.__path__` -- it yields nothing
+    # and the assertion passes while checking nothing.
     unreachable = registered - walked
     assert not unreachable, (
         "the package walk did not find tables the registry did, so the walk is "

@@ -1,7 +1,6 @@
 // Unbuilt work leaves no trace in the code: it is built in this change, or it
 // becomes an LGA ticket and the marker goes. A deferral recorded only in a
-// comment is a scope decision made where no owner will read it, and it
-// defaults to permanent. The pattern below is the whole flagged family.
+// comment is a scope decision made where no owner will read it.
 
 // Accepted: the same letters in another sense. Word boundaries keep longer
 // words out, the deferring-verb anchor keeps a bare "later" out, and only

@@ -1,14 +1,8 @@
 """Regression coverage for the `smurf-boost/v1` detection model.
 
-The fixtures mirror the model's own validation plan. The
-engine is pure, so every case is built from constructed matches with no database
-and no mocking.
-
 Fixture construction relies on one property: when every composite metric is
-`base * (1 + 0.5 * level)`, each z-score reduces to `level / sd(levels)`, so the
-standardized composite of a match is exactly
-`(level - mean(baseline levels)) / sd(baseline levels)`. Levels are therefore a
-direct handle on `C`.
+`base * (1 + 0.5 * level)`, each z-score reduces to `level / sd(levels)`, so a
+match's standardized composite `C` is a direct function of its level.
 """
 
 from __future__ import annotations
@@ -238,11 +232,8 @@ def test_the_two_variance_denominators_stay_apart() -> None:
     """`n` and `n - 1` are both used here, deliberately and in different places.
 
     The module aliases both denominators to `statistics`, one line apart, so
-    swapping which name points at which is an edit that changes no shape and
-    no type:
-    the composite keeps standardizing, `hedges_g` keeps returning a float, and
-    every threshold in the model quietly means something else. On eight games
-    the two differ by 14 percent, which is the width of a band.
+    swapping which name points at which changes no shape and no type. On eight
+    games the two differ by 14 percent, which is the width of a band.
     """
     values = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]
 
@@ -255,8 +246,7 @@ def test_hedges_g_keeps_its_small_sample_correction() -> None:
 
     Drop it and the function still returns a plausible effect size, larger
     than the real one -- by 13 percent on the eight-game windows this model
-    actually sees, which is enough to carry a player across a calibrated
-    threshold and into a stronger accusation than the evidence supports.
+    actually sees, enough to carry a player across a calibrated threshold.
     """
     recent = [10.0, 12.0, 14.0, 16.0]
     baseline = [2.0, 4.0, 6.0, 8.0]
@@ -274,9 +264,8 @@ def test_windows_too_small_to_have_spread_report_zero_or_none() -> None:
     """One observation carries no dispersion, and the model must not invent it.
 
     A player with a single recent game reaches these helpers the same way as
-    one with fifty. Dividing by `n - 1` would raise on the first and there is
-    no interval to compute on a player with no games at all -- each guard is a
-    real input this model receives, not a defensive flourish.
+    one with fifty. Dividing by `n - 1` would raise on the first, and there is
+    no interval to compute on a player with no games at all.
     """
     assert sample_variance([7.0]) == 0.0
     assert sample_variance([]) == 0.0
@@ -804,9 +793,8 @@ def test_schema_defaults_are_the_default_preset() -> None:
     """A fresh account starts exactly on the preset the dropdown calls default.
 
     The settings write schema repeats the fifteen threshold numbers as field
-    defaults; nothing else ties the two copies together, so a preset tweak in
-    `config.py` without the matching schema edit would silently split what
-    "Conservative" means from what a new account actually gets.
+    defaults; nothing else ties the two copies together, so a `config.py` tweak
+    without the matching schema edit splits what "Conservative" means.
     """
     from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
 
@@ -893,8 +881,7 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
 
 # Service orchestration. The engine above is pure, but the defects that reach a
 # viewer live in how the service loads history, claims a run and shapes its
-# output. These cases drive the service directly with a stub session, matching
-# how the matchmaking analysis lifecycle is covered in this suite.
+# output. These cases drive the service directly with a stub session.
 
 
 def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:

@@ -23,9 +23,8 @@ class Player(Base):
     __tablename__ = "players"
     __table_args__ = (
         # Canonical casing is lowercase — Riot's own spelling and the `Platform`
-        # enum's values (see `normalize_platform`). The invariant is the
-        # database's so a writer that forgets fails loudly instead of hiding rows
-        # from case-sensitive lookups. Bare name: `ck` prefixes `ck_<table>_`.
+        # enum's values (see `normalize_platform`). The database owns the
+        # invariant so a writer that forgets fails loudly.
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",

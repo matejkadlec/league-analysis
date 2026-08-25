@@ -1,8 +1,7 @@
 /**
  * Which side of a win-rate gap counts as good news, and how big it has to be.
  * The two surfaces answer it differently on purpose -- the results card leaves
- * a gap under three points uncoloured, the history table colours every gap --
- * and here that disagreement is one argument rather than two rebuilt pairs.
+ * a gap under three points uncoloured, the history table colours every gap.
  */
 export const GAP_FAIRNESS_THRESHOLD = 0.03;
 

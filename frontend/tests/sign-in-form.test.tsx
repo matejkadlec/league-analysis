@@ -121,10 +121,9 @@ describe("SignInForm", () => {
   });
 
   it("shows a rejected field's message and points the input at it", async () => {
-    // Guards `components/ui/form.tsx` through its only consumer: every error path
-    // there was unexercised, and `FormMessage` returning `null` kept 352 tests
-    // green. `a@b` on purpose -- the input is `type="email"` with no `noValidate`,
-    // so a malformed value never reaches these primitives at all.
+    // Guards `components/ui/form.tsx` through its only consumer. `a@b` on purpose
+    // -- the input is `type="email"` with no `noValidate`, so a malformed value
+    // never reaches these primitives at all.
     const user = userEvent.setup();
     render(<SignInForm />);
 
@@ -142,9 +141,8 @@ describe("SignInForm", () => {
 
   it("hands the form back after a failure, without the last failure's message", async () => {
     // Both halves strand the visitor: without `setIsSubmitting(false)` the button
-    // reads "Signing in..." and stays disabled forever after a rejection, and
-    // without `setError(null)` the previous failure stays on screen while the next
-    // attempt is in flight.
+    // stays disabled forever after a rejection, and without `setError(null)` the
+    // previous failure stays on screen while the next attempt is in flight.
     const user = userEvent.setup();
     login.mockRejectedValueOnce(new Error("Failed to fetch"));
     render(<SignInForm />);
@@ -219,9 +217,8 @@ describe("SignInForm", () => {
       );
 
       // A token the server rejected must not be sent again: dropping
-      // `setCaptchaToken(null)` leaves the form resubmitting it on every retry. The
-      // stubbed widget ignores `ref`, so this asserts the state the form owns, which
-      // is the half that has to be right.
+      // `setCaptchaToken(null)` leaves the form resubmitting it on every retry.
+      // The stubbed widget ignores `ref`, so this asserts the state the form owns.
       await waitFor(() =>
         expect(
           screen.getByRole("button", { name: "Sign In" }),

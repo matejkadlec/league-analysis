@@ -2,8 +2,7 @@
 
 The composite is the single per-match performance number every location, spread
 and shape signal reads. It is standardized against the baseline window so that
-`mean(C_B) = 0` and `sd(C_B) = 1` exactly, which is what makes a threshold
-expressed in "baseline standard deviations" literally true.
+`mean(C_B) = 0` and `sd(C_B) = 1` exactly, making sd thresholds literally true.
 """
 
 from __future__ import annotations

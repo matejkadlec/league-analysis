@@ -29,13 +29,9 @@ from app.features.matchmaking_analysis.schemas import (
 class MatchmakingAnalysisResultsJSON(TypedDict):
     """Shape of the ``results`` JSONB payload written on completion.
 
-    The three required keys are required because `_build_completion_results`
-    is the only writer of a non-NULL `results` and has emitted all four since
-    the initial commit; the legacy fixtures in `validate_migrations.py` carry
-    them too. They used to be optional, which meant both readers supplied
-    their own `0` for a missing winrate -- a value inside the response
-    schema's own `ge=0.0, le=1.0` bound, so nothing could reject it and the
-    UI showed "0% average teammate winrate" for a row it could not read.
+    The keys are required, not optional: `_build_completion_results` is the
+    only writer of a non-NULL `results` and always emits them, and an optional
+    winrate let readers substitute a plausible `0` no schema bound could reject.
     """
 
     team_avg_winrate: float
@@ -132,9 +128,8 @@ class MatchmakingAnalysis(Base):
             values_in_sql("status", get_args(MatchmakingAnalysisStatus)),
             name="status_valid",
         ),
-        # Per account, not per player -- see the matching index on
-        # `smurf_boost_analyses`. Ownership itself is enforced by the WHERE
-        # clauses in the service; this only stops the two accounts from
+        # Per account, not per player -- ownership itself is enforced by the
+        # WHERE clauses in the service; this only stops two accounts from
         # contending for one active row.
         Index(
             "uq_matchmaking_analyses_active_puuid",
@@ -143,9 +138,8 @@ class MatchmakingAnalysis(Base):
             unique=True,
             postgresql_where=text(values_in_sql("status", ACTIVE_ANALYSIS_STATUSES)),
         ),
-        # No index on `puuid` alone -- it leads the primary key -- and none
-        # on `created_at`, which the key does NOT cover: every query that
-        # orders by it also filters on `puuid` (service.py:243, 258, 309, 349),
-        # so the key serves all four.
+        # No index on `puuid` alone -- it leads the primary key -- and none on
+        # `created_at`: every query that orders by it also filters on `puuid`,
+        # so the primary key serves them.
         {"schema": "core"},
     )

@@ -33,8 +33,7 @@ interface SmurfBoostResultCardProps {
 /**
  * One colour ladder, read two ways: the band word takes the text colour and
  * the family's card takes the same step as a left edge. Colour never encodes
- * a number -- the specification forbids a per-family score -- and never
- * carries the reading alone; the band word is always beside it.
+ * a number and never carries the reading alone; the band word is beside it.
  */
 const BAND_STYLES: Record<
   SmurfBoostFamily["band"],
@@ -67,9 +66,8 @@ function formatValue(value: number | null | undefined): string {
 
 /**
  * The version half of a `module/version` model identifier. Only the version
- * says which formulas produced the numbers beside it, so the module name --
- * still `smurf-boost`, because renaming it would move the API contract for
- * nothing -- is dropped. A value with no slash passes through unchanged.
+ * says which formulas produced the numbers beside it, so the module name is
+ * dropped. A value with no slash passes through unchanged.
  */
 function modelVersionLabel(modelVersion: string): string {
   const separator = modelVersion.lastIndexOf("/");
@@ -79,8 +77,7 @@ function modelVersionLabel(modelVersion: string): string {
 /**
  * Why an available signal did not trigger. Four of the eight combine their
  * threshold with a separate condition, any of which can fail while the
- * measured value sits above the threshold printed beside it -- and "Below
- * threshold" on a row reading 1.50 against 1.20 is simply not true.
+ * measured value sits above the threshold printed beside it.
  */
 function signalOutcome(signal: SmurfBoostSignal): string {
   const value = signal.raw_value;
@@ -114,8 +111,7 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
 /**
  * The measured value drawn against its threshold. The marks sit at fixed
  * fractions of the track, and the bar grows from the zero notch, leftward for
- * a negative score -- clamping one to an empty bar read as a rendering bug.
- * Decorative: the figures beside the bar are the accessible reading.
+ * a negative score. Decorative: the figures beside the bar are the reading.
  */
 const METER_ZERO_PERCENT = 25;
 const METER_TICK_PERCENT = 70;
@@ -270,9 +266,8 @@ function FamilySection({
 
   return (
     // Each family is read on its own and never combined, so each gets its own
-    // panel. The tint separates it from the run card holding it, which shares
-    // the same `bg-card`; the accent edge repeats the colour whose worded
-    // reading sits in the tab directly above.
+    // panel. The tint separates it from the run card holding it; the accent
+    // edge repeats the colour of the worded reading in the tab above.
     <Card
       className={cn("border-l-4 bg-muted/20 shadow-none", bandStyle.accent)}
     >
@@ -352,9 +347,8 @@ export function SmurfBoostResultCard({
             found.
           </span>
           {/* The stored value is a namespaced slug (`smurf-boost/v1`) naming
-              the detection module, which is the one place the retired product
-              name still reached a reader. Only the version identifies what
-              produced this reading, so only the version is shown. */}
+              the detection module. Only the version identifies what produced
+              this reading, so only the version is shown. */}
           <span className="ml-auto font-mono text-sm text-muted-foreground">
             Model {modelVersionLabel(results.model_version)}
           </span>
@@ -362,9 +356,8 @@ export function SmurfBoostResultCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* One tab per family. The trigger carries its family's worded band
-            in the band's own colour, so choosing a tab never hides a verdict,
-            only the measurements. Panels stay mounted so both exist for the
-            tests and for find-in-page; `hidden` does the switching. */}
+            in its own colour, so choosing a tab never hides a verdict, only
+            the measurements. Panels stay mounted; `hidden` switches them. */}
         {firstFamily && (
           <Tabs defaultValue={firstFamily.family}>
             <TabsList className="h-auto flex-wrap justify-start">
@@ -412,8 +405,7 @@ export function SmurfBoostResultCard({
 
         {/* Footnotes, not callouts. The specification wants both permanent
             and plain -- never a tooltip, never collapsed -- so quiet means
-            small muted prose at the bottom, not hidden behind a hover that
-            a phone does not have. */}
+            small muted prose at the bottom. */}
         <div className="space-y-2 border-t border-border/40 pt-3">
           {results.notes.length > 0 && (
             <p className="text-sm leading-snug text-muted-foreground">

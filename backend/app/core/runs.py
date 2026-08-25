@@ -1,11 +1,8 @@
 """Lifecycle primitives shared by one-active-run-per-player analyses.
 
-Background analysis features persist runs with the same mechanics: an
-active-status vocabulary, one active row per account and PUUID enforced by a
-partial unique index, insert races resolved by rolling back and re-reading the
-concurrent winner, and guarded updates that can never revive a finished
-run. This module owns those mechanics once; each feature keeps its own
-policy (status vocabulary, attach rules, expiry leases, interlocks).
+Background analysis features persist runs with the same mechanics: one active
+row per account and PUUID, insert races resolved by re-reading the concurrent
+winner, and guarded updates that can never revive a finished run.
 """
 
 from collections.abc import Sequence
@@ -24,13 +21,8 @@ def values_in_sql(column: str, values: Sequence[str]) -> str:
     """The ``<column> IN (...)`` text a Python vocabulary renders to in SQL.
 
     Every run table spells its status vocabulary twice in DDL -- the CHECK
-    constraint over all statuses and the partial unique index over the
-    active ones -- and the credential-health table does the same for its two
-    enums. Rendering the SQL from the Python values means extending a
-    vocabulary cannot silently leave a constraint behind;
-    `validate_migrations.py` compares the rendered text against the
-    database, so a rendering change is caught before it masquerades as
-    schema drift.
+    constraint and the partial unique index -- so rendering the SQL from the
+    Python values means extending a vocabulary cannot leave a constraint behind.
     """
     joined = ", ".join(f"'{value}'" for value in values)
     return f"{column} IN ({joined})"
@@ -45,12 +37,9 @@ def active_run_filter(
 ) -> ColumnElement[bool]:
     """WHERE clause naming one account's active runs for a player.
 
-    `user_id` is positional and required rather than an optional refinement:
-    every clause in both features had matched on `puuid` alone, which made a
-    stored run the property of the Riot player instead of the account that
-    asked for it. An owner that can be omitted is one a caller forgets, and
-    the forgetting is invisible -- the query still returns a row, just
-    somebody else's.
+    `user_id` is positional and required rather than optional: matching on
+    `puuid` alone makes a stored run the property of the Riot player instead
+    of the account that asked for it, and the query still returns a row.
     """
     clauses: list[ColumnElement[bool]] = [
         model.user_id == user_id,

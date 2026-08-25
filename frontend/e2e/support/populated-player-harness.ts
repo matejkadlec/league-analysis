@@ -6,9 +6,8 @@ import { blockUpstreamRequests } from "./offline";
 
 /**
  * A player with enough stored data that every table, row and stat block
- * actually renders. Against an empty database the wide descendants never
- * mount and the page measures exactly the viewport, so the overflow these
- * fixtures exist to catch is invisible.
+ * actually renders. Against an empty database the wide descendants never mount
+ * and the page measures exactly the viewport, hiding the overflow.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
@@ -54,8 +53,6 @@ const league = {
   created_at: NOW,
   // A percentage, not a fraction: the backend's PlayerLeague.win_rate
   // property multiplies by 100 (leagues_schemas.py says "as a percentage").
-  // This fixture served a fraction until 2026-08-20, which the UI's old
-  // unit-guessing formatter silently absorbed.
   win_rate: (70 / 126) * 100,
   total_games: 126,
   display_rank: "Emerald II",
@@ -353,10 +350,9 @@ export const POPULATED_ROUTES = [
   {
     name: "player overview",
     route: `/player-overview?puuid=${PUUID}`,
-    // The rank badge from the league fixture, rendered verbatim by
-    // PlayerCard: it mounts only once the league query has resolved, well
-    // past the page skeleton. (Champion names are display-transformed, so
-    // they are not safe anchors.)
+    // The rank badge from the league fixture, rendered verbatim by PlayerCard:
+    // it mounts only once the league query has resolved, well past the page
+    // skeleton. Champion names are display-transformed, so not safe anchors.
     ready: "text=Emerald II",
     reflowSurfaces: [],
   },

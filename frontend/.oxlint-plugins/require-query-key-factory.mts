@@ -1,17 +1,14 @@
 // Every cache-touching call names its key through the factory that owns it.
-// `QueryKey` is `unknown[]`, so a key typed out at an invalidation compiles
-// forever while the factory it mirrors moves underneath it -- the invalidation
-// then matches nothing and the surface serves stale data for its whole window.
+// `QueryKey` is `unknown[]`, so a hand-typed key compiles forever while the
+// factory moves underneath it, and the invalidation then matches nothing.
 
 // Flagged: an array literal as `queryKey:`, as the positional key of
-// `setQueryData`/`getQueryData`, or a `predicate` comparing a key position
-// inline. Accepted: a `*QueryKey()` call, a `*_QUERY_KEY` constant, and a
-// named predicate helper exported beside the factory.
+// `setQueryData`/`getQueryData`, or an inline `predicate` key comparison.
+// Accepted: `*QueryKey()`, `*_QUERY_KEY`, and a named predicate helper.
 
 // The boundary: the cache is recognised by method name on any receiver, and a
-// key hoisted into a local `const` a line above the call is not resolved.
-// Anything that is not an array literal reads as a factory, so `[...key(id),
-// extra]` is a composition rather than a hand-typed key.
+// key hoisted into a local `const` is not resolved. Anything that is not an
+// array literal reads as a factory, so `[...key(id), extra]` passes.
 
 type Node = {
   type: string;
@@ -25,6 +22,7 @@ type Node = {
   key?: Node;
   expression?: Node;
   elements?: readonly (Node | null)[];
+  properties?: readonly Node[];
   arguments?: readonly Node[];
   argument?: Node;
   left?: Node;
@@ -169,17 +167,13 @@ export const requireQueryKeyFactoryRule = {
         for (const argument of args) {
           const options = unwrap(argument);
           if (options?.type !== "ObjectExpression") continue;
-          for (const property of (options as unknown as {
-            properties?: readonly Node[];
-          }).properties ?? []) {
+          for (const property of options.properties ?? []) {
             if (
               property.type !== "Property" ||
               staticName(property.key) !== "queryKey"
             )
               continue;
-            const key = arrayLiteral(
-              (property as unknown as { value?: Node }).value,
-            );
+            const key = arrayLiteral(property.value as Node | undefined);
             if (key) context.report({ node: key, messageId: "inlineQueryKey" });
           }
         }

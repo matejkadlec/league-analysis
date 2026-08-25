@@ -90,9 +90,8 @@ def is_loopback_address(value: str) -> bool:
     """Return whether a configured or observed address is loopback-only.
 
     A copy of `scripts/local_target.py` on purpose: the installer copies this
-    one file to `~/.local/share` and the timer runs it under `/usr/bin/python3`
-    with no repository on `sys.path`, so it cannot import anything from here.
-    Keep the two in step.
+    one file to `~/.local/share`, where the timer runs it with no repository
+    on `sys.path`. Keep the two in step.
     """
     normalized = value.strip().strip("[]").lower()
     if normalized == "localhost":

@@ -1,12 +1,8 @@
 """Pin which endpoints each test-runner job actually calls.
 
-These jobs exist to prove a Riot API key still works against every endpoint
-its real counterpart uses, so the endpoint list *is* the feature: drop a call
-and the run still reports success while covering less than it claims. Nothing
-in `tests/` referenced this module before.
-
-`call_endpoints` is driven directly with a stubbed client -- the surrounding
-loop waits 60 seconds between iterations, which is not something to run here.
+The endpoint list *is* the feature: drop a call and the run still reports
+success while covering less than it claims. `call_endpoints` is driven with a
+stubbed client because the surrounding loop waits 60 seconds per iteration.
 """
 
 from typing import Any

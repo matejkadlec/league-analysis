@@ -15,16 +15,14 @@ import {
 
 /**
  * An oxlint `overrides` entry replaces a rule's whole configuration for the
- * files it matches. It does not merge. A block that sets
- * `no-restricted-imports` for one file and forgets the shared lists exempts
- * that file silently, because a rule that is not applied reports nothing.
+ * files it matches; it does not merge. A block that sets
+ * `no-restricted-imports` and forgets the shared lists exempts that file.
  */
 
 /**
  * The lists below are the oracle, deliberately duplicated from the config: a
  * test that derives its expectation from its subject checks spelling, not
- * intent. An audit neutered every rule four ways while the derived version of
- * this test stayed green.
+ * intent.
  */
 
 /** Every group the shared import rule must ban, spelled out here on purpose. */
@@ -62,9 +60,8 @@ const EXPECTED_EDGE_SELECTOR_COUNT = 4;
 
 /**
  * Blocks that set `no-restricted-imports` without the barrel list, each a
- * named decision: the API client owns one documented deep import, the five
- * hint-reading pages predate the rule, and the edge has its own allowlist. A
- * fourth appearing here is a decision that has to be argued.
+ * named decision: the API client's one documented deep import, the five
+ * hint-reading pages, and the edge's own allowlist. A fourth must be argued.
  */
 const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 3;
 
@@ -213,9 +210,8 @@ describe("the oxlint config's shared teardown rules", () => {
 
   it("never excludes application code from the session guards", () => {
     // `tests/` and `e2e/` are the only directories these rules skip, plus the
-    // five hint-reading pages and the plugin sources. An audit added
-    // `components/**` to an eslint ignore list and the whole guard stopped
-    // applying to the components it exists for.
+    // five hint-reading pages and the plugin sources. Anything wider silently
+    // stops the guard applying to the code it exists for.
     const guarded = new Set([
       "no-restricted-imports",
       "house/session-teardown-syntax",
@@ -238,10 +234,9 @@ describe("the oxlint config's shared teardown rules", () => {
   });
 
   it("keeps the flags the config's rules are inert without", () => {
-    // Both flags buy silence when absent, and neither is expressible in the
-    // config file. A type-aware rule without `--type-aware` reports nothing
-    // and says nothing about it; without the directive flag, a fixture whose
-    // rule regressed passes on its now-pointless suppression.
+    // Neither flag is expressible in the config file, and both buy silence when
+    // absent: a type-aware rule without `--type-aware` reports nothing, and a
+    // regressed fixture passes on its now-pointless suppression.
     const lint = (packageJson as { scripts: Record<string, string> }).scripts
       .lint;
     expect(lint).toContain("--type-aware");

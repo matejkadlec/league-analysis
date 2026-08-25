@@ -151,10 +151,9 @@ class AuthService:
         code: str,
     ) -> None:
         """Send email-change verification code."""
-        # Same guard as `join_us.send_contact_email`. Logging the code and
-        # returning as if the mail had gone out made an unconfigured deployment
-        # indistinguishable from a working one -- and put the verification code
-        # on disk wherever `LOG_LEVEL=INFO` met the `local` log driver.
+        # Same guard as `join_us.send_contact_email`: logging the code and
+        # returning as if the mail had gone out makes an unconfigured deployment
+        # indistinguishable from a working one, with the code on disk.
         if not smtp_configured():
             raise EmailChangeEmailNotConfiguredError
 
@@ -358,10 +357,8 @@ class AuthService:
         """Stage one `refresh_tokens` row and hand back its raw secret.
 
         Deliberately does not commit. A rotation has to revoke the old row and
-        insert its replacement in a single transaction, so it cannot simply
-        call `create_refresh_token`: that would split the rotation in two and
-        leave a window with the caller's token revoked and no replacement
-        written -- a visitor signed out with nothing to refresh with.
+        insert its replacement in one transaction; calling `create_refresh_token`
+        would split it, leaving the caller revoked with no replacement written.
         """
         raw_token = secrets.token_urlsafe(64)
         record = RefreshToken(
@@ -429,20 +426,13 @@ class AuthService:
         """Rotate refresh token and return new access/refresh pair.
 
         `None` means the server refused: no such token, reuse, expiry, or an
-        unknown user. It must never mean "something went wrong". The router
-        answers `None` with 401 INVALID_REFRESH_TOKEN, and the browser is
-        required to end the session on that -- so an infrastructure failure
-        swallowed into a `None` here is laundered into a refusal that looks
-        byte-identical to a real one, and every visitor is signed out for the
-        length of a database blip while their refresh row stays live and
-        unrevoked. Let those errors raise: a 500 says nothing about the
-        session, which is the truth, and the client keeps it.
+        unknown user, never "something went wrong". The router answers `None`
+        with 401 and the browser ends the session, so let real errors raise.
         """
         token_hash = self._hash_refresh_token(raw_refresh_token)
         # `FOR UPDATE`: this reads `revoked_at` and then writes it, so two
         # requests carrying one cookie both read NULL and both rotate, forking
-        # one token into two valid 30-day families with the reuse alarm
-        # skipped.
+        # one token into two valid families with the reuse alarm skipped.
         result = await self.db.execute(
             select(RefreshToken)
             .where(RefreshToken.token_hash == token_hash)
@@ -550,36 +540,9 @@ class AuthService:
     ) -> tuple[User, str, datetime, str, datetime] | None:
         """Decide what a request presenting an already-revoked token gets.
 
-        Production data (2026-08-25) showed every firing of the old response
-        -- revoke every session the user has -- was an innocent client, not an
-        attacker: two tabs refreshing one cookie 138ms apart, a browser whose
-        rotation response was lost to a deploy, a stale profile reopened with
-        a week-old cookie. Each one signed the user out of every device.
-
-        Two-part answer instead:
-
-        - **Heal** when the presented token is itself unexpired and its
-          replacement has never been used (unrevoked, unreplaced, unexpired).
-          In the innocent races the replacement cookie never reached any
-          client, so this holds; an attacker actively riding a stolen chain
-          has rotated it, so it does not. Revoke the unused replacement, mint
-          a fresh one, answer success. The condition cannot prove the
-          replacement was never *delivered*, so two holders of adjacent
-          tokens -- a victim and a thief -- could alternate heals and both
-          stay in; that needs an already-stolen cookie, and every heal logs,
-          so a repeating `refresh_token_reuse_healed` for one user is the
-          signal theft detection turned into.
-
-        - **Otherwise revoke the presented token's descendants** -- the chain
-          `replaced_by_token_id` records -- and refuse. Theft response is
-          preserved: the stolen chain dies the moment the victim's stale
-          token collides with it. What changed is blast radius: sessions from
-          *other* logins (other devices) survive, so one zombie cookie no
-          longer signs the user out everywhere.
-
-        Three-plus concurrent refreshes on one cookie can still walk past the
-        heal (the second racer replaces the replacement) and sign that one
-        browser out; that is one re-login on one device, accepted.
+        Heal when the presented token is unexpired and its replacement was
+        never used: revoke that replacement, mint a fresh one, answer success.
+        Otherwise revoke only the presented token's descendants, and refuse.
         """
         successor = None
         if token_record.replaced_by_token_id is not None:
@@ -666,10 +629,8 @@ class AuthService:
         """Identify the owner of a refresh token without rotating it.
 
         Logout needs this because it must work when the access token has
-        already expired. That is the common case rather than the rare one: the
-        access token lives 30 minutes and the refresh token 30 days, so any
-        logout after a short idle period has nothing but the refresh cookie
-        left to say whose session to end.
+        already expired -- the common case, since access lives 30 minutes and
+        the refresh cookie 30 days.
         """
         result = await self.db.execute(
             select(RefreshToken).where(
@@ -721,9 +682,8 @@ class AuthService:
             return
 
         # Two logouts can carry the same token -- two tabs, or the context's
-        # logout racing the one token-manager sends after a rotation it could
-        # not keep. `token_id` is unique, so let the database settle it; the
-        # loser is asking for work the winner already did.
+        # logout racing the one token-manager sends after a rotation. `token_id`
+        # is unique, so let the database settle it.
         await self.db.execute(
             insert(RevokedAccessToken)
             .values(

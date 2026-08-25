@@ -123,10 +123,9 @@ export function PlayerSelector({
         }),
       );
     },
-    // Focus, not just length: a seeded box already holds a Riot ID, and
-    // without this every mount of a surface that keeps its selection would
-    // spend a suggestions request on a list nothing can show -- the results
-    // only render while the box has focus.
+    // Focus, not just length: a seeded box already holds a Riot ID, and the
+    // results only render while the box has focus, so without this every
+    // mount would spend a suggestions request on a list nothing can show.
     enabled: debouncedSearch.length >= 2 && isSearchFocused,
     staleTime: 30_000,
   });
@@ -138,10 +137,9 @@ export function PlayerSelector({
   // player already chosen does not remount this control, so without this the
   // box would empty for that one case and the name would look lost.
   const keepsSelection = initialSearchValue !== "";
-  // What the box reads when it is showing a selection rather than a query.
-  // Enter before its suggestions arrive does nothing: the value parses as a
-  // Riot ID, so without this it read as an unknown player and opened the
-  // server dialog for the player already chosen.
+  // What the box reads when it is showing a selection rather than a query, so
+  // that Enter before the suggestions arrive does nothing instead of opening
+  // the server dialog for the player already chosen.
   const [selectedLabel, setSelectedLabel] = useState(initialSearchValue);
 
   const choosePlayer = async (player: Player) => {
@@ -164,8 +162,7 @@ export function PlayerSelector({
 
   // The Riot ID and server travel as mutation variables rather than being read
   // from state in `onError`: cancelling or switching server while the request
-  // is in flight would otherwise name a server that was never queried, or drop
-  // the specific "wasn't found on <server>" wording for the generic message.
+  // is in flight would otherwise name a server that was never queried.
   const discoverMutation = useMutation({
     mutationFn: async ({ riotId, platform }: DiscoverAttempt) => {
       return unwrap(
@@ -274,10 +271,9 @@ export function PlayerSelector({
         }}
         onFocus={(event) => {
           setIsSearchFocused(true);
-          // Only where the box is seeded. There it holds a name with no
-          // visible way to clear it, so typing would append to it and match
-          // nothing; on the sidebar switcher, which starts empty, selecting
-          // a half-typed query would arm the next keystroke to wipe it.
+          // Only where the box is seeded: there it holds a name with no
+          // visible way to clear it, so typing would append and match nothing.
+          // On an empty box, selecting would let the next keystroke wipe it.
           if (keepsSelection) event.target.select();
         }}
         onBlur={() => setIsSearchFocused(false)}

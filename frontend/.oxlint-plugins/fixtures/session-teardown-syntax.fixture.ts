@@ -1,7 +1,5 @@
 // Regression fixture for `house/session-teardown-syntax`. Every directive
-// below suppresses a shape the rule MUST flag, and each is an escape a real
-// audit used against an earlier version of this guard. The accepted cases
-// carry none.
+// below suppresses a shape the rule MUST flag; the accepted cases carry none.
 
 declare const document: { cookie: string };
 declare const headers: {

@@ -35,8 +35,7 @@ export type ApiResponse<T> =
 /**
  * Unwrap an `ApiResponse` inside a query or mutation function. The `validated*`
  * helpers resolve rather than reject, so a caller reading only `.data` renders
- * a failure as a silent empty state and never reaches the `QueryCache` toast
- * that `frontend/CLAUDE.md` makes the floor. Throwing keeps that contract.
+ * a failure as a silent empty state and never reaches the `QueryCache` toast.
  */
 export function unwrap<T>(result: ApiResponse<T>): T {
   if (!result.success) {
@@ -47,9 +46,8 @@ export function unwrap<T>(result: ApiResponse<T>): T {
 
 /**
  * `unwrap`, except a 404 is an ordinary empty state: several resources exist
- * only once something has happened -- an unanalysed player, a deployment with
- * no key yet -- so their absence is what the surface renders. Every other
- * status still throws, so a real failure keeps reaching the `QueryCache` toast.
+ * only once something has happened, so their absence is what the surface
+ * renders. Every other status still throws and reaches the `QueryCache` toast.
  */
 export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
   if (!result.success && result.error.status === 404) {
@@ -109,8 +107,7 @@ api.interceptors.response.use(
     const refresh = await refreshAccessToken();
     if (refresh.outcome !== "refreshed") {
       // No teardown here, and no reuse of the original 401: only the refresh
-      // call can tell a rejected session from an unreachable server, and that
-      // 401 is true of the expired access token and of nothing else. Forward
+      // call can tell a rejected session from an unreachable server. Forward
       // what the refresh reported, verbatim.
       if (refresh.outcome === "refused") {
         return Promise.reject(error);

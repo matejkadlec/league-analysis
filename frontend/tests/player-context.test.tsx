@@ -99,8 +99,7 @@ function answer(url: string) {
 /**
  * Leave the persist round-trip in flight: its `onSuccess` overwrites the saved
  * player with the URL's, so once it resolves the two agree and the assertions
- * pass against any implementation. The window before it lands is when someone
- * opens a shared link.
+ * pass against any implementation.
  */
 function holdThePut() {
   validatedPut.mockImplementation(() => new Promise(() => {}));
@@ -181,10 +180,9 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("treats an empty `?puuid=` as no player rather than as nobody", async () => {
-    // A link that carries the parameter with nothing after it. The empty
-    // string reaches the context and reads as "the URL names a player", so
-    // the account's saved player vanished and the page asked them to pick
-    // one.
+    // A link that carries the parameter with nothing after it. The empty string
+    // reaches the context and reads as "the URL names a player", so the
+    // account's saved player vanishes and the page asks them to pick one.
     search.current = "puuid=";
     const { result } = renderContext();
 
@@ -210,9 +208,8 @@ describe("which player the app thinks you are looking at", () => {
 
   it("puts the saved player into the address bar through the router", async () => {
     // Restoring the last player has to go through `router.replace`:
-    // `history.replaceState` changes the address bar without telling the
-    // router, so `useSearchParams` elsewhere keeps returning nothing and every
-    // sidebar link is built without the player.
+    // `history.replaceState` changes the address bar without telling the router,
+    // so `useSearchParams` elsewhere keeps returning nothing.
     const { result } = renderContext();
 
     await waitFor(() => expect(replace).toHaveBeenCalled());
@@ -232,8 +229,7 @@ describe("which player the app thinks you are looking at", () => {
 
     // Wait for both queries to have *landed*: the effect cannot run before
     // `savedPlayer` exists, and `isLoading` ORs in the context query's. Not
-    // "the PUT was called" -- that fires while the context query is still
-    // undefined, which is the race this wait exists to avoid.
+    // "the PUT was called" -- that fires while the context query is undefined.
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(replace).not.toHaveBeenCalled();
   });
@@ -261,8 +257,7 @@ describe("persisting the player named in the URL", () => {
   it("writes the same player once rather than on every render", async () => {
     // `persistedUrlPuuidRef` is the whole guard: both effects depend on
     // `contextQuery.data`, which this mutation's `onSuccess` rewrites, so
-    // without it each success schedules the next write -- a PUT loop for as
-    // long as the page is open. The ref covers the window before it settles.
+    // without it each success schedules the next write -- a PUT loop.
     holdThePut();
     search.current = "puuid=url-puuid";
     const { rerender } = renderContext();
@@ -310,8 +305,7 @@ describe("whether the app says it is still loading", () => {
   it("does not wait on a player query that was never asked for", async () => {
     // With no `?puuid=` the URL player query is disabled. React Query v5
     // derives `isLoading` as `isPending && isFetching`, so a disabled query
-    // reports false and needs no `!!urlPuuid &&` guard in the provider —
-    // this pins that pages still leave their skeleton state without one.
+    // reports false and needs no `!!urlPuuid &&` guard in the provider.
     const { result } = renderContext();
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -333,9 +327,8 @@ describe("whether the app says it is still loading", () => {
 
   it("does not probe a URL PUUID while nobody is signed in either", async () => {
     // The case above leaves `?puuid=` empty, so it passes whether or not the
-    // auth half of `enabled` survives. This one does not: the PUUID guard
-    // moved onto `queryFn` as `skipToken`, so dropping `enabled:
-    // isAuthenticated` sends an unauthenticated `/players/{puuid}`.
+    // auth half of `enabled` survives. This one does not: the PUUID guard sits
+    // on `queryFn`, so dropping `enabled` sends an unauthenticated request.
     search.current = `puuid=${FROM_URL.puuid}`;
     useAuth.mockReturnValue({
       user: null,
@@ -353,8 +346,7 @@ describe("choosing a player from the picker", () => {
   it("saves the choice, seeds its cache entry, and navigates", async () => {
     // `setQueryData` on the player key is why the destination page renders the
     // player immediately instead of flashing a skeleton: the picker already
-    // holds the whole record, so refetching it is a round trip for data it
-    // just had.
+    // holds the whole record, so refetching it is a wasted round trip.
     const { result, queryClient } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
@@ -376,8 +368,7 @@ describe("choosing a player from the picker", () => {
   it("does not let the stale URL revert an explicit choice", async () => {
     // `selectPlayer` persists first and navigates second, so one commit has
     // the context naming the chosen player while the URL still names the
-    // previous one; the persist effect used to PUT that one straight back.
-    // The mocked URL never advances, so the stale window lasts the test.
+    // previous one. The mocked URL never advances, so that window lasts.
     search.current = "puuid=saved-puuid";
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
@@ -416,8 +407,7 @@ describe("switching to a participant by PUUID", () => {
   it("starts the target's update and navigates, but never persists a stranger", async () => {
     // Clicking an enemy laner starts their update and switches the page, but
     // the persist effect skips an untracked player -- so tomorrow's visit
-    // still defaults to the last *tracked* player, not to a stranger with no
-    // sidebar entry to switch back from.
+    // still defaults to the last *tracked* player, not to a stranger.
     const { result, rerender } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),

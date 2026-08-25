@@ -241,9 +241,8 @@ class JobExecution(Base):
     )
 
 
-# The sync-run status vocabulary and its active subset. The CHECK constraint and
-# the one-active-run partial unique index below are rendered from these, and
-# `PlayerSyncRunResponse` types its status field from the same Literal -- so
+# The CHECK constraint, the one-active-run partial unique index below, and
+# `PlayerSyncRunResponse`'s status field all render from this Literal -- so
 # extending it is a schema change and cannot leave the API contract stale.
 PlayerSyncStatus = Literal[
     "pending",

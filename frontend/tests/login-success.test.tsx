@@ -32,10 +32,9 @@ function userBody(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Signing in successfully, which nothing in this repo covered. `login` raises
- * `isLoading` and only the `checkAuth()` in its `finally` lowers it, so
- * deleting that one line left 320 tests green and every route reading
- * "Checking your session..." for the rest of the tab's life.
+ * Signing in successfully. `login` raises `isLoading` and only the
+ * `checkAuth()` in its `finally` lowers it, so losing that line leaves every
+ * route reading "Checking your session..." for the rest of the tab's life.
  */
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));

@@ -5,8 +5,7 @@ import { JobExecutionSchema } from "@/lib/core/schemas";
 /**
  * Zod parses the bytes FastAPI actually sends: every other jobs test builds a
  * `JobExecution` typed against this schema and so can never disagree with it.
- * These payloads are `JobExecutionResponse.model_dump_json()` output, copied
- * verbatim.
+ * These payloads are `JobExecutionResponse.model_dump_json()` output.
  */
 const PAYLOADS = {
   "a single call and a grouped one": `{"id":1,"job_config_id":2,"started_at":"2026-08-20T23:42:55.547593Z","completed_at":null,"status":"SUCCESS","api_requests_made":4,"records_created":0,"records_updated":0,"error_message":null,"execution_log":{},"detailed_logs":{"logs":[{"event":"x"}],"api_calls":[{"endpoint":"/lol/match/v5/matches/EUW1_1","region":"europe","count":1,"first_timestamp":"2026-08-21T00:00:00","last_timestamp":"2026-08-21T00:00:00","params":{"matchId":"EUW1_1"},"param_key":null,"first_param":null,"last_param":null},{"endpoint":"/lol/match/v5/matches/by-puuid","region":"europe","count":3,"first_timestamp":"2026-08-21T00:00:00","last_timestamp":"2026-08-21T00:00:02","params":null,"param_key":"puuid","first_param":"p1","last_param":"p3"}]},"triggered_by":"system","has_api_key_error":false,"execution_type":"REGULAR"}`,

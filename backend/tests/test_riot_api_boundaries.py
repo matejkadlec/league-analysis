@@ -122,9 +122,7 @@ async def test_null_body_is_retried_then_raises(
 
     Callers are typed `dict | list`; letting None through crashes them on a
     subscript far from the request. Riot answers objects and lists, so a null
-    body is an intermediary glitch — the old loop's `if result is not None`
-    retried it, which is what lets a one-off glitch self-heal on the next
-    attempt instead of failing the whole batch.
+    body is an intermediary glitch that a retry lets self-heal.
     """
     client, served = _client_with_bodies([b"null", b'{"ok": true}'])
     result = await client._make_request(
@@ -273,11 +271,9 @@ def _app_window_headers(limit: str, count: str) -> httpx.Headers:
 async def test_saturated_window_waits_out_the_provider_interval() -> None:
     """A used-up window must hold the next request until the window resets.
 
-    This is the entire point of the limiter and nothing was exercising it.
     Without the wait the client sends straight into a window Riot has already
-    filled, and the provider answers 429s and escalates a persistent offender
-    to a key ban -- which on this deployment takes ingestion down completely,
-    because there is one key.
+    filled; a persistent offender is escalated to a key ban, which takes
+    ingestion down completely on this deployment's single key.
     """
     limiter = RateLimiter()
     with patch(RATE_LIMITER_CLOCK, return_value=100.0):
@@ -328,12 +324,9 @@ async def test_consecutive_requests_keep_the_burst_spacing() -> None:
 async def test_burst_spacing_holds_across_separate_clients() -> None:
     """Two clients share the ceiling, because Riot counts per key, not per client.
 
-    `RiotAPIClient` builds its own `RateLimiter`, and the API path builds a
-    client per HTTP request. If the spacing were per-instance, N concurrent
-    callers would each get a full allowance and the process would burst at N
-    times the intended rate against one key. This is the guard for that: the
-    second limiter has never issued a request of its own and must still wait
-    on the first one's.
+    `RiotAPIClient` builds its own `RateLimiter` and the API path builds a
+    client per HTTP request, so per-instance spacing would let N concurrent
+    callers burst at N times the intended rate against one key.
     """
     first = RateLimiter()
     second = RateLimiter()
@@ -359,11 +352,8 @@ def test_a_count_that_dropped_means_a_new_window_began() -> None:
     """A lower count is the only signal that the provider window rolled over.
 
     Riot does not say when a window started; the limiter infers it from the
-    first observation. If a count goes down, the window it belonged to is
-    gone and a new one is running -- so its deadline has to move with it.
-    Anchoring to the old start makes the limiter believe capacity returns
-    sooner than it does, and it resumes sending into a window that is still
-    filling.
+    first observation. Anchoring to the old start makes it believe capacity
+    returns sooner than it does, so it sends into a window still filling.
     """
     limiter = RateLimiter()
     scope = ("europe.api.riotgames.com", 120)
@@ -413,9 +403,8 @@ def test_riot_id_lookups_share_one_method_window() -> None:
     """Both segments of a Riot ID are redacted, so all lookups share a scope.
 
     A Riot ID is two path segments, `gameName/tagLine`. Redact fewer and every
-    player searched for becomes its own method window: each one looks unused,
-    the shared method budget is never observed, and the limiter waits for a
-    limit it cannot see.
+    player searched for becomes its own method window, so the shared method
+    budget is never observed.
     """
     limiter = RateLimiter()
     base = "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id"
@@ -428,10 +417,9 @@ def test_riot_id_lookups_share_one_method_window() -> None:
 def test_unreadable_rate_headers_do_not_break_the_request() -> None:
     """A header the parser cannot read degrades to no window, not an exception.
 
-    `update_limits` is called on the success path of every Riot response. If a
-    provider-side format change raised here, it would fail requests that had
-    already succeeded -- the limiter is advisory, and losing it must not lose
-    the data.
+    `update_limits` is called on the success path of every Riot response, so a
+    raise here would fail requests that already succeeded. The limiter is
+    advisory: losing it must not lose the data.
     """
     limiter = RateLimiter()
 
@@ -458,8 +446,7 @@ class _StopBeforeRequest(Exception):
 
 
 # Every client method records a path template for the job log and then asks
-# `endpoints` to build the URL it actually requests. Nothing but the author's
-# attention keeps the two pointing at the same Riot route, and a mismatch is
+# `endpoints` to build the URL it requests. A mismatch between the two is
 # invisible -- the request succeeds and the log names another endpoint.
 _ROUTE_CASES: list[tuple[str, dict[str, str]]] = [
     ("get_account_by_riot_id", {"game_name": "Sanitized", "tag_line": "TEST"}),

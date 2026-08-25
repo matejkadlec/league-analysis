@@ -1,9 +1,8 @@
 import type { CardId } from "@/lib/core/schemas";
 /**
  * The viewer-configurable thresholds of the smurf and boost detection card.
- * The backend owns the ranges and rejects anything outside them, but exposes
- * no endpoint describing them, so the form carries its own copy;
- * `tests/smurf-boost-settings.test.ts` fails if any bound here drifts.
+ * The backend owns the ranges but exposes no endpoint describing them, so the
+ * form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
  */
 
 /** Typed against the API's own card-id enum, so a rename fails here. */
@@ -214,9 +213,8 @@ export function writableSettings(
   settings: Record<string, number>,
 ): Record<string, number> {
   // A loop, not `THRESHOLD_FIELDS.map(...)` into `Object.fromEntries`: that
-  // map infers `(string | number | undefined)[][]`, losing the tuple, so the
-  // narrowing it then needs is an assertion the compiler cannot check. Widen
-  // the value type and this body fails to compile; that one posts a string.
+  // map loses the tuple, so the narrowing it then needs is an assertion the
+  // compiler cannot check, and a widened value type would post a string.
   const payload: Record<string, number> = {};
   for (const field of THRESHOLD_FIELDS) {
     const value = settings[field.name];
@@ -229,17 +227,15 @@ export function writableSettings(
 
 /**
  * The baseline floor the model treats as a correctness constraint. Not
- * configurable and never sent by the API, so this is a second copy of a
- * backend constant; `tests/smurf-boost-settings.test.ts` reads `config.py`
- * and fails on any drift, because nothing else would catch it.
+ * configurable and never sent by the API, so this is a second copy of a backend
+ * constant; `tests/smurf-boost-settings.test.ts` reads `config.py` for drift.
  */
 export const MINIMUM_BASELINE_GAMES = 15;
 
 /**
  * What a comparison still needs, said in one sentence, for the two surfaces
- * that say it. The recent window is taken first, so quoting only the two
- * sample floors understates the requirement. `fallbackRecentWindow` covers a
- * run stored under an older contract that may not carry the window at all.
+ * that say it. The recent window is taken first, so quoting only the sample
+ * floors understates it; `fallbackRecentWindow` covers a run without a window.
  */
 export function gameShortfall(
   eligibleGames: number,

@@ -66,8 +66,7 @@ describe("the top champions card", () => {
   it("returns to the first page when the data behind it changes", () => {
     // The page number lives in component state and the component is not remounted
     // when the player changes, which is the only reason `dataSourceKey` is a prop.
-    // The second list must be longer than the page reached in the first, or
-    // `getChampionPage` clamps out of range and it passes anyway.
+    // The second list must be longer than the page reached in the first.
     const { container, rerender } = renderCard(twelve(), "player-a");
 
     fireEvent.click(next());

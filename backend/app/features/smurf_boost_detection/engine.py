@@ -96,9 +96,8 @@ class AnalysisRequest:
         """Every eligible game the player has, not just the loaded slice.
 
         The service caps how many matches it loads for performance, so the
-        loaded list can be shorter than the player's real history. Reporting
-        the slice length would understate the history and would make a
-        staleness comparison against it meaningless.
+        loaded list can be shorter than the player's real history; reporting
+        the slice length would understate it.
         """
         if self.total_eligible_games is None:
             return len(self.eligible)

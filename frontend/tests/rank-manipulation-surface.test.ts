@@ -79,9 +79,8 @@ describe("the Rank Manipulation surface", () => {
 
   it("keeps every card header in title case", () => {
     // Playwright matches an accessible name case-insensitively, so the e2e
-    // passes on `Games comparison` just as happily. LGA-99 asked for one
-    // convention across the page, and half of these headers were sentence
-    // case until someone read them side by side.
+    // passes on `Games comparison` just as happily. The page holds one
+    // convention: title case for every card header.
     const headers: Array<[string, string]> = [
       [
         "features/smurf-boost/components/smurf-boost-explanation-card.tsx",

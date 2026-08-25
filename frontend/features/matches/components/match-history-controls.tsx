@@ -107,8 +107,7 @@ export function MatchHistoryLoadingCard() {
 /**
  * The row that stands in for matches an update run has not stored yet. A row,
  * not a card-wide state: replacing the list hides matches already readable.
- * `role="status"` announces the wait once, and its text never changes as rows
- * land in front of it, so it is not re-announced per arrival.
+ * `role="status"` text never changes, so arrivals are not re-announced.
  */
 export function MatchHistoryLoadingRow() {
   return (
@@ -126,8 +125,7 @@ export function MatchHistoryLoadingRow() {
 /**
  * The same slot as the loading row, for when the poll behind it is failing. A
  * card-wide error would throw away the matches already on screen over a blip.
- * `match-history.tsx` silences the global toast for this query because this
- * row is the report of the failure whenever there are rows to keep.
+ * `match-history.tsx` silences the global toast because this row reports it.
  */
 export function MatchHistoryLoadFailedRow({
   onRetry,
@@ -249,9 +247,8 @@ export function MatchHistoryHeader({
             Select one queue, or hold Shift while selecting to combine queues.
           </p>
           {/* Below xl the strip wraps onto as many lines as the column
-              allows; the seven options measure ~770px, which no phone column
-              holds. The per-option `widthClass` stays either way: it is what
-              stops the strip shifting when the selected label goes bold. */}
+              allows; the seven options measure ~770px. The per-option
+              `widthClass` stops the strip shifting when a label goes bold. */}
           <div className="flex flex-wrap items-center justify-center gap-y-1 text-sm xl:w-max xl:min-w-full xl:flex-nowrap xl:gap-y-0">
             {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
               const isSelected = activeQueueFilters.includes(queueOption.id);
@@ -277,9 +274,8 @@ export function MatchHistoryHeader({
                   </button>
                   {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
                     // Only on the single-line layout. Nothing can tell CSS
-                    // which option a wrapped line ends on, so below xl the
-                    // separators would leave a trailing bar hanging off the
-                    // end of most lines.
+                    // which option a wrapped line ends on, so below xl a
+                    // trailing bar would hang off the end of most lines.
                     <span className="hidden text-muted-foreground xl:inline">
                       |
                     </span>

@@ -55,8 +55,7 @@ def _job_configuration_double(**attributes: object) -> JobConfiguration:
 
     Constructing the mapped class would configure SQLAlchemy's entire mapper
     registry, and this file imports only the jobs models, so a real instance
-    fails to initialize. The double carries exactly the columns the code under
-    test reads.
+    fails to initialize.
     """
     return cast(JobConfiguration, SimpleNamespace(**attributes))
 
@@ -313,9 +312,8 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
 
 def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
     # The frontend keys its API-call rows by the endpoint alone
-    # (job-execution-api-calls.tsx), so this grouping is a cross-package
-    # contract: regroup by anything finer — region, batch, time window — and
-    # those React keys collide, freezing the first row's numbers on every row.
+    # (job-execution-api-calls.tsx), so regrouping by anything finer — region,
+    # batch, time window — collides those React keys.
     calls = [
         APICallRecord(
             endpoint="/lol/match/v5/matches/{matchId}",
@@ -605,9 +603,8 @@ async def test_two_runs_of_one_configuration_cannot_both_start(
     """The runtime key is claimed before the first await, so only one run wins.
 
     Two background player syncs for different PUUIDs both drive the Match
-    Fetcher, and they share a configuration id. While the registry was written
-    to after the start-up queries, both passed the check, both wrote match rows
-    concurrently, and the first to finish released the other's key.
+    Fetcher and share a configuration id, so a registry written after the
+    start-up queries lets both pass the check.
     """
     from app.features.jobs import control as control_module
 
@@ -767,9 +764,8 @@ class _WriterInterlockSession:
 
 
 async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() -> None:
-    # The refusal exists to stop a Riot writer while cleanup owns the data
-    # tables, and only works if the lock comes *before* the read — read first and
-    # the answer can be stale by the time the writer proceeds. Compiling the
+    # The refusal only works if the lock comes *before* the read — read first
+    # and the answer can be stale by the time the writer proceeds. Compiling the
     # Select below configures every mapper, so import the registry first.
     from app.model_registry import import_all_models
 
@@ -803,9 +799,8 @@ def test_detailed_logs_accepts_every_shape_production_stores() -> None:
     """The three shapes measured in `jobs.job_executions` on 2026-08-21.
 
     2,620 rows hold an object: 1,806 `{api_calls, logs}`, 811 `{logs}`, and 3
-    a legacy `{message}` written before this contract existed. Naming the
-    shape is only safe while that last one still parses -- a strict model
-    would 500 the executions dialog on those three rows instead.
+    a legacy `{message}`. Naming the shape is only safe while that last one
+    still parses -- a strict model would 500 the executions dialog.
     """
     grouped = JobExecutionDetailedLogs.model_validate(
         {

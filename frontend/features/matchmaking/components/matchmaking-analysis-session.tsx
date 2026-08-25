@@ -71,8 +71,7 @@ export function MatchmakingAnalysisSession({
       }
       // A 404 is the ordinary end of a watch -- the record was deleted, or
       // the stored `watchingCreatedAt` outlived it -- so it resolves to
-      // "nothing to report". Every other failure throws through to the toast;
-      // returning null would leave the card animating an untracked run.
+      // "nothing to report". Every other failure throws through to the toast.
       const status = unwrapOr404(
         await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt),
         null,

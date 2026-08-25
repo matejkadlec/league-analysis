@@ -37,9 +37,8 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
   const isExpanded = isHovered || isPinned;
 
   // The DOM is the registry: a hard-coded item list drifts out of step with
-  // what a page conditionally renders, and Rank Manipulation offered `Result`
-  // before any comparison had produced one. Measuring only while the panel is
-  // open is enough -- that is the only state in which an item can be clicked.
+  // what a page conditionally renders. Measuring only while the panel is open
+  // is enough -- that is the only state in which an item can be clicked.
   useEffect(() => {
     if (!isExpanded) return;
     const measure = () => setRenderedAnchors(renderedAnchorsOf(items));

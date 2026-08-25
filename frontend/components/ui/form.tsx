@@ -49,9 +49,8 @@ const useFormField = () => {
   const { getFieldState, formState } = useFormContext();
 
   // PATCHED (see components/CLAUDE.md): upstream tests `!fieldContext`, which
-  // is never true because the context defaults to `{}`, and tests it *after*
-  // `getFieldState` has already read through it. Checking the field name
-  // first is what makes the message the developer actually sees.
+  // is never true because the context defaults to `{}`. Checking the field
+  // name first is what makes the message the developer actually sees.
   if (!fieldContext.name) {
     throw new Error("useFormField should be used within <FormField>");
   }
@@ -115,9 +114,8 @@ const FormControl = React.forwardRef<
   const { error, formItemId, formMessageId } = useFormField();
 
   // PATCHED (see components/CLAUDE.md): describe the control only by the
-  // message actually on screen -- upstream names ids that `FormMessage` may
-  // never render. Known gap: static helper children go unannounced; pass
-  // helper text through a labelled element.
+  // message on screen -- upstream names ids `FormMessage` may never render.
+  // Known gap: static helper children need their own labelled element.
   const describedBy = error?.message ? formMessageId : undefined;
 
   return (

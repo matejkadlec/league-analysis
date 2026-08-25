@@ -49,8 +49,7 @@ describe("player sync start refusal", () => {
   it("reports a SYNC_BUSY refusal as information naming the running player", async () => {
     // The 409 is a refusal, not a failure: no run was created, the click
     // still lands on the target player's stored data, and the backend's
-    // sentence says whose update is in the way. An error toast here read as
-    // "the feature broke", which is the complaint that led to the 409.
+    // sentence says whose update is in the way.
     validatedPost.mockResolvedValue({
       success: false,
       error: {

@@ -51,9 +51,8 @@ class DatabaseManager:
             except Exception as error:
                 await rollback_quietly(session)
                 # FastAPI throws route HTTPExceptions into yield-dependencies,
-                # so ordinary 4xx responses unwind through here; they are
-                # already recorded by the request completion event and must
-                # not warn like a real database failure.
+                # so ordinary 4xx responses unwind through here and must not
+                # warn like a real database failure.
                 log = (
                     logger.debug if isinstance(error, HTTPException) else logger.warning
                 )

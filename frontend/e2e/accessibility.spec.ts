@@ -9,8 +9,7 @@ import {
 /**
  * axe over the data-rich player pages: against an empty database the rows and
  * tables never mount and the scan proves nothing. axe does NOT catch
- * use-of-color -- the win/loss tint is a known open finding -- and it grades
- * only what the fixtures put on screen.
+ * use-of-color -- the win/loss tint is a known open finding.
  */
 
 test.describe("axe scan of the populated player pages", () => {

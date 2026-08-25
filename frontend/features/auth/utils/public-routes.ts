@@ -1,7 +1,6 @@
 /**
- * The routes a visitor may read without a session. One list, because two
- * copies drifted and left a legally required page unreachable to signed-out
- * visitors. `proxy.ts` may import only this directory, so nothing here may
+ * The routes a visitor may read without a session, kept in one list so copies
+ * cannot drift. `proxy.ts` may import only this directory, so nothing here may
  * ever reach for the network.
  */
 export const PUBLIC_ROUTES = [

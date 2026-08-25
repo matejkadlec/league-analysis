@@ -22,8 +22,7 @@ export type PlayerTrackingFailureKind =
 /**
  * Classify a failed player lookup from the already-normalized error.
  * `normalizeApiError` has read the status and the structured code, so this
- * only names the four outcomes the selector words differently -- no second
- * error type, and no sniffing the message text for "api key".
+ * only names the four outcomes the selector words differently.
  */
 export function playerTrackingFailureKind(
   error: ApiError,

@@ -26,10 +26,7 @@ export const MatchmakingAnalysisStatusSchema = z.enum([
 ]);
 
 /**
- * One schema for every matchmaking run the API returns. `/status` had its own,
- * differing only by a `puuid_progress` map nothing read, typed to accept a
- * string against a `dict[str, bool]` column that cannot hold one. The server
- * excludes the field now.
+ * One schema for every matchmaking run the API returns, `/status` included.
  */
 export const MatchmakingAnalysisResponseSchema = z
   .object({

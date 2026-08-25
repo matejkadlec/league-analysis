@@ -34,8 +34,7 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
 /**
  * A minute count laddered up into hours and days, signed for `Intl`.
  * `direction` is all that separates the two clocks: -1 elapsed, +1 upcoming.
- * The clamp stays on `diffMins`, each clock's own direction, so neither
- * crosses into the other's side of "Just now".
+ * The clamp stays on `diffMins` so neither crosses into the other's side.
  */
 function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
   if (diffMins < 1) return "Just now";
@@ -52,9 +51,8 @@ function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
 
 /**
  * The narrow, always-relative clock the job surfaces run on: "2h ago", and
- * never anything else. Deliberately not `lib/core/relative-time`'s
- * `formatRelativeTime`, which answers "Never" and goes absolute past a week --
- * wrong for an execution row, which always has a start time and reads as a log.
+ * never anything else. Deliberately not `formatRelativeTime`, which answers
+ * "Never" and goes absolute past a week -- wrong for an execution row.
  */
 export function formatLastRun(timestamp: string): string {
   const elapsedMins = Math.floor(

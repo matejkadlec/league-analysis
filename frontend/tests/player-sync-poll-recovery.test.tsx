@@ -79,10 +79,9 @@ describe("player sync poll recovery", () => {
   });
 
   it("keeps polling after the exact-status poll errors", async () => {
-    // The premise the whole "unreadable run" path rested on. `refetchInterval`
-    // reads `query.state.data`, which survives an error, so the status still
-    // says `running` and the interval keeps being consulted — an errored poll
-    // backs off to 15s, it does not stop.
+    // `refetchInterval` reads `query.state.data`, which survives an error, so
+    // the status still says `running` and the interval keeps being consulted —
+    // an errored poll backs off to 15s, it does not stop.
     const exactCalls = mockPollThatFailsThenRecovers("completed");
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, {}));
 
@@ -124,9 +123,8 @@ describe("player sync poll recovery", () => {
 
   it("settles once, with the real status, when the poll recovers", async () => {
     // A few seconds of failed polling must not settle the run: the caller acts
-    // on that callback, and acting on `null` while the run is still going
-    // means acting on partial data — then a second settle carrying the real
-    // status clears the warning attached to that partial result.
+    // on that callback, and acting on `null` while the run is still going means
+    // acting on partial data, which a later real settle then contradicts.
     const onSettled = vi.fn();
     mockPollThatFailsThenRecovers("completed");
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, { onSettled }));

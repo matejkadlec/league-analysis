@@ -36,9 +36,8 @@ function cacheKey(key: readonly unknown[] | undefined): string | undefined {
 export function createProvidersQueryClient(): QueryClient {
   return new QueryClient({
     // Most `useQuery` call sites read only `data` and `isLoading`, so a failed
-    // fetch used to render as a permanently empty surface. Announcing it once
-    // here covers every call site including the ones not written yet, which is
-    // what a per-caller rule could never do.
+    // fetch renders as a permanently empty surface. Announcing it once here
+    // covers every call site including the ones not written yet.
     queryCache: new QueryCache({
       onError: (error, query) => {
         reportApiError(normalizeApiError(error), {
@@ -85,9 +84,8 @@ export function Providers({
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           {/* Not `fallback={null}`: `PlayerContextProvider` reads
-              `useSearchParams`, which bails to client rendering during a
-              static prerender, so this fallback is what the prerender emits.
-              A null one shipped every prerendered route with an empty body. */}
+              `useSearchParams`, which bails to client rendering during a static
+              prerender, so this fallback is what the prerender emits. */}
           <Suspense fallback={<AppSkeleton />}>
             <PlayerContextProvider>
               <AuthGate>{children}</AuthGate>

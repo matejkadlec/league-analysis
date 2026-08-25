@@ -1,8 +1,7 @@
 /**
  * The two API shapes every spec has to answer: the signed-in user behind
- * `/auth/me`, and a tracked player. Written out in full at each site they had
- * drifted -- one spec's QA user had a connected Riot account with no sign that
- * was deliberate. Passing only the fields a spec depends on puts that in view.
+ * `/auth/me`, and a tracked player. Specs override only the fields they
+ * depend on, so a deliberate difference stays visible.
  */
 
 const baseUser = (now: string) => ({

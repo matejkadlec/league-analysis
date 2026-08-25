@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Every error code this UI branches on must be one the API can actually send:
- * the auth and settings flows switch on `detail.code` and render their own
- * copy, so a code renamed on the backend leaves the branch permanently dead
- * with nothing failing.
+ * the auth and settings flows switch on `detail.code`, so a code renamed on
+ * the backend leaves the branch permanently dead with nothing failing.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

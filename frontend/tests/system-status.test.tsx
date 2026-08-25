@@ -147,10 +147,9 @@ describe("the jobs system status", () => {
   });
 
   it("reads a future next run as upcoming, not as the recent past", () => {
-    // next_run_time has its own future-facing clock; through the past-only
-    // one, a run scheduled ten minutes out rendered "Just now". An overdue
-    // schedule (negative lead) clamps to "Just now" rather than reading as
-    // history.
+    // next_run_time has its own future-facing clock; the past-only one renders
+    // a run scheduled ten minutes out as "Just now". An overdue schedule
+    // (negative lead) clamps to "Just now" rather than reading as history.
     const ahead = (minutes: number) =>
       new Date(NOW.getTime() + minutes * 60_000).toISOString();
 

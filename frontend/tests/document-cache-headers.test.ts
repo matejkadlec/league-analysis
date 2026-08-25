@@ -11,9 +11,8 @@ import {
 
 /**
  * A cached HTML document after a deploy still names the previous image's
- * `/_next/static` hashes, so the browser asks for an asset the origin 404s
- * and React mounts `undefined`. Hashed assets may stay immutable; documents
- * may not.
+ * `/_next/static` hashes, so the browser asks for an asset the origin 404s and
+ * React mounts `undefined`. Hashed assets stay immutable; documents may not.
  */
 describe("document cache headers", () => {
   it("forbids storing HTML and reaffirms immutable hashed assets, in that order", async () => {

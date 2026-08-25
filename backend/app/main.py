@@ -68,8 +68,7 @@ async def _start_scheduler_safely() -> None:
 
     A failed scheduler is degraded but serviceable, so it must not stop the
     application. `StartupRecoveryError` is the exception: it means persisted
-    application state was left stranded, and serving would look healthy while
-    every affected player polls an update that can never finish.
+    state was stranded, and serving would look healthy while polls never finish.
     """
     try:
         scheduler = await start_scheduler()
@@ -170,9 +169,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # No endpoint accepts an upload, so a mebibyte is far above anything legitimate;
-# without a ceiling a body is read until it ends and one client can stream
-# arbitrarily much into memory. Added before the logging middleware so that
-# stays outermost and records the 413 like any other response.
+# uncapped, one client can stream arbitrarily much into memory. Added before the
+# logging middleware so that stays outermost and records the 413.
 app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 
 # Added after CORS so it runs outermost of the user middlewares, just inside

@@ -9,8 +9,7 @@ import { isPasswordStrong } from "@/features/settings/settings-helpers";
 /**
  * The password policy is written twice and nothing else notices when they
  * disagree: `validate_password_strength` is a Pydantic field validator, so its
- * regexes never reach the OpenAPI document. This reads the backend and
- * exercises the frontend, with no frontend literal.
+ * regexes never reach the OpenAPI document. This reads the backend source.
  */
 
 const BACKEND_SCHEMAS = join(

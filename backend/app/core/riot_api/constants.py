@@ -121,24 +121,9 @@ RANKED_SOLO_QUEUE_ID: Final[int] = QueueType.RANKED_SOLO_5X5.value
 def normalize_platform(platform: Platform | str) -> str:
     """Return the canonical stored spelling of a platform id.
 
-    Lowercase is canonical because it is what Riot itself uses: it is the
-    `Platform` enum's own values, what appears in every Riot URL, and what
-    `get_region_by_platform` below already coerces to before matching. Riot's
-    match payload spells the same id `EUW1`, so a value arriving from there
-    needs converting rather than trusting.
-
-    Every read and write of `core.players.platform` goes through here. They
-    used not to, and the column ended up holding both spellings while two
-    lookups compared it case-sensitively — see the check constraint on
-    `Player.__table_args__`.
-
-    Membership is checked here too, because this is the only place that can:
-    the column is `varchar(4)` under a lowercase check constraint, so an
-    unknown-but-lowercase id like a new Riot region stores cleanly and then
-    fails `PlayerResponse`, whose field is the enum. That is a 500 on
-    `/players/{puuid}` *and* on every tracked-player load inside the writer
-    jobs, for a row the database was happy to accept. Refusing the write
-    costs one skipped match instead.
+    Lowercase is canonical: every read and write of `core.players.platform`
+    goes through here, under the check constraint on `Player.__table_args__`.
+    Membership is checked so an unknown id fails here, not later in a response.
 
     Raises:
         ValueError: the id is not one of Riot's platforms.

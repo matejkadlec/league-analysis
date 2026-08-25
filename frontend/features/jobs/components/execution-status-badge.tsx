@@ -28,10 +28,8 @@ function statusVariant(status: JobStatus) {
 }
 
 /**
- * The status of one job execution, drawn the same way everywhere. The three
- * surfaces each wrote the ladder out and had drifted -- the history strip had
- * lost CANCELLED and PAUSED entirely. `className` carries per-surface sizing
- * only; the colours are not a caller's decision.
+ * The status of one job execution, drawn the same way everywhere. `className`
+ * carries per-surface sizing only; the colours are not a caller's decision.
  */
 export function ExecutionStatusBadge({
   status,

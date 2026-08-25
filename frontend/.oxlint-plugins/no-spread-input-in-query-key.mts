@@ -1,17 +1,14 @@
 // A query key is composed from other query keys, never from a caller's input
-// object. Spreading `...args` or `...filters` puts every property the object
-// happens to carry into the cache identity, so an unrelated field changing
-// refetches, and a field the key needs going missing reads someone else's entry.
+// object. Spreading `...args` puts every property the object happens to carry
+// into the cache identity, so unrelated fields refetch and missing ones collide.
 
 // Flagged: a spread of anything but a key in a `queryKey:` array or in a
 // `*QueryKey` factory's return, and `{ ...input }` sitting inside one.
-// Accepted: `...matchmakingStatusQueryKey(puuid)`, `...JOB_EXECUTIONS_QUERY_KEY`,
-// and an object literal listing its cache-identity fields by name.
+// Accepted: `...matchmakingStatusQueryKey(puuid)` and named literal fields.
 
 // The boundary: a key is recognised by its name -- a `*QueryKey` call or a
-// `*_QUERY_KEY` constant -- not by following the binding, so a factory under
-// another name reads as an input object. A key array assembled outside a
-// `queryKey:` property or a `*QueryKey` factory is not visited at all.
+// `*_QUERY_KEY` constant -- not by following the binding. A key array outside
+// a `queryKey:` property or a `*QueryKey` factory is not visited at all.
 
 type Node = {
   type: string;

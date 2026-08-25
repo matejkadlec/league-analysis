@@ -11,9 +11,8 @@ import {
 
 /**
  * The hint has to die under whatever domain it was born with. Domain is part
- * of a cookie's identity and is absent on both sides only by luck; the day the
- * session is shared across hosts, a host-only delete matches nothing and leaves
- * the visitor stranded with `proxy.ts` still admitting them.
+ * of a cookie's identity; the day the session is shared across hosts, a
+ * host-only delete matches nothing and leaves the visitor stranded.
  */
 afterEach(() => {
   for (const entry of document.cookie.split("; ")) {

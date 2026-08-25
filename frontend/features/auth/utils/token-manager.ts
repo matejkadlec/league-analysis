@@ -1,8 +1,7 @@
 /**
- * Centralized auth session management.
- *
- * Tokens live in server-set HttpOnly cookies. This module only asks the
- * backend to rotate or drop that session; JavaScript never reads the tokens.
+ * Centralized auth session management. Tokens live in server-set HttpOnly
+ * cookies, so this module only asks the backend to rotate or drop a session;
+ * JavaScript never reads the tokens.
  */
 
 import { clearAuthStateCookie } from "./auth-state-cookie";
@@ -30,7 +29,6 @@ export type SessionRefresh =
  * The codes this API uses when it means "this session is over". A status
  * alone is never evidence: an edge challenge and an authorization failure
  * both answer 403, so a refusal has to name itself here.
- *
  */
 const SESSION_ENDING_CODES = new Set([
   "INVALID_REFRESH_TOKEN",
@@ -40,10 +38,9 @@ const SESSION_ENDING_CODES = new Set([
 export async function namesTheEndOfTheSession(
   response: Response,
 ): Promise<boolean> {
-  // Any JSON media type, not the exact string: an audit moved errors to RFC
-  // 9457 `application/problem+json`, which keeps `detail.code` intact, and a
-  // strict match would have stopped every genuine sign-out. A challenge page
-  // is no flavour of JSON, which is the distinction that matters.
+  // Any JSON media type, not the exact string: RFC 9457
+  // `application/problem+json` keeps `detail.code` intact, while a challenge
+  // page is no flavour of JSON, which is the distinction that matters.
   if (
     !/^application\/([\w.+-]+\+)?json/i.test(
       response.headers.get("content-type") ?? "",
@@ -81,8 +78,7 @@ export function removeAuthTokens(): void {
   sessionEpoch += 1;
   // Every path that gives up on a session routes through here, so this is the
   // one place that has to retract the cookie `proxy.ts` routes on. Without it
-  // a session the API has stopped honouring still looks live to the server,
-  // which admits the visitor to a page the client then cannot render.
+  // the server admits the visitor to a page the client then cannot render.
   clearAuthStateCookie();
 }
 
@@ -113,25 +109,22 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
 
       if (!response.ok) {
         // Only the server refusing the token ends a session: a 502 is a
-        // redeploy, and reading that as a rejection signed people out with a
-        // valid refresh cookie. A 401 or 403 counts only when the body names
-        // a session-ending code -- see `namesTheEndOfTheSession`.
+        // redeploy. A 401 or 403 counts only when the body names a
+        // session-ending code -- see `namesTheEndOfTheSession`.
         const refused =
           (response.status === 401 || response.status === 403) &&
           (await namesTheEndOfTheSession(response));
         if (refused && epoch === sessionEpoch) {
           // Only if this refresh still belongs to the session on screen: a
           // rejection landing after a teardown is about the session that
-          // ended, and acting on it would sign out whoever signed in since --
-          // on a shared machine, the next person.
+          // ended, and acting on it signs out whoever signed in since.
           removeAuthTokens();
           return { outcome: "refused" };
         }
         if (refused) {
           // A refusal aimed at a session that already ended says nothing about
           // the one on screen. Reporting its status would have
-          // `normalizeApiError` read 401 back as `kind: "authentication"`, and
-          // the caller would treat somebody else's refusal as its own.
+          // `normalizeApiError` read 401 back as `kind: "authentication"`.
           return { outcome: "unreachable" };
         }
         if (response.status === 401 || response.status === 403) {
@@ -142,16 +135,14 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
         }
         // Not a refusal. The status travels with it so a rate limit is not
         // reported as an unreachable server: `/auth/refresh` shares one rate
-        // bucket, so a 429 is ordinary and "check that the backend is
-        // running" is the wrong thing to say about one that is.
+        // bucket, so a 429 is ordinary.
         return { outcome: "unavailable", status: response.status };
       }
 
       if (epoch !== sessionEpoch) {
         // Torn down while in flight, but this refresh succeeded and the
         // browser has already committed the rotated HttpOnly cookies over
-        // anyone who signed in since. Ending the session server-side is the
-        // only sound exit.
+        // anyone who signed in since. Only a server-side end is sound.
         clearAuthStateCookie();
         try {
           await fetch("/api/v1/auth/logout", {

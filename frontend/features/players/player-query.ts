@@ -22,10 +22,9 @@ export function playerContextQueryKey(userId: number | null | undefined) {
   return ["player-context", userId] as const;
 }
 
-/** The suggestion caches `player-selector.tsx` reads; it keys full searches
- * on this prefix and invalidates the whole family by it after a selection.
- * An array, not a bare string, so query-key-scope-contract.test.ts can read
- * the namespace here. */
+/** The suggestion caches `player-selector.tsx` reads; it keys full searches on
+ * this prefix and invalidates the whole family by it. An array, not a bare
+ * string, so query-key-scope-contract.test.ts can read the namespace here. */
 export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
 /** Invalidate everything that reflects whether a player is tracked. Track and
@@ -47,18 +46,16 @@ export function invalidateTrackingQueries(
 export function playerQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: playerQueryKey(puuid),
-    // `skipToken` rather than `enabled: !!puuid` plus an unreachable throw:
-    // `enabled` is an ordinary option, so a caller spreading these options and
-    // setting its own drops the guard -- `player-context.tsx` does exactly
-    // that. On `queryFn` the guard cannot be spread away.
+    // `skipToken` rather than `enabled: !!puuid`: `enabled` is an ordinary
+    // option, so a caller spreading these options and setting its own drops
+    // the guard -- on `queryFn` the guard cannot be spread away.
     queryFn: puuid
       ? async () =>
           unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
       : skipToken,
     // The copy `player-context.tsx` seeds from `/players/context` is only
     // worth seeding while it counts as fresh: at `staleTime: 0` every route
-    // refetches a player it was just handed. Correctness does not depend on
-    // the window -- invalidation beats `staleTime`.
+    // refetches a player it was just handed. Invalidation beats `staleTime`.
     staleTime: 60_000,
     retry: false,
   });
@@ -66,9 +63,8 @@ export function playerQueryOptions(puuid: string | null) {
 
 /**
  * Ranked Solo/Duo stats for one player, over their whole history or the last
- * `limit` games. The player card and the recent-performance card both mount
- * on the overview page, and their unlimited variants were two keys issuing
- * the byte-identical request. One key, one round trip.
+ * `limit` games. The player card and the recent-performance card share this
+ * key, so their unlimited variants are one round trip.
  */
 export function playerStatsQueryOptions(puuid: string, limit?: number) {
   return queryOptions({
@@ -79,10 +75,9 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
           {
-            // `queues`, not the scalar `queue` this endpoint used to accept
-            // too: a single-member union is the same filter, and a name the
-            // endpoint does not declare is dropped rather than refused --
-            // which would have made this card average every queue.
+            // `queues`, not the scalar `queue`: a name this endpoint does not
+            // declare is dropped rather than refused, which would leave the
+            // card averaging every queue.
             queues: String(RANKED_SOLO_QUEUE_ID),
             ...(limit !== undefined && { limit }),
           },

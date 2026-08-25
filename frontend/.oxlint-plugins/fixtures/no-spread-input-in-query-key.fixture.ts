@@ -1,7 +1,6 @@
 // Regression fixture for `house/no-spread-input-in-query-key`. Each directive
-// suppresses a shape the rule MUST flag; accepted cases carry none, and three
-// are spellings this repo already uses. An unused directive fails the run, and
-// a report on an accepted case fails it the other way.
+// suppresses a shape the rule MUST flag; accepted cases carry none. An unused
+// directive fails the run, and a report on an accepted case fails it too.
 
 declare const puuid: string;
 declare const watchingCreatedAt: string;

@@ -1,7 +1,6 @@
 // `formatDate`'s own `timeZone: "UTC"` is the only thing keeping its output
-// stable, and the gate container runs UTC, so without this the mutation would
-// survive CI. Works only because `formatDate` builds its formatter per call;
-// if that ever caches one, move to `test: { env: { TZ } }`.
+// stable, and the gate container runs UTC. Works only because `formatDate`
+// builds its formatter per call; if it caches one, use `test: { env: { TZ } }`.
 process.env.TZ = "Pacific/Kiritimati";
 
 import { describe, expect, it } from "vitest";
@@ -11,9 +10,8 @@ import { formatDate } from "@/features/players/components/player-card-format";
 describe("the last-updated date", () => {
   it("reads the same clock everywhere it is rendered", () => {
     // This timestamp is half an hour before midnight UTC, so any zone east of
-    // it prints the following day. The value describes when the server last
-    // synced a player, and two people looking at the same player should not
-    // see different days.
+    // it prints the following day. Two people looking at the same player
+    // should not see different days.
     expect(formatDate("2026-03-04T23:30:00Z")).toBe("Mar 4, 2026, 11:30 PM");
   });
 

@@ -115,9 +115,8 @@ describe("API error presentation", () => {
 
   it("survives the array `detail` FastAPI returns for a 422", () => {
     // The only response body where `detail` is neither a string nor the
-    // structured object: a list of per-field validation errors. Nothing
-    // covered it, so a stricter `detail` reader could have thrown out of
-    // `normalizeApiError` -- the one function every failure path calls.
+    // structured object: a list of per-field validation errors. A stricter
+    // reader could throw out of `normalizeApiError`, which every path calls.
     expect(
       normalizeApiError(
         axiosError(422, {

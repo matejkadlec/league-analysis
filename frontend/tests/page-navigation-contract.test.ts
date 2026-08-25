@@ -18,9 +18,8 @@ const SIDEBAR_SOURCES = [
 const NOT_NAVIGATION_TARGETS = new Set(["/"]);
 
 // Routes a signed-out visitor is meant to reach. Everything else in app/ that
-// is not a redirect has to be wrapped, and the test below is written so that
-// forgetting is the failing case: a new page is protected unless someone adds
-// it here on purpose.
+// is not a redirect has to be wrapped, so a new page fails this test unless
+// someone adds it here on purpose.
 const PUBLIC_ROUTES = new Set([
   "/cookie-policy",
   "/join-us",

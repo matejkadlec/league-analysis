@@ -18,9 +18,8 @@ const EDGE_SILENCE =
   "The edge cannot tell a refusal from an outage, and cannot retry with a refresh. Asking the API here ends with a session torn down over a redeploy.";
 
 // Only the refresh call may give up on a session. Each selector keys on the
-// cookie's own name, not the receiver: enumerating spellings was always one
-// short. A teardown through `useAuth().logout()` arrives by React context and
-// is invisible here -- `tests/auth-teardown-behaviour.test.tsx` owns that.
+// cookie's own name, not the receiver: enumerating spellings goes one short.
+// `tests/auth-teardown-behaviour.test.tsx` owns the React-context teardown.
 export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
   // Any receiver, any spelling: `document.cookie`, `document["cookie"]`,
   // `globalThis.document.cookie`, or an alias held in a variable.
@@ -90,9 +89,8 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
 ];
 
 // The edge gets one answer or none and cannot retry with a refresh, so it
-// makes no requests at all. An allowlist rather than a banlist, because
-// banning `fetch` and axios by name went one spelling short the moment an
-// audit moved the probe into a helper.
+// makes no requests at all. An allowlist rather than a banlist: banning
+// `fetch` and axios by name goes one spelling short of a probe in a helper.
 export const EDGE_ISOLATION_SYNTAX: readonly SyntaxRestriction[] = [
   {
     selector:

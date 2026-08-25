@@ -1,11 +1,8 @@
 """Every route says what it returns, in the annotation a type checker reads.
 
-Fifty of the sixty-seven routes declared their contract only in a
-`response_model=` decorator kwarg, which pyright does not look at. A handler
-could return the wrong shape, or fall off the end of an `except` arm and
-return `None`, and nothing in the gate would say so — FastAPI would still
-serialise whatever it got against the model and the OpenAPI document would
-still look right.
+A `response_model=` decorator kwarg is not read by pyright, so a handler could
+return the wrong shape, or fall off the end of an `except` arm and return
+`None`, with FastAPI still serialising it and the OpenAPI document still right.
 """
 
 import ast

@@ -53,10 +53,9 @@ def test_the_map_nothing_reads_stays_off_the_wire() -> None:
 
 
 def test_a_completed_run_missing_a_winrate_is_rejected_not_zero_filled() -> None:
-    # `/status` used to build its own results object and only for a completed
-    # row; it validates every row through the response now, so a blob written
-    # before the three keys were required fails loudly instead of rendering as
-    # a 0% winrate the response's own `ge=0.0, le=1.0` bound cannot reject.
+    # `/status` validates every row through the response, so a blob missing one
+    # of the three required keys fails loudly instead of rendering as a 0%
+    # winrate the response's own `ge=0.0, le=1.0` bound cannot reject.
     with pytest.raises(ValidationError):
         response(
             status="completed",

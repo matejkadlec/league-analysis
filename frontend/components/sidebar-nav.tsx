@@ -33,16 +33,14 @@ export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   // Sign out awaits the server before clearing anything, because only the
-  // server can revoke. Against a backend that hangs, that is the full probe
-  // deadline with nothing on screen moving -- the button reads as dead and
+  // server can revoke. Against a hanging backend the button reads as dead, so
   // every further click stacks another request.
   const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // Scoped exactly as `player-context.tsx` scopes its own read.
   // `/matchmaking-analysis` also carries `?puuid=`, but that one is a
-  // page-local analysed player -- forwarding it would quietly promote a local
-  // choice into the account's current player.
+  // page-local analysed player, not the account's current player.
   const urlPuuid = isPlayerCentricPath(pathname)
     ? searchParams.get("puuid")
     : null;
@@ -224,9 +222,8 @@ export function SidebarNav() {
           {/* Footer */}
           <div className="border-t border-white/10 p-6">
             {/* The cookie policy tells every reader they can reopen the
-                dialog "using the Cookie settings link in the page footer".
-                Only the public footer carried one, so for a signed-in reader
-                that sentence named a control this shell did not render. */}
+                dialog "using the Cookie settings link in the page footer",
+                so the signed-in shell has to render one too. */}
             <LegalNotice>
               <CookieSettingsTrigger className={LEGAL_LINK_CLASS} />
             </LegalNotice>

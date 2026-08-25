@@ -119,10 +119,9 @@ describe("the one button that does five different things", () => {
   });
 
   it("forces the stop only once a graceful stop is already in flight", async () => {
-    // The second press is the force. `stopMutation.mutate(isAnyStopping)` is
-    // what makes it the second press rather than the first: pass `true` and
-    // one click kills a healthy job mid-write; pass `false` and a job wedged
-    // in its stopping state can never be forced.
+    // `stopMutation.mutate(isAnyStopping)` is what makes the force the second
+    // press: pass `true` and one click kills a healthy job mid-write; pass
+    // `false` and a job wedged in its stopping state can never be forced.
     const { result } = renderControls({ is_running: true, is_stopping: true });
 
     act(() => result.current.handleMainAction());
@@ -167,9 +166,8 @@ describe("the one button that does five different things", () => {
 
   it("sees a paused test run even while the scheduled job reports unpaused", async () => {
     // Pause is per run: `is_paused` belongs to the scheduled run and
-    // `is_test_paused` to the test run. Deriving the card's paused state
-    // from `is_paused` alone leaves a paused test run looking active, with
-    // a stop button where the resume belongs.
+    // `is_test_paused` to the test run. Deriving the card's paused state from
+    // `is_paused` alone leaves a paused test run looking active.
     const { result } = renderControls({
       is_test_running: true,
       is_test_paused: true,
@@ -182,10 +180,9 @@ describe("the one button that does five different things", () => {
     );
   });
 
-  // handleMainAction's paused branch now delegates to handlePauseResume, so
-  // these cases and the main-action resume cases above exercise one shared
-  // path from two entry points. Both sets stay: they pin that the delegation
-  // itself keeps working from each button.
+  // handleMainAction's paused branch delegates to handlePauseResume, so these
+  // cases and the main-action resume cases above pin that one shared path
+  // still reaches from each button.
   it.each([
     ["pauses", "the scheduled job", { is_running: true }, "/jobs/7/pause"],
     [
@@ -224,9 +221,8 @@ describe("the one button that does five different things", () => {
   });
 
   // Each control has three endings and only success changes the card, because
-  // the job flags come from a refetch. On either failure the card looks exactly
-  // as it did before the press, so the toast is the only thing that says the
-  // press did nothing.
+  // the job flags come from a refetch. On either failure the card is unchanged,
+  // so the toast is the only thing that says the press did nothing.
   const REFUSED = {
     success: true,
     data: {
@@ -281,9 +277,8 @@ describe("the one button that does five different things", () => {
 
   it("tells an admin the job was already running rather than that the trigger failed", async () => {
     // A trigger the server declines because a run is already in flight is not
-    // an error — it is the answer to "is it running?", and the action is to
-    // wait rather than to retry or to go read a log. Collapsing it into the
-    // failure branch sends the admin looking for a fault that is not there.
+    // an error, and the action is to wait. Collapsing it into the failure
+    // branch sends the admin looking for a fault that is not there.
     validatedPost.mockResolvedValue({
       success: true,
       data: { success: false, message: "already running", execution_id: null },
@@ -303,8 +298,7 @@ describe("the one button that does five different things", () => {
   it("does not report a job as paused when nothing is running", async () => {
     // `is_paused` on a job with no run in flight describes the schedule, not
     // a run. Reading it alone turns the main button into "Resume" for a job
-    // that has nothing to resume, and the press sends a resume for a run that
-    // does not exist.
+    // that has nothing to resume.
     const { result } = renderControls({ is_paused: true });
 
     expect(result.current.isAnyPaused).toBe(false);
@@ -329,8 +323,7 @@ describe("the one button that does five different things", () => {
 describe("the manually triggered run's finishing notice", () => {
   // These use `rerender` with new props rather than a fresh render: the whole
   // mechanism lives in refs set by the trigger's `onSuccess`, so a second
-  // `renderHook` starts with `awaitingManualRun` false and every assertion
-  // below would pass against any implementation at all.
+  // `renderHook` starts with `awaitingManualRun` false and asserts nothing.
   async function triggerThenReport(executions: JobExecution[]) {
     const { result, rerender } = renderHookWithQueryClient(
       ({ recent }: { recent: JobExecution[] }) =>
@@ -368,8 +361,7 @@ describe("the manually triggered run's finishing notice", () => {
   it("ignores a scheduled run that finishes while a manual one is awaited", async () => {
     // The list holds every recent execution, and on a 15-minute schedule a
     // scheduled run finishing first is the normal case. Without the
-    // `triggered_by` filter the admin is told their manual run completed
-    // while it is still queued.
+    // `triggered_by` filter the manual run is reported while still queued.
     const toasts = await triggerThenReport([
       execution({ id: 101, triggered_by: "system" }),
     ]);
@@ -378,10 +370,9 @@ describe("the manually triggered run's finishing notice", () => {
   });
 
   it("ignores an execution that predates the trigger", async () => {
-    // `manualRunBaselineIdRef` is the id of the newest execution at the
-    // moment of the press, and `> baselineId` is what stops the *previous*
-    // manual run -- already finished, still in the list -- being reported as
-    // this one. Without it the toast fires before the new run has a row.
+    // `manualRunBaselineIdRef` is the id of the newest execution at the moment
+    // of the press, and `> baselineId` is what stops the *previous* manual run,
+    // still in the list, being reported as this one.
     const toasts = await triggerThenReport([execution({ id: 99 })]);
 
     expect(toasts).toEqual([]);

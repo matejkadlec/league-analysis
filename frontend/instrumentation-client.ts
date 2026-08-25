@@ -3,8 +3,7 @@ import { reportClientError } from "@/lib/core/client-error-report";
 /**
  * Runs in the browser before application code. Next.js does not forward
  * `console.error` to the production server, so this posts a scrubbed record
- * the frontend container log can see -- including a missing chunk, whose 404
- * `next start` does not log at all.
+ * the frontend container log can see -- including a missing chunk's 404.
  */
 function isChunkFilename(filename: string | undefined): boolean {
   return filename !== undefined && filename.includes("/_next/static/chunks/");

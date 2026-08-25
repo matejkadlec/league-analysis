@@ -1,9 +1,8 @@
 """Where each team objective total comes from, per team, per match.
 
 Two sources feed the same nine numbers: the timeline aggregate row when the
-match has one, and the participants' own counters when it does not. Nothing
-pinned which wins, so the max()/or_zero chain and the derived voidgrub count
-could have been rewritten without anything going red.
+match has one, and the participants' own counters when it does not. These
+cases pin which wins, and the derived voidgrub count.
 """
 
 from app.features.matches.match_history import build_team_compositions_and_stats

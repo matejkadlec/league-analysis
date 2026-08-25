@@ -1,7 +1,6 @@
 // Regression fixture for `house/meaningful-tests`. Every directive below
-// suppresses a shape the rule MUST flag; accepted cases carry none. Under
-// `--report-unused-disable-directives-severity=error` an unused directive is
-// a detection that stopped matching, a report here is one that over-matched.
+// suppresses a shape the rule MUST flag; accepted cases carry none. An unused
+// directive means a detection stopped matching, a report here means it grew.
 
 type Matchers = {
   toBe: (value: unknown) => void;
@@ -42,9 +41,8 @@ declare const clearOptionalBrowserStorage: () => void;
 declare const failingQuery: () => Promise<unknown>;
 
 describe("mock-call-only assertions", () => {
-  // MUST flag: the whole test is wiring. It passes with the toast, the
-  // rendered row and the returned value all wrong. The `.not` chain is a call
-  // assertion too, so it does not rescue the test.
+  // MUST flag: the whole test is wiring. The `.not` chain is a call assertion
+  // too, so it does not rescue the test.
   // oxlint-disable-next-line house/meaningful-tests
   it("posts the sync request", () => {
     startSync();

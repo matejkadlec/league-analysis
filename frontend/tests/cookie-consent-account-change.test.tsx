@@ -7,9 +7,8 @@ import { renderWithQueryClient } from "./render-support";
 
 /**
  * Whose decision the banner is recording. A second account signing in on the
- * same browser inherited the first one's choice, and that inherited choice was
- * written to its record as `consent_source: "banner"`. These assert the
- * account's own stored record.
+ * same browser inherited the first one's choice, written to its record as
+ * `consent_source: "banner"`. These assert the account's own stored record.
  */
 
 const { validatedGet, validatedPut, useAuth } = vi.hoisted(() => ({
@@ -159,10 +158,9 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("records the choice of a visitor who answers and then signs in", async () => {
-    // The one branch that writes to an audit trail, and the reason the ref
-    // exists at all: nobody is signed in, the person answers the banner, and
-    // then signs in. That choice is theirs, made seconds ago, so re-asking
-    // them as soon as they authenticate would be the wrong kind of careful.
+    // The one branch that writes to an audit trail: nobody is signed in, the
+    // person answers the banner, then signs in. That choice is theirs, so
+    // re-asking at authentication would be the wrong kind of careful.
     useAuth.mockReturnValue({ isAuthenticated: false, user: null });
     serverAnswers(null);
     const { rerender } = await mount();

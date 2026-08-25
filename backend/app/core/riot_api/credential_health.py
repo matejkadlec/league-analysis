@@ -48,10 +48,9 @@ class RiotAPIKey(Base):
 
     __tablename__ = "riot_api_keys"
     __table_args__ = (
-        # `conv()` keeps the pre-convention name the baseline actually created;
-        # the `ck` convention would otherwise drift from the database. A single
-        # `%` is correct: SQLAlchemy escapes it for the DBAPI when it compiles
-        # the DDL, so spelling `%%` renders as `%%%%`.
+        # `conv()` keeps the pre-convention name the baseline actually created.
+        # A single `%` is correct: SQLAlchemy escapes it for the DBAPI when it
+        # compiles the DDL, so spelling `%%` renders as `%%%%`.
         CheckConstraint(
             "key_value LIKE 'RGAPI-%' AND length(key_value) = 42",
             name=conv("check_riot_key_format"),
@@ -162,8 +161,7 @@ async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
     if key_record is None:
         # `LIMIT 1 ... FOR UPDATE` picks its row from the statement's own
         # snapshot and only then blocks, so a concurrent save that deleted that
-        # row returns nothing -- not its replacement. Reading empty here would
-        # report MISSING for a live key; a second snapshot sees the replacement.
+        # row returns nothing -- not its replacement. A second snapshot sees it.
         key_record = await _lock_newest_key(db)
     return key_record
 
@@ -253,10 +251,9 @@ async def synchronize_riot_credential_health(
         _replace_generation(health, db_key_id=db_key_id, now=now)
 
     if expired and key_record is not None:
-        # Only now, and only the row the select above already locked. Deleting
-        # earlier would blank `db_key_id` through `ON DELETE SET NULL`, leaving
-        # health reading `valid` for a credential that no longer exists. Taking
-        # no new lock here keeps the save path's order, so they cannot deadlock.
+        # Deleting earlier would blank `db_key_id` through `ON DELETE SET NULL`,
+        # leaving health reading `valid` for a dead credential. Taking no new
+        # lock here keeps the save path's order, so they cannot deadlock.
         logger.warning("riot_api_key_age_limit_reached", key_id=key_record.id)
         await db.execute(delete(RiotAPIKey).where(RiotAPIKey.id == key_record.id))
 

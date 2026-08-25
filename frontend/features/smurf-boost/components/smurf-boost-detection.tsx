@@ -24,10 +24,9 @@ import { gameShortfall } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
 import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-card";
 
-// The two statuses the backend uses for a run that has not reached a terminal
-// state. A run is owned by the account that asked for it, so a start returns
-// one of these only when this same account already has one in flight -- a
-// second tab, or a double submit -- and attaches to it instead of racing.
+// The two statuses for a run that has not reached a terminal state. A run is
+// owned by the account that asked for it, so a start returns one of these only
+// when this account already has one in flight, and attaches to it.
 const ACTIVE_STATUSES = ["pending", "in_progress"];
 
 // How often an active run is re-read. The computation finishes inside its own
@@ -54,9 +53,8 @@ interface SmurfBoostDetectionProps {
   playerName: string | null;
   /**
    * The page's local player search, label and all, rendered inside this card.
-   * Taken as a node because choosing the analysed player is the page's
-   * business; the label comes with it because the page owns the control's
-   * `id`, and a `htmlFor` hardcoded here would orphan itself.
+   * The label comes with it because the page owns the control's `id`, and a
+   * `htmlFor` hardcoded here would orphan itself.
    */
   playerSelector: ReactNode;
 }
@@ -96,10 +94,9 @@ export function SmurfBoostDetection({
       isActive(query.state.data ?? null) ? ACTIVE_POLL_MS : false,
   });
 
-  // The pool the comparison draws from, and the only count that exists
-  // before a first run. Deliberately not the player row's `total_matches`:
-  // that counts all six synced queues, so it would advertise a pool several
-  // times larger than a ranked-solo-only comparison can ever read.
+  // The pool the comparison draws from, and the only count that exists before
+  // a first run. Not the player row's `total_matches`: that counts all six
+  // synced queues, far more than a ranked-solo-only comparison can read.
   const { data: rankedStats, dataUpdatedAt: rankedStatsReadAt } = useQuery({
     ...playerStatsQueryOptions(puuid ?? ""),
     // Required, not decorative: unlike `playerQueryOptions` this one has no
@@ -132,8 +129,7 @@ export function SmurfBoostDetection({
     },
     // Cache only. Anything the viewer sees belongs to the `mutate` call below:
     // these options-level callbacks live on the mutation, so they still run
-    // after this component unmounts -- a `data.puuid !== puuid` guard here
-    // read the unmounted closure's player and toasted over whoever was on.
+    // after this component unmounts, against a stale closure's player.
     onSuccess: (data) => {
       // The response is stored under the player it describes, never under
       // whichever player happens to be selected when it arrives.
@@ -148,9 +144,8 @@ export function SmurfBoostDetection({
     runMutation.mutate(targetPuuid, {
       onSuccess: (data) => {
         // Compared against the player this run asked about, not the card's
-        // current one: these callbacks already stop firing once the card is
-        // gone, so what is left to catch is a server answering about somebody
-        // else, where "comparison complete" would be a lie either way.
+        // current one: these callbacks stop firing once the card is gone, so
+        // what is left to catch is a server answering about somebody else.
         if (data.puuid !== targetPuuid) {
           return;
         }
@@ -184,19 +179,16 @@ export function SmurfBoostDetection({
   };
 
   // A comparison this card still owes for a fetch it asked for itself: the
-  // sync hook adopts whatever update is already in flight, so without this the
-  // card announces a result for a click that never happened. State, not a ref,
+  // sync hook adopts whatever update is already in flight. State, not a ref,
   // because it also disables the button across the callback gap.
   const [comparisonOwed, setComparisonOwed] = useState(false);
-  // Why a fetch did not finish, in the backend's own reviewed words. Without
-  // it the card looks identical to a fully fresh run; with a sentence of our
-  // own it would promise a retry that a stale player id or an expired key
-  // cannot honour.
+  // Why a fetch did not finish, in the backend's own reviewed words: a
+  // sentence of our own would promise a retry that a stale player id or an
+  // expired key cannot honour.
   const [staleFetch, setStaleFetch] = useState<string | null>(null);
   // Stored ranked games as they stood when this card asked for a fetch, so the
-  // line below can say what the fetch added -- nothing can say beforehand how
-  // many are missing. With the reading's own timestamp, because the count
-  // alone cannot say whether it has been re-read since.
+  // line below can say what the fetch added. With the reading's own timestamp,
+  // because the count alone cannot say whether it has been re-read since.
   const [fetchBaseline, setFetchBaseline] = useState<{
     games: number;
     readAt: number;
@@ -213,9 +205,8 @@ export function SmurfBoostDetection({
       quiet: true,
       onSettled: (run) => {
         // Reported before the gate, not after it: this card renders the fetch
-        // whoever started it, having just told the viewer to run the
-        // comparison once it finished. Staying silent when that fetch failed
-        // would leave them comparing stored games believing otherwise.
+        // whoever started it. Staying silent when a fetch failed would leave
+        // the viewer comparing stored games believing they are fresh.
         setStaleFetch(
           run?.status === "completed"
             ? null
@@ -238,9 +229,8 @@ export function SmurfBoostDetection({
   const running = runMutation.isPending || isActive(latest ?? null);
   const results = latest?.status === "completed" ? latest.results : null;
   // As of the last run, the only count anything has measured: no eligible-game
-  // total exists for a player never compared, and the comparison after this
-  // fetch reports the corrected figure itself. A failed run stores none, and
-  // the column defaults to zero, which reads as a player with no games.
+  // total exists for a player never compared. A failed run stores none, and the
+  // column defaults to zero, which reads as a player with no games.
   const shortfallReading =
     latest && latest.status === "completed"
       ? gameShortfall(
@@ -257,9 +247,8 @@ export function SmurfBoostDetection({
       : null;
   const storedRankedGames = rankedStats?.total_matches ?? null;
   // Only against a count re-read since the click, never against `isUpdating`:
-  // that goes false the moment the poll reads a completed run, a render and a
-  // round trip before the hook refreshes this query -- so a fetch that added
-  // twelve games would announce "no new ones" and correct itself after.
+  // that goes false a render and a round trip before the hook refreshes this
+  // query, so a fetch that added games would announce "no new ones" first.
   const fetchedGames =
     fetchBaseline !== null &&
     storedRankedGames !== null &&
@@ -375,9 +364,8 @@ export function SmurfBoostDetection({
             )}
 
             {/* What there is to compare, before anything has been compared.
-                A label and a number rather than a sentence: the plural of a
-                count nobody has measured yet is a branch to get wrong, and
-                zero reads correctly here without a case of its own. */}
+                A label and a number rather than a sentence: zero reads
+                correctly here without a plural branch of its own. */}
             {storedRankedGames !== null && (
               <p className="text-sm text-muted-foreground">
                 Ranked solo games stored: {storedRankedGames}.
@@ -419,10 +407,9 @@ export function SmurfBoostDetection({
               )}
             </Button>
 
-            {/* Motion for a wait nothing can measure: `Progress` takes a
-                `value` and there is no denominator, since how many games Riot
-                will return is unknown until the fetch ends. `aria-hidden`
-                because the button above already names the state. */}
+            {/* Motion for a wait nothing can measure: `Progress` needs a
+                denominator and there is none until the fetch ends. Hidden
+                from assistive tech because the button already names it. */}
             {(isFetchingGames || comparisonOwed || running) && (
               <div
                 aria-hidden="true"

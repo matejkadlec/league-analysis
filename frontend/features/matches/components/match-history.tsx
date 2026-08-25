@@ -70,8 +70,7 @@ export function MatchHistory({
     onCompleted: () => router.refresh(),
     // A run that stopped early still stored whatever it got through, and the
     // poll below ends the moment the status leaves `running`. Scoped to this
-    // card's own two caches: other cards decide for themselves what a failed
-    // fetch means, and refreshing Smurf Boost here would put a number back.
+    // card's own two caches: other cards decide what a failed fetch means.
     onSettled: (run) => {
       // `null` is a run whose status could not be read — a poll that gave up
       // part-way through the writing. That is the case with the most rows
@@ -152,9 +151,8 @@ export function MatchHistory({
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
     // While the player's own update run is storing matches, this is what makes
-    // them appear: it is the only query carrying the rows and the total the
-    // pagination is built from. 2s rather than the 5s below because this case
-    // is a list visibly filling up, not a wait for a first row to exist.
+    // them appear: it is the only query carrying the rows and the total. 2s
+    // rather than the 5s below because the list is visibly filling up.
     refetchInterval: (query) =>
       isFetchingMatches
         ? 2000
@@ -211,9 +209,8 @@ export function MatchHistory({
   );
   const hasActiveSearch = debouncedMatchSearch.length > 0;
   // An update run is storing this player's matches, so the stored total is not
-  // the real one yet. Everything progressive about this card hangs off the run
-  // being authoritative about whether more records are coming. The match half
-  // only: the Player Updater writes no matches, so counting it over-promises.
+  // the real one yet. The match half only: the Player Updater writes no
+  // matches, so counting it over-promises.
   const isLoadingMoreMatches = isFetchingMatches;
   // Only after the last record there is: earlier pages are complete and must
   // not claim to be still filling. Not while the query behind it is failing
@@ -222,15 +219,13 @@ export function MatchHistory({
   const showLoadingRow = isLoadingMoreMatches && isLastPage && !error;
   // Gated on neither `isLoadingMoreMatches` nor `isLastPage`, unlike the
   // loading row: the outage that fails this query also drops
-  // `isFetchingMatches`. This query is opted out of the global error toast,
-  // so without this row nothing at all reports the failure.
+  // `isFetchingMatches`, and nothing else reports the failure.
   const showLoadFailedRow = !!error && !!data;
 
   useEffect(() => {
     // Not on an error: a failed request carries no `data`, which reads here as
     // a server total of zero and so as "the page you asked for is gone",
-    // silently putting the viewer back on page 1. An error is not a statement
-    // about the total.
+    // silently putting the viewer back on page 1.
     if (isPlaceholderData || error) {
       return;
     }
@@ -247,8 +242,7 @@ export function MatchHistory({
 
   // Only when there is nothing to fall back to. React Query keeps cached data
   // through an error, and the 2s poll fails precisely when rows are on screen
-  // -- a card-wide error would throw away readable matches over one bad
-  // request. That case renders MatchHistoryLoadFailedRow in the list.
+  // -- that case renders MatchHistoryLoadFailedRow in the list instead.
   if (!isFetching && error && !data) {
     const apiError = normalizeApiError(error);
 
@@ -280,25 +274,22 @@ export function MatchHistory({
         {matches.length === 0 && !showLoadingRow && !showLoadFailedRow ? (
           // Not while an update is running, and not when the list failed to
           // load: "no matches" is a verdict, and neither a run still going nor
-          // a request that never answered has earned it. The list below
-          // renders with that row as its only body row instead.
+          // a request that never answered has earned it.
           <MatchHistoryEmptyAlert
             hasActiveSearch={hasActiveSearch}
             debouncedMatchSearch={debouncedMatchSearch}
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          // Below `lg` a row reflows into stacked blocks and fits any phone;
-          // from `lg` up it is the fixed-width desktop layout, which still has
-          // to scroll inside this container. `min-w-0` because the flex chain
-          // above refuses to shrink otherwise.
+          // Below `lg` a row reflows into stacked blocks; from `lg` up it is
+          // the fixed-width desktop layout, which still has to scroll inside
+          // this container. `min-w-0` because the flex chain refuses to shrink.
           <div
             data-testid="match-list"
             className="min-w-0 rounded-md border lg:overflow-x-auto"
             // A region that scrolls sideways must be reachable without a
             // mouse, and a focusable region needs a name -- but only from
-            // `lg` up, the only width this container scrolls at. Applying
-            // them always put a keyboard stop in front of a fixed region.
+            // `lg` up, the only width this container scrolls at.
             {...(isDesktopLayout
               ? {
                   role: "region",

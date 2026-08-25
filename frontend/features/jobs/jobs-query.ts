@@ -15,10 +15,7 @@ import {
 import { JOBS_REFRESH_INTERVAL_MS } from "./refresh-interval";
 
 /**
- * The four caches the jobs surface reads, named once. They used to be inline
- * literals across four files with the invalidation set copied by hand -- the
- * same drift the matchmaking feature already paid for once (see
- * `matchmaking-query.ts`).
+ * The four caches the jobs surface reads, named once.
  */
 function jobsQueryKey() {
   return ["jobs"] as const;
@@ -46,7 +43,6 @@ const EXECUTIONS_PAGE_SIZE = 20;
  * Every job's executions, newest first, infinitely scrolled. Fixed-size
  * pages, because the backend caps `size` at 100. The failure envelope is
  * re-thrown on purpose: returned as data it truncates the list to page 1.
- *
  */
 export function jobExecutionsInfiniteQueryOptions() {
   return infiniteQueryOptions({

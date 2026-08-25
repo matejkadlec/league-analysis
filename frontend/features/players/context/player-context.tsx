@@ -32,9 +32,8 @@ interface PlayerContextValue {
   selectPlayer: (player: Player) => Promise<void>;
   /**
    * Switch to a player known only by PUUID -- a participant in somebody
-   * else's match. Persisting is left to the `?puuid=` effect below, which
-   * already handles a URL naming a player nobody clicked; two writers would
-   * race on a switch to a PUUID whose row has since been deleted.
+   * else's match. Persisting is left to the `?puuid=` effect below; two
+   * writers would race on a switch to a PUUID whose row has since been deleted.
    */
   selectPlayerByPuuid: (puuid: string) => void;
 }
@@ -54,14 +53,12 @@ export function PlayerContextProvider({
   const persistedUrlPuuidRef = useRef<string | null>(null);
   // The player an explicit `selectPlayer` call is switching to. It persists
   // first and navigates second, so for one commit the URL still names the
-  // previous player and the persist effect below would PUT them back. While
-  // this ref is set that effect stands down.
+  // previous player and the persist effect below would PUT them back.
   const pendingExplicitSelectionRef = useRef<string | null>(null);
   const isPlayerRoute = isPlayerCentricPath(pathname);
   // `?puuid=` with nothing after it is not a selection, it is a malformed
-  // link -- `searchParams.get` answers `""` for it, and an empty string is
-  // truthy enough to reach the URL branch below and suppress the account's
-  // saved player. Treat it as absent.
+  // link -- `searchParams.get` answers `""`, which is truthy enough to reach
+  // the URL branch below and suppress the account's saved player.
   const urlPuuid = (isPlayerRoute ? searchParams.get("puuid") : null) || null;
 
   const contextQuery = useQuery({
@@ -70,10 +67,9 @@ export function PlayerContextProvider({
       const context = unwrap(
         await validatedGet(PlayerContextSchema, "/players/context"),
       );
-      // This response carries the whole current player, and every route then
-      // asks `/players/{puuid}` for that same row, so seeding the player cache
-      // turns that second request into a cache hit. In the `queryFn` rather
-      // than an effect: children's queries fire before any effect commits.
+      // Seeding the player cache turns every route's later `/players/{puuid}`
+      // into a cache hit. In the `queryFn` rather than an effect: children's
+      // queries fire before any effect commits.
       if (context.current_player) {
         queryClient.setQueryData(
           playerQueryKey(context.current_player.puuid),
@@ -88,9 +84,8 @@ export function PlayerContextProvider({
   const urlPlayerQuery = useQuery({
     ...playerQueryOptions(urlPuuid),
     // Only the auth half: the PUUID half now lives on `queryFn` as
-    // `skipToken`. Keeping this is not redundancy -- `playerQueryOptions`
-    // carries no auth gate, and a signed-out visit to
-    // `/player-overview?puuid=...` would otherwise probe the API.
+    // `skipToken`. `playerQueryOptions` carries no auth gate, so a signed-out
+    // visit to `/player-overview?puuid=...` would otherwise probe the API.
     enabled: isAuthenticated,
   });
 
@@ -115,10 +110,9 @@ export function PlayerContextProvider({
       new URLSearchParams(searchParams),
       savedPlayer.puuid,
     );
-    // `window.history.replaceState` would put the PUUID in the address bar
-    // without telling the router, so `useSearchParams` elsewhere keeps
-    // returning nothing and the sidebar builds every link without the player.
-    // This cannot loop: the effect returns early once `urlPuuid` is set.
+    // `window.history.replaceState` would leave the router unaware, so
+    // `useSearchParams` elsewhere keeps returning nothing and the sidebar
+    // links drop the player. No loop: the effect returns once `urlPuuid` is set.
     router.replace(nextUrl, { scroll: false });
   }, [
     contextQuery.data,
@@ -130,10 +124,9 @@ export function PlayerContextProvider({
   ]);
 
   useEffect(() => {
-    // Mid explicit switch: the URL is behind the choice, not ahead of it.
-    // Persisting from it here is what reverted the choice. Cleared once the
-    // URL names the chosen player (who is already persisted, so nothing else
-    // to do); until then every URL value is stale by construction.
+    // Mid explicit switch: the URL is behind the choice, not ahead of it, so
+    // persisting from it here reverts the choice. Cleared once the URL names
+    // the chosen player, who is already persisted.
     if (pendingExplicitSelectionRef.current !== null) {
       if (urlPuuid === pendingExplicitSelectionRef.current) {
         pendingExplicitSelectionRef.current = null;
@@ -144,19 +137,17 @@ export function PlayerContextProvider({
       !urlPuuid ||
       !urlPlayerQuery.data ||
       // Untracked players are a visit, not a choice: clicking an enemy laner
-      // must not make a stranger every page's default -- they are not in the
-      // sidebar, so there is nowhere to switch back from. `is_tracked`
-      // defaults to false, so an endpoint that omits it fails safe.
+      // must not make a stranger every page's default. `is_tracked` defaults
+      // to false, so an endpoint that omits it fails safe.
       !urlPlayerQuery.data.is_tracked ||
       contextQuery.data?.current_player?.puuid === urlPuuid ||
       persistedUrlPuuidRef.current === urlPuuid
     ) {
       return;
     }
-    // The ref stays set on failure. Clearing it retried, and this effect
-    // depends on `updateCurrentMutation`, which `useMutation` replaces on
-    // every transition: an unbounded PUT loop against a 500, with no toast,
-    // for as long as the page stayed open. One attempt per PUUID is enough.
+    // The ref stays set on failure: this effect depends on
+    // `updateCurrentMutation`, which `useMutation` replaces on every
+    // transition, so clearing it means an unbounded PUT loop against a 500.
     persistedUrlPuuidRef.current = urlPuuid;
     updateCurrentMutation.mutate(urlPuuid);
   }, [contextQuery.data, updateCurrentMutation, urlPlayerQuery.data, urlPuuid]);
@@ -164,9 +155,8 @@ export function PlayerContextProvider({
   const { mutate: startProfileUpdate } = usePlayerProfileUpdate();
 
   // No profile update here, on purpose: picking a player from the sidebar is
-  // navigation. `e2e/player-context.spec.ts` asserts a "View" click starts
-  // zero sync runs, so browsing six tracked players cannot spend six Riot
-  // fetches. `selectPlayerByPuuid` below is the deliberate exception.
+  // navigation, so browsing six tracked players cannot spend six Riot fetches.
+  // `selectPlayerByPuuid` below is the deliberate exception.
   const selectPlayer = useCallback(
     async (player: Player) => {
       pendingExplicitSelectionRef.current = player.puuid;
@@ -190,8 +180,7 @@ export function PlayerContextProvider({
 
   // `urlPuuid`, not `urlPlayerQuery.data?.puuid`: the row behind the URL is
   // still loading right after a switch, so reading the loaded player would
-  // leave this on the previous one, and a second click in that window would
-  // pass the guard below and start the update twice.
+  // leave this on the previous one and a second click would start twice.
   const currentPuuid =
     urlPuuid ?? contextQuery.data?.current_player?.puuid ?? null;
 
@@ -200,10 +189,9 @@ export function PlayerContextProvider({
       // Switching to the player already current would restart their update and
       // push the URL they are already on.
       if (puuid === currentPuuid) return;
-      // The exception to the rule above `selectPlayer`. This path is reached
+      // The exception to the rule above `selectPlayer`: this path is reached
       // only by clicking a participant inside somebody else's match -- a
-      // player with no stored games, so navigating without fetching lands on
-      // an empty history. The run also feeds Match History's loading state.
+      // player with no stored games, so navigating alone lands on empty history.
       startProfileUpdate({ puuid });
       router.push(
         playerRoute(pathname, new URLSearchParams(searchParams), puuid),

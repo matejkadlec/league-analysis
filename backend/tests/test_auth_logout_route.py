@@ -1,9 +1,8 @@
 """Logout asserted through real FastAPI routing, not by calling the function.
 
-Every other logout test unwraps the endpoint and awaits it directly, which
-skips decorators and dependencies entirely. Re-adding `@rate_limit` or an
-auth `Depends` to this route would leave that whole file green while sign-out
-broke in the browser — so these go through the router.
+Every other logout test unwraps the endpoint and awaits it directly, skipping
+decorators and dependencies. Re-adding `@rate_limit` or an auth `Depends` would
+leave that file green while sign-out broke — so these go through the router.
 """
 
 from collections.abc import AsyncIterator
@@ -39,9 +38,8 @@ def service() -> AuthService:
 @pytest.fixture
 async def client(service: AuthService) -> AsyncIterator[httpx.AsyncClient]:
     # `ASGITransport`, not starlette's TestClient: the latter is annotated
-    # against httpx2, which this environment does not install, so every call
-    # came back `Unknown` and had to be cast, and it warns at import time in a
-    # suite that treats warnings as errors. This app has no lifespan to drive.
+    # against httpx2, which this environment does not install, and it warns at
+    # import time in a suite that treats warnings as errors.
     app = FastAPI()
     app.include_router(router)
 
@@ -75,8 +73,7 @@ async def test_repeated_logouts_are_never_refused(client: httpx.AsyncClient) -> 
 
     The limiter keys on `get_remote_address`, and behind the Next.js rewrite
     with `--no-proxy-headers` every user in production shares one bucket. A
-    limit here is therefore globally deniable: one client can spend the quota
-    and nobody else can sign out.
+    limit here is globally deniable: one client can spend everyone's quota.
     """
     # More iterations than any per-minute limit anyone would plausibly set
     # here; the existing limits in this router run 3-20/minute.
@@ -114,17 +111,9 @@ async def test_a_credential_less_logout_writes_no_deletion_cookies(
 ) -> None:
     """Because anyone's website can make this request.
 
-    Dropping the auth dependency was right -- it is what made sign-out work
-    after 30 minutes idle -- but it also opened this route to a top-level form
-    POST from any page on the internet. SameSite=Lax keeps the cookies off
-    that request, so it revokes nothing; the response still arrives in a
-    first-party context, so three deletion Set-Cookies would be applied.
-    The visitor is signed out on someone else's say-so, their refresh row live
-    and unrevoked for the rest of its 30 days with no browser holding it: the
-    stranded session this branch exists to remove, reached from outside.
-
-    A caller carrying no cookie has nothing to clear, so refusing to write
-    them costs nothing.
+    The route is unauthenticated, so a top-level form POST from any page
+    reaches it. SameSite=Lax keeps the cookies off that request, so it revokes
+    nothing, but deletion Set-Cookies would still sign the visitor out.
     """
     assert (await _post(client)).headers.get_list("set-cookie") == []
 
@@ -135,9 +124,8 @@ async def test_a_real_sign_out_still_clears_every_cookie(
     """The other direction, and the reason the guard reads the request.
 
     Narrowing it further -- to a valid refresh token, say -- would leave the
-    cookies in place for anyone whose token had already expired or been
-    revoked elsewhere, which is a signed-out visitor still holding a hint that
-    `proxy.ts` admits.
+    cookies in place for anyone whose token had expired or been revoked, a
+    signed-out visitor still holding a hint that `proxy.ts` admits.
     """
     cast(AsyncMock, service).resolve_user_id_for_refresh_token.return_value = None
 

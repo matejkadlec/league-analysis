@@ -10,10 +10,9 @@ afterEach(() => {
 
 describe("clearing optional storage when the browser refuses", () => {
   it("does not throw", () => {
-    // A visitor with site data blocked makes every `localStorage` access throw.
-    // This runs in a mount effect above every error boundary, so an unguarded
-    // throw hands them a blank page. Stub the getter, not `removeItem`: that is
-    // where the browser actually throws.
+    // A visitor with site data blocked makes every `localStorage` access throw,
+    // and this runs in a mount effect above every error boundary. Stub the
+    // getter, not `removeItem`: that is where the browser actually throws.
     const original = Object.getOwnPropertyDescriptor(window, "localStorage");
     Object.defineProperty(window, "localStorage", {
       configurable: true,

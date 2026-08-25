@@ -1,12 +1,8 @@
 """End-to-end 429 handling through `_make_request`.
 
-The retry loop's helpers are pinned elsewhere; what nothing pinned before
-this file is the loop itself as callers see it: a 429 answered with
-``Retry-After`` waits exactly that long and retries, and exhaustion raises a
-``RateLimitError`` still carrying the header evidence. These tests drive the
-real request path over an ``httpx.MockTransport`` (built by the shared
-``riot_client_answering`` fixture), so they hold no matter what machinery
-implements the waiting.
+A 429 answered with ``Retry-After`` waits exactly that long and retries, and
+exhaustion raises a ``RateLimitError`` still carrying the header evidence.
+Driven over ``httpx.MockTransport``, so no waiting machinery is assumed.
 """
 
 from typing import Any

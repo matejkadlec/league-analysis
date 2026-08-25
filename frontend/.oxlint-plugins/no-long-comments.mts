@@ -1,14 +1,12 @@
-// A comment past four lines is code that never got clarified, or rationale
-// that belongs in docs/ where an owner will find it. A run of consecutive
-// `//` lines is ONE block: the repo writes its rationale that way, so
-// per-line counting would leave the ceiling unenforceable.
+// A comment past three lines is code that never got clarified, or narration
+// of how it got that way. A run of consecutive `//` lines is ONE block: the
+// repo writes rationale that way, so per-line counting would not bind.
 
-// Flags a five-line `//` run, and a block comment carrying five lines of
-// prose — blank ` *` lines included. Accepts anything at the ceiling, two
-// short runs split by a blank line or by code, and a `// why` trailing a
-// statement, which opens its own block instead of extending the run above.
+// Blank ` *` lines count, bare `/**` and `*/` do not. A run at the ceiling
+// passes, and so does a `// why` trailing a statement, which opens its own
+// block instead of extending the run above.
 
-const DEFAULT_MAX_LINES = 4;
+const DEFAULT_MAX_LINES = 3;
 
 type Position = { line: number; column: number };
 type Comment = { type: string; loc: { start: Position; end: Position } };
@@ -77,7 +75,7 @@ export const noLongCommentsRule = {
     type: "problem",
     docs: {
       description:
-        "Keep a comment short enough to carry one non-obvious constraint; longer rationale belongs in docs/.",
+        "Keep a comment short enough to carry one non-obvious constraint, and cut the rest.",
     },
     schema: [
       {

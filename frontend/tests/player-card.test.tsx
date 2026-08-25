@@ -104,8 +104,7 @@ const stats = {
 
 // `/players/{puuid}/league` answers an unranked player with a 200 carrying
 // `null`, so `leagueData: null` is a *successful* empty response here.
-// Modelling it as a failure let the card render a broken request as
-// "unranked"; `failLeagueWith` covers the failure case separately.
+// `failLeagueWith` covers the failure case separately.
 function answerWith({
   leagueData = league as typeof league | null,
   statsData = stats as typeof stats | null,
@@ -174,8 +173,7 @@ describe("what the card says about the player", () => {
   it("does not pass a failed league request off as unranked", async () => {
     // The card cannot tell the viewer anything useful here, so the failure has
     // to reach the QueryCache toast -- which only happens if the query ends in
-    // `error`. Swallowing it to `null` renders the unranked branch instead,
-    // which reads as a fact about the player rather than about the request.
+    // `error`. Swallowing it to `null` renders the unranked branch instead.
     failLeagueWith(500);
     const { queryClient } = renderCard();
 
@@ -220,8 +218,7 @@ describe("the freshness line", () => {
   it("says so when any of the three syncs has never run", () => {
     // The label is fed by the *oldest complete* of profile, league and match
     // sync. Dropping one from that list makes a player whose matches never
-    // synced claim to be up to date — the exact lie the label exists to
-    // prevent.
+    // synced claim to be up to date — the lie the label exists to prevent.
     renderCard(player({ match_synced_at: null }));
 
     expect(screen.getByText("Not fully synced yet")).toBeTruthy();

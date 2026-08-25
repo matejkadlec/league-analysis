@@ -1,38 +1,8 @@
-"""Comment hygiene for Python, mirroring the frontend's three oxlint rules.
+"""Comment hygiene for Python, mirroring the frontend's oxlint rules.
 
-The frontend enforces `no-long-comments`, `no-deferral-comments` and
-`no-compat-shims` as oxlint custom plugins. Ruff has no plugin API and no
-comment-length rule, so the backend half is this script rather than a fork or a
-new dependency. The regexes are copied verbatim from the oxlint rules so a
-sentence that fails review in TypeScript fails it here too.
-
-What the three checks say:
-
-`no-long-comments` — a comment past a few lines is usually code that never got
-clarified, or narration of how it got that way rather than what it constrains. A
-run of consecutive own-line `#` lines counts as ONE comment, because per-line
-counting would make the ceiling unenforceable. A comment trailing code
-(`x = 1  # why`) starts its own block: the code between it and the previous
-line breaks the run.
-
-`no-deferral-comments` — a "for now / TODO / temporary" comment is a scope
-decision recorded nowhere an owner will see, defaulting to permanent. Build it,
-or file an LGA ticket and delete the marker.
-
-`no-compat-shims` — this is an application, not a library: every caller is in
-this repository, so there is no "backward" to be compatible with. Renames
-update all call sites in the same change; old paths are deleted, not
-deprecated. The identifier half runs over the AST, not over the text, so a
-string literal that merely mentions "legacy" is not a hit.
-
-DOCSTRINGS ARE NOT COMMENTS. They are the documented interface of a module,
-class or function, and this script never looks at them: `tokenize` reports them
-as STRING tokens and only `#` text arrives as COMMENT.
-
-Usage: `python scripts/check_comments.py [path ...]`, run from `backend/`.
-Reports `path:line: rule: message` and exits 1 when anything is reported.
-`--self-check` is in `tests/test_check_comments.py` instead, next to the rest
-of the suite.
+Ruff has no plugin API and no comment-length rule, so the backend half is this
+script rather than a fork. Every rule states its whole reasoning in its own
+report message. Run from `backend/`: `python scripts/check_comments.py [path]`.
 """
 
 from __future__ import annotations
@@ -44,7 +14,7 @@ import sys
 import tokenize
 from pathlib import Path
 
-MAX_PROSE_LINES = 4
+MAX_PROSE_LINES = 3
 DEFAULT_PATHS = ("app", "tests", "scripts")
 
 DEFERRAL = re.compile(
@@ -63,6 +33,30 @@ COMPAT_COMMENT = re.compile(
 )
 COMPAT_NAME = re.compile(r"^(legacy|deprecated)|Legacy|Deprecated")
 
+# A docstring is the documented interface, so its summary line and its
+# structured sections are free. Everything else in it is prose under the same
+# ceiling as a comment -- rationale was found relocated here to dodge that.
+SECTIONS = frozenset(
+    (
+        "Args:",
+        "Arguments:",
+        "Attributes:",
+        "Example:",
+        "Examples:",
+        "Parameters:",
+        "Raises:",
+        "Returns:",
+        "Yields:",
+    )
+)
+
+LONG_DOCSTRING_MESSAGE = (
+    "no-long-docstrings: this docstring carries {count} lines of prose past "
+    "its summary; the ceiling is {ceiling}. A docstring documents the "
+    "interface -- state it, name the arguments under `Args:`, and cut the "
+    "narration. FastAPI publishes a route docstring as the OpenAPI "
+    "description, so what is written here is served to callers."
+)
 LONG_MESSAGE = (
     "no-long-comments: this comment carries {count} lines of prose; the "
     "ceiling is {ceiling}. Keep the constraint a reader needs and cut the "
@@ -104,14 +98,57 @@ def comment_blocks(source: str) -> list[list[tokenize.TokenInfo]]:
     return blocks
 
 
-def compat_names(source: str) -> list[tuple[int, str]]:
+def docstring_prose(doc: str) -> int:
+    """Count the lines of a docstring that are narration, not documentation."""
+    prose = 0
+    section_indent: int | None = None
+    for raw in doc.expandtabs().splitlines()[1:]:
+        text = raw.strip()
+        if not text:
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if section_indent is not None and indent > section_indent:
+            continue
+        section_indent = None
+        if text in SECTIONS:
+            section_indent = indent
+            continue
+        prose += 1
+    return prose
+
+
+def long_docstrings(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return every docstring whose prose runs past the ceiling."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        ):
+            continue
+        doc = ast.get_docstring(node, clean=False)
+        if doc is None:
+            continue
+        prose = docstring_prose(doc)
+        if prose <= MAX_PROSE_LINES:
+            continue
+        body = node.body[0]
+        found.append(
+            (
+                body.lineno,
+                LONG_DOCSTRING_MESSAGE.format(count=prose, ceiling=MAX_PROSE_LINES),
+            )
+        )
+    return found
+
+
+def compat_names(tree: ast.Module) -> list[tuple[int, str]]:
     """Return declared names that announce a legacy or deprecated thing.
 
     Decorators are read too: `@deprecated` is the JSDoc tag's Python spelling,
     and `warnings.deprecated` reaches it through an attribute.
     """
     declared: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             declared.append((node.lineno, node.name))
             declared.extend(
@@ -126,7 +163,7 @@ def compat_names(source: str) -> list[tuple[int, str]]:
 
 
 def check_source(source: str) -> list[tuple[int, str]]:
-    """Return every `(line, message)` the three checks find in one file."""
+    """Return every `(line, message)` the four checks find in one file."""
     found: list[tuple[int, str]] = []
     for block in comment_blocks(source):
         if len(block) > MAX_PROSE_LINES:
@@ -146,9 +183,11 @@ def check_source(source: str) -> list[tuple[int, str]]:
                         COMPAT_COMMENT_MESSAGE.format(match=compat.group(0)),
                     )
                 )
+    tree = ast.parse(source)
+    found.extend(long_docstrings(tree))
     found.extend(
         (line, COMPAT_NAME_MESSAGE.format(name=name))
-        for line, name in compat_names(source)
+        for line, name in compat_names(tree)
     )
     return sorted(found)
 

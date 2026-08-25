@@ -7,8 +7,7 @@ import { reportClientError } from "@/lib/core/client-error-report";
 /**
  * Rendered for signed-out visitors too: gating it on authentication made a
  * render error on /sign-in an absorbing state, since the reset button lived
- * inside the thing that would not render. It sits inside the layout and so
- * does not cover the layout itself -- that is `global-error.tsx`.
+ * inside the thing that would not render. The layout itself: `global-error.tsx`.
  */
 export default function Error({
   error,

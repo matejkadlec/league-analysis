@@ -47,11 +47,9 @@ def _service(user_id: int | None) -> AuthService:
 async def test_logout_revokes_using_only_the_refresh_cookie() -> None:
     """The access token expires in 30 minutes; the refresh token lasts 30 days.
 
-    Logout used to depend on a valid access token, so any logout after a short
-    idle period answered 401 and revoked nothing — leaving a usable 30-day
-    credential in the browser of someone who had just been told they were
-    signed out. Only the refresh cookie is present here, which is the ordinary
-    case rather than an edge one.
+    Depending on a valid access token means a logout after a short idle period
+    answers 401 and revokes nothing, leaving a usable 30-day credential behind.
+    Only the refresh cookie is present here, which is the ordinary case.
     """
     service = _service(user_id=9)
 
@@ -70,15 +68,8 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
     """Logout is idempotent: an unauthenticated call is answered, not refused.
 
     A caller can only ever revoke the session their own request carries, so
-    there is nothing to protect by rejecting this — and rejecting it is what
-    made the failure silent.
-
-    The request carries the hint and nothing else, which is the state this
-    covers: another tab already signed out, or a page left open until the
-    refresh cookie expired. The cookies are still cleared. A request carrying
-    no cookie at all is a different thing entirely — it can only have come
-    from somewhere that is not this app — and that case lives in
-    `test_auth_logout_route.py`.
+    there is nothing to protect by rejecting this. The request here carries the
+    hint alone; no cookie at all lives in `test_auth_logout_route.py`.
     """
     service = _service(user_id=None)
     response = Response()
@@ -94,8 +85,7 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
     cleared = response.headers.getlist("set-cookie")
     # The session hint belongs in this list too: `proxy.ts` routes on it, so a
     # logout that leaves it standing sends the visitor back into a signed-in
-    # shell the API will refuse. The browser clears it as well, and this is the
-    # half that also covers a logout from another tab or a stale page.
+    # shell the API will refuse.
     for name in (
         ACCESS_TOKEN_COOKIE_NAME,
         REFRESH_TOKEN_COOKIE_NAME,
@@ -149,12 +139,9 @@ async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
 async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
     """Each revocation commits separately, so the order is the failure mode.
 
-    If the second call fails -- dropped connection, deadlock, statement
-    timeout -- whatever the first did stands. Losing the 30-minute credential
-    and keeping the 30-day one is survivable, because it dies on its own. The
-    other way round leaves a live 30-day refresh cookie in a browser that has
-    already been told it is signed out, which is exactly what this branch
-    exists to stop.
+    If the second call fails, whatever the first did stands. Losing the
+    30-minute credential and keeping the 30-day one is survivable; the other
+    way round leaves a live refresh cookie in a browser told it is signed out.
     """
     service = _service(user_id=9)
     order: list[str] = []
@@ -187,14 +174,9 @@ async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
 async def test_a_bearer_token_is_spent_only_on_itself() -> None:
     """An access token blacklists itself and signs nobody out everywhere.
 
-    It used to name its owner, so that a client holding only the pair
-    `/login` returned could end its own session. That fallback was a
-    session-denial primitive: the route is unauthenticated, naming a user
-    revokes every session they own, an access token rides on every request
-    and lands in logs and crash dumps, and no age bound resolves it -- short
-    enough to be safe is too short to serve the idle client it existed for.
-    Nothing holds only a Bearer here; the browser has the refresh cookie,
-    which wins anyway. So the capability went rather than the window shrank.
+    Letting a Bearer name its owner is a session-denial primitive: the route is
+    unauthenticated, revoking by user ends every session they own, and an access
+    token rides on every request and lands in logs and crash dumps.
     """
     service = _service(user_id=None)
 
@@ -227,12 +209,9 @@ class _RecordingDb:
 async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     """Binds the lookup to the hash and to `user_id` specifically.
 
-    Asserting only that the statement mentions the right columns leaves two
-    one-line breakages green, because a bind value never appears in rendered
-    SQL: matching on the raw token instead of its hash (logout then resolves
-    nobody and revokes nothing -- the 30-day-credential bug this branch
-    exists to close), and reading `.id` instead of `.user_id` off the row
-    (logout then revokes some other user's every session).
+    A bind value never appears in rendered SQL, so asserting on columns alone
+    leaves two breakages green: matching the raw token instead of its hash, and
+    reading `.id` instead of `.user_id` off the row.
     """
     row = MagicMock()
     row.id = 4321
@@ -285,9 +264,8 @@ async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
     """Only the duplicate-key conflict is tolerated, not every failure.
 
     `ON CONFLICT DO NOTHING` swallows exactly the duplicate `token_id` and
-    nothing else. Widening it -- to a bare `try`/`except Exception`, or to a
-    conflict target that matches more rows -- would turn a real DB fault into a
-    logout that reports success with the token still honoured.
+    nothing else. Widening it would turn a real DB fault into a logout that
+    reports success with the token still honoured.
     """
 
     class _Faulty:
@@ -306,16 +284,9 @@ async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
 async def test_the_blacklist_row_names_the_token_it_revokes() -> None:
     """Nothing else in the suite looks at what is actually inserted.
 
-    The other fakes ignore the statement handed to `execute()`, so swapping
-    `token_id=token_id` for `token_id=user_id` -- or dropping `expires_at`, or
-    writing the wrong user -- leaves every test green while the blacklist stops
-    matching the token it is meant to revoke. `is_access_token_revoked` then
-    answers False forever and a spent token keeps working.
-
-    The same capture pins the conflict clause: without it a second logout
-    carrying the same token raises a duplicate-key IntegrityError on a route
-    whose entire premise is that it always succeeds. This fake has no
-    `rollback()` at all, so any attempt to recover from one would fail here.
+    The other fakes ignore the statement handed to `execute()`, so writing the
+    wrong `token_id` leaves every test green while a spent token keeps working.
+    The same capture pins the conflict clause a second logout depends on.
     """
 
     class _CapturingDb:

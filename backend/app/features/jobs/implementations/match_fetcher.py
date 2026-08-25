@@ -123,8 +123,7 @@ class MatchFetcherJob(BaseJob):
 
         # The identifier, not the row: this closure runs after a skipped match
         # has rolled the session back, and a rolled-back session expires every
-        # instance it holds. Reading `player.puuid` there raises instead of
-        # reporting the match that failed.
+        # instance it holds.
         puuid = player.puuid
 
         # Fetch new matches with rate limiting
@@ -162,10 +161,9 @@ class MatchFetcherJob(BaseJob):
         self.metrics["records_created"] += count
 
         if len(self._errors_encountered) != error_count_before:
-            # Same rollback, other half of the problem: everything below reads
-            # `player` synchronously, and an expired read outside an await
-            # raises `MissingGreenlet`, which `is_database_job_error` then
-            # calls fatal. One SELECT per failing player buys the row back.
+            # Same rollback, other half: everything below reads `player`
+            # synchronously, and an expired read outside an await raises
+            # `MissingGreenlet`, which `is_database_job_error` calls fatal.
             await db.refresh(player)
 
         if len(self._errors_encountered) == error_count_before:
@@ -190,10 +188,9 @@ class MatchFetcherJob(BaseJob):
         except RateLimitError:
             raise
         except Exception as e:
-            # This one re-raises rather than returning, because its caller is
-            # `_process_player`, which has no stop channel of its own: the
-            # exception is how the decision reaches the loop, via
-            # `_handle_player_processing_error`.
+            # This one re-raises rather than returning, because its caller
+            # `_process_player` has no stop channel of its own: the exception
+            # is how the decision reaches the loop.
             if await self.handle_player_error(
                 db,
                 e,

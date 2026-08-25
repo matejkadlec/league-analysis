@@ -1,6 +1,5 @@
 # APScheduler 3.x ships neither stubs nor a `py.typed` marker. The rule is off
-# project-wide in `pyproject.toml`; the `strict` header above resets it to the
-# strict default, so restore the project setting here.
+# project-wide in `pyproject.toml`; `strict` resets it, so restore it here.
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 

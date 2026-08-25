@@ -211,8 +211,7 @@ export function SignInForm() {
                   <div className="space-y-2">
                     {/* A heading over the widget, not a form field: there is
                         no control to label, and a FormLabel would point
-                        `htmlFor` at an id nothing renders. The widget is
-                        named through aria-labelledby below. */}
+                        `htmlFor` at an id nothing renders. */}
                     <p
                       id="sign-in-captcha-heading"
                       className="text-sm font-medium leading-none text-gray-700"

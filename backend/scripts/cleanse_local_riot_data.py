@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Cleanse verified local Riot data and normalize the LGA-11 QA accounts.
 
-The command is intentionally fail-closed. It is read-only by default and will
-only mutate a database after an explicit ``--apply`` plus a verified backup.
-It is for the local development database only; it must never be used for a
-production or shared database.
+Fail-closed: read-only by default, and it only mutates a database after an
+explicit ``--apply`` plus a verified backup. For the local development
+database only; it must never be used for a production or shared database.
 """
 
 from __future__ import annotations

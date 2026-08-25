@@ -247,14 +247,12 @@ async def refresh_access_token(
 
 
 # Deliberately not rate limited: `get_remote_address` keys on
-# `request.client.host`, and browser traffic arrives through the Next.js
-# rewrite, so one bucket is shared by everyone -- and refusing a logout
-# strands a live 30-day token, which costs more than an extra hash lookup.
+# `request.client.host` and browser traffic arrives through the Next.js
+# rewrite, so one shared bucket would strand live 30-day tokens.
 @router.post("/logout")
 # No body parameter: declaring one makes FastAPI validate the body, so a
 # `navigator.sendBeacon` logout (`text/plain`) becomes a 422 on a route
-# whose contract is that it cannot fail -- and a 422 here revoked nothing.
-# A future non-cookie client reads the body by hand and ignores junk.
+# whose contract is that it cannot fail.
 async def logout(
     request: Request,
     response: Response,
@@ -262,22 +260,9 @@ async def logout(
 ) -> MessageResponse:
     """Revoke whatever session the request still carries, and always succeed.
 
-    This deliberately does not depend on a valid access token. It used to, and
-    that made it fail exactly when it mattered: the access token expires after
-    30 minutes while the refresh token lives 30 days, so logging out after any
-    idle period returned 401 and revoked nothing, leaving a usable 30-day
-    credential in the browser of someone who had just been told they were
-    signed out. The client cannot make up the difference — only the server can
-    revoke, and clearing cookies merely hides the credential.
-
-    Identity therefore comes from the refresh cookie, and an unauthenticated
-    call is answered rather than rejected: logout is idempotent, and a caller
-    can only ever revoke the session their own request already carries.
-
-    "Always succeed" means never refusing a caller for lacking credentials. A
-    database fault still propagates as a 500 with the cookies left in place,
-    deliberately: answering 200 there would report a revocation that did not
-    happen, which is the failure this route exists to stop.
+    Identity comes from the refresh cookie, never a valid access token, which
+    expires 30 minutes into a 30-day session; an unauthenticated call is
+    answered, not rejected. A database fault still propagates as a 500.
     """
     # The Authorization header first, matching `get_request_access_token`, so
     # a non-browser client holding only the pair `/login` returned still gets
@@ -291,16 +276,14 @@ async def logout(
 
     # Only the refresh token names a user: naming one signs them out everywhere
     # and this route is unauthenticated, so honouring an access token here --
-    # which lands in logs and crash dumps -- would be a replayable "sign this
-    # user out of everything" button.
+    # which lands in logs -- would be a replayable sign-out-everywhere button.
     user_id: int | None = None
     if refresh_token:
         user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
 
     # Refresh tokens first. Each revocation commits on its own, so a failure
-    # between the two leaves whatever the earlier call already did. Losing the
-    # 30-day credential and keeping the 30-minute one is survivable; the other
-    # order strands a live refresh cookie in a browser already told it is out.
+    # between the two leaves the earlier one done: losing the 30-day credential
+    # and keeping the 30-minute one is the survivable half of that.
     if user_id is not None:
         await auth_service.revoke_all_refresh_tokens_for_user(user_id)
     if access_token:
@@ -308,9 +291,8 @@ async def logout(
 
     if user_id is not None:
         # Only for a caller that proved it holds a credential. This issues
-        # table-wide DELETEs and a COMMIT, and the endpoint is unauthenticated,
-        # so running it unconditionally would let anonymous requests drive
-        # write transactions at request rate.
+        # table-wide DELETEs and a COMMIT on an unauthenticated endpoint, so
+        # running it unconditionally hands anonymous requests a write loop.
         await auth_service.cleanup_expired_token_state()
     if user_id is not None:
         logger.info("logout_succeeded", user_id=user_id)
@@ -319,9 +301,8 @@ async def logout(
         # anonymous POST loop would otherwise be a free way to fill the logs.
         logger.debug("logout_succeeded_without_a_session")
     # Only for a request that actually carried something. A deletion Set-Cookie
-    # applies in any first-party context -- a cross-site top-level form POST is
-    # one -- where SameSite=Lax withholds the cookies, so it revokes nothing
-    # while stranding the live refresh row.
+    # applies in first-party contexts where SameSite=Lax withheld the cookies,
+    # so it would revoke nothing while stranding the live refresh row.
     if any((access_token, refresh_token, request.cookies.get(AUTH_STATE_COOKIE_NAME))):
         clear_auth_cookies(response)
     return MessageResponse(message="Successfully logged out")
@@ -346,12 +327,7 @@ async def register_user(
 ) -> User:
     """Register a new user account.
 
-    Password requirements:
-    - At least 8 characters
-    - At least one lowercase letter
-    - At least one uppercase letter
-    - At least one digit
-    - At least one special character
+    Passwords need 8+ characters with lower, upper, digit and special.
     """
     return await auth_service.create_user(user_create)
 

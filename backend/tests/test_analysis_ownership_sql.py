@@ -1,19 +1,8 @@
 """Which account a stored analysis answers to, asserted by running the query.
 
-Both analysis features keyed every stored run on `(puuid, created_at)` and
-nothing else, so a run belonged to the Riot player rather than to the account
-that asked for it. The whole of LGA-102 is one predicate per query, and a
-mocked `db.execute` cannot see a predicate: it returns the row it was handed
-whatever the WHERE clause says. Every other test in this suite would have
-stayed green with the owner removed again -- 1,028 of them did, before this
-file existed.
-
-So these run the real statements against a real database, in the shape
-`test_auth_logout_identity_sql.py` established: SQLite in memory with `core`
-and `auth` attached as schemas, rows in through the ORM, answers out through
-the services' own public methods. Two accounts, one Riot player: the negative
-assertion -- that the other account's run is *not* returned, cancelled or
-deleted -- is the point of the file.
+A mocked `db.execute` cannot see a predicate, so these run the real statements
+against SQLite in memory with `core` and `auth` attached as schemas. Two
+accounts, one Riot player: the negative assertion is the point of the file.
 """
 
 from collections.abc import Iterator
@@ -34,10 +23,9 @@ from app.features.smurf_boost_detection.models import SmurfBoostAnalysis
 from app.features.smurf_boost_detection.service import SmurfBoostDetectionService
 from app.model_registry import import_all_models
 
-# Both tables now carry a foreign key to `auth.users`, and SQLAlchemy resolves
-# a key by looking the target up in the metadata. Without every model imported
-# it is absent, and creating the two tables under test fails on the reference
-# rather than on anything to do with them.
+# Both tables carry a foreign key to `auth.users`, and SQLAlchemy resolves a key
+# by looking the target up in the metadata. Without every model imported,
+# creating the two tables under test fails on the reference.
 import_all_models()
 
 
@@ -111,8 +99,7 @@ def _smurf_service(session: Session, user_id: int) -> SmurfBoostDetectionService
     service = SmurfBoostDetectionService(cast(Any, _SyncSessionShim(session)), user_id)
     # `get_latest` also computes a staleness flag, which reads the match
     # tables. Those carry column types SQLite will not render, and staleness
-    # is not what any test here is about: the subject is which run comes back,
-    # not what is said about it. Stubbed rather than built.
+    # is not what any test here is about.
     service._newest_eligible_match_id = _no_newest_match  # type: ignore[method-assign]
     return service
 
@@ -194,9 +181,7 @@ async def test_the_newest_run_read_back_is_the_callers_own(session: Session) -> 
 
     A Rank Manipulation run is scored against thresholds resolved per account
     from `auth.user_card_preferences`, and the row carries them back to be
-    rendered. So the other account's newer run is not a slightly stale answer
-    here -- it is somebody else's settings, presented beside a settings card
-    that tells this viewer those settings are theirs alone.
+    rendered. The other account's newer run is somebody else's settings.
     """
     now = datetime.now(UTC)
     mine = _store_smurf(
@@ -238,10 +223,9 @@ async def test_expiring_abandoned_runs_leaves_another_account_running(
 ) -> None:
     """Reading is a write here, and the write was unowned too.
 
-    `get_latest` terminalizes an active row older than the lease, on the
-    reasoning that the run executes inside its own request so nothing can
-    still be computing. Unowned, that made a *read* by one account able to
-    fail another account's in-flight run.
+    `get_latest` terminalizes an active row older than the lease. Unowned,
+    that made a *read* by one account able to fail another account's
+    in-flight run.
     """
     stale = datetime.now(UTC) - timedelta(hours=2)
     session.add(

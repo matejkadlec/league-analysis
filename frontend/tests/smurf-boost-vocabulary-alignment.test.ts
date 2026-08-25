@@ -15,9 +15,8 @@ const ENGINE_DIR = join(here, "../../backend/app/features/smurf_boost_detection"
 
 /**
  * The engine's identifiers are copied by hand into the vocabulary module, and
- * the deliberate self-naming fallback is why nothing else notices the copy
- * drifting. One-way, and both constant shapes matter: the family ids do not
- * spell the NOTE_ prefix, so a NOTE_-only sweep would pass vacuously.
+ * a self-naming fallback means nothing else notices the copy drifting. Both
+ * constant shapes matter: family ids do not spell the NOTE_ prefix.
  */
 function backendIdentifiers(prefix: "NOTE_" | "FAMILY_"): string[] {
   const ids: string[] = [];

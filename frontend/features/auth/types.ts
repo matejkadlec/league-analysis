@@ -34,9 +34,8 @@ export interface AuthContextType {
   // know when the request has actually come back.
   /**
    * Ends the session. Without the flag this changes nothing locally when the
-   * server could not be reached -- the safe answer for anything automatic,
-   * which is what a timer or an effect will write. Pass the flag only from a
-   * control a person just used.
+   * server could not be reached -- the safe answer for anything automatic.
+   * Pass the flag only from a control a person just used.
    */
   logout: (options?: {
     evenIfTheServerCannotBeReached?: boolean;

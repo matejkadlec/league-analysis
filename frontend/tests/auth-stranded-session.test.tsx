@@ -40,9 +40,8 @@ vi.mock("@/features/auth", () => ({
 }));
 
 // The refusals `/auth/refresh` actually issues, body and all. A bodyless
-// `new Response("{}", { status: 401 })` is not one of them, and using it here
-// hid the fact that the client would take an edge-minted 403 -- a Cloudflare
-// challenge, say -- for a refusal from this API.
+// `new Response("{}", { status: 401 })` is not one of them, and the client
+// must not take an edge-minted 403 for a refusal from this API.
 function refusal(status: number, code: string): Response {
   return new Response(JSON.stringify({ detail: { code, message: code } }), {
     status,
@@ -106,8 +105,7 @@ describe("a session the API rejected", () => {
   it("offers a retry instead of a blank page when the server is unreachable", async () => {
     // A hint still set means the server could not be reached, not a rejection.
     // `proxy.ts` sends /sign-in back to / while it lives, so redirecting
-    // bounces forever; rendering null was the original bug -- nothing to
-    // click, and the only thing that re-checks runs on mount.
+    // bounces forever, and rendering null leaves nothing to click.
     setHint();
 
     const { getByRole, getByText } = render(
@@ -137,8 +135,7 @@ describe("a session the API rejected", () => {
   it("escapes the retry surface once a retry proves the session is dead", async () => {
     // The retry clears the hint, which changes no React state and the cookie
     // is not reactive -- so without an explicit re-read the gate shows "Can't
-    // reach the server" forever over a session that is definitively gone, with
-    // reloading the only exit and nothing on screen saying so.
+    // reach the server" forever over a session that is definitively gone.
     setHint();
     auth.checkAuth.mockImplementation(async () => {
       clearHint();
@@ -162,9 +159,8 @@ describe("a session the API rejected", () => {
 
   it("says what it is doing once the probe has run long enough to look broken", async () => {
     // This gate wraps the entire layout, so a backend that accepts the
-    // connection and hangs meant a white page for the full ten-second
-    // deadline -- twice that when a refresh is honoured and the second probe
-    // hangs too. The reported symptom, merely time-boxed.
+    // connection and hangs means a white page for the full ten-second
+    // deadline -- twice that when a refresh is honoured and the second hangs.
     vi.useFakeTimers();
     auth.isLoading = true;
     setHint();
@@ -174,8 +170,7 @@ describe("a session the API rejected", () => {
 
       // Against a literal, not the constant under test: advancing
       // `SLOW_PROBE_NOTICE_MS - 1` only proves the component honours its own
-      // value, so a one-millisecond delay -- the flash on every healthy page
-      // load this half prevents -- would pass by construction.
+      // value, so a one-millisecond delay would pass by construction.
       expect(SLOW_PROBE_NOTICE_MS).toBeGreaterThanOrEqual(300);
 
       await act(async () => {
@@ -193,9 +188,8 @@ describe("a session the API rejected", () => {
     }
   });
 
-  // Every entry, not a sample of one: asserting `/privacy-policy` alone let a
-  // dropped `/cookie-policy` pass the whole suite, sending a signed-out
-  // visitor from the consent banner to /sign-in. The list is shared with
+  // Every entry, not a sample of one: asserting `/privacy-policy` alone lets
+  // a dropped `/cookie-policy` pass the whole suite. The list is shared with
   // `proxy.ts`, so this sweeps whatever it holds.
   it.each(PUBLIC_ROUTES)("leaves the public route %s alone", async (route) => {
     nav.pathname = route;
@@ -222,9 +216,8 @@ describe("a session the API rejected", () => {
 describe("the can't-reach-the-server surface", () => {
   it("says a retry is running, and refuses to stack another", async () => {
     // Both actions can take the full ten-second deadline, and this surface
-    // exists for exactly the server that will take it. With nothing on screen
-    // moving, the visitor reads the button as dead and clicks again, stacking
-    // another probe each time.
+    // exists for exactly the server that will take it. With nothing moving,
+    // the visitor reads the button as dead and stacks another probe.
     setHint();
     let release: (() => void) | null = null;
     auth.checkAuth.mockImplementation(
@@ -270,8 +263,7 @@ describe("the can't-reach-the-server surface", () => {
   it("offers a way out when retrying will never work", async () => {
     // A persistent 500 on one account takes this branch forever: `proxy.ts`
     // sends /sign-in back here while the hint lives, and the sidebar's Sign
-    // Out is not drawn for an unauthenticated visitor. Without this control
-    // the only escape is deleting the cookie by hand in devtools.
+    // Out is not drawn for an unauthenticated visitor.
     setHint();
     auth.logout.mockImplementation(async () => {
       clearHint();
@@ -344,9 +336,8 @@ describe("the sign-in page", () => {
 describe("giving up on a session", () => {
   it("deletes with the path the server wrote, not the current page's", () => {
     // jsdom serves every test from "/", so a delete that omits path=/ passes
-    // here and fails in production: a visitor on /player-overview would
-    // delete a page-scoped cookie while the "/" hint survived its own
-    // delete -- the stranded state, now permanent.
+    // here and fails in production: a visitor on /player-overview would delete
+    // a page-scoped cookie while the "/" hint survived its own delete.
     const written: string[] = [];
     const original = Object.getOwnPropertyDescriptor(
       Document.prototype,
@@ -383,10 +374,9 @@ describe("giving up on a session", () => {
   });
 
   it("reads the hint as present only for the value the server writes", async () => {
-    // `proxy.ts` compares against AUTH_STATE_COOKIE_VALUE exactly. Relaxing
-    // this to a name-only match left every test green while the edge and the
-    // browser silently disagreed about who is signed in -- which is the
-    // disagreement the whole fix is about.
+    // `proxy.ts` compares against AUTH_STATE_COOKIE_VALUE exactly. A name-only
+    // match leaves every test green while the edge and the browser silently
+    // disagree about who is signed in.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=something-else; path=/`;
 
     expect(hasAuthStateCookie()).toBe(false);
@@ -395,8 +385,7 @@ describe("giving up on a session", () => {
   it("does not take an edge challenge for a refusal", async () => {
     // Cloudflare fronts these routes: a challenge answers with 403 and an HTML
     // body the origin never sees. Taking that for a refusal retracts the hint
-    // and strands a 30-day token nothing revoked, for as long as the challenge
-    // lasts.
+    // and strands a 30-day token nothing revoked.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("<html><title>Access denied</title></html>", {
@@ -412,10 +401,9 @@ describe("giving up on a session", () => {
   });
 
   it("still recognises a refusal wrapped in a problem+json envelope", async () => {
-    // Why the media type is matched loosely: an audit answered errors as RFC
-    // 9457 `application/problem+json`, and a strict `application/json` match
-    // stopped every genuine sign-out, leaving a dead session on "Can't reach
-    // the server" forever.
+    // Why the media type is matched loosely: errors can come back as RFC 9457
+    // `application/problem+json`, and a strict `application/json` match stops
+    // every genuine sign-out.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -453,9 +441,8 @@ describe("giving up on a session", () => {
 
   it("does not treat a 403 about something else as the end of the session", async () => {
     // A 403 means "not authorized for this", not "your session is over". An
-    // audit added an `email_verified` gate to the dependency every protected
-    // route shares and signed out every visitor while their refresh token
-    // stayed live -- signing in again stranded one more token each time.
+    // `email_verified` gate on the dependency every protected route shares
+    // would sign out visitors whose refresh token is still live.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       refusal(403, "EMAIL_NOT_VERIFIED"),
@@ -469,17 +456,15 @@ describe("giving up on a session", () => {
 
   it("keeps the deadline short enough to be a deadline", async () => {
     // Every other deadline assertion is relative to this constant, so nothing
-    // bounded it above: raising it to ten minutes left the suite green while a
-    // hung backend held the visitor on a spinner for ten minutes -- the
-    // reported symptom with a nicer message.
+    // bounds it above: raising it to ten minutes leaves the suite green while
+    // a hung backend holds the visitor on a spinner for that long.
     expect(AUTH_PROBE_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
   });
 
   it("gives up on the refresh at the deadline, not never", async () => {
     // Without a deadline a backend that accepts the connection and hangs
-    // strands the caller exactly as a probe that never settles would. Asserted
-    // as an effect: this used to check only that the signal was an
-    // `AbortSignal`, which stayed green with the deadline deleted.
+    // strands the caller. Asserted as an effect: checking only that the signal
+    // is an `AbortSignal` stays green with the deadline deleted.
     setHint();
     vi.useFakeTimers();
     const restoreDeadlines = installDrivableAbortDeadlines();
@@ -507,9 +492,8 @@ describe("giving up on a session", () => {
 
   it("gives up on the post-teardown logout at the deadline, not never", async () => {
     // `refreshInFlight` clears only once the post-teardown logout settles, so
-    // without a deadline on it one hung logout leaves every later refresh
-    // awaiting a promise that never settles: token refresh silently dead for
-    // the whole tab.
+    // without a deadline one hung logout leaves every later refresh awaiting a
+    // promise that never settles: token refresh silently dead for the tab.
     setHint();
     vi.useFakeTimers();
     const restoreDeadlines = installDrivableAbortDeadlines();
@@ -542,10 +526,9 @@ describe("giving up on a session", () => {
   });
 
   it("clears the hint when the server rejects the refresh", async () => {
-    // The load-bearing line of the whole fix. For the reported visitor --
-    // hint cookie, no usable tokens -- this rejection is what retracts the
-    // hint, which is what lets the gate redirect instead of rendering
-    // nothing. Deleting it used to pass the entire suite.
+    // For the reported visitor -- hint cookie, no usable tokens -- this
+    // rejection is what retracts the hint, which is what lets the gate
+    // redirect instead of rendering nothing.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       refusal(401, "INVALID_REFRESH_TOKEN"),
@@ -560,8 +543,7 @@ describe("giving up on a session", () => {
   it("ends the session when the account is deactivated", async () => {
     // `/auth/refresh` answers 403 ACCOUNT_INACTIVE after revoking every token
     // server-side. Nothing else feeds a 403 to a refresh, so narrowing the
-    // refusal check to `=== 401` passed the whole gate and left the visitor on
-    // "Can't reach the server" for good.
+    // refusal check to `=== 401` strands the visitor for good.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       refusal(403, "ACCOUNT_INACTIVE"),
@@ -585,8 +567,7 @@ describe("giving up on a session", () => {
 
     // Reported as what it was, status and all. A caller that cannot tell this
     // from a refusal is one `if (!result) logout()` away from signing the
-    // visitor out over a redeploy, and that is the shape an audit used to walk
-    // past every guard in the repo with.
+    // visitor out over a redeploy.
     expect(result).toEqual({ outcome: "unavailable", status: 502 });
     expect(hasAuthStateCookie()).toBe(true);
   });
@@ -603,9 +584,8 @@ describe("giving up on a session", () => {
 
   it("never answers a refresh with a falsy value", async () => {
     // Nothing stops someone writing `if (!(await refreshAccessToken()))
-    // logout()`; this makes it inert. Every outcome is truthy, so that check
-    // is dead code rather than a teardown over a redeploy, and telling a
-    // refusal from an outage means reading `outcome`.
+    // logout()`; every outcome is truthy, so that check is dead code rather
+    // than a teardown over a redeploy. Telling the two apart means `outcome`.
     setHint();
     const answers: unknown[] = [];
     for (const respond of [
@@ -627,9 +607,8 @@ describe("giving up on a session", () => {
 
   it("does not tear down a session that started after it was rejected", async () => {
     // A shared machine: A signs out while a refresh of A's session is still
-    // in flight, B signs in, then the stale refresh finally comes back 401.
-    // Acting on it here would delete B's hint and bounce B -- who just signed
-    // in successfully -- straight back to the sign-in page.
+    // in flight, B signs in, then the stale refresh comes back 401. Acting on
+    // it here would delete B's hint and bounce B back to the sign-in page.
     setHint();
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       removeAuthTokens(); // A signs out mid-flight.
@@ -640,9 +619,8 @@ describe("giving up on a session", () => {
     const result = await refreshAccessToken();
 
     // Reported as nothing learned, not as `unavailable` carrying the 401.
-    // `api.ts` re-encodes a status into a response and `normalizeApiError`
-    // reads 401 back as `kind: "authentication"`, so passing the status on
-    // would hand B somebody else's refusal as their own.
+    // `normalizeApiError` reads 401 back as `kind: "authentication"`, so
+    // passing the status on hands B somebody else's refusal as their own.
     expect(result).toEqual({ outcome: "unreachable" });
     expect(hasAuthStateCookie()).toBe(true);
   });
@@ -650,8 +628,7 @@ describe("giving up on a session", () => {
   it("does not let a refresh that lands after teardown resurrect it", async () => {
     // Also why this logout is not skipped when somebody signed in since the
     // teardown: /auth/refresh re-sets all three cookies under the same names
-    // and path, so the browser has already replaced their jar -- skipping
-    // leaves a shell with their name on it sending someone else's credentials.
+    // and path, so the browser has already replaced their jar.
     setHint();
 
     // A refresh already in flight when the user logs out. The server answers
@@ -675,9 +652,8 @@ describe("giving up on a session", () => {
     // is HttpOnly, so the session has to be ended server-side.
     const logoutCall = calls.find((call) => call.url.includes("/auth/logout"));
     // The shape, not just the URL. As a GET this is a 405 and as a request
-    // without cookies the server resolves nobody -- both revoke nothing, and
-    // both leave the assertion "a call happened" perfectly green while the
-    // rotated 30-day token stays live for whoever uses the machine next.
+    // without cookies the server resolves nobody -- both revoke nothing while
+    // leaving "a call happened" perfectly green.
     expect(logoutCall?.init).toEqual(
       expect.objectContaining({ method: "POST", credentials: "include" }),
     );

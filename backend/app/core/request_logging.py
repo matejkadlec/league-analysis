@@ -45,14 +45,9 @@ def _log_http_request_completed(
 class RequestLoggingMiddleware:
     """Bind request contextvars and log exactly one event per HTTP request.
 
-    The contextvars are bound before the inner app runs so every downstream
-    log event carries the request context, and cleared after the inner app
-    returns. The completion event is logged when the terminal response body
-    message passes through, not after the inner app returns: Starlette awaits
-    background tasks inside the response call, so waiting would attribute
-    background-work time to ``duration_ms`` and delay the event by the whole
-    task runtime. Query strings, headers, and bodies are deliberately never
-    read.
+    Logs on the terminal response body message, not after the inner app
+    returns: Starlette awaits background tasks there, which would fold their
+    runtime into ``duration_ms``. Query strings, headers and bodies are unread.
     """
 
     def __init__(self, app: ASGIApp) -> None:

@@ -109,10 +109,9 @@ describe("sign-in error mapping", () => {
   });
 
   it("tells a locked-out account when it may try again", () => {
-    // The existing lockout case passes an unparseable `locked_until`, so the branch
-    // that names a time had never run -- without it a lockout says "try again
-    // later" and the person guesses between a minute and a day. The assertion pins
-    // the shape, not the instant: the fixture is UTC and the gate is not.
+    // Without the branch that names a time, a lockout says "try again later"
+    // and the person guesses between a minute and a day. The assertion pins the
+    // shape, not the instant: the fixture is UTC and the gate is not.
     const message = getLoginErrorMessage(
       createAuthLoginError(
         {
@@ -134,10 +133,9 @@ describe("sign-in error mapping", () => {
   });
 
   it("does not treat a thrown non-Error as an authentication error", () => {
-    // Dropping the `instanceof Error` gate survived the whole suite. It is the gate
-    // in `getLoginRequestError`, so a bare object thrown by the fetch layer would
-    // skip the NETWORK_ERROR fallback and stop telling the visitor to check their
-    // connection.
+    // `getLoginRequestError` gates on `instanceof Error`, so a bare object thrown
+    // by the fetch layer would skip the NETWORK_ERROR fallback and stop telling
+    // the visitor to check their connection.
     expect(isAuthLoginError("boom")).toBe(false);
     expect(isAuthLoginError({ code: "ACCOUNT_LOCKED" })).toBe(false);
     expect(isAuthLoginError(null)).toBe(false);
@@ -148,8 +146,7 @@ describe("sign-in error mapping", () => {
   it("names the two refusals a person can act on themselves", () => {
     // A rejected CAPTCHA and a rate limit are both recoverable by the person
     // in front of the form -- solve it again, or wait. Falling through to
-    // "Something went wrong" turns both into a dead end, and the CAPTCHA one
-    // is reachable on any retry after a failed check.
+    // "Something went wrong" turns both into a dead end.
     expect(
       getLoginErrorMessage(
         createAuthLoginError({ detail: { code: "CAPTCHA_INVALID" } }, 403),

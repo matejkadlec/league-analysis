@@ -117,9 +117,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   ).toHaveCount(0);
 
   // The panel is sized by its entries, while the tab that opens it keeps the
-  // fixed rail height. Stretching the panel to the rail left about 100px of
-  // empty card under a three-entry list. Measured rather than asserted on a
-  // class, so a future height lands here rather than passing silently.
+  // fixed rail height. Measured rather than asserted on a class, so a future
+  // height lands here rather than passing silently.
   const panel = quickNavigation.getByRole("navigation", {
     name: "Page sections",
   });
@@ -128,9 +127,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   // and counting it would loosen the bound below by a whole entry.
   const entryCount = await panel.getByRole("button").count();
   // Measured: three entries render 132px, against the 242px the fixed rail
-  // height used to force. ~40px an entry plus the nav's `py-2`, with a little
-  // slack -- loose enough to survive a font change, tight enough that a
-  // return to 242px lands here.
+  // height used to force. ~40px an entry plus the nav's `py-2`, loose enough
+  // to survive a font change, tight enough that a return to 242px lands here.
   expect(panelBox!.height).toBeLessThanOrEqual(entryCount * 40 + 16 + 8);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
@@ -237,8 +235,7 @@ test("renders the page at the sizes the layout was specified in", async ({
     .getByRole("button", { name: "Detection Settings", exact: true })
     .click();
 
-  // Muted helper copy was 12px against a dark background, which is the whole
-  // complaint the readability ticket opens with. These are measured rather
+  // Muted helper copy was 12px against a dark background. Measured rather
   // than asserted as class names: a utility that stops resolving still leaves
   // the class in the markup.
   const helper = page.locator("#smurf-boost-recentWindowSize-help");
@@ -328,8 +325,7 @@ test("renders the page at the sizes the layout was specified in", async ({
 /**
  * The reason the page has a search of its own: analysing somebody who is not
  * the account's player, without becoming them. The other spec asserts only
- * that the control is on screen, which passed just as well when choosing a
- * player meant leaving for Player Overview.
+ * that the control is on screen.
  */
 test("compares a player the account has never tracked, and stays itself", async ({
   page,
@@ -424,8 +420,7 @@ test("seeds the card's search with the first player an empty account picks", asy
 
   // The account that has never chosen a player: the one state where the card's
   // `key` does real work. `PlayerSelector` starts with an empty
-  // `initialSearchValue` here, so only the remount re-seeds the box with who was
-  // chosen.
+  // `initialSearchValue` here, so only the remount re-seeds the box.
   await installSmurfBoostMocks(page, { currentPlayer: null });
 
   await page.goto("/rank-manipulation");
@@ -448,8 +443,7 @@ test("seeds the card's search with the first player an empty account picks", asy
 /**
  * `accessibility.spec.ts` scans the three routes the populated-player harness
  * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.
- * The result card is included on purpose -- it is the widest, densest markup
- * in the feature and the part a scan of an unrun page would never reach.
+ * The result card is included on purpose -- a scan of an unrun page misses it.
  */
 test("has no WCAG A/AA violations, before or after a comparison", async ({
   page,

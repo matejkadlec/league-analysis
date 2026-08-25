@@ -2,12 +2,7 @@
 
 The parameters this repo configures measure ~42ms per call, and the API runs
 one worker per container, so an inline hash stalls every other request in
-flight for that long -- including the dummy-hash branch a failed login takes
-precisely so that timing says nothing about whether the account exists.
-
-Asserting `asyncio.to_thread` was called would only restate the
-implementation. This asserts the property that matters: the loop kept
-running while the hash ran.
+flight -- including the dummy-hash branch a failed login takes.
 """
 
 import asyncio

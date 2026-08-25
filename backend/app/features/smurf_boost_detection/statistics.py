@@ -1,10 +1,8 @@
 """Pure statistical helpers for `smurf-boost/v1`.
 
 The specification pins exact denominators, and `statistics` pins the same ones
-by documented contract -- `pvariance` divides by n, `variance` by n - 1 -- so
-the mean and the two variances are aliases. Everything below them stays spelled
-out: skewness, kurtosis and the Wilson interval are where library defaults
-really do disagree with the specification.
+by documented contract -- `pvariance` divides by n, `variance` by n - 1. Below
+them, skewness, kurtosis and the Wilson interval stay spelled out.
 """
 
 from __future__ import annotations
@@ -79,9 +77,8 @@ def bimodality_coefficient(values: Sequence[float]) -> float | None:
     """Bias-corrected bimodality coefficient.
 
     Skewness and excess kurtosis are standardized by the population second
-    central moment, not by the sample standard deviation. Mixing the two
-    produces a different statistic and would invalidate the calibrated
-    threshold. Returns None when the sample is too small or has no spread.
+    central moment, not by the sample standard deviation; mixing the two
+    invalidates the calibrated threshold. Returns None when there is no spread.
     """
     n = len(values)
     if n < 4:

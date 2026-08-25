@@ -49,8 +49,7 @@ const PRESETS_KEY = ["smurf-boost-presets"] as const;
 /**
  * Detection Settings behind a button: the form is a page's worth of fields
  * that most visits never touch, so it lives in a dialog rather than a card in
- * the reading flow. The trigger stays enabled through every query state -- the
- * dialog itself reports loading and failure.
+ * the reading flow. The trigger stays enabled through every query state.
  */
 export function SmurfBoostSettingsDialog() {
   const queryClient = useQueryClient();

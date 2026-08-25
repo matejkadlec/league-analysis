@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 
 /**
  * The value, held back until it has stopped changing for `delayMs`. It feeds a
- * query key, so the point is fewer requests, not a smoother render --
- * `useDeferredValue` would still fetch on every keystroke. Debounced as the
- * caller passes it: trimming inside the timeout restarts it on a stray space.
+ * query key, so the point is fewer requests -- `useDeferredValue` would still
+ * fetch on every keystroke. Trimming inside the timeout would restart it.
  */
 export function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);

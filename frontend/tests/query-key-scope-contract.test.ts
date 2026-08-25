@@ -35,8 +35,7 @@ interface QueryKeyUse {
 /**
  * Every key array this codebase writes, with its leading namespace string.
  * Both spellings count -- inline `queryKey: [...]` and the array a factory
- * returns -- or the last call site could move into a factory and drop the
- * namespace from this contract's view.
+ * returns -- or a call site could move into a factory and escape this contract.
  */
 const KEY_ARRAY_PATTERNS = [
   // [^\]] already spans newlines, so no dotall flag is needed.

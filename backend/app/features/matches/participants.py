@@ -260,9 +260,8 @@ class MatchParticipant(Base):
 
 
 # Composite indexes for common queries. No `idx_participants_match_puuid`:
-# `uq_match_participants_puuid_match` is unique on the same two columns in the
-# same order and its backing index already serves them. `match_id` carries no
-# `index=True` for the same reason -- it leads the primary key and that unique.
+# `uq_match_participants_puuid_match` is unique on the same two columns and
+# already serves them, as the primary key does for `match_id`.
 
 Index(
     "idx_participants_champion_win", MatchParticipant.champion_id, MatchParticipant.win

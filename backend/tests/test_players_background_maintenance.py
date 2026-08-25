@@ -40,9 +40,7 @@ async def test_the_global_tracking_recount_locks_the_row_it_rewrites() -> None:
 
     Two users acting on one player interleaved there: the untrack counted
     zero without seeing the other's uncommitted track, then wrote its stale
-    `false` last. The mapping table then said the player was tracked while
-    `core.players.is_tracked_by_anyone` -- the writer jobs' allowlist -- said
-    nobody tracked them, and nothing but another track or untrack clears it.
+    `false` last, and nothing but another track or untrack clears it.
     """
     statements: list[object] = []
 

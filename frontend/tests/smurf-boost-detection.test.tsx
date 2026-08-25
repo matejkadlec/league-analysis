@@ -293,10 +293,9 @@ describe("SmurfBoostDetection", () => {
     );
     expect(screen.getAllByText("Playing Pattern Change").length).toBe(2);
 
-    // A family reading is one of the five fixed words and nothing else. A digit
-    // here would mean the internal weighted sum had reached the screen. A raw
-    // win rate may still be a percentage inside a signal row, which is data
-    // rather than a verdict, so this is checked on the band element alone.
+    // A family reading is one of the five fixed words and nothing else: a digit
+    // here would mean the internal weighted sum had reached the screen. Checked
+    // on the band element alone, since a signal row may carry a percentage.
     const bands = screen.getAllByTestId(/^smurf-boost-band-/);
     expect(bands.length).toBe(2);
     const labels = Object.values(BAND_LABELS);
@@ -676,9 +675,8 @@ describe("SmurfBoostDetection", () => {
 
   it("says nothing about a run whose card is already gone", async () => {
     // A run can outlive the card that started it, and a mutation's options-level
-    // callbacks keep running after unmount. The guard that used to sit there
-    // compared against the unmounted closure's player, so it matched and announced
-    // over whoever the page was showing by then.
+    // callbacks keep running after unmount, so a guard on the closure's player
+    // would match and announce over whoever the page is showing by then.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -825,10 +823,9 @@ describe("SmurfBoostDetection", () => {
     // click contradict each other, and its wording is written for the Player
     // Card. This card's inline notice is the account that survives.
     expect(toast.warning).not.toHaveBeenCalled();
-    // Inline, not a toast that disappears: without it this reads exactly like
-    // a run on games fetched a second ago. In the backend's own words, too --
-    // a sentence of our own would promise a retry that a stale player id or
-    // an expired key cannot honour.
+    // Inline, not a toast that disappears: without it this reads exactly like a
+    // run on games fetched a second ago. In the backend's own words, since ours
+    // would promise a retry a stale player id or an expired key cannot honour.
     expect(
       screen.getByText(/The update reached Riot's rate limit\./),
     ).toBeTruthy();
@@ -995,10 +992,9 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("keeps the button shut until the comparison it owes has started", async () => {
-    // The hook reports the run finished and only then awaits its cache
-    // refresh before calling back. A click landing in that gap would be
-    // answered by the *previous* fetch's callback, and its own fetch would
-    // never be compared at all.
+    // The hook reports the run finished and only then awaits its cache refresh
+    // before calling back. A click landing in that gap would be answered by the
+    // *previous* fetch's callback, and its own fetch never compared.
     let releaseRefetch = () => {};
     getLatestSmurfBoostDetection
       .mockResolvedValueOnce({
@@ -1174,10 +1170,9 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("claims no fetch total when the stored count could not be re-read", async () => {
-    // The hook refreshes this player's caches before handing the card back
-    // its callback, and swallows a refresh that fails. The count is then the
-    // pre-fetch one for good -- so subtracting it announces "no new games"
-    // for a fetch that may well have added a dozen, and never corrects.
+    // The hook refreshes this player's caches before handing the card back its
+    // callback, and swallows a refresh that fails. Subtracting the stale count
+    // would announce "no new games" for a fetch that added a dozen.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1218,9 +1213,8 @@ describe("SmurfBoostDetection", () => {
 
   it("subtracts from no baseline when the count was unread at the click", async () => {
     // Clicked before the stored count arrived -- a slow or briefly failing
-    // stats read -- there is nothing to subtract from. Treating the unknown
-    // as zero would credit the fetch with the player's entire ranked history
-    // the moment the count does arrive.
+    // stats read -- there is nothing to subtract from. Treating the unknown as
+    // zero would credit the fetch with the player's entire ranked history.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),

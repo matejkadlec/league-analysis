@@ -1,8 +1,7 @@
 /**
  * The site's own origin and its crawl policy, declared once and baked into the
  * static payload at build time. `frontend/Dockerfile` refuses to build without
- * `NEXT_PUBLIC_SITE_URL`, so the default below is reachable only from
- * `npm run dev`, where localhost is what the browser is really talking to.
+ * `NEXT_PUBLIC_SITE_URL`, so the default below is reachable only from dev.
  */
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"

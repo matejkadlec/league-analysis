@@ -89,19 +89,9 @@ class PlayerService:
     async def _update_global_tracking_flag(self, puuid: str) -> bool:
         """Update core.players.is_tracked_by_anyone from all user mappings.
 
-        Locks the player row first: this counts and then writes what it
-        counted, and two users touching one PUUID at once used to interleave
-        there. A's untrack counted 0 without seeing B's uncommitted track,
-        waited on B's row lock, and then wrote its stale `false` last -- so
-        the mapping table said B tracks the player while the column said
-        nobody did, and `get_globally_tracked_players` is the allowlist both
-        writer jobs load. B's UI reads the mapping table, so it kept showing
-        the player as tracked while its matches and rank silently stopped.
-        Nothing self-heals that; only another track or untrack clears it.
-
-        A correlated `UPDATE ... SET is_tracked_by_anyone = EXISTS(...)` does not fix
-        it: under READ COMMITTED the subquery's snapshot predates the lock
-        wait, so the loser rewrites the same stale value.
+        Locks the player row first: count-then-write races otherwise leave
+        the stale count last. A correlated `EXISTS` does not fix it -- under
+        READ COMMITTED the subquery's snapshot predates the lock wait.
         """
         await self.db.execute(
             select(Player.puuid).where(Player.puuid == puuid).with_for_update()
@@ -174,13 +164,8 @@ class PlayerService:
         """One complete player, however the caller reached it.
 
         Both `/players/{puuid}` and the `current_player` on `/players/context`
-        answer with a `PlayerResponse` for the same row, so they have to build
-        it the same way. They did not: only the first filled the two match
-        counts, and `PlayerResponse` defaults them to 0, so the context
-        endpoint reported every player as having no matches. That was
-        invisible while nothing read the counts off a context player -- and
-        stopped being invisible the moment the frontend started seeding its
-        player cache from that response.
+        answer with a `PlayerResponse` for the same row, so both must fill the
+        match counts here -- `PlayerResponse` silently defaults them to 0.
         """
         response = self._to_response(
             player,
@@ -196,9 +181,8 @@ class PlayerService:
         """One player as one user sees it.
 
         `is_tracked` is per-user and has no column: `core.players` stores
-        `is_tracked_by_anyone`, which is the writer jobs' allowlist. Passing it
-        is therefore not optional, and every response is built here so that
-        stays true.
+        `is_tracked_by_anyone`, the writer jobs' allowlist. Passing it is
+        therefore not optional.
         """
         response = PlayerResponse.model_validate(player)
         response.is_tracked = is_tracked
@@ -281,9 +265,8 @@ class PlayerService:
 
         now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone:
-        # discovery cannot tell a re-encrypted PUUID from a Riot ID renamed away
-        # and reclaimed by another account, so merging would risk moving one
-        # player's history onto another. A duplicate row is visible and fixable.
+        # discovery cannot tell a re-encrypted PUUID from a reclaimed Riot ID,
+        # so merging would risk moving one player's history onto another.
         player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(
@@ -342,8 +325,6 @@ class PlayerService:
         if user is None:
             # Not a tracking failure: the session outlived its account row, so
             # the answer is "sign in again", not "that player does not exist".
-            # `get_current_active_user` catches this in every ordinary case;
-            # reaching here means the account was deleted mid-request.
             raise http_error(
                 401,
                 "AUTHENTICATION_REQUIRED",
@@ -491,8 +472,7 @@ class PlayerService:
 
         Rows, not `PlayerResponse`: the only callers are the two writer jobs
         and the job test runner, none of which has a current user, so the
-        per-user `is_tracked` field on the response had no meaning for them --
-        and both jobs then re-fetched the row they had just serialised away.
+        per-user `is_tracked` field on the response has no meaning for them.
         """
         query = (
             select(Player)

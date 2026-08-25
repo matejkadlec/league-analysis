@@ -14,9 +14,8 @@ const CONSTANTS = join(here, "../../backend/app/core/riot_api/constants.py");
 
 /**
  * Supported queues are decided on the backend and copied by hand into the
- * filter row and the queue-name lookup, with nothing connecting the three: a
- * queue added there renders as "Queue 490" with a green suite. One-way -- a
- * name for a queue the backend does not store is allowed.
+ * filter row and the queue-name lookup: a queue added there renders as
+ * "Queue 490". One-way -- an extra name the backend does not store is allowed.
  */
 function backendSupportedQueueIds(): number[] {
   const source = readFileSync(CONSTANTS, "utf8");

@@ -3,16 +3,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * LGA-101's size floor, for every analysis surface held to it. It moved here
- * from `rank-manipulation-surface.test.ts` when a second page was raised to the
- * same floor. Source text rather than a render: this has to hold for every
- * line, not the handful a browser test samples.
+ * LGA-101's size floor, for every analysis surface held to it. Source text
+ * rather than a render: this has to hold for every line, not the handful a
+ * browser test samples.
  */
 /**
  * Every file that renders part of each surface. The component directories are
- * read rather than listed -- a hand-kept list shipped with three of nine
- * components missing. `player-selector.tsx` is named explicitly because it
- * belongs to neither directory.
+ * read rather than listed, since a hand-kept list goes stale.
+ * `player-selector.tsx` is named explicitly, belonging to neither directory.
  */
 function componentsIn(directory: string): string[] {
   return readdirSync(directory)
@@ -64,8 +62,7 @@ describe.each(Object.entries(SURFACES))("%s", (_surface, paths) => {
   it("scans the files it is written against", () => {
     // Aimed at what is not derived: a page or shared control that was moved or
     // renamed would otherwise drop out silently. The count guards the other
-    // direction -- a components directory that resolved to nothing would pass
-    // every check below by scanning no source at all.
+    // direction -- an empty directory would pass every check below.
     for (const path of paths) {
       expect(() => readFileSync(path, "utf8"), path).not.toThrow();
     }

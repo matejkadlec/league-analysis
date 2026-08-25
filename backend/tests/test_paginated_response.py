@@ -1,9 +1,7 @@
 """The page envelope's field names, which three endpoints now share.
 
-`PaginatedResponse` is a win and a risk: one edit moves every paginated
-endpoint at once. Before it existed, renaming a counter was caught by exactly
-one test, on the matches side only -- the jobs list would have changed its wire
-contract with the suite green. These are the names the client reads.
+One edit to `PaginatedResponse` moves every paginated endpoint at once. These
+are the names the client reads.
 """
 
 import pytest

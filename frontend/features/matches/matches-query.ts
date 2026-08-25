@@ -15,8 +15,6 @@ const MATCH_HISTORY_DETAILED_KEY = "match-history-detailed";
 /**
  * The two caches the Match History surface reads, named once — the same
  * arrangement every other data-bearing feature keeps in its `*-query.ts`.
- * The two literals this replaced had already drifted onto different casing
- * conventions.
  */
 export function matchHistoryStatsQueryOptions(
   puuid: string,

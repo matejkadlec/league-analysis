@@ -22,8 +22,7 @@ const BRANDED_CLASSES = [
 /**
  * Every file allowed to hand-roll a gradient, and why it is not a branded
  * surface. A gradient outside this list is the failure the branded classes
- * exist to prevent: an action styled to look primary or destructive by
- * inline Tailwind, which then drifts from the real ones on the next change.
+ * exist to prevent: an action styled to look primary or destructive inline.
  */
 const HAND_ROLLED_GRADIENTS = new Map([
   ["components/ui/skeleton.tsx", "shadcn primitive's loading shimmer sweep"],
@@ -119,9 +118,8 @@ describe("branded style contract", () => {
    */
   it("gives every header card its own white", () => {
     // The element, not a window around it: a slice of surrounding characters
-    // is satisfied by a `text-white` on the parent or on the heading inside,
-    // and neither colours the card. Matching the opening tag also checks every
-    // header card in a file rather than whichever one comes first.
+    // is satisfied by a `text-white` on the parent or the heading inside, and
+    // neither colours the card. The tag match also checks every header card.
     const openingTag = /<[A-Za-z][^>]*\bid="header-card"[^>]*>/g;
     const missing = allSourceFiles()
       .filter((path) =>
@@ -166,9 +164,8 @@ describe("branded style contract", () => {
 
   /**
    * A class from a plugin that is not installed styles nothing.
-   * `@tailwindcss/typography` is not a dependency, so `prose prose-lg` on two
-   * pages were inert names that read as deliberate styling. Either half is fine
-   * on its own; the classes without the plugin are not.
+   * `@tailwindcss/typography` is not a dependency. Either half is fine on its
+   * own; the classes without the plugin are not.
    */
   it("does not use plugin classes the build cannot generate", () => {
     const manifest = readFileSync("package.json", "utf8");

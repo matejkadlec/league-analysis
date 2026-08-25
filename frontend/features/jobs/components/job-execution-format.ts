@@ -48,13 +48,11 @@ export function formatApiCallParamLabel(paramKey?: string | null): string {
 }
 
 // Deliberately not shared with the identical-looking set in
-// `job-execution-logs.tsx`: that one hides fields the row already renders,
-// this one skips fields the key emits positionally. Sharing them would drop a
-// hidden field from the key, and rows differing only in it would collide.
+// `job-execution-logs.tsx`: that one hides fields the row already renders, this
+// one skips fields the key emits positionally. Sharing them collides rows.
 const KEYED_POSITIONALLY = new Set(["level", "timestamp", "event"]);
 
-// Every field of a structlog record arrives as `unknown` -- the schema says
-// `z.record(z.string(), z.unknown())` and constrains no name, `event` and
+// Every field of a structlog record arrives as `unknown`, `event` and
 // `timestamp` included. Bare `String()` renders an object as `[object Object]`,
 // which reads as nothing on screen and collides with every other object here.
 export function logFieldText(value: unknown): string {

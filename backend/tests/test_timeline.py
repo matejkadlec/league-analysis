@@ -37,8 +37,7 @@ def test_synthetic_dto_includes_stored_game_version() -> None:
 def test_timeline_rows_tolerate_missing_game_version() -> None:
     # A stored match with no recorded version reaches timeline replacement as a
     # synthetic DTO whose `game_version` defaults to "" — the backfill path in
-    # `backfill_timeline_only_match` does exactly this. The old hand-rolled
-    # namespace dropped the attribute entirely, a shape no caller can produce.
+    # `backfill_timeline_only_match` does exactly this.
     participant = cast(
         MatchParticipant, SimpleNamespace(participant_id=1, team_id=100, puuid="p1")
     )
@@ -79,10 +78,8 @@ class _CommitFailsSession:
     """A session whose commit fails, so the caller's recovery is observable.
 
     A failed commit leaves the transaction aborted: every later statement on
-    the same session raises until something rolls it back. The Match Fetcher
-    runs many matches on one session, so a writer that re-raises without
-    rolling back turns one bad match into a failure for every match after it,
-    and only the first error in the run is the real one.
+    the same session raises until something rolls it back, and the Match
+    Fetcher runs many matches on one session.
     """
 
     def __init__(self, participants: list[object]) -> None:
@@ -140,9 +137,8 @@ def test_a_row_level_integrity_error_does_not_fail_the_whole_run() -> None:
     """One bad match is skipped; a broken session still stops the run.
 
     Both writers roll back before re-raising, so the session survives an
-    IntegrityError and the next match can be written. A lost connection or an
-    already-aborted transaction has no such guarantee and must still reach the
-    owning job.
+    IntegrityError. A lost connection or an already-aborted transaction has no
+    such guarantee and must still reach the owning job.
     """
     integrity = IntegrityError("insert", {}, ValueError("fk violation"))
 
@@ -158,20 +154,8 @@ async def test_timeline_rows_are_staged_only_after_a_flush() -> None:
     """The order these rows depend on, asserted instead of inherited.
 
     Both foreign keys on `core.match_timelines` point at rows the same
-    transaction is still holding as pending ORM objects, and the session is
-    `autoflush=False`. Across mappers SQLAlchemy orders a flush from
-    `relationship()` alone -- a `ForeignKey` in the DDL contributes no edge --
-    so when 2356d05 deleted `MatchTimeline.match` and `MatchTimeline.player` as
-    unread, the INSERT for these rows moved ahead of `core.players` and four
-    consecutive production Match Fetcher runs died on
-    `fk_match_timelines_puuid_players`.
-
-    Nothing in the gate saw it: the relationships really were unread, and the
-    ordering they bought is invisible to every type, lint and unit check. What
-    this asserts is narrower than what broke -- a recording fake sees the call
-    sequence, not the mapper graph, so it fails when the flush is removed or
-    moved after the rows are staged, and it cannot see a relationship deleted
-    somewhere else. `.claude/pitfalls.md` carries that half.
+    transaction still holds as pending ORM objects, with `autoflush=False`.
+    Across mappers only `relationship()` orders a flush -- DDL does not.
     """
     calls: list[str] = []
 

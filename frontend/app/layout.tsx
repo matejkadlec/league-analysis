@@ -61,8 +61,7 @@ export default async function RootLayout({
 
   // `dark` is written on the element, not chosen at runtime: there is no light
   // design. The splash, the sidebar's `#0a1428` and every branded gradient are
-  // defined only under `.dark`, so a viewer whose OS said light used to get
-  // white cards on a dark splash with no toggle to correct it.
+  // defined only under `.dark`.
   return (
     <html lang="en" className="dark">
       <body
@@ -80,8 +79,7 @@ export default async function RootLayout({
             </Suspense>
             {/* `min-w-0` because a flex item defaults to `min-width: auto`
                   and so refuses to shrink below its content. Without it, one
-                  wide child stretches the whole document sideways and every
-                  `overflow-x-auto` beneath this element is inert. */}
+                  wide child stretches the document and `overflow-x-auto` is inert. */}
             <main id="content" className="min-w-0 flex-1 bg-background">
               {children}
             </main>

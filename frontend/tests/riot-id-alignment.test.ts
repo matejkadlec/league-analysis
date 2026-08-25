@@ -12,9 +12,8 @@ import {
 
 /**
  * The Riot ID rules exist on both sides, so something has to hold them equal.
- * The route declares them as `Query(min_length=, max_length=, pattern=)`, which
- * puts them in the OpenAPI document, and this reads them back out. Needs
- * `OPENAPI_JSON`; without it the check skips rather than pretending to pass.
+ * The route declares them as `Query(...)`, which puts them in the OpenAPI
+ * document; without `OPENAPI_JSON` this skips rather than pretending to pass.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath

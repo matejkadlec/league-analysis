@@ -11,8 +11,7 @@ import {
 /**
  * The display-name rule exists on both sides, so something has to hold it
  * equal. Needs `OPENAPI_JSON`, which `test.sh` produces; without it the check
- * skips, and what keeps that skip honest is the convention check in
- * `api-contract-alignment.test.ts`.
+ * skips, kept honest by the convention check in `api-contract-alignment`.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath
@@ -43,8 +42,7 @@ const spec = openapiPath
 /**
  * `UserProfileUpdate.display_name` is optional, so its constraints sit inside
  * `anyOf` beside the null branch; `UserBase.display_name` is required and
- * carries them directly. Reading only the top level would silently find
- * `undefined` on the optional one and compare nothing.
+ * carries them directly. Reading only the top level would compare nothing.
  */
 function displayNameConstraints(schemaName: string) {
   const property = spec?.components.schemas[schemaName]?.properties?.[

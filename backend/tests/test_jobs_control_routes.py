@@ -1,12 +1,8 @@
 """What the pause/resume/stop routes answer, per outcome of the service call.
 
 The six control routes -- the regular trio and the test-run trio -- share one
-shape: ask the service and turn its answer into a 404/409/200. Nothing pinned
-that shape before this file, so a refactor could quietly have collapsed "this
-job does not exist" and "this job refused" into the generic server error --
-which is the one distinction the Jobs page acts on. (The test-run trio used
-to answer a refusal as 200-with-success:false; the frontend already collapsed
-both shapes into one toast, so unifying on 409 changed no UI.)
+shape: ask the service and turn its answer into a 404/409/200. "Does not
+exist" and "refused" are the one distinction the Jobs page acts on.
 """
 
 from collections.abc import Awaitable, Callable
@@ -118,10 +114,9 @@ async def test_refusal_is_409_carrying_the_service_message(
 async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> None:
     """The route neither swallows the failure nor turns it into a 404 or 409.
 
-    What the client sees is the app-level handler's one client-safe body, and
-    `test_unhandled_error_response.py` pins that. What matters here is that the
-    route lets it reach the handler rather than answering for it -- a bare
-    `except Exception` would make every outage look like a refused job.
+    The client sees the app-level handler's one client-safe body, pinned by
+    `test_unhandled_error_response.py`. What matters here is that the route
+    lets it reach the handler -- a bare `except Exception` would hide outages.
     """
     with pytest.raises(RuntimeError, match="connection reset"):
         await route(_service(RuntimeError("connection reset")))

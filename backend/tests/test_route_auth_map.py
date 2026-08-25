@@ -1,18 +1,8 @@
 """Which routes require a signed-in user, and which require an admin.
 
 Route-level dependencies are the only authorization boundary in this app --
-`main.py` mounts every router with no global dependency -- and nothing
-asserted that any *route* carries one. Two tests exercised
-`get_current_admin_user` in isolation, which passes whether or not a single
-route uses it: replacing every `AdminUserDep` in the jobs router with
-`CurrentUserDep`, so any signed-in visitor could trigger, stop and pause the
-writers, left the whole suite green.
-
-The table below is the contract. A route that changes tier, or a new route
-that lands on the wrong one, fails here and has to be answered for
-deliberately. PUBLIC is a claim too: four match-statistics reads and one
-league read are open on purpose, and that decision was previously written
-down nowhere.
+`main.py` mounts every router with no global dependency. The table below is the
+contract, and PUBLIC is a claim too: those routes are open on purpose.
 """
 
 from __future__ import annotations
@@ -157,11 +147,9 @@ def _dependency_names(dependencies: Sequence[params.Depends]) -> set[str]:
 def _observed_guards() -> dict[tuple[str, str], Guard]:
     """The tier each registered route actually enforces.
 
-    `app.routes` cannot be walked naively: an `isinstance(route, APIRoute)`
-    filter finds exactly one route in this app, because everything else is an
-    include record holding its own router. Router-level dependencies live on
-    that record and have to be unioned in, or every jobs route reads as
-    unguarded.
+    `app.routes` cannot be walked naively: all but one entry is an include
+    record holding its own router, and router-level dependencies live on that
+    record, so they have to be unioned in or every jobs route reads unguarded.
     """
     observed: dict[tuple[str, str], Guard] = {}
     for entry in app.routes:

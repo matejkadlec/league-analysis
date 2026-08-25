@@ -71,8 +71,7 @@ def _validate_smurf_boost_cross_fields(
 
 # Each card declares its fields once, on the write model; the read model below is
 # that same model with the policy relaxed, so a bound cannot be tightened for
-# writers and forgotten for readers. `strict=True` sits on the model, and
-# `included_roles` opts its *items* out because JSON sends the string `"TOP"`.
+# writers and forgotten for readers.
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract for the approved version 1 Top Champions card."""
 
@@ -177,8 +176,7 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
 
 # The read contract is the write contract with two rules dropped: a stored value
 # may be spelled with the canonical field name, and it may need coercing. Bounds
-# and validators are inherited, so a stored value that no longer fits is still
-# refused. `validate_by_name`: a subclass cannot reverse the write base's choice.
+# and validators are inherited, so one that no longer fits is still refused.
 _READ_POLICY = ConfigDict(validate_by_name=True, validate_by_alias=True, strict=False)
 
 
@@ -203,10 +201,9 @@ class SmurfBoostDetectionMutableSettingsV1(SmurfBoostDetectionMutableSettingsWri
 def _require_json_integer(value: object) -> int:
     """Reject coerced values for the one field the model's `strict` cannot cover.
 
-    The card write models say `strict=True` on the model, which is the same
-    policy. `version` is a `Literal[1]`, and Pydantic raises `RuntimeError:
-    Unable to apply constraint 'strict' to schema of type 'literal'` -- and
-    would not reject `True` there in any case.
+    `strict=True` on the model is the same policy, but `version` is a
+    `Literal[1]`: Pydantic raises `RuntimeError: Unable to apply constraint
+    'strict' to schema of type 'literal'`, and would not reject `True` anyway.
     """
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("must be an integer")

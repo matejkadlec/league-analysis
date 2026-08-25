@@ -44,9 +44,8 @@ function showToast({
   };
 
   // Sonner names one method per variant and `ToastVariant` is exactly that set
-  // of names, so the four-armed switch this replaces was spelling out an
-  // identity. The second argument is still withheld when there is nothing to
-  // put in it, which is what callers asserting a bare `(title)` expect.
+  // of names. The second argument is withheld when there is nothing to put in
+  // it, which is what callers asserting a bare `(title)` expect.
   return Object.keys(options).length > 0
     ? sonnerToast[variant](title, options)
     : sonnerToast[variant](title);
@@ -79,10 +78,9 @@ export function useToast() {
 }
 
 /**
- * The complete vocabulary of a query's `meta`. A type alias, not an interface,
- * and that is the whole point: `QueryMeta` resolves to `Register["queryMeta"]`
- * only when it extends `Record<string, unknown>`, which an alias satisfies by
- * implicit index signature and an interface does not.
+ * The complete vocabulary of a query's `meta`. A type alias, not an interface:
+ * `QueryMeta` resolves to `Register["queryMeta"]` only when it extends
+ * `Record<string, unknown>`, which an alias satisfies and an interface cannot.
  */
 type AppQueryMeta = {
   /** Some other surface reports this failure; say which in a comment. */

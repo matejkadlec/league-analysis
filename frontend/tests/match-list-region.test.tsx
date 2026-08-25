@@ -52,8 +52,7 @@ function setOptionalConsent(): void {
 }
 
 // The list scrolls sideways only from `lg` up, so only there does it need to be
-// a named keyboard-reachable region -- below that `tabIndex={0}` was a focus
-// stop on a phone that led nowhere. These render the real `MatchHistory`; a
+// a named keyboard-reachable region. These render the real `MatchHistory`; a
 // local copy of the JSX would survive the revert they exist to catch.
 
 function stubMatchMedia(matches: boolean): void {

@@ -20,9 +20,8 @@ from .schemas import (
 from .service import SmurfBoostDetectionError
 
 # A run already in flight under different settings is a retryable conflict, not
-# a malformed request, so it must not be reported as a validation failure. A run
-# that cannot be read back after it was written is a server-side invariant
-# failure, and blaming the caller's valid payload for it would be wrong.
+# a malformed request; a run that cannot be read back after it was written is a
+# server-side invariant failure. Neither is the caller's fault.
 ERROR_STATUS_CODES = {"analysis_in_progress": 409, "analysis_missing": 500}
 
 logger = structlog.get_logger(__name__)

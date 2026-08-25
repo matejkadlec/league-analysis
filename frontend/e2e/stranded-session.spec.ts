@@ -4,10 +4,9 @@ import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
- * The reported bug end to end: the hint cookie outlives the session it stands
- * for, `proxy.ts` routes on the hint alone, and the gate then rendered null --
- * no sidebar, no toast host, nothing to click. Every other spec mocks /auth/me
- * into a 200, which is why none of them saw it.
+ * The hint cookie outlives the session it stands for, `proxy.ts` routes on the
+ * hint alone, and the gate then rendered null. Every other spec mocks /auth/me
+ * into a 200, which is why none of them cover this.
  */
 test.describe("a session the API no longer honours", () => {
   test.beforeEach(async ({ page }) => {
@@ -37,8 +36,7 @@ test.describe("a session the API no longer honours", () => {
     await expect(page).toHaveURL(/\/sign-in$/);
     // The consent dialog opens over the page and, being modal, takes
     // everything behind it out of the accessibility tree — so the form is
-    // present but unreachable by role until this is dismissed. Every other
-    // spec here does the same.
+    // present but unreachable by role until this is dismissed.
     await acceptCookieBanner(page);
 
     await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();

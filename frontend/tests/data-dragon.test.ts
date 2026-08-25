@@ -161,8 +161,7 @@ describe("Data Dragon display names", () => {
   it("names runes and spells the way the game does, not the way the CDN does", () => {
     // The asset filename is not the name: 8439 still ships as
     // `VeteranAftershock` and 8008 as `LethalTempoTemp`, while the game calls
-    // them Aftershock and Lethal Tempo. A tooltip built from the path would
-    // put a decade-old codename in front of the player.
+    // them Aftershock and Lethal Tempo.
     expect(getKeystoneName(8439)).toBe("Aftershock");
     expect(getKeystoneName(8008)).toBe("Lethal Tempo");
     expect(getKeystoneName(8005)).toBe("Press the Attack");

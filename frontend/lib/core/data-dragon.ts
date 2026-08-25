@@ -1,8 +1,6 @@
 /**
- * Data Dragon CDN utilities for League of Legends assets.
- *
- * Data Dragon is Riot's official CDN for game assets like champion icons,
- * item images, summoner spell icons, etc.
+ * Data Dragon CDN utilities: Riot's official CDN for game assets like champion
+ * icons, item images and summoner spell icons.
  */
 
 // Used only when Riot's version manifest cannot be reached. The root layout
@@ -25,12 +23,7 @@ export function getChampionIconUrl(
   return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
 }
 
-/**
- * Get the URL for a summoner profile icon.
- *
- * @param profileIconId - The profile icon ID from player data
- * @returns URL to the profile icon image
- */
+/** Get the URL for a summoner profile icon. */
 export function getProfileIconUrl(
   profileIconId: number,
   version: string = DDRAGON_FALLBACK_VERSION,
@@ -108,12 +101,7 @@ const SUMMONER_SPELL_MAP: Record<number, { name: string; asset: string }> = {
   },
 };
 
-/**
- * Get the URL for a summoner spell icon by ID.
- *
- * @param spellId - The summoner spell ID from the API
- * @returns URL to the summoner spell icon, or null if not found
- */
+/** Get the URL for a summoner spell icon by ID, or null when unmapped. */
 export function getSummonerSpellIconUrlById(
   spellId: number,
   version: string = DDRAGON_FALLBACK_VERSION,
@@ -249,12 +237,7 @@ const RUNE_STYLE_MAP: Record<
   8400: { name: "Resolve", iconPath: "perk-images/Styles/7204_Resolve.png" },
 };
 
-/**
- * Get the name of a rune style.
- *
- * @param styleId - The rune style ID
- * @returns The style name (e.g., "Precision", "Domination"), or null if not found
- */
+/** Get the name of a rune style ("Precision"), or null when unmapped. */
 export function getRuneStyleName(styleId: number): string | null {
   return RUNE_STYLE_MAP[styleId]?.name ?? null;
 }

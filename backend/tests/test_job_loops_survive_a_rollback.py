@@ -1,17 +1,8 @@
 """A skippable player error must not end the run.
 
-`handle_player_error` rolls the session back so one player's failure cannot
-poison the next player's writes. `AsyncSession.rollback` also expires every
-instance the session holds -- `expire_on_commit=False` covers commit only --
-so any row the loop loaded before the rollback answers its next attribute
-read with a lazy refresh. Under asyncio that refresh raises outside the
-greenlet, and the loop's own error handler reads `puuid`, so the second
-failure escapes the loop: one recoverable error would skip every remaining
-tracked player.
-
-The fakes here expire exactly what a real rollback expires, using
-SQLAlchemy's own machinery, so a loop that holds a row across the rollback
-fails these tests.
+`handle_player_error` rolls the session back, and `AsyncSession.rollback`
+expires every instance the session holds -- so a row the loop still holds
+answers its next read with a lazy refresh that raises under asyncio.
 """
 
 from types import SimpleNamespace
@@ -179,11 +170,9 @@ async def test_match_fetcher_survives_a_rollback_inside_the_match_sync(
 ) -> None:
     """A skipped match rolls back mid-iteration, then reports itself.
 
-    `must_abort_writer_sync` stopped escalating a row-level IntegrityError, so
-    a failed match is now swallowed by `process_queue_sync_match`, which calls
-    the job's `on_failure` -- after the writer has already rolled the session
-    back. The loop's `Player` is expired by then, so an `on_failure` that
-    reads it turns a skipped match into a dead run.
+    `process_queue_sync_match` swallows a row-level IntegrityError and calls
+    the job's `on_failure` after the writer has rolled the session back, so an
+    `on_failure` that reads the expired `Player` turns a skip into a dead run.
     """
     session = _ExpiringSession()
     attempts: list[str] = []

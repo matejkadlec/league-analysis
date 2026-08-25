@@ -19,8 +19,7 @@ export default defineConfig({
       reporter: ["text", "json-summary"],
       // Every source file, not just the ones a test loaded: the default scope
       // makes the denominator a function of the tests, so an untested file is
-      // invisible rather than zero. Extension-qualified so the parser is never
-      // handed a `.md`.
+      // invisible rather than zero. Extension-qualified to exclude `.md`.
       include: ["{app,components,features,lib}/**/*.{ts,tsx}", "proxy.ts"],
       exclude: [
         ...(configDefaults.coverage.exclude ?? []),
@@ -31,8 +30,7 @@ export default defineConfig({
       ],
       // Floors, not targets: each sits ~2 points under the last measurement
       // (2026-08-20: 83.74/78.27/80.62/83.84). Ratchet on the way out of every
-      // batch, deletion sweeps included -- a floor left behind stops catching
-      // anything and silently buys headroom.
+      // batch, deletion sweeps included, or the floor stops catching anything.
       thresholds: {
         statements: 81,
         branches: 76,

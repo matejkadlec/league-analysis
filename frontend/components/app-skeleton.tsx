@@ -2,8 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * The page-shaped placeholder shown whenever there is nothing to draw yet.
- * Rendered signed-out as well: the gate's redirect needs the session probe to
- * finish, so the wait a gated skeleton left blank was the wait it was for.
+ * Rendered signed-out too: the gate's redirect waits on the session probe.
  * Lives here, not in `app/loading.tsx`, because `providers.tsx` needs it too.
  */
 export function AppSkeleton() {

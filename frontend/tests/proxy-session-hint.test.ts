@@ -15,8 +15,7 @@ import {
 
 // The edge may route on the hint and may never retract it: only a request to
 // the API tells a refusal from an outage, and the edge cannot make one. So it
-// asks nothing, asserted here as whole response envelopes rather than as named
-// teardown channels, which an audit walked past.
+// asks nothing, asserted here as whole response envelopes.
 
 function hintedRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`), {
@@ -63,10 +62,9 @@ function plainRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`));
 }
 
-// The headers a browser actually sends on a click. An audit gated its
-// teardown on `sec-fetch-dest: document` -- a sensible-looking way to avoid
-// probing on every prefetch -- and the whole table passed, because every
-// request in it was bare. A request shape is as much a case as a path is.
+// The headers a browser actually sends on a click. A request shape is as much
+// a case as a path is: a teardown gated on `sec-fetch-dest: document` passes a
+// table of bare requests without ever running.
 function navigationRequest(pathname: string, hint: boolean): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`), {
     headers: {
@@ -88,9 +86,8 @@ afterEach(() => {
 
 describe("the edge and the session hint", () => {
   // Every routing case the edge has, compared against its complete header
-  // set. A test that samples one response, one path or one channel was walked
-  // past three times; this samples nothing, so the decision the edge made is
-  // never what is watched.
+  // set. Sampling one response, one path or one channel is not enough to
+  // watch the decision the edge actually made.
   const cases: {
     what: string;
     path: string;
@@ -138,8 +135,7 @@ describe("the edge and the session hint", () => {
     {
       // The first branch in the function, and the one taken most often: the
       // matcher only excludes `_next/static`, `_next/image` and the favicon,
-      // so every dotted path -- `/background.jpg`, referenced by the global
-      // stylesheet, on every page load -- lands here.
+      // so every dotted path lands here.
       what: "a hinted visitor loading a static asset",
       path: "/background.jpg",
       hint: true,
@@ -277,9 +273,8 @@ describe("the edge and the session hint", () => {
 
   it("has no other edge entrypoint to hide in", () => {
     // Next accepts `proxy`, `middleware`, `src/proxy` and `src/middleware`,
-    // and runs whichever exists. Everything asserted here is asserted about
-    // `@/proxy` alone, and the lint rules name files too -- so a second
-    // entrypoint would be an edge with no rules and no coverage at all.
+    // and runs whichever exists. Everything asserted here is about `@/proxy`
+    // alone, so a second entrypoint would be an edge with no coverage at all.
     const root = join(dirname(fileURLToPath(import.meta.url)), "..");
     // Every name Next can resolve, matching the lint block's file list. A
     // `proxy.tsx` beside `proxy.ts` wins the discovery loop, so the edge Next
@@ -300,9 +295,8 @@ describe("the edge and the session hint", () => {
 
   it("never asks the API whether a session is still good", () => {
     // Weaker than the table above and cheaper: it only sees `globalThis.fetch`
-    // at call time, so an imported client walks past it. It names the mistake
-    // -- an edge that probes cannot tell a refusal from an outage, and cannot
-    // retry with a refresh, which needs the browser.
+    // at call time, so an imported client walks past it. An edge that probes
+    // cannot tell a refusal from an outage.
     const fetchSpy = vi.fn(() => Promise.reject(new Error("ECONNREFUSED")));
     vi.stubGlobal("fetch", fetchSpy);
 

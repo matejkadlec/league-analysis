@@ -27,8 +27,7 @@ import { api } from "@/lib/core/api";
 
 // The wire shape per function. The backend's test_frontend_api_paths.py proves
 // every (path, method) pair; what nothing else checks is query parameter names,
-// the request body, and URL-versus-`params`. Schema pairing is deliberately not
-// checked -- it fails closed, and tsc holds the return type.
+// the request body, and URL-versus-`params`.
 
 const originalAdapter = api.defaults.adapter;
 
@@ -80,10 +79,9 @@ describe("player-api wire shapes", () => {
   });
 
   it("sends only the search params the caller gave", async () => {
-    // `platform` and `limit` are spread conditionally. If the spread breaks
-    // and sends `platform: undefined`, axios drops it anyway — the real risk
-    // is the other direction: a typo'd key (`platform_` ) is silently ignored
-    // by the server and the search quietly spans the wrong platform.
+    // `platform` and `limit` are spread conditionally. axios drops an
+    // `undefined` param anyway — the real risk is a typo'd key (`platform_` ),
+    // silently ignored by the server so the search spans the wrong platform.
     await searchPlayerSuggestions({ q: "faker" });
 
     expect(request().params).toEqual({ q: "faker" });

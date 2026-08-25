@@ -18,10 +18,9 @@ async def test_an_unmapped_route_failure_answers_the_service_error_detail() -> N
     app.dependency_overrides[get_player_service] = lambda: SimpleNamespace(
         get_player_league=AsyncMock(side_effect=RuntimeError("boom"))
     )
-    # `ASGITransport` drives no lifespan, which is what this wants. Debug is
-    # pinned off and the stack rebuilt: `ServerErrorMiddleware` is handed the
-    # flag's *value* when the stack is assembled -- lazily, on first request --
-    # so setting `app.debug` alone only works when this test runs by itself.
+    # Debug is pinned off and the stack rebuilt: `ServerErrorMiddleware` is
+    # handed the flag's *value* when the stack is assembled, so setting
+    # `app.debug` alone only works when this test runs by itself.
     was_debug = app.debug
     app.debug = False
     app.middleware_stack = app.build_middleware_stack()

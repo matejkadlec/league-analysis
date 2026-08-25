@@ -11,8 +11,7 @@ interface PlayerCardWinRateProps {
   /**
    * Whether the ranked lookup failed, as opposed to answering "no league".
    * Both arrive as a falsy `league`, but only one licenses the "(unranked)"
-   * label: that word is a claim about the player and a failed request
-   * supports no claim. The toast reports the failure.
+   * label: that word is a claim, and a failed request supports no claim.
    */
   leagueFailed?: boolean;
 }

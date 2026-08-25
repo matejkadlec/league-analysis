@@ -1,8 +1,7 @@
 /**
  * Splits a parsed run so only `completed` owns `results`: reading
- * `run.results` without narrowing on `status` is a compile error rather than a
- * failed run rendered as a successful one. A `completed` row with no results
- * degrades to `failed` rather than failing the parse.
+ * `run.results` without narrowing on `status` is a compile error. A
+ * `completed` row with no results degrades to `failed`, not a parse failure.
  */
 type RunLifecycleSplit<TWire extends { status: string }, TResults> =
   | (Omit<TWire, "status" | "results"> & {
@@ -12,16 +11,14 @@ type RunLifecycleSplit<TWire extends { status: string }, TResults> =
   | (Omit<TWire, "status" | "results"> & {
       // "failed" is unioned in rather than merely excluded, because the
       // malformed-completion branch below manufactures it. Leaving it out
-      // would make this `never` for a wire type whose only status is
-      // "completed", and the cast at the end would then be a lie.
+      // makes this `never` for a wire type whose only status is "completed".
       status: Exclude<TWire["status"], "completed"> | "failed";
     });
 
 /**
  * Split a parsed run into a union where only `completed` carries `results`.
  * `status` must be destructured out, or each variant's discriminant becomes an
- * intersection with the full enum and TypeScript refuses to discriminate on
- * it.
+ * intersection with the full enum and TypeScript refuses to discriminate.
  */
 export function splitRunOnLifecycle<
   TWire extends { status: string; results?: TResults | null | undefined },

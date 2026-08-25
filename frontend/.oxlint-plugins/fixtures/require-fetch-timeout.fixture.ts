@@ -1,7 +1,6 @@
 // Regression fixture for `house/require-fetch-timeout`. Each directive
-// suppresses a shape the rule MUST flag; accepted cases carry none. A selector
-// that stops matching leaves an unused directive and fails the run, and one
-// that over-matches reports on an accepted case and fails it the other way.
+// suppresses a shape the rule MUST flag; accepted cases carry none. A stale
+// selector leaves an unused directive; an over-broad one reports on an accept.
 
 declare const url: string;
 declare const body: string;
