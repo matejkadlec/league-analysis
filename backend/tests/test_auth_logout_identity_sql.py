@@ -126,8 +126,9 @@ async def test_a_token_revoked_without_a_replacement_names_nobody(
 ) -> None:
     """The other direction, and the reason this is not simply "any token".
 
-    A token revoked by a logout or by reuse detection has no replacement
-    recorded. That session is over, and letting it name its owner would make a
+    A token revoked by a logout, or left at the tip of a chain reuse
+    detection killed, has no replacement recorded. That session is over, and
+    letting it name its owner would make a
     dead credential a way to end whatever session the same person has since
     started.
     """

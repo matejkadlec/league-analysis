@@ -20,6 +20,21 @@ issue, newest last:
   `frontend/tests/smurf-boost-detection.test.tsx` that pin the silence:
   "quotes no fetch total while the fetch is still running" and "claims no fetch
   total when the stored count could not be re-read".
+- 2026-08-25 backend/app/features/auth/service.py
+  (`revoke_all_refresh_tokens_for_user`): its unlocked SELECT-then-stamp can
+  race a concurrent rotation or reuse-heal commit — logout snapshots the
+  active set, the rotation commits a replacement row the snapshot never saw,
+  and logout answers "Successfully logged out" with that fresh token live.
+  Pre-existing (plain rotation has the same window, found reviewing the
+  reuse-heal branch). Fix shape: FOR UPDATE the user's active rows, or
+  re-query after stamping until the set is empty.
+- 2026-08-25 backend/app/features/auth/service.py
+  (`resolve_user_id_for_refresh_token`): any revoked-with-replacement token
+  authorises a full logout for 30 days, so a stale stolen cookie that
+  /refresh would now refuse with family scope can still sign the user out of
+  every device via /logout (DoS, not access). The documented intent is only
+  the just-superseded holder; requiring the replacement to be unused
+  (unrevoked, unreplaced) would narrow the window to exactly that case.
 - 2026-08-25 frontend (admin service-status banner): "No active Riot API Key
   found! System cannot function. Please configure it in settings immediately."
   overstates the outage now that stored-data reads survive a lapsed key —

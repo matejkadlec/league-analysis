@@ -180,8 +180,9 @@ def _assert_the_session_was_installed(response: Response) -> None:
 
     Names alone are not enough, and the ways to get this wrong are all one
     word: passing the *old* refresh token (the variable is right there in
-    scope) leaves the browser holding what the rotation just revoked, so the
-    next refresh is reuse and reuse detection revokes every device. Passing
+    scope) leaves the browser holding what the rotation just revoked, so
+    every refresh from then on limps through the reuse branch's heal instead
+    of a clean rotation. Passing
     `access_expires_at` for the refresh cookie gives it and the hint a
     30-minute life against a 30-day row, so the visitor is reported signed out
     on the next navigation with a live token nothing holds.
@@ -240,13 +241,14 @@ def _active_user() -> MagicMock:
 
 
 async def test_a_successful_refresh_installs_the_new_cookies() -> None:
-    """Rotation without the Set-Cookie is a permanent lockout, not a blip.
+    """Rotation without the Set-Cookie breaks the session, not just one call.
 
     The server revokes the old row and commits the new token either way, so a
     refresh that forgets to install it leaves the browser holding the token
-    that was just revoked. Presenting it is reuse, and reuse detection revokes
-    the entire family -- every device, no way back, and signing in again
-    strands again one rotation later. Nothing else in the suite reaches this:
+    that was just revoked, with an access cookie that never updates: every
+    later refresh limps through the reuse branch's heal while requests keep
+    failing, and signing in again strands again one rotation later. Nothing
+    else in the suite reaches this:
     `set_auth_cookies` is tested in isolation above, and deleting the call
     from the route left all 603 tests green.
     """
