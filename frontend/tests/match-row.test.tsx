@@ -465,6 +465,18 @@ describe("a match history row", () => {
     expect(screen.queryByAltText("Summoner Spell")).toBeNull();
   });
 
+  it("offers one keyboard stop per rune or spell group, not per icon", () => {
+    // Nine non-interactive stops per row made tabbing a page of rows mostly
+    // decoration (LGA-91 review), while LGA-93 wants the names keyboard-
+    // reachable. The middle: each side's rune pair and spell pair is one
+    // focusable group whose tooltip names both, so 2 sides x 2 groups. The
+    // champion portraits and other participants stay real buttons and are
+    // counted by the lineup test above; nothing else may grab a stop.
+    const { container } = renderRow();
+
+    expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);
+  });
+
   it("falls back to the tree when the keystone is one we have no name for", () => {
     // The tooltip and the icon read the same keystone table, so an unknown
     // keystone has to drop both back to the tree together -- a label naming a

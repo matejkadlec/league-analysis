@@ -20,6 +20,7 @@ from app.features.auth.dependencies import CurrentUserDep
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.models import PlayerSyncRun
 from app.features.jobs.player_sync import (
+    SyncBusyError,
     create_or_get_player_sync,
     get_active_player_sync,
     run_player_sync,
@@ -215,6 +216,14 @@ async def start_player_sync(
         )
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except SyncBusyError as error:
+        # A refusal, not a failure: no run was created, and the frontend
+        # reads the code to report it as "showing stored data" rather than
+        # as an error (`usePlayerProfileUpdate`).
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SYNC_BUSY", "message": error.message},
+        ) from error
     if created:
         background_tasks.add_task(run_player_sync, sync_run.id)
     return sync_run
@@ -300,6 +309,14 @@ async def track_player(
         sync_run, created = await create_or_get_player_sync(
             player_service.db,
             user_id=current_user.id,
+            puuid=puuid,
+        )
+    except SyncBusyError as e:
+        # Not an error: the pipeline is busy, the tracking still succeeded,
+        # and the scheduler's next pass covers the player.
+        logger.info(
+            "track_player_initial_sync_busy",
+            reason=e.message,
             puuid=puuid,
         )
     except Exception as e:

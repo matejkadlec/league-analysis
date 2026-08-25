@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import db_manager
 from app.core.db_session import rollback_quietly
 from app.features.jobs.base import BaseJob
+from app.features.jobs.control import is_runtime_job_running
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.models import (
@@ -24,6 +25,71 @@ from app.features.players.models import Player
 logger = structlog.get_logger(__name__)
 
 
+class SyncBusyError(Exception):
+    """A sync start refused because another update holds the pipeline.
+
+    Raised instead of creating a run that the job layer would only fail with
+    SYNC_BUSY minutes later: the click that asked for it gets an immediate,
+    honest refusal and no failed run is left behind. `message` is the
+    client-safe sentence, naming the running player when one is known.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+async def _busy_message(db: AsyncSession, puuid: str) -> str | None:
+    """The refusal sentence when the sync pipeline is held, else None.
+
+    Two holders are visible before a run is created: another player's active
+    `PlayerSyncRun`, and the writers' runtime keys — which the scheduled
+    Match Fetcher claims too, so a click during its window is refused here
+    rather than producing a run doomed to fail as SYNC_BUSY. A race where two
+    cross-player starts both pass this check is accepted: the job layer's
+    `skipped_as_already_running` backstop still fails the loser honestly.
+    """
+    other_active = await db.scalar(
+        select(PlayerSyncRun)
+        .where(
+            PlayerSyncRun.puuid != puuid,
+            PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES),
+        )
+        .limit(1)
+    )
+    if other_active is not None:
+        running_player = await db.get(Player, other_active.puuid)
+        if running_player is not None:
+            return (
+                f"An update for {running_player.game_name}"
+                f"#{running_player.tag_line} is still running. "
+                "Showing stored data instead."
+            )
+        return "Another player's update is still running. Showing stored data instead."
+
+    writer_configs = await _writer_configurations(db)
+    if any(is_runtime_job_running(config.id) for config in writer_configs):
+        return "A scheduled data update is still running. Showing stored data instead."
+    return None
+
+
+async def _writer_configurations(db: AsyncSession) -> list[JobConfiguration]:
+    """The two writer configurations a sync run claims, in one read."""
+    return list(
+        (
+            await db.execute(
+                select(JobConfiguration).where(
+                    JobConfiguration.job_type.in_(
+                        [JobType.MATCH_FETCHER, JobType.PLAYER_UPDATER]
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
 async def create_or_get_player_sync(
     db: AsyncSession, *, user_id: int, puuid: str
 ) -> tuple[PlayerSyncRun, bool]:
@@ -34,6 +100,10 @@ async def create_or_get_player_sync(
     active = await get_active_player_sync(db, puuid)
     if active is not None:
         return active, False
+
+    busy = await _busy_message(db, puuid)
+    if busy is not None:
+        raise SyncBusyError(busy)
 
     sync_run = PlayerSyncRun(user_id=user_id, puuid=puuid, status="pending")
     db.add(sync_run)
@@ -155,19 +225,7 @@ async def _load_player_sync(
         if sync_run is None or sync_run.status not in ACTIVE_SYNC_STATUSES:
             return None
         puuid = sync_run.puuid
-        configs = (
-            (
-                await db.execute(
-                    select(JobConfiguration).where(
-                        JobConfiguration.job_type.in_(
-                            [JobType.MATCH_FETCHER, JobType.PLAYER_UPDATER]
-                        )
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        configs = await _writer_configurations(db)
         by_type = {config.job_type: config for config in configs}
     return (
         puuid,

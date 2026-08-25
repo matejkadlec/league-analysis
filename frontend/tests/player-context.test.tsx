@@ -3,20 +3,30 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet, validatedPut, useAuth, replace, push, pathname, search } =
-  vi.hoisted(() => ({
-    validatedGet: vi.fn(),
-    validatedPut: vi.fn(),
-    useAuth: vi.fn(),
-    replace: vi.fn(),
-    push: vi.fn(),
-    pathname: { current: "/player-overview" },
-    search: { current: "" },
-  }));
+const {
+  validatedGet,
+  validatedPost,
+  validatedPut,
+  useAuth,
+  replace,
+  push,
+  pathname,
+  search,
+} = vi.hoisted(() => ({
+  validatedGet: vi.fn(),
+  validatedPost: vi.fn(),
+  validatedPut: vi.fn(),
+  useAuth: vi.fn(),
+  replace: vi.fn(),
+  push: vi.fn(),
+  pathname: { current: "/player-overview" },
+  search: { current: "" },
+}));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
   validatedGet,
+  validatedPost,
   validatedPut,
 }));
 
@@ -66,6 +76,9 @@ function player(puuid: string, name: string): Player {
 
 const SAVED = player("saved-puuid", "SavedPlayer");
 const FROM_URL = player("url-puuid", "UrlPlayer");
+// A participant clicked inside somebody else's match: has a row, but this
+// account does not track them and they are not in the sidebar.
+const STRANGER: Player = { ...player("stranger-puuid", "Stranger"), is_tracked: false };
 
 function answer(url: string) {
   if (url === "/players/context") {
@@ -76,6 +89,9 @@ function answer(url: string) {
   }
   if (url === `/players/${FROM_URL.puuid}`) {
     return { success: true, data: FROM_URL };
+  }
+  if (url === `/players/${STRANGER.puuid}`) {
+    return { success: true, data: STRANGER };
   }
   return { success: false, error: { status: 404, kind: "not_found" } };
 }
@@ -114,6 +130,18 @@ beforeEach(() => {
   validatedPut.mockResolvedValue({
     success: true,
     data: { current_player: FROM_URL, tracked_players: [SAVED] },
+  });
+  validatedPost.mockReset();
+  validatedPost.mockResolvedValue({
+    success: true,
+    data: {
+      id: 21,
+      puuid: STRANGER.puuid,
+      status: "pending",
+      match_execution_id: null,
+      created_at: "2026-08-16T10:00:00Z",
+      updated_at: "2026-08-16T10:00:00Z",
+    },
   });
   useAuth.mockReturnValue({
     user: { id: 1, is_admin: false, is_active: true },
@@ -372,6 +400,64 @@ describe("choosing a player from the picker", () => {
     expect(push).toHaveBeenCalledWith("/player-overview?puuid=url-puuid", {
       scroll: false,
     });
+  });
+});
+
+describe("switching to a participant by PUUID", () => {
+  it("starts the target's update and navigates, but never persists a stranger", async () => {
+    // The whole flow of clicking an enemy laner: the update starts so their
+    // history can fill, the page switches — and when the URL then names
+    // them, the persist effect skips an untracked player, so tomorrow's
+    // visit still defaults to the last *tracked* player, not to a stranger
+    // with no sidebar entry to switch back from.
+    const { result, rerender } = renderContext();
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
+    );
+
+    result.current.selectPlayerByPuuid(STRANGER.puuid);
+
+    await waitFor(() =>
+      expect(validatedPost).toHaveBeenCalledWith(
+        expect.anything(),
+        `/players/${STRANGER.puuid}/sync`,
+      ),
+    );
+    expect(push).toHaveBeenCalledWith(
+      `/player-overview?puuid=${STRANGER.puuid}`,
+      { scroll: false },
+    );
+
+    // The navigation happened: the URL now names the stranger.
+    search.current = `puuid=${STRANGER.puuid}`;
+    rerender();
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe(STRANGER.puuid),
+    );
+    expect(validatedPut).not.toHaveBeenCalled();
+  });
+
+  it("still persists a tracked player arrived at the same way", async () => {
+    // The gate is `is_tracked`, not the click path: switching to somebody in
+    // the sidebar is a real choice and keeps being remembered.
+    search.current = `puuid=${FROM_URL.puuid}`;
+    renderContext();
+
+    await waitFor(() => expect(validatedPut).toHaveBeenCalledTimes(1));
+    expect(validatedPut.mock.calls[0]?.[2]).toEqual({ puuid: FROM_URL.puuid });
+  });
+
+  it("does nothing when the clicked participant is already current", async () => {
+    const { result } = renderContext();
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
+    );
+
+    result.current.selectPlayerByPuuid("saved-puuid");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(validatedPost).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

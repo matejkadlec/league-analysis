@@ -141,6 +141,13 @@ export function PlayerContextProvider({
     if (
       !urlPuuid ||
       !urlPlayerQuery.data ||
+      // Untracked players are a visit, not a choice: clicking an enemy laner
+      // (or following a shared link to one) must not make a stranger every
+      // page's default until the next explicit switch — they are not in the
+      // sidebar, so there is nowhere to switch back from. `is_tracked` is
+      // per-user, and the schema defaults it to false, so an endpoint that
+      // omits the field fails safe by not persisting.
+      !urlPlayerQuery.data.is_tracked ||
       contextQuery.data?.current_player?.puuid === urlPuuid ||
       persistedUrlPuuidRef.current === urlPuuid
     ) {
