@@ -449,9 +449,8 @@ class AuthService:
         # reuse alarm entirely; an attacker replaying a stolen cookie against
         # a live client got a valid pair with nothing logged and nothing
         # revoked. Serialising the pair sends the loser down the reuse branch,
-        # which revokes the family and signs the visitor out -- the outcome
-        # `resolve_user_id_for_refresh_token` already documents for a replayed
-        # token, arrived at deliberately rather than by losing a race.
+        # where `_answer_reused_refresh_token` decides between healing an
+        # innocent race and revoking a compromised family.
         result = await self.db.execute(
             select(RefreshToken)
             .where(RefreshToken.token_hash == token_hash)
@@ -463,13 +462,12 @@ class AuthService:
 
         now = datetime.now(UTC)
         if token_record.revoked_at is not None:
-            logger.warning(
-                "refresh_token_reuse_detected",
-                user_id=token_record.user_id,
-                token_id=token_record.token_id,
+            return await self._answer_reused_refresh_token(
+                token_record,
+                now,
+                remote_ip=remote_ip,
+                user_agent=user_agent,
             )
-            await self.revoke_all_refresh_tokens_for_user(token_record.user_id)
-            return None
 
         if token_record.expires_at <= now:
             logger.warning(
@@ -521,6 +519,136 @@ class AuthService:
             refresh_expires_at,
         )
 
+    async def _lock_refresh_token_by_token_id(
+        self, token_id: str
+    ) -> RefreshToken | None:
+        result = await self.db.execute(
+            select(RefreshToken)
+            .where(RefreshToken.token_id == token_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _reuse_is_healable(
+        token_record: RefreshToken,
+        successor: RefreshToken,
+        now: datetime,
+    ) -> bool:
+        """A reuse is healable when the replacement was never used.
+
+        The presented credential must be live on its own terms too: an
+        expired token is dead however it was revoked, and only survives in
+        the table until cleanup deletes it.
+        """
+        return (
+            successor.revoked_at is None
+            and successor.replaced_by_token_id is None
+            and successor.expires_at > now
+            and token_record.expires_at > now
+        )
+
+    async def _answer_reused_refresh_token(
+        self,
+        token_record: RefreshToken,
+        now: datetime,
+        *,
+        remote_ip: str | None,
+        user_agent: str | None,
+    ) -> tuple[User, str, datetime, str, datetime] | None:
+        """Decide what a request presenting an already-revoked token gets.
+
+        Production data (2026-08-25) showed every firing of the old response
+        -- revoke every session the user has -- was an innocent client, not an
+        attacker: two tabs refreshing one cookie 138ms apart, a browser whose
+        rotation response was lost to a deploy, a stale profile reopened with
+        a week-old cookie. Each one signed the user out of every device.
+
+        Two-part answer instead:
+
+        - **Heal** when the presented token is itself unexpired and its
+          replacement has never been used (unrevoked, unreplaced, unexpired).
+          In the innocent races the replacement cookie never reached any
+          client, so this holds; an attacker actively riding a stolen chain
+          has rotated it, so it does not. Revoke the unused replacement, mint
+          a fresh one, answer success. The condition cannot prove the
+          replacement was never *delivered*, so two holders of adjacent
+          tokens -- a victim and a thief -- could alternate heals and both
+          stay in; that needs an already-stolen cookie, and every heal logs,
+          so a repeating `refresh_token_reuse_healed` for one user is the
+          signal theft detection turned into.
+
+        - **Otherwise revoke the presented token's descendants** -- the chain
+          `replaced_by_token_id` records -- and refuse. Theft response is
+          preserved: the stolen chain dies the moment the victim's stale
+          token collides with it. What changed is blast radius: sessions from
+          *other* logins (other devices) survive, so one zombie cookie no
+          longer signs the user out everywhere.
+
+        Three-plus concurrent refreshes on one cookie can still walk past the
+        heal (the second racer replaces the replacement) and sign that one
+        browser out; that is one re-login on one device, accepted.
+        """
+        successor = None
+        if token_record.replaced_by_token_id is not None:
+            successor = await self._lock_refresh_token_by_token_id(
+                token_record.replaced_by_token_id
+            )
+
+        if successor is not None and self._reuse_is_healable(
+            token_record, successor, now
+        ):
+            user = await self.get_user_by_id(token_record.user_id)
+            if user is not None:
+                successor.revoked_at = now
+                refresh_expires_at = now + timedelta(
+                    days=self.settings.jwt_refresh_token_expire_days
+                )
+                replacement, new_refresh_token = self._stage_refresh_token(
+                    user_id=user.id,
+                    now=now,
+                    expires_at=refresh_expires_at,
+                    remote_ip=remote_ip,
+                    user_agent=user_agent,
+                )
+                successor.replaced_by_token_id = replacement.token_id
+                logger.info(
+                    "refresh_token_reuse_healed",
+                    user_id=user.id,
+                    token_id=token_record.token_id,
+                    successor_token_id=successor.token_id,
+                )
+                await self.db.commit()
+                access_token, access_expires_at, _ = self.create_access_token(user)
+                return (
+                    user,
+                    access_token,
+                    access_expires_at,
+                    new_refresh_token,
+                    refresh_expires_at,
+                )
+
+        descendants_revoked = 0
+        current = successor
+        while current is not None:
+            if current.revoked_at is None:
+                current.revoked_at = now
+                descendants_revoked += 1
+            next_id = current.replaced_by_token_id
+            current = (
+                await self._lock_refresh_token_by_token_id(next_id)
+                if next_id is not None
+                else None
+            )
+        logger.warning(
+            "refresh_token_reuse_detected",
+            user_id=token_record.user_id,
+            token_id=token_record.token_id,
+            descendants_revoked=descendants_revoked,
+        )
+        await self.db.commit()
+        return None
+
     async def revoke_all_refresh_tokens_for_user(self, user_id: int) -> None:
         """Revoke all active refresh tokens for a user."""
         result = await self.db.execute(
@@ -568,10 +696,12 @@ class AuthService:
                 # out" having revoked nothing, and the replacement stays live
                 # for its full 30 days with no browser left holding it to ever
                 # trip reuse detection. That is the state this route exists to
-                # remove. It grants nothing new either: replaying the same
-                # token at /refresh already revokes the whole family through
-                # reuse detection, which is strictly more than this does. A
-                # token revoked by a logout or by that reuse path has no
+                # remove. What it grants is small and holder-scoped: replaying
+                # the same token at /refresh already kills its whole descendant
+                # chain through reuse detection, so honouring it here extends
+                # that to the user's other sessions only for a logout the
+                # holder of a just-superseded cookie asked for. A token revoked
+                # by a logout or by the reuse path's descendant walk has no
                 # replacement recorded, so it still names nobody.
                 or_(
                     RefreshToken.revoked_at.is_(None),

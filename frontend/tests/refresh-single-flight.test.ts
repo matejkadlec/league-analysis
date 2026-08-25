@@ -16,13 +16,15 @@ import {
  * the axios interceptor. Without the shared promise in `token-manager.ts`,
  * each one POSTs `/auth/refresh` carrying the *same* refresh cookie -- the
  * browser composed them all before any rotation landed. The first rotates;
- * every other is a replay of a token that is now revoked, which the server
- * reads as reuse and answers by revoking the whole family, on every device.
+ * every other is a replay of a token that is now revoked. The server heals
+ * the first such replay (the replacement was never used), but the second
+ * replay finds a used replacement, reads as reuse, and revokes the chain --
+ * so three-plus unguarded refreshes still sign this browser out.
  *
  * The client is right to end the session at that point, because the server
  * really did refuse. That is what makes this so quiet: no guard here is
  * violated, nothing lies, and an ordinary page load after lunch signs the
- * visitor out everywhere with nothing they could have done differently.
+ * visitor out with nothing they could have done differently.
  *
  * Deleting the guard left all 320 tests green.
  */
