@@ -140,9 +140,11 @@ against the same window its stored snapshot will be judged by, so an identical
 rerun reports the same split instead of flipping current-day to period-accurate.
 
 Results also persist `player_ranks` (rank per unique participant, keyed by
-puuid) and per-match `ally_puuids`/`enemy_puuids`, so the client re-slices the
-rank averages and tier distribution for the SoloQ/DuoQ scopes without another
-fetch. `ally_puuids` includes the analyzed player; duo classification still
+puuid) and per-match `ally_puuids`/`enemy_puuids`/`win` (the analyzed
+player's own result, read from the already-stored match), so the client
+re-slices the rank averages, tier distribution, the analyzed player's W–L
+record, and the lobby-vs-own-rank gap for the SoloQ/DuoQ scopes without
+another fetch. `ally_puuids` includes the analyzed player; duo classification still
 ignores them, because they appear in every spine match. Runs stored before
 these keys existed fall back to the run-wide figures, and the card captions
 that fallback. The client still injects the analyzed PUUID into a Set, so

@@ -287,6 +287,7 @@ def _spine_stat(
     enemy_avg: float | None = 0.6,
     ally_puuids: list[str] | None = None,
     enemy_puuids: list[str] | None = None,
+    win: bool | None = None,
     **performance: float | None,
 ) -> analysis_service_module.SpineMatchStats:
     return analysis_service_module.SpineMatchStats(
@@ -295,6 +296,7 @@ def _spine_stat(
         enemy_avg=enemy_avg,
         ally_puuids=ally_puuids or [],
         enemy_puuids=enemy_puuids or [],
+        win=win,
         **performance,
     )
 
@@ -363,6 +365,22 @@ def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
     per_match = results.get("per_match")
     assert per_match is not None
     assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
+
+
+def test_the_analyzed_players_win_flag_rides_per_match() -> None:
+    """The scope W-L record is client-side; the flag must survive to JSON."""
+    results = _completion_results(
+        [
+            _spine_stat("EUN1_1", win=True),
+            _spine_stat("EUN1_2", win=False),
+            _spine_stat("EUN1_3"),
+        ],
+        matches_analyzed=3,
+    )
+
+    per_match = results.get("per_match")
+    assert per_match is not None
+    assert [entry.get("win") for entry in per_match] == [True, False, None]
 
 
 """Duplicated as TRIM_FIXTURES in scope-aggregates.test.ts and kept identical

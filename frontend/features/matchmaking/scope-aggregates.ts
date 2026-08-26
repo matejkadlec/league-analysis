@@ -117,6 +117,73 @@ export function rankAggregates(
   };
 }
 
+export interface WinLossRecord {
+  wins: number;
+  losses: number;
+}
+
+/**
+ * The analyzed player's own W-L record over one scope's matches. Null when no
+ * scoped match carries the win flag (runs stored before it existed).
+ */
+export function winLossRecord(
+  perMatch: MatchmakingPerMatch[],
+  scope: MatchScope,
+): WinLossRecord | null {
+  const scoped =
+    scope === "all"
+      ? perMatch
+      : perMatch.filter((m) => m.duo === (scope === "duo"));
+  const flags = scoped.map((m) => m.win).filter((w): w is boolean => w != null);
+  if (flags.length === 0) return null;
+  const wins = flags.filter(Boolean).length;
+  return { wins, losses: flags.length - wins };
+}
+
+export interface LobbyGap {
+  lobbyAvg: number;
+  playerValue: number;
+}
+
+/**
+ * Average rank of every unique player in one scope's lobbies (both sides,
+ * analyzed player included) against the analyzed player's own rank. Null
+ * when the run lacks per-match puuids, or either figure is unrankable.
+ */
+export function lobbyGap(
+  perMatch: MatchmakingPerMatch[],
+  playerRanks: Record<string, MatchmakingPlayerRank> | null | undefined,
+  scope: MatchScope,
+  analysisPuuid: string,
+): LobbyGap | null {
+  if (!playerRanks) return null;
+  const playerValue = playerRanks[analysisPuuid]?.value;
+  if (playerValue == null) return null;
+  const scoped =
+    scope === "all"
+      ? perMatch
+      : perMatch.filter((m) => m.duo === (scope === "duo"));
+  if (
+    scoped.length === 0 ||
+    scoped.some((m) => m.ally_puuids == null || m.enemy_puuids == null)
+  ) {
+    return null;
+  }
+  const lobby = new Set<string>([analysisPuuid]);
+  for (const m of scoped) {
+    for (const puuid of m.ally_puuids ?? []) lobby.add(puuid);
+    for (const puuid of m.enemy_puuids ?? []) lobby.add(puuid);
+  }
+  const values = [...lobby]
+    .map((puuid) => playerRanks[puuid]?.value)
+    .filter((v): v is number => v != null);
+  if (values.length === 0) return null;
+  return {
+    lobbyAvg: values.reduce((sum, v) => sum + v, 0) / values.length,
+    playerValue,
+  };
+}
+
 export interface SidePerformance {
   kda: number | null;
   killParticipation: number | null;

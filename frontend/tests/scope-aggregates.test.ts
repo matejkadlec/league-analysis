@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   effectiveScope,
+  lobbyGap,
   performanceAggregates,
   rankAggregates,
   scopeAggregates,
   trimmedMean,
+  winLossRecord,
 } from "@/features/matchmaking/scope-aggregates";
 import {
   MatchmakingPerMatchSchema,
@@ -241,5 +243,79 @@ describe("effectiveScope", () => {
     expect(effectiveScope("duo", some, null)).toBe("all");
     expect(effectiveScope("solo", null, some)).toBe("all");
     expect(effectiveScope("all", some, some)).toBe("all");
+  });
+});
+
+describe("winLossRecord", () => {
+  const MATCHES: MatchmakingPerMatch[] = [
+    { match_id: "m1", duo: true, win: true, team_avg: 0.5, enemy_avg: 0.5 },
+    { match_id: "m2", duo: true, win: false, team_avg: 0.5, enemy_avg: 0.5 },
+    { match_id: "m3", duo: false, win: false, team_avg: 0.5, enemy_avg: 0.5 },
+  ];
+
+  it("counts the analyzed player's wins and losses per scope", () => {
+    expect(winLossRecord(MATCHES, "all")).toEqual({ wins: 1, losses: 2 });
+    expect(winLossRecord(MATCHES, "duo")).toEqual({ wins: 1, losses: 1 });
+    expect(winLossRecord(MATCHES, "solo")).toEqual({ wins: 0, losses: 1 });
+  });
+
+  it("returns null when no scoped match carries the win flag", () => {
+    const preExtension = [
+      { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+    ];
+
+    expect(winLossRecord(preExtension, "all")).toBeNull();
+    expect(winLossRecord([], "all")).toBeNull();
+    // A scope emptied of flagged matches is null even when another has them.
+    expect(winLossRecord([...preExtension, MATCHES[2]!], "duo")).toBeNull();
+  });
+});
+
+describe("lobbyGap", () => {
+  const RANKS: Record<string, MatchmakingPlayerRank> = {
+    me: { tier: "GOLD", value: 1500 },
+    partner: { tier: "PLATINUM", value: 1700 },
+    foe1: { tier: "PLATINUM", value: 1900 },
+    foe2: { tier: "UNRANKED", value: null },
+  };
+  const MATCHES: MatchmakingPerMatch[] = [
+    {
+      match_id: "m1",
+      duo: true,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      ally_puuids: ["me", "partner"],
+      enemy_puuids: ["foe1", "foe2"],
+    },
+    {
+      match_id: "m2",
+      duo: false,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      ally_puuids: ["me"],
+      enemy_puuids: ["foe1"],
+    },
+  ];
+
+  it("averages every unique ranked player in the scoped lobbies", () => {
+    // Unranked foe2 is excluded from the average, not counted as 0.
+    expect(lobbyGap(MATCHES, RANKS, "duo", "me")).toEqual({
+      lobbyAvg: (1500 + 1700 + 1900) / 3,
+      playerValue: 1500,
+    });
+    expect(lobbyGap(MATCHES, RANKS, "all", "me")?.lobbyAvg).toBe(
+      (1500 + 1700 + 1900) / 3,
+    );
+  });
+
+  it("returns null without per-match puuids or an analyzed-player rank", () => {
+    const preExtension = [
+      { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+    ];
+
+    expect(lobbyGap(preExtension, RANKS, "all", "me")).toBeNull();
+    expect(lobbyGap(MATCHES, null, "duo", "me")).toBeNull();
+    expect(lobbyGap(MATCHES, RANKS, "duo", "unranked-me")).toBeNull();
+    expect(lobbyGap([], RANKS, "duo", "me")).toBeNull();
   });
 });

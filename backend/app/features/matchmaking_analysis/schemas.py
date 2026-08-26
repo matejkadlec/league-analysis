@@ -81,6 +81,10 @@ class MatchmakingPerMatchBreakdown(BaseModel):
 
     match_id: str
     duo: bool
+    win: bool | None = Field(
+        default=None,
+        description="Whether the analyzed player won this spine match",
+    )
     ally_puuids: list[str] | None = Field(
         default=None,
         description="Allies of this spine match including the analyzed player",
