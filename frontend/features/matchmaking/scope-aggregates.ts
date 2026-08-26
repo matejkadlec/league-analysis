@@ -13,6 +13,21 @@ export interface ScopeAggregates {
  * per-match breakdown. The "All" scope must NOT go through this: the card
  * shows the stored aggregates for it, so the figure never drifts from history.
  */
+/**
+ * The scope the card may actually render: a selection whose aggregates are
+ * gone (player switch, new run, deletion) snaps back to "all", so the Select
+ * and captions can never label the stored All-scope figures as a slice.
+ */
+export function effectiveScope(
+  selected: MatchScope,
+  soloAggregates: ScopeAggregates | null,
+  duoAggregates: ScopeAggregates | null,
+): MatchScope {
+  if (selected === "solo" && soloAggregates) return "solo";
+  if (selected === "duo" && duoAggregates) return "duo";
+  return "all";
+}
+
 export function scopeAggregates(
   perMatch: MatchmakingPerMatch[],
   scope: Exclude<MatchScope, "all">,

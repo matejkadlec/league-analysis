@@ -42,6 +42,7 @@ export const MatchmakingAnalysisResultsSchema = z.object({
   enemy_avg_winrate: z.number().min(0).max(1),
   matches_analyzed: z.number().int().min(0),
   matches_requested: z.number().int().nullable().optional(),
+  spine_matches_found: z.number().int().nullable().optional(),
   ally_avg_rank_value: z.number().min(0).nullable().optional(),
   enemy_avg_rank_value: z.number().min(0).nullable().optional(),
   ally_tier_counts: z.record(z.string(), z.number().int()).nullable().optional(),

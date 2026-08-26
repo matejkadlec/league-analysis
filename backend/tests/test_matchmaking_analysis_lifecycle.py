@@ -1,7 +1,7 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
@@ -13,15 +13,20 @@ from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError
+from app.core.riot_api.models import LeagueEntryDTO
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-from app.features.matchmaking_analysis.ranks import summarize_ranks
+from app.features.matchmaking_analysis.ranks import rank_value, summarize_ranks
 from app.features.matchmaking_analysis.schemas import (
     MatchmakingAnalysisParams,
     MatchmakingAnalysisRequest,
 )
-from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
+from app.features.matchmaking_analysis.service import (
+    HISTORICAL_RANK_WINDOW,
+    RANK_SNAPSHOT_MAX_AGE,
+    MatchmakingAnalysisService,
+)
 
 # The account these tests act as. Every stored run belongs to one, so a service
 # cannot be built without saying which.
@@ -468,3 +473,163 @@ async def test_below_the_floor_fails_with_not_enough_matches() -> None:
     await_args = service._complete_with_error.await_args
     assert await_args is not None
     assert await_args.kwargs["error_code"] == "not_enough_matches"
+
+
+def _gold_entry(lp: int = 40) -> LeagueEntryDTO:
+    return LeagueEntryDTO(
+        queue_type="RANKED_SOLO_5x5",
+        tier="GOLD",
+        rank="II",
+        league_points=lp,
+        wins=50,
+        losses=50,
+    )
+
+
+async def test_route_threads_non_default_params_into_the_service() -> None:
+    """A chosen preset and end date must reach start_analysis, not defaults."""
+    service = MagicMock(spec=MatchmakingAnalysisService)
+    service.start_analysis.return_value = _analysis()
+
+    await analysis_router.start_analysis(
+        request=_request(),
+        payload=MatchmakingAnalysisRequest(
+            puuid=_PUUID, match_count=30, end_date=date(2026, 7, 26)
+        ),
+        service=cast(MatchmakingAnalysisService, service),
+    )
+
+    service.start_analysis.assert_awaited_once_with(
+        _PUUID, MatchmakingAnalysisParams(match_count=30, end_date=date(2026, 7, 26))
+    )
+
+
+async def test_a_fresh_snapshot_resolves_a_rank_without_a_league_call() -> None:
+    service = _bare_service()
+    service._find_rank_snapshot = AsyncMock(
+        return_value=SimpleNamespace(tier="GOLD", rank="II", league_points=40)
+    )
+    service._api_call_with_retries = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_values["p1"] == rank_value("GOLD", "II", 40)
+    assert service._rank_period_accurate == 1
+    assert service._rank_current_day == 0
+    service._api_call_with_retries.assert_not_awaited()
+
+
+async def test_a_live_read_near_the_backdated_window_counts_period_accurate() -> None:
+    """The counter must match how a rerun will judge the stored snapshot."""
+    service = _bare_service()
+    service.end_date = datetime.now(UTC).date() - timedelta(days=2)
+    service._find_rank_snapshot = AsyncMock(return_value=None)
+    service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
+    service._store_rank_snapshot = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_period_accurate == 1
+    assert service._rank_current_day == 0
+    service._store_rank_snapshot.assert_awaited_once()
+
+
+async def test_a_live_read_far_from_the_backdated_window_counts_current_day() -> None:
+    service = _bare_service()
+    service.end_date = datetime.now(UTC).date() - timedelta(days=60)
+    service._find_rank_snapshot = AsyncMock(return_value=None)
+    service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
+    service._store_rank_snapshot = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_period_accurate == 0
+    assert service._rank_current_day == 1
+
+
+async def test_snapshot_window_is_a_day_back_for_latest_runs() -> None:
+    service = _bare_service()
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._find_rank_snapshot("p1")
+
+    assert execute.await_args is not None
+    statement = execute.await_args.args[0]
+    bounds = [v for v in _compiled_values(statement) if isinstance(v, datetime)]
+    assert len(bounds) == 2
+    assert max(bounds) - min(bounds) == RANK_SNAPSHOT_MAX_AGE
+
+
+async def test_snapshot_window_straddles_the_backdated_reference() -> None:
+    service = _bare_service()
+    service.end_date = date(2026, 7, 26)
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._find_rank_snapshot("p1")
+
+    assert execute.await_args is not None
+    statement = execute.await_args.args[0]
+    bounds = [v for v in _compiled_values(statement) if isinstance(v, datetime)]
+    assert len(bounds) == 2
+    assert max(bounds) - min(bounds) == 2 * HISTORICAL_RANK_WINDOW
+
+
+async def test_store_rank_snapshot_skips_tracked_players() -> None:
+    """Match Fetcher owns tracked players' cadence; see `match_lp.py`."""
+    service = _bare_service()
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: True))
+    add = MagicMock()
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute, add=add))
+
+    await service._store_rank_snapshot("p1", _gold_entry())
+
+    add.assert_not_called()
+
+
+async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
+    service = _bare_service()
+    entry = _gold_entry()
+    identical = SimpleNamespace(
+        tier="GOLD", rank="II", league_points=40, wins=50, losses=50
+    )
+    results = [
+        MagicMock(scalar_one_or_none=lambda: None),
+        MagicMock(scalar_one_or_none=lambda: identical),
+    ]
+    add = MagicMock()
+    service.db = cast(
+        AsyncSession,
+        SimpleNamespace(execute=AsyncMock(side_effect=results), add=add),
+    )
+
+    await service._store_rank_snapshot("p1", entry)
+
+    add.assert_not_called()
+
+
+async def test_store_rank_snapshot_inserts_a_changed_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _bare_service()
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    results = [
+        MagicMock(scalar_one_or_none=lambda: None),
+        MagicMock(scalar_one_or_none=lambda: None),
+    ]
+    add = MagicMock()
+    service.db = cast(
+        AsyncSession,
+        SimpleNamespace(
+            execute=AsyncMock(side_effect=results), add=add, commit=AsyncMock()
+        ),
+    )
+
+    await service._store_rank_snapshot("p1", _gold_entry())
+
+    add.assert_called_once()

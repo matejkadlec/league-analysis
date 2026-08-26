@@ -98,6 +98,15 @@ describe("the matchmaking analysis history card", () => {
     cleanup();
   });
 
+  it("labels each run's Type from its own params", async () => {
+    // The backdated day renders in UTC: parsed without the Z suffix it would
+    // shift to Jan 31 west of Greenwich and read "through" the wrong day.
+    renderHistory();
+    const rows = await table();
+    expect(rows.getByText("10 · latest")).toBeTruthy();
+    expect(rows.getByText("30 · through Feb 1, 2026")).toBeTruthy();
+  });
+
   it("reads a player with no analyses as empty, not as a failure", async () => {
     // A player's first visit is a 404, and letting it through turns the
     // ordinary empty state into "could not be loaded". Rendered on the real

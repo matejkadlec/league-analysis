@@ -41,6 +41,7 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     # reader: rows completed before the extension lack them, and a missing
     # value must render as absent, not as Iron IV 0 LP or a 0% figure.
     matches_requested: NotRequired[int]
+    spine_matches_found: NotRequired[int]
     ally_avg_rank_value: NotRequired[float | None]
     enemy_avg_rank_value: NotRequired[float | None]
     ally_tier_counts: NotRequired[dict[str, int]]

@@ -212,6 +212,7 @@ def _build_completion_results(
         "enemy_avg_winrate": round(fmean(enemy_avgs), 4),
         "matches_analyzed": matches_analyzed,
         "matches_requested": matches_requested,
+        "spine_matches_found": len(spine_stats),
         "ally_avg_rank_value": rank_summary.ally_avg_rank_value,
         "enemy_avg_rank_value": rank_summary.enemy_avg_rank_value,
         "ally_tier_counts": rank_summary.ally_tier_counts,
@@ -960,16 +961,23 @@ class MatchmakingAnalysisService:
             self._rank_tiers[p_puuid] = UNRANKED
             return
 
-        # A live fetch is the period itself for a latest run, but only
-        # today's rank for a backdated one -- the honesty caption's split.
         self._record_rank(
             p_puuid,
             solo_entry.tier,
             solo_entry.rank,
             solo_entry.league_points,
-            period_accurate=self.end_date is None,
+            period_accurate=self._live_read_is_period_accurate(),
         )
         await self._store_rank_snapshot(p_puuid, solo_entry)
+
+    def _live_read_is_period_accurate(self) -> bool:
+        """Judge a live read the way `_find_rank_snapshot` judges its stored
+        snapshot, so an identical rerun reports the same freshness caption
+        instead of flipping current-day counts to period-accurate ones."""
+        if self.end_date is None:
+            return True
+        now = datetime.now(UTC)
+        return abs(now - self._rank_reference_time) <= HISTORICAL_RANK_WINDOW
 
     def _record_rank(
         self,

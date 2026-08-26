@@ -104,6 +104,10 @@ class MatchmakingAnalysisResults(BaseModel):
         default=None,
         description="Spine size the run was asked for (params.match_count)",
     )
+    spine_matches_found: int | None = Field(
+        default=None,
+        description="Spine matches actually found, <= matches_requested",
+    )
     ally_avg_rank_value: float | None = Field(
         default=None,
         description="Mean LP-equivalent rank over unique ranked allies",

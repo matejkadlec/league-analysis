@@ -30,7 +30,12 @@ import {
 import { getRankColors, rankValueToDisplay } from "@/features/players";
 import { matchmakingResultsQueryKey } from "../matchmaking-query";
 import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
-import { scopeAggregates, type MatchScope } from "../scope-aggregates";
+import { formatRunEndDate } from "../run-type";
+import {
+  effectiveScope as resolveScope,
+  scopeAggregates,
+  type MatchScope,
+} from "../scope-aggregates";
 import { TierDistribution } from "./tier-distribution";
 
 interface MatchmakingAnalysisResultsProps {
@@ -101,12 +106,13 @@ export function MatchmakingAnalysisResults({
   const perMatch = results.per_match ?? null;
   const soloAggregates = perMatch ? scopeAggregates(perMatch, "solo") : null;
   const duoAggregates = perMatch ? scopeAggregates(perMatch, "duo") : null;
+  const effectiveScope = resolveScope(scope, soloAggregates, duoAggregates);
   // The "All" scope always shows the stored aggregate -- never a client
   // recomputation, so it cannot drift from the history card's figures.
   const scoped =
-    scope === "solo" && soloAggregates
+    effectiveScope === "solo" && soloAggregates
       ? soloAggregates
-      : scope === "duo" && duoAggregates
+      : effectiveScope === "duo" && duoAggregates
         ? duoAggregates
         : {
             teamAvg: results.team_avg_winrate,
@@ -114,7 +120,15 @@ export function MatchmakingAnalysisResults({
             matchCount: perMatch?.length ?? null,
           };
 
-  const matchCountLabel = latestAnalysis.params.match_count;
+  const { params } = latestAnalysis;
+  const spineFound = results.spine_matches_found ?? null;
+  const windowCount =
+    spineFound !== null && spineFound < params.match_count
+      ? `${spineFound} of ${params.match_count}`
+      : `${params.match_count}`;
+  const windowLabel = params.end_date
+    ? `${windowCount} Matches through ${formatRunEndDate(params.end_date)}`
+    : `Last ${windowCount} Matches`;
   const winrateDiff = scoped.teamAvg - scoped.enemyAvg;
   const winrateDiffPercent = formatFractionAsPercent(Math.abs(winrateDiff));
   const {
@@ -154,7 +168,7 @@ export function MatchmakingAnalysisResults({
                 : "No duo games detected in this run"}
             </span>
             <Select
-              value={scope}
+              value={effectiveScope}
               onValueChange={(value) => setScope(value as MatchScope)}
             >
               <SelectTrigger
@@ -181,7 +195,7 @@ export function MatchmakingAnalysisResults({
             <TableRow>
               <TableHead>Team</TableHead>
               <TableHead className="text-right">
-                Average Winrate (Last {matchCountLabel} Matches)
+                Average Winrate ({windowLabel})
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -218,7 +232,7 @@ export function MatchmakingAnalysisResults({
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
             Based on {results.matches_analyzed} ranked matches
-            {scope !== "all" && scoped.matchCount !== null
+            {effectiveScope !== "all" && scoped.matchCount !== null
               ? ` · ${scoped.matchCount} of this run's matches in scope`
               : ""}
           </p>

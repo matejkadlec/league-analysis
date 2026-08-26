@@ -117,7 +117,7 @@ export function MatchmakingAnalysisStartCard({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="matchmaking-end-date">
-            Analyze matches before (optional)
+            Last day to include (optional)
           </Label>
           <div className="flex items-center gap-2">
             <Input

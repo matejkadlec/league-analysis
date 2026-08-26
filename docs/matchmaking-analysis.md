@@ -114,7 +114,9 @@ Ranks are mapped to one LP-equivalent scalar
 `ranks.py`; the frontend formatter mirrors the scale and shared test fixtures
 guard drift. `rank_freshness` records how many ranks were period-accurate vs
 current-day so the UI can caption backdated runs honestly — historical rank
-data starts as "today's ranks" and improves with use.
+data starts as "today's ranks" and improves with use. A live read is judged
+against the same window its stored snapshot will be judged by, so an identical
+rerun reports the same split instead of flipping current-day to period-accurate.
 
 ### Duo classification (heuristic)
 
@@ -311,7 +313,7 @@ completion reaches 100% and triggers result/history refresh.
 | Scenario                                      | Handling                                                        |
 | --------------------------------------------- | --------------------------------------------------------------- |
 | Player has <5 ranked matches in the window    | Fast start succeeds; background run becomes retryable `failed`  |
-| 5 ≤ found < requested (sparse backdated window) | Run completes over the found matches; `matches_requested` records the ask |
+| 5 ≤ found < requested (sparse backdated window) | Run completes over the found matches; `matches_requested` records the ask and `spine_matches_found` the reality, so the card can caption "8 of 30" |
 | League read fails/empty for a participant     | Player counted UNRANKED; excluded from rank averages            |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
 | Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { scopeAggregates } from "@/features/matchmaking/scope-aggregates";
+import {
+  effectiveScope,
+  scopeAggregates,
+} from "@/features/matchmaking/scope-aggregates";
 import type { MatchmakingPerMatch } from "@/lib/core/schemas";
 
 const PER_MATCH: MatchmakingPerMatch[] = [
@@ -28,5 +31,22 @@ describe("scopeAggregates", () => {
 
     expect(scopeAggregates(allSolo, "duo")).toBeNull();
     expect(scopeAggregates([], "solo")).toBeNull();
+  });
+});
+
+describe("effectiveScope", () => {
+  const some = { teamAvg: 0.5, enemyAvg: 0.5, matchCount: 3 };
+
+  it("keeps a selection whose aggregates exist", () => {
+    expect(effectiveScope("duo", null, some)).toBe("duo");
+    expect(effectiveScope("solo", some, null)).toBe("solo");
+  });
+
+  it("snaps back to all when the selected slice is gone", () => {
+    // The regression: DuoQ stays selected after a player switch or a new
+    // no-duo run, and the card would label All-scope figures as duo-scoped.
+    expect(effectiveScope("duo", some, null)).toBe("all");
+    expect(effectiveScope("solo", null, some)).toBe("all");
+    expect(effectiveScope("all", some, some)).toBe("all");
   });
 });
