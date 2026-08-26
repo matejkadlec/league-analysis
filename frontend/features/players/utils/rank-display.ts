@@ -24,18 +24,23 @@ function titleCase(tier: string): string {
 export interface RankDisplay {
   /** Tier used for coloring via `getRankColors`. MASTER for everything 2800+. */
   tier: Tier;
-  /** e.g. "Gold II", "Master+ 150 LP" */
+  /** e.g. "Gold II · 40 LP", "Master+ 150 LP" */
   label: string;
 }
 
 export function rankValueToDisplay(value: number): RankDisplay {
-  if (value >= MASTER_FLOOR) {
-    return { tier: "MASTER", label: `Master+ ${Math.round(value - MASTER_FLOOR)} LP` };
+  // Round first so 1599.7 promotes to "Platinum IV · 0 LP" instead of the
+  // impossible "Gold I · 100 LP".
+  const rounded = Math.round(Math.max(0, value));
+  if (rounded >= MASTER_FLOOR) {
+    return { tier: "MASTER", label: `Master+ ${rounded - MASTER_FLOOR} LP` };
   }
-  const clamped = Math.max(0, value);
-  // `value < MASTER_FLOOR` bounds both indexes; the fallbacks only satisfy
+  // `rounded < MASTER_FLOOR` bounds both indexes; the fallbacks only satisfy
   // noUncheckedIndexedAccess.
-  const tier = TIERS_BELOW_MASTER[Math.floor(clamped / 400)] ?? "IRON";
-  const division = DIVISIONS[Math.floor((clamped % 400) / 100)] ?? "IV";
-  return { tier, label: `${titleCase(tier)} ${division}` };
+  const tier = TIERS_BELOW_MASTER[Math.floor(rounded / 400)] ?? "IRON";
+  const division = DIVISIONS[Math.floor((rounded % 400) / 100)] ?? "IV";
+  return {
+    tier,
+    label: `${titleCase(tier)} ${division} · ${rounded % 100} LP`,
+  };
 }
