@@ -43,7 +43,7 @@ export function MatchmakingExplanationCard() {
           nearest stored rank snapshot — for backdated runs, ranks without a
           snapshot near that period fall back to current-day rank, which the
           result labels honestly. Averages over ten or more matches trim the
-          single most extreme match from each end before averaging, and the
+          most extreme tenth of matches from each end before averaging, and the
           Recent Form figures read each player&apos;s KDA, kill participation
           and damage share over the same recent matches the win rates use.
         </p>

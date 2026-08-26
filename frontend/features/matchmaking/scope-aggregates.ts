@@ -30,8 +30,8 @@ export function effectiveScope(
 
 /**
  * Mean with 10% trimmed from each end (floor'd count, so under ten values
- * nothing is trimmed). Mirrors `trimmed_mean` in the backend service; the two
- * implementations share test fixtures so they cannot drift apart.
+ * nothing is trimmed). Mirrors `trimmed_mean` in the backend service; the
+ * fixtures duplicated across both test suites must stay identical.
  */
 export function trimmedMean(values: number[]): number {
   const k = Math.floor(values.length * 0.1);

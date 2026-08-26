@@ -6,7 +6,10 @@ import {
   scopeAggregates,
   trimmedMean,
 } from "@/features/matchmaking/scope-aggregates";
-import type { MatchmakingPerMatch } from "@/lib/core/schemas";
+import {
+  MatchmakingPerMatchSchema,
+  type MatchmakingPerMatch,
+} from "@/lib/core/schemas";
 
 const PER_MATCH: MatchmakingPerMatch[] = [
   { match_id: "m1", duo: true, team_avg: 0.4, enemy_avg: 0.6 },
@@ -37,13 +40,13 @@ describe("scopeAggregates", () => {
 });
 
 /**
- * Shared with TRIM_FIXTURES in the backend lifecycle test: the two trimmed
- * mean implementations must agree, or the stored All-scope figure and the
- * client's slice figures drift apart. n=10 is the smallest input that trims.
+ * Duplicated as TRIM_FIXTURES in the backend lifecycle test; both copies must
+ * stay identical or the stored All-scope figure and the client's slices drift.
+ * The n=5 fixture is asymmetric so trimming below ten values fails it.
  */
 const TRIM_FIXTURES: Array<[number[], number]> = [
   [[0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625],
-  [[0.0, 0.5, 0.5, 0.5, 1.0], 0.5],
+  [[0.0, 0.5, 0.5, 0.5, 0.9], 0.48],
 ];
 
 describe("trimmedMean", () => {
@@ -60,6 +63,40 @@ describe("trimmedMean", () => {
     }));
 
     expect(scopeAggregates(perMatch, "duo")?.teamAvg).toBeCloseTo(0.50625, 10);
+  });
+});
+
+describe("MatchmakingPerMatchSchema", () => {
+  it("parses an LGA-105 entry with the performance keys absent", () => {
+    // Rejecting absent keys would blank the whole results card for every
+    // run stored before the performance fields existed.
+    const parsed = MatchmakingPerMatchSchema.parse({
+      match_id: "m1",
+      duo: true,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+    });
+
+    expect(parsed.team_kda).toBeUndefined();
+    expect(parsed.enemy_damage_share).toBeUndefined();
+  });
+
+  it("parses a new entry whose metrics are explicit nulls", () => {
+    const parsed = MatchmakingPerMatchSchema.parse({
+      match_id: "m1",
+      duo: false,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      team_kda: 2.5,
+      enemy_kda: null,
+      team_kill_participation: null,
+      enemy_kill_participation: null,
+      team_damage_share: null,
+      enemy_damage_share: null,
+    });
+
+    expect(parsed.team_kda).toBe(2.5);
+    expect(parsed.enemy_kda).toBeNull();
   });
 });
 

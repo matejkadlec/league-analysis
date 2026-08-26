@@ -87,8 +87,8 @@ Average of averages of averages:
 3. Final: **10%-trimmed mean** of the N per-match ally averages and of the N
    per-match enemy averages → `{ team_avg_winrate, enemy_avg_winrate }`. The
    trim count is floored (`int(N × 0.1)`), so runs under 10 sided matches are
-   effectively plain means, and at 10–29 exactly the single most extreme match
-   drops from each end. The client's SoloQ/DuoQ recomputation applies the same
+   effectively plain means; 10–19 drop the single most extreme match from each
+   end, 20–29 drop two, 30 drops three. The client's SoloQ/DuoQ recomputation applies the same
    rule (`trimmedMean`, fixtures shared with the backend); the "All" scope
    always displays the stored aggregate, never a client recomputation. Runs
    stored before the trim are plain means — cross-boundary history
@@ -96,9 +96,11 @@ Average of averages of averages:
 
 ### Recent-form performance (zero extra API calls)
 
-Each participant's trailing form is read from the **same ≤10 anchored
-matches** the win rate uses, after the win-rate pass has persisted any
-API-fetched matches — so the read is DB-only and adds no Riot calls. Per
+Each participant's trailing form is read from **exactly the matches their
+win rate counted** (the winrate pass records its sampled match IDs), after
+that pass has persisted any API-fetched matches — so the read is DB-only,
+adds no Riot calls, and can never describe a different window than the
+win-rate figure beside it. Per
 player: **median** per-game KDA (a single stomp skews a mean at this sample
 size), mean kill participation, mean team-damage share; the two ratios are
 averaged only over the games that carry them (older stored rows may lack the

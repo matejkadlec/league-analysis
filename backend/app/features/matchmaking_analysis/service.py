@@ -9,6 +9,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from statistics import fmean, median
 from typing import Any
 
@@ -169,8 +170,8 @@ def trimmed_mean(values: Sequence[float]) -> float:
     """Mean with 10% trimmed from each end -- a floor'd count, so below ten
     values nothing is trimmed and this is the plain mean.
 
-    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the two
-    implementations share test fixtures so they cannot drift apart.
+    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the
+    fixtures duplicated across both test suites must stay identical.
     """
     k = int(len(values) * 0.1)
     kept = sorted(values)[k : len(values) - k]
@@ -209,13 +210,13 @@ class SidePerformance:
 
 
 def player_performance_from_rows(
-    rows: Sequence[tuple[Any, Any, Any]],
+    rows: Sequence[tuple[Decimal, Decimal | None, Decimal | None]],
 ) -> PlayerPerformance | None:
     """Fold one player's trailing (kda, kill_participation, damage_share) rows.
 
-    Casts every value to float at this boundary: the columns are NUMERIC, and
-    a Decimal that survives into the results payload fails JSON serialization
-    at finalize -- after the whole run's API work is already spent.
+    Casts to float at this boundary: the columns are NUMERIC, and a Decimal in
+    the results payload fails JSON serialization at finalize. The None-skip
+    serves pre-column rows; modern writes store absent keys as 0, accepted.
     """
     if not rows:
         return None
@@ -418,6 +419,9 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid: str | None = None
         self._current_analysis_created_at: datetime | None = None
         self._winrate_cache: dict[str, float | None] = {}
+        # The exact matches each player's winrate counted, so the Recent Form
+        # read describes the same sample the figure beside it does.
+        self._winrate_sample_ids: dict[str, list[str]] = {}
         self._performance_cache: dict[str, PlayerPerformance | None] = {}
         # Run parameters; the worker re-reads them from the run row so a
         # resumed run keeps the values it was started with.
@@ -750,6 +754,7 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
+        self._winrate_sample_ids = {}
         self._performance_cache = {}
         self._rank_values = {}
         self._rank_tiers = {}
@@ -1047,9 +1052,8 @@ class MatchmakingAnalysisService:
         )
         if wr is not None:
             side.winrates.append(wr)
-        # After the winrate pass: any API-fetched trailing matches are now
-        # stored, so this read is DB-only and costs no Riot calls.
-        perf = await self._cached_player_performance(p_puuid, end_time_seconds)
+        # After the winrate above, so the sampled match IDs it recorded exist.
+        perf = await self._cached_player_performance(p_puuid)
         if perf is not None:
             side.performances.append(perf)
         await self._cached_player_rank(p_puuid)
@@ -1069,32 +1073,29 @@ class MatchmakingAnalysisService:
         return wr
 
     async def _cached_player_performance(
-        self, p_puuid: str, end_time_seconds: int
+        self, p_puuid: str
     ) -> PlayerPerformance | None:
-        """One player's trailing form, from the same window the winrate read.
-
-        DB-only by design: it runs after the winrate pass has stored any
-        API-fetched matches, so whatever the database holds by then is the
-        sample -- fewer rows just mean a smaller per-player sample.
+        """One player's trailing form, from exactly the matches their winrate
+        counted (`_winrate_sample_ids`) -- every sampled match had a readable
+        participant row when that pass finished, so this read is DB-only and
+        cannot describe a different window than the figure beside it.
         """
         if p_puuid in self._performance_cache:
             return self._performance_cache[p_puuid]
 
+        sample_ids = self._winrate_sample_ids.get(p_puuid)
+        if not sample_ids:
+            self._performance_cache[p_puuid] = None
+            return None
         result = await self.db.execute(
             select(
                 MatchParticipant.kda,
                 MatchParticipant.kill_participation,
                 MatchParticipant.team_damage_percentage,
-            )
-            .join(Match, MatchParticipant.match_id == Match.match_id)
-            .where(
+            ).where(
                 MatchParticipant.puuid == p_puuid,
-                Match.queue_id == RANKED_SOLO_QUEUE_ID,
-                Match.game_start_timestamp <= end_time_seconds * 1000,
-                Match.fully_analyzed.is_(True),
+                MatchParticipant.match_id.in_(sample_ids),
             )
-            .order_by(Match.game_start_timestamp.desc())
-            .limit(MATCHES_FOR_WINRATE)
         )
         perf = player_performance_from_rows(result.tuples().all())
         self._performance_cache[p_puuid] = perf
@@ -1257,7 +1258,7 @@ class MatchmakingAnalysisService:
         anchor_ms = end_time_seconds * 1000
 
         result = await self.db.execute(
-            select(MatchParticipant.win)
+            select(MatchParticipant.match_id, MatchParticipant.win)
             .join(Match, MatchParticipant.match_id == Match.match_id)
             .where(
                 MatchParticipant.puuid == puuid,
@@ -1268,40 +1269,41 @@ class MatchmakingAnalysisService:
             .order_by(Match.game_start_timestamp.desc())
             .limit(MATCHES_FOR_WINRATE)
         )
-        # `.scalars()`, not `.all()`: SQLAlchemy types a single-column select as
-        # `Result[Tuple[bool]]`, and taking the rows threw that away into
-        # `Sequence[Any]` -- so `if w` would have accepted a row of any shape.
-        db_wins = result.scalars().all()
+        db_rows = result.tuples().all()
 
-        if len(db_wins) >= MATCHES_FOR_WINRATE:
-            return self._winrate_from_rows(db_wins)
+        if len(db_rows) >= MATCHES_FOR_WINRATE:
+            return self._winrate_from_rows(puuid, db_rows)
 
         match_ids = await self._get_match_ids_for_player(puuid, end_time_seconds)
         if not match_ids:
-            return self._winrate_from_rows(db_wins)
+            return self._winrate_from_rows(puuid, db_rows)
         return await self._winrate_from_match_ids(match_ids, puuid)
 
-    def _winrate_from_rows(self, db_wins: Sequence[bool]) -> float | None:
-        if not db_wins:
+    def _winrate_from_rows(
+        self, puuid: str, rows: Sequence[tuple[str, bool]]
+    ) -> float | None:
+        if not rows:
             return None
-        self.matches_analyzed += len(db_wins)
-        return sum(db_wins) / len(db_wins)
+        self.matches_analyzed += len(rows)
+        self._winrate_sample_ids[puuid] = [match_id for match_id, _ in rows]
+        return sum(win for _, win in rows) / len(rows)
 
     async def _winrate_from_match_ids(
         self, match_ids: list[str], puuid: str
     ) -> float | None:
         wins = 0
-        total = 0
+        sampled: list[str] = []
         for mid in match_ids:
             win = await self._get_win_status(mid, puuid)
             if win is not None:
-                total += 1
+                sampled.append(mid)
                 if win:
                     wins += 1
-        if total <= 0:
+        if not sampled:
             return None
-        self.matches_analyzed += total
-        return wins / total
+        self.matches_analyzed += len(sampled)
+        self._winrate_sample_ids[puuid] = sampled
+        return wins / len(sampled)
 
     # ================================================================
     # Data Access (DB-first)

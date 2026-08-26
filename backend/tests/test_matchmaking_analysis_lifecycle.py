@@ -360,12 +360,13 @@ def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
     assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
 
 
-"""Shared with `trimmedMean` fixtures in scope-aggregates.test.ts: the two
-implementations must agree, or the stored All-scope figure and the client's
-slice figures drift apart. n=10 is the smallest input that actually trims."""
+"""Duplicated as TRIM_FIXTURES in scope-aggregates.test.ts and kept identical
+by hand: the implementations must agree or the stored All-scope figure and the
+client's slices drift. n=10 is the smallest input that trims; the n=5 fixture
+is asymmetric on purpose, so a trim wrongly applied below ten values fails."""
 TRIM_FIXTURES: list[tuple[list[float], float]] = [
     ([0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625),
-    ([0.0, 0.5, 0.5, 0.5, 1.0], 0.5),
+    ([0.0, 0.5, 0.5, 0.5, 0.9], 0.48),
 ]
 
 
@@ -385,7 +386,9 @@ def test_headline_averages_trim_the_extreme_matches() -> None:
     ]
     results = _completion_results(stats, matches_analyzed=100)
 
-    assert results["team_avg_winrate"] == pytest.approx(0.5063, abs=1e-4)
+    # Exact, not approx: `round(trimmed, 4)` is deterministic, and a loose
+    # tolerance here could never catch a one-ulp rounding regression.
+    assert results["team_avg_winrate"] == 0.5062
 
 
 def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
