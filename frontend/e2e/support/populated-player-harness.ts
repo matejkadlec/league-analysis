@@ -235,6 +235,7 @@ const matchmakingAnalysis = {
   started_at: NOW,
   completed_at: NOW,
   requests_saved: 41,
+  params: { match_count: 10, end_date: null },
 };
 
 const matchmakingHistory = {
@@ -243,6 +244,7 @@ const matchmakingHistory = {
     team_avg_winrate: 0.48 + index * 0.004,
     enemy_avg_winrate: 0.54 - index * 0.003,
     gap: -0.06 + index * 0.007,
+    params: { match_count: 10, end_date: null },
   })),
 };
 
