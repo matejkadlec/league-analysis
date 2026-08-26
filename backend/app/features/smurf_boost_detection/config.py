@@ -9,15 +9,15 @@ from __future__ import annotations
 
 from typing import Final
 
+from app.core.riot_api.constants import TEAM_POSITIONS
+
 MODEL_VERSION: Final[str] = "smurf-boost/v1"
 
 # Eligibility. A match must be ranked solo/duo, not a remake, long enough to
 # carry performance information, and played in a recognized position. The queue
 # itself is the shared matches constant; only the thresholds here are versioned.
 MINIMUM_GAME_DURATION_SECONDS: Final[int] = 300
-RECOGNIZED_POSITIONS: Final[frozenset[str]] = frozenset(
-    {"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"}
-)
+RECOGNIZED_POSITIONS: Final[frozenset[str]] = TEAM_POSITIONS
 
 # Sample floors. These are correctness constraints, not preferences.
 MINIMUM_RECENT_GAMES: Final[int] = 10

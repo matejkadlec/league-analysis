@@ -85,6 +85,13 @@ def test_lane_falls_back_to_individual_position() -> None:
     )
 
 
+def test_unrecognised_positions_are_stored_as_null() -> None:
+    payload = participant(teamPosition="Invalid", individualPosition="")
+    assert (
+        MatchDTOTransformer.extract_participant_data(payload)["team_position"] is None
+    )
+
+
 def test_challenge_stats_are_read_under_riots_own_names() -> None:
     # The challenges dict is raw camelCase Riot vocabulary, and a typo in any key
     # is silent -- .get(wrong, 0) writes a zero into every row forever. Only the

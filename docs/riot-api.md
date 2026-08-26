@@ -223,10 +223,13 @@ be "fixed" away:
 
 - **LEAGUE-V4 by-PUUID** can omit `leagueId` and `puuid` live even though the
   portal contract lists them. They are optional metadata in `LeagueEntryDTO`;
-  `queueType`, tier, rank, LP, win/loss, and state fields remain required. A
-  missing `leagueId` is stored as SQL `NULL` and does not prevent the rank
-  snapshot from being saved. Unranked players return `[]`; Flex adds a second
-  entry.
+  `queueType`, LP, win/loss, and state fields remain required. `tier` is the
+  closed `Tier` vocabulary (IRON–CHALLENGER) and `rank` is `I`–`IV`; Master and
+  above still send `I`. `queueType` stays a free string on the DTO so a TFT
+  sibling cannot fail the ranked snapshot, but `core.player_leagues` only
+  stores `RANKED_SOLO_5x5` and `RANKED_FLEX_SR`. A missing `leagueId` is stored
+  as SQL `NULL` and does not prevent the rank snapshot from being saved.
+  Unranked players return `[]`; Flex adds a second entry.
 - **ACCOUNT-V1** responses may omit `gameName` and `tagLine`. Persistence
   preserves the already-known Riot ID rather than overwriting it with nothing;
   legacy `summonerName` is only a fallback for a new record or display, never

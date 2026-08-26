@@ -6,6 +6,7 @@ from typing import Any, Final
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Computed,
     ForeignKey,
     Index,
@@ -23,6 +24,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
+from app.core.riot_api.constants import TEAM_IDS, TEAM_POSITIONS
+from app.core.runs import ints_in_sql, nullable_values_in_sql
 
 
 class MatchParticipant(Base):
@@ -33,6 +36,11 @@ class MatchParticipant(Base):
         # The PK is (match_id, participant_id); this separately guarantees a
         # player appears at most once per match, whichever slot they occupy.
         UniqueConstraint("match_id", "puuid", name="uq_match_participants_puuid_match"),
+        CheckConstraint(ints_in_sql("team_id", TEAM_IDS), name="team_id_valid"),
+        CheckConstraint(
+            nullable_values_in_sql("team_position", sorted(TEAM_POSITIONS)),
+            name="team_position_valid",
+        ),
         {"schema": "core"},
     )
 

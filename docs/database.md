@@ -106,7 +106,12 @@ because these values drive staleness decisions.
   stored lowercase and then could not be found by name and tag. Normalising in
   Python fixed the code; the constraint makes it the database's invariant, so a
   future writer that forgets fails loudly instead of hiding rows. Lowercase is
-  canonical because it is Riot's own spelling.
+  canonical because it is Riot's own spelling. Revision `20260826_0033` also
+  CHECKs `players.platform` and `matches.platform` against the `Platform`
+  enum, `player_leagues.tier` / `rank` / `queue_type` against `Tier` /
+  `Division` / `LeagueQueueType`, and `match_participants.team_id` /
+  `team_position` against `TeamId` / `TeamPosition` (unknown stored lanes were
+  folded to NULL first).
 - `core.riot_api_keys` holds at most one row (revision `20260820_0019`). Past
   keys are secrets with no diagnostic value, and the surviving row's `id` is
   what `riot_credential_health.db_key_id` binds to, so replacing the key

@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import Tier
+from app.core.enums import Division, Tier
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import LeagueQueueType
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.players import service as player_service_module
 from app.features.players.leagues import PlayerLeague
@@ -21,8 +22,8 @@ from app.features.players.service import PlayerService
 def _league_entry(league_points: int = 42) -> LeagueEntryDTO:
     return LeagueEntryDTO(
         queue_type="RANKED_SOLO_5x5",
-        tier="GOLD",
-        rank="II",
+        tier=Tier.GOLD,
+        rank=Division.II,
         league_points=league_points,
         wins=12,
         losses=8,
@@ -110,9 +111,9 @@ def test_a_challenger_snapshot_survives_the_response_model() -> None:
     """
     snapshot = PlayerLeagueResponse(
         puuid="sanitized-puuid",
-        queue_type="RANKED_SOLO_5x5",
+        queue_type=LeagueQueueType.RANKED_SOLO_5x5,
         tier=Tier.CHALLENGER,
-        rank="I",
+        rank=Division.I,
         league_points=1247,
         wins=300,
         losses=200,

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
 
+from app.core.enums import Division, Tier
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.core.riot_api.models import LeagueEntryDTO
@@ -310,6 +311,7 @@ def _completion_results(
         player_ranks={},
         rank_period_accurate=0,
         rank_current_day=0,
+        analyzed_puuid="analyzed",
     )
 
 
@@ -480,8 +482,8 @@ def test_per_match_carries_both_sides_puuids_for_rank_scoping() -> None:
 
     per_match = results.get("per_match")
     assert per_match is not None
-    assert per_match[0]["ally_puuids"] == ["partner"]
-    assert per_match[0]["enemy_puuids"] == ["foe1", "foe2"]
+    assert per_match[0].get("ally_puuids") == ["partner"]
+    assert per_match[0].get("enemy_puuids") == ["foe1", "foe2"]
     assert results.get("player_ranks") == {}
 
 
@@ -589,8 +591,8 @@ async def test_below_the_floor_fails_with_not_enough_matches() -> None:
 def _gold_entry(lp: int = 40) -> LeagueEntryDTO:
     return LeagueEntryDTO(
         queue_type="RANKED_SOLO_5x5",
-        tier="GOLD",
-        rank="II",
+        tier=Tier.GOLD,
+        rank=Division.II,
         league_points=lp,
         wins=50,
         losses=50,

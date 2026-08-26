@@ -4,19 +4,23 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
-from sqlalchemy import (
+    CheckConstraint,
     ForeignKey,
     Index,
     Integer,
     String,
 )
+from sqlalchemy import (
+    DateTime as SQLDateTime,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
+from app.core.enums import Division, Tier
 from app.core.models import Base
+from app.core.riot_api.constants import LeagueQueueType
 from app.core.riot_api.models import LeagueEntryDTO
+from app.core.runs import nullable_values_in_sql, values_in_sql
 
 
 class PlayerLeague(Base):
@@ -27,7 +31,21 @@ class PlayerLeague(Base):
     """
 
     __tablename__ = "player_leagues"
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        CheckConstraint(
+            values_in_sql("tier", [tier.value for tier in Tier]),
+            name="tier_valid",
+        ),
+        CheckConstraint(
+            nullable_values_in_sql("rank", [division.value for division in Division]),
+            name="rank_division_valid",
+        ),
+        CheckConstraint(
+            values_in_sql("queue_type", [queue.value for queue in LeagueQueueType]),
+            name="queue_type_valid",
+        ),
+        {"schema": "core"},
+    )
 
     # Composite primary key using puuid + created_at
     puuid: Mapped[str] = mapped_column(
@@ -113,7 +131,11 @@ def solo_duo_league_entry(
 ) -> LeagueEntryDTO | None:
     """Return the Solo/Duo league entry from a LEAGUE-V4 payload."""
     return next(
-        (entry for entry in league_entries if entry.queue_type == "RANKED_SOLO_5x5"),
+        (
+            entry
+            for entry in league_entries
+            if entry.queue_type == LeagueQueueType.RANKED_SOLO_5x5
+        ),
         None,
     )
 
@@ -136,8 +158,8 @@ def player_league_from_entry(puuid: str, solo_entry: LeagueEntryDTO) -> PlayerLe
     return PlayerLeague(
         puuid=puuid,
         queue_type=solo_entry.queue_type,
-        tier=solo_entry.tier,
-        rank=solo_entry.rank,
+        tier=solo_entry.tier.value,
+        rank=solo_entry.rank.value,
         league_points=solo_entry.league_points,
         wins=solo_entry.wins,
         losses=solo_entry.losses,

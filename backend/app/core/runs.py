@@ -28,6 +28,17 @@ def values_in_sql(column: str, values: Sequence[str]) -> str:
     return f"{column} IN ({joined})"
 
 
+def ints_in_sql(column: str, values: Sequence[int]) -> str:
+    """The integer form of `values_in_sql`."""
+    joined = ", ".join(str(value) for value in values)
+    return f"{column} IN ({joined})"
+
+
+def nullable_values_in_sql(column: str, values: Sequence[str]) -> str:
+    """Allow SQL NULL or one of the closed string members."""
+    return f"{column} IS NULL OR {values_in_sql(column, values)}"
+
+
 def active_run_filter(
     model: type[Any],
     statuses: Sequence[str],

@@ -7,19 +7,20 @@ from typing import TypedDict
 
 import structlog
 
+from app.core.riot_api.constants import TeamPosition
 from app.core.schemas import is_json_object
 
 from .participants import MatchParticipant
-from .schemas import ChampionStatsItem, LaneStatsItem
+from .schemas import ChampionStatsItem, LaneDisplayName, LaneStatsItem
 
 logger = structlog.get_logger(__name__)
 
-LANE_DISPLAY_NAMES: dict[str, str] = {
-    "TOP": "Top",
-    "JUNGLE": "Jungle",
-    "MIDDLE": "Mid",
-    "BOTTOM": "Bottom",
-    "UTILITY": "Support",
+LANE_DISPLAY_NAMES: dict[str, LaneDisplayName] = {
+    TeamPosition.TOP.value: "Top",
+    TeamPosition.JUNGLE.value: "Jungle",
+    TeamPosition.MIDDLE.value: "Mid",
+    TeamPosition.BOTTOM.value: "Bottom",
+    TeamPosition.UTILITY.value: "Support",
 }
 
 
@@ -115,7 +116,12 @@ def accumulate_lane_stats(
 ) -> dict[str, dict[str, int]]:
     """Aggregate combat stats grouped by assigned lane."""
     return _accumulate_group_stats(
-        participants, lambda participant: participant.team_position
+        participants,
+        lambda participant: (
+            participant.team_position
+            if participant.team_position in LANE_DISPLAY_NAMES
+            else None
+        ),
     )
 
 
@@ -177,10 +183,11 @@ def build_lane_stat_items(lane_data: dict[str, dict[str, int]]) -> list[LaneStat
     """Build per-lane statistics sorted by games played."""
     lanes = [
         LaneStatsItem(
-            lane=LANE_DISPLAY_NAMES.get(lane, lane),
+            lane=LANE_DISPLAY_NAMES[lane],
             **common_stat_fields(data),
         )
         for lane, data in lane_data.items()
+        if lane in LANE_DISPLAY_NAMES
     ]
     lanes.sort(key=lambda item: item.games_played, reverse=True)
     return lanes

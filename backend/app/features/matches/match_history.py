@@ -7,6 +7,8 @@ from typing import Any, cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.constants import Platform, TeamId, TeamPosition
+
 from .lane import opposing_lane_participant
 from .match_stats import advanced_int, or_zero
 from .models import Match
@@ -19,15 +21,16 @@ from .schemas import (
     TeamComposition,
     TeamStats,
     TeamStatsComposition,
+    stored_team_position,
 )
 from .timeline import MatchTimeline
 
 ROLE_ORDER: dict[str, int] = {
-    "TOP": 0,
-    "JUNGLE": 1,
-    "MIDDLE": 2,
-    "BOTTOM": 3,
-    "UTILITY": 4,
+    TeamPosition.TOP.value: 0,
+    TeamPosition.JUNGLE.value: 1,
+    TeamPosition.MIDDLE.value: 2,
+    TeamPosition.BOTTOM.value: 3,
+    TeamPosition.UTILITY.value: 4,
 }
 
 
@@ -167,7 +170,7 @@ def accumulate_team_participant(
     team_champ = TeamChampion(
         champion_id=participant.champion_id,
         champion_name=participant.champion_name,
-        team_position=participant.team_position,
+        team_position=stored_team_position(participant.team_position),
         puuid=participant.puuid,
         game_name=participant.game_name,
         tag_line=participant.tag_line,
@@ -272,8 +275,8 @@ def build_player_match_participant(
         champion_id=player_participant.champion_id,
         champion_name=player_participant.champion_name,
         champion_level=player_participant.champion_level,
-        team_position=player_participant.team_position,
-        team_id=player_participant.team_id,
+        team_position=stored_team_position(player_participant.team_position),
+        team_id=TeamId(player_participant.team_id),
         win=player_participant.win,
         remake=player_participant.remake,
         kills=player_participant.kills,
@@ -301,7 +304,7 @@ def build_match_with_player_data(
 ) -> MatchWithPlayerData:
     return MatchWithPlayerData(
         match_id=match.match_id,
-        platform=match.platform,
+        platform=Platform(match.platform),
         game_creation_timestamp=match.game_creation_timestamp,
         game_start_timestamp=match.game_start_timestamp,
         game_start_timestamp_source=match.game_start_timestamp_source,

@@ -81,7 +81,7 @@ function champ(name: string, puuid: string) {
 
 const MATCH: MatchWithPlayerData = {
   match_id: "EUN1_1",
-  platform: "EUN1",
+  platform: "eun1",
   game_creation_timestamp: GAME_START - 60_000,
   game_start_timestamp: GAME_START,
   game_start_timestamp_source: "riot_game_start",

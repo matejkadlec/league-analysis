@@ -5,16 +5,27 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.riot_api.constants import TEAM_POSITIONS, Platform, TeamPosition
 from app.core.schemas import PaginatedResponse
 from app.features.matches.rune_transform import transform_runes_payload
+
+
+def _blank_to_none(value: object) -> object:
+    """Empty string is the pre-check stored form of 'no role'."""
+    return None if value == "" else value
+
+
+def stored_team_position(value: str | None) -> TeamPosition | None:
+    """Map a stored lane to the closed vocabulary, or None if it is not one."""
+    if value in TEAM_POSITIONS:
+        return TeamPosition(value)
+    return None
 
 
 class MatchBase(BaseModel):
     """Base Match schema with common attributes."""
 
-    platform: str = Field(
-        ..., max_length=4, description="Platform where the match was played"
-    )
+    platform: Platform = Field(..., description="Platform where the match was played")
     game_creation_timestamp: int = Field(
         ..., description="Loading-screen timestamp in milliseconds since epoch"
     )
@@ -83,9 +94,18 @@ class PlayerMatchParticipant(BaseModel):
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
     champion_level: int = Field(..., description="Champion level at end of game")
-    team_position: str | None = Field(default=None, description="Lane position")
+    team_position: TeamPosition | None = Field(
+        default=None, description="Lane position"
+    )
     team_id: int = Field(..., description="Team ID (100=Blue, 200=Red)")
     win: bool = Field(..., description="Whether the player won")
+
+    @field_validator("team_position", mode="before")
+    @classmethod
+    def blank_position_is_absent(cls, value: object) -> object:
+        """Empty string is the pre-check stored form of 'no role'."""
+        return _blank_to_none(value)
+
     remake: bool = Field(default=False, description="Whether it was a remake")
     kills: int = Field(default=0, description="Kills")
     deaths: int = Field(default=0, description="Deaths")
@@ -153,10 +173,18 @@ class TeamChampion(BaseModel):
 
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
-    team_position: str | None = Field(default=None, description="Lane position")
+    team_position: TeamPosition | None = Field(
+        default=None, description="Lane position"
+    )
     puuid: str = Field(..., description="Player PUUID")
     game_name: str = Field(..., description="Riot ID game name")
     tag_line: str = Field(..., description="Riot ID tag line")
+
+    @field_validator("team_position", mode="before")
+    @classmethod
+    def blank_position_is_absent(cls, value: object) -> object:
+        """Empty string is the pre-check stored form of 'no role'."""
+        return _blank_to_none(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -309,11 +337,14 @@ class ChampionStatsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+LaneDisplayName = Literal["Top", "Jungle", "Mid", "Bottom", "Support"]
+
+
 class LaneStatsItem(BaseModel):
     """Schema for stats of a single lane/position."""
 
-    lane: str = Field(
-        ..., description="Lane/position name (TOP, JUNGLE, MID, ADC, SUPPORT)"
+    lane: LaneDisplayName = Field(
+        ..., description="Display name of a Summoner's Rift role"
     )
     games_played: int = Field(..., ge=0, description="Number of games played")
     wins: int = Field(..., ge=0, description="Number of wins")

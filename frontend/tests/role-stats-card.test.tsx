@@ -7,22 +7,26 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { RoleStatsCard } from "@/features/profile/components/role-stats-card";
-import type { LaneStatsItem, LaneStatsResponse } from "@/lib/core/schemas";
+import type {
+  LaneDisplayName,
+  LaneStatsItem,
+  LaneStatsResponse,
+} from "@/lib/core/schemas";
 
 /** The display names the backend actually sends, read from its own map. */
-function backendLaneNames(): string[] {
+function backendLaneNames(): LaneDisplayName[] {
   const source = readFileSync(
     join(process.cwd(), "../backend/app/features/matches/match_stats.py"),
     "utf8",
   );
-  const map = /LANE_DISPLAY_NAMES: dict\[str, str\] = \{([^}]*)\}/.exec(source);
+  const map = /LANE_DISPLAY_NAMES: dict\[[^\]]+\] = \{([^}]*)\}/.exec(source);
   if (!map) throw new Error("LANE_DISPLAY_NAMES not found in match_stats.py");
   return [...(map[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map(
-    (entry) => entry[1] ?? "",
+    (entry) => entry[1] as LaneDisplayName,
   );
 }
 
-function lane(name: string, overrides: Partial<LaneStatsItem> = {}) {
+function lane(name: LaneDisplayName, overrides: Partial<LaneStatsItem> = {}) {
   return {
     lane: name,
     games_played: 10,

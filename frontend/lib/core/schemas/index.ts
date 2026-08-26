@@ -4,6 +4,7 @@ export * from "./jobs";
 export * from "./match";
 export * from "./matchmaking";
 export * from "./player";
+export * from "./riot";
 export * from "./run-lifecycle";
 export * from "./settings";
 export * from "./smurf-boost";

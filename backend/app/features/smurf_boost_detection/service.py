@@ -18,7 +18,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
-from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_TYPE
 from app.core.runs import active_run_filter, commit_new_run, guarded_run_update
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
@@ -48,7 +48,7 @@ from .schemas import (
 
 logger = structlog.get_logger(__name__)
 
-RANKED_SOLO_QUEUE = "RANKED_SOLO_5x5"
+RANKED_SOLO_QUEUE = RANKED_SOLO_QUEUE_TYPE
 
 # The engine never needs more than the largest configurable windows combined.
 MAX_WINDOW_MATCHES = 250

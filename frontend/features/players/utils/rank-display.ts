@@ -1,4 +1,4 @@
-import type { Tier } from "@/lib/core/schemas";
+import type { Division, Tier } from "@/lib/core/schemas";
 
 /**
  * Inverse of the backend's LP-equivalent rank scale (`ranks.py`): each tier
@@ -14,7 +14,7 @@ const TIERS_BELOW_MASTER: Tier[] = [
   "EMERALD",
   "DIAMOND",
 ];
-const DIVISIONS = ["IV", "III", "II", "I"];
+const DIVISIONS: Division[] = ["IV", "III", "II", "I"];
 const MASTER_FLOOR = TIERS_BELOW_MASTER.length * 400;
 
 function titleCase(tier: string): string {

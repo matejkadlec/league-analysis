@@ -188,9 +188,9 @@ def test_lane_items_are_renamed_for_display_and_sorted_by_games() -> None:
     assert items[0].avg_deaths == 1.0
 
 
-def test_an_unknown_lane_keeps_its_raw_name() -> None:
+def test_an_unknown_lane_is_omitted_rather_than_shown_raw() -> None:
     items = build_lane_stat_items(
         {"AFK": {"games": 1, "wins": 0, "kills": 0, "deaths": 1, "assists": 0}}
     )
 
-    assert items[0].lane == "AFK"
+    assert items == []

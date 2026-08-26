@@ -15,6 +15,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
+from app.core.riot_api.constants import Platform
+from app.core.runs import values_in_sql
 
 
 class Player(Base):
@@ -28,6 +30,10 @@ class Player(Base):
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",
+        ),
+        CheckConstraint(
+            values_in_sql("platform", [p.value for p in Platform]),
+            name="platform_supported",
         ),
         {"schema": "core"},
     )

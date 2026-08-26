@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+import { PLATFORMS } from "@/lib/core/platform-utils";
+
 import { paginationFields } from "./common";
+import { LaneDisplayNameSchema, TeamPositionSchema } from "./riot";
 
 // Match Schema
 export const MatchSchema = z.object({
   match_id: z.string(),
-  platform: z.string(),
+  platform: z.enum(PLATFORMS),
   game_creation_timestamp: z.number().int(),
   game_start_timestamp: z.number().int(),
   game_start_timestamp_source: z.enum([
@@ -41,7 +44,7 @@ export const PlayerMatchParticipantSchema = z.object({
   champion_id: z.number().int(),
   champion_name: z.string(),
   champion_level: z.number().int(),
-  team_position: z.string().optional().nullable(),
+  team_position: TeamPositionSchema.optional().nullable(),
   team_id: z.number().int(),
   win: z.boolean(),
   remake: z.boolean().default(false),
@@ -96,7 +99,7 @@ export const TeamStatsCompositionSchema = z.object({
 export const TeamChampionSchema = z.object({
   champion_id: z.number().int(),
   champion_name: z.string(),
-  team_position: z.string().optional().nullable(),
+  team_position: TeamPositionSchema.optional().nullable(),
   puuid: z.string(),
   game_name: z.string(),
   tag_line: z.string(),
@@ -172,7 +175,7 @@ export type ChampionStatsResponse = z.infer<typeof ChampionStatsResponseSchema>;
 
 // Lane Stats Item Schema
 export const LaneStatsItemSchema = z.object({
-  lane: z.string(),
+  lane: LaneDisplayNameSchema,
   games_played: z.number().int(),
   ...performanceStatsFields,
 });
