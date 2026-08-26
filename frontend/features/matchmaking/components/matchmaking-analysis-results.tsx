@@ -34,6 +34,7 @@ import { formatRunEndDate } from "../run-type";
 import {
   effectiveScope as resolveScope,
   performanceAggregates,
+  rankAggregates,
   scopeAggregates,
   type MatchScope,
   type SidePerformance,
@@ -177,10 +178,30 @@ export function MatchmakingAnalysisResults({
   const performance = perMatch
     ? performanceAggregates(perMatch, effectiveScope)
     : null;
-  const allyRank = results.ally_avg_rank_value ?? null;
-  const enemyRank = results.enemy_avg_rank_value ?? null;
-  const allyTiers = results.ally_tier_counts ?? null;
-  const enemyTiers = results.enemy_tier_counts ?? null;
+  // Ranks re-slice with the dropdown when the run stored per-match puuids;
+  // older runs fall back to the run-wide figures, captioned as such below.
+  const scopedRanks =
+    effectiveScope !== "all" && perMatch
+      ? rankAggregates(
+          perMatch,
+          results.player_ranks,
+          effectiveScope,
+          latestAnalysis.puuid,
+        )
+      : null;
+  const allyRank = scopedRanks
+    ? scopedRanks.allyAvg
+    : (results.ally_avg_rank_value ?? null);
+  const enemyRank = scopedRanks
+    ? scopedRanks.enemyAvg
+    : (results.enemy_avg_rank_value ?? null);
+  const allyTiers = scopedRanks
+    ? scopedRanks.allyTierCounts
+    : (results.ally_tier_counts ?? null);
+  const enemyTiers = scopedRanks
+    ? scopedRanks.enemyTierCounts
+    : (results.enemy_tier_counts ?? null);
+  const ranksAreRunWide = effectiveScope !== "all" && !scopedRanks;
   const freshness = results.rank_freshness ?? null;
 
   return (
@@ -354,6 +375,12 @@ export function MatchmakingAnalysisResults({
                   division spans 100 LP).
                 </p>
               )}
+            {ranksAreRunWide && (
+              <p className="text-sm text-muted-foreground">
+                Rank figures cover the whole run; this run predates per-scope
+                ranks.
+              </p>
+            )}
             {freshness && freshness.current_day > 0 && (
               <p className="text-sm text-muted-foreground">
                 {freshness.period_accurate} ranks measured near the analyzed

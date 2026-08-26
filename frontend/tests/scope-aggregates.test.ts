@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   effectiveScope,
   performanceAggregates,
+  rankAggregates,
   scopeAggregates,
   trimmedMean,
 } from "@/features/matchmaking/scope-aggregates";
@@ -155,6 +156,73 @@ describe("performanceAggregates", () => {
 
     expect(performanceAggregates(preExtension, "all")).toBeNull();
     expect(performanceAggregates([], "all")).toBeNull();
+  });
+});
+
+describe("rankAggregates", () => {
+  const RANKS = {
+    me: { tier: "GOLD", value: 1500 },
+    partner: { tier: "GOLD", value: 1600 },
+    stranger: { tier: "PLATINUM", value: 1800 },
+    foe1: { tier: "EMERALD", value: 2200 },
+    foe2: { tier: "UNRANKED", value: null },
+  };
+  const DUO_MATCHES = [
+    {
+      match_id: "m1",
+      duo: true,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      ally_puuids: ["partner"],
+      enemy_puuids: ["foe1", "foe2"],
+    },
+    {
+      match_id: "m2",
+      duo: true,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      ally_puuids: ["partner", "stranger"],
+      enemy_puuids: ["foe1"],
+    },
+    {
+      match_id: "m3",
+      duo: false,
+      team_avg: 0.5,
+      enemy_avg: 0.5,
+      ally_puuids: ["stranger"],
+      enemy_puuids: ["foe2"],
+    },
+  ];
+
+  it("averages unique players per side, analyzed player included", () => {
+    // "partner" and "foe1" recur across both duo matches but count once,
+    // matching the backend's global unique-player semantics.
+    const duo = rankAggregates(DUO_MATCHES, RANKS, "duo", "me");
+
+    expect(duo).toEqual({
+      allyAvg: (1500 + 1600 + 1800) / 3,
+      enemyAvg: 2200,
+      allyTierCounts: { GOLD: 2, PLATINUM: 1 },
+      enemyTierCounts: { EMERALD: 1, UNRANKED: 1 },
+    });
+  });
+
+  it("buckets unranked players without dragging the average to null", () => {
+    const solo = rankAggregates(DUO_MATCHES, RANKS, "solo", "me");
+
+    expect(solo?.enemyAvg).toBeNull();
+    expect(solo?.enemyTierCounts).toEqual({ UNRANKED: 1 });
+    expect(solo?.allyAvg).toBe((1500 + 1800) / 2);
+  });
+
+  it("returns null when the run predates per-match puuid lists", () => {
+    const preExtension = [
+      { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+    ];
+
+    expect(rankAggregates(preExtension, RANKS, "duo", "me")).toBeNull();
+    expect(rankAggregates(DUO_MATCHES, null, "duo", "me")).toBeNull();
+    expect(rankAggregates([], RANKS, "duo", "me")).toBeNull();
   });
 });
 

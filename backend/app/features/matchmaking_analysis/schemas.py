@@ -69,6 +69,14 @@ class MatchmakingPerMatchBreakdown(BaseModel):
 
     match_id: str
     duo: bool
+    ally_puuids: list[str] | None = Field(
+        default=None,
+        description="Non-analyzed allies of this spine match, for rank scoping",
+    )
+    enemy_puuids: list[str] | None = Field(
+        default=None,
+        description="Enemies of this spine match, for rank scoping",
+    )
     team_avg: float = Field(..., ge=0.0, le=1.0)
     enemy_avg: float = Field(..., ge=0.0, le=1.0)
     team_kda: float | None = Field(default=None, ge=0.0)
@@ -77,6 +85,13 @@ class MatchmakingPerMatchBreakdown(BaseModel):
     enemy_kill_participation: float | None = Field(default=None, ge=0.0)
     team_damage_share: float | None = Field(default=None, ge=0.0, le=1.0)
     enemy_damage_share: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class MatchmakingPlayerRank(BaseModel):
+    """One participant's rank at run time; value is None for UNRANKED."""
+
+    tier: str
+    value: float | None = None
 
 
 class MatchmakingRankFreshness(BaseModel):
@@ -140,6 +155,10 @@ class MatchmakingAnalysisResults(BaseModel):
     per_match: list[MatchmakingPerMatchBreakdown] | None = Field(
         default=None,
         description="Per-spine-match ally/enemy averages with the duo flag",
+    )
+    player_ranks: dict[str, MatchmakingPlayerRank] | None = Field(
+        default=None,
+        description="Rank per unique participant, keyed by puuid",
     )
     rank_freshness: MatchmakingRankFreshness | None = Field(
         default=None,

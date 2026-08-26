@@ -139,6 +139,12 @@ data starts as "today's ranks" and improves with use. A live read is judged
 against the same window its stored snapshot will be judged by, so an identical
 rerun reports the same split instead of flipping current-day to period-accurate.
 
+Results also persist `player_ranks` (rank per unique participant, keyed by
+puuid) and per-match `ally_puuids`/`enemy_puuids`, so the client re-slices the
+rank averages and tier distribution for the SoloQ/DuoQ scopes without another
+fetch. Runs stored before these keys existed fall back to the run-wide
+figures, and the card captions that fallback.
+
 ### Duo classification (heuristic)
 
 A spine match is classified **DuoQ** when any non-analyzed player appears on

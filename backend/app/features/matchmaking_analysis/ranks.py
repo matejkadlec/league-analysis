@@ -75,6 +75,18 @@ def summarize_ranks(
     )
 
 
+def player_rank_map(
+    puuids: set[str],
+    tiers: dict[str, str],
+    values: dict[str, int | None],
+) -> dict[str, dict[str, object]]:
+    """Per-player tier and LP-equivalent value, for client-side scope slicing."""
+    return {
+        puuid: {"tier": tiers.get(puuid, UNRANKED), "value": values.get(puuid)}
+        for puuid in puuids
+    }
+
+
 def classify_duo_matches(
     spine_allies: list[tuple[str, list[str]]],
 ) -> dict[str, bool]:

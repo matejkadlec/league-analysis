@@ -285,6 +285,7 @@ def _spine_stat(
     team_avg: float | None = 0.5,
     enemy_avg: float | None = 0.6,
     ally_puuids: list[str] | None = None,
+    enemy_puuids: list[str] | None = None,
     **performance: float | None,
 ) -> analysis_service_module.SpineMatchStats:
     return analysis_service_module.SpineMatchStats(
@@ -292,6 +293,7 @@ def _spine_stat(
         team_avg=team_avg,
         enemy_avg=enemy_avg,
         ally_puuids=ally_puuids or [],
+        enemy_puuids=enemy_puuids or [],
         **performance,
     )
 
@@ -305,6 +307,7 @@ def _completion_results(
         matches_analyzed=matches_analyzed,
         matches_requested=10,
         rank_summary=summarize_ranks(set(), set(), {}, {}),
+        player_ranks={},
         rank_period_accurate=0,
         rank_current_day=0,
     )
@@ -460,6 +463,26 @@ def test_recurring_teammates_flag_their_spine_matches_as_duo() -> None:
     assert per_match is not None
     duo_by_match = {e["match_id"]: e["duo"] for e in per_match}
     assert duo_by_match == {"EUN1_1": True, "EUN1_2": True, "EUN1_3": False}
+
+
+def test_per_match_carries_both_sides_puuids_for_rank_scoping() -> None:
+    """The client re-slices ranks per scope from these lists plus player_ranks."""
+    results = _completion_results(
+        [
+            _spine_stat(
+                "EUN1_1",
+                ally_puuids=["partner"],
+                enemy_puuids=["foe1", "foe2"],
+            )
+        ],
+        matches_analyzed=10,
+    )
+
+    per_match = results.get("per_match")
+    assert per_match is not None
+    assert per_match[0]["ally_puuids"] == ["partner"]
+    assert per_match[0]["enemy_puuids"] == ["foe1", "foe2"]
+    assert results.get("player_ranks") == {}
 
 
 async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
