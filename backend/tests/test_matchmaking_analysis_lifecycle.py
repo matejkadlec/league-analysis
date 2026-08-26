@@ -7,6 +7,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import Insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
@@ -580,12 +581,12 @@ async def test_store_rank_snapshot_skips_tracked_players() -> None:
     """Match Fetcher owns tracked players' cadence; see `match_lp.py`."""
     service = _bare_service()
     execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: True))
-    add = MagicMock()
-    service.db = cast(AsyncSession, SimpleNamespace(execute=execute, add=add))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
 
     await service._store_rank_snapshot("p1", _gold_entry())
 
-    add.assert_not_called()
+    # Only the tracked probe ran; no insert statement followed it.
+    assert execute.await_count == 1
 
 
 async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
@@ -594,19 +595,18 @@ async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
     identical = SimpleNamespace(
         tier="GOLD", rank="II", league_points=40, wins=50, losses=50
     )
-    results = [
-        MagicMock(scalar_one_or_none=lambda: None),
-        MagicMock(scalar_one_or_none=lambda: identical),
-    ]
-    add = MagicMock()
-    service.db = cast(
-        AsyncSession,
-        SimpleNamespace(execute=AsyncMock(side_effect=results), add=add),
+    execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(scalar_one_or_none=lambda: identical),
+        ]
     )
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
 
     await service._store_rank_snapshot("p1", entry)
 
-    add.assert_not_called()
+    # Tracked probe and latest-snapshot read only; no insert statement.
+    assert execute.await_count == 2
 
 
 async def test_store_rank_snapshot_inserts_a_changed_rank(
@@ -618,18 +618,22 @@ async def test_store_rank_snapshot_inserts_a_changed_rank(
         "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
-    results = [
-        MagicMock(scalar_one_or_none=lambda: None),
-        MagicMock(scalar_one_or_none=lambda: None),
-    ]
-    add = MagicMock()
-    service.db = cast(
-        AsyncSession,
-        SimpleNamespace(
-            execute=AsyncMock(side_effect=results), add=add, commit=AsyncMock()
-        ),
+    execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(),
+        ]
     )
+    commit = AsyncMock()
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute, commit=commit))
 
     await service._store_rank_snapshot("p1", _gold_entry())
 
-    add.assert_called_once()
+    # The write is an INSERT ... FROM SELECT re-checking the tracked flag at
+    # insert time, so a tracking activation racing the earlier probe cannot
+    # land an analysis-time snapshot for a tracked player.
+    inserted = execute.await_args_list[2].args[0]
+    assert isinstance(inserted, Insert)
+    assert "core.players" in str(inserted.compile())
+    commit.assert_awaited_once()

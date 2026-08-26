@@ -13,7 +13,16 @@ from statistics import fmean
 from typing import Any
 
 import structlog
-from sqlalchemy import ColumnElement, and_, func, select, update
+from sqlalchemy import (
+    ColumnElement,
+    Insert,
+    and_,
+    func,
+    insert,
+    literal,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
@@ -44,7 +53,6 @@ from app.features.matches.participants import MatchParticipant
 from app.features.players.leagues import (
     PlayerLeague,
     league_snapshot_matches,
-    player_league_from_entry,
     solo_duo_league_entry,
 )
 from app.features.players.models import Player
@@ -223,6 +231,28 @@ def _build_completion_results(
             "current_day": rank_current_day,
         },
     }
+
+
+def _untracked_snapshot_insert(p_puuid: str, solo_entry: LeagueEntryDTO) -> Insert:
+    """An INSERT whose tracked-player guard the database evaluates at insert
+    time -- a Python-side check can go stale before the commit lands."""
+    untracked = ~(
+        select(Player.puuid)
+        .where(Player.puuid == p_puuid, Player.is_tracked_by_anyone)
+        .exists()
+    )
+    return insert(PlayerLeague).from_select(
+        ["puuid", "queue_type", "tier", "rank", "league_points", "wins", "losses"],
+        select(
+            literal(p_puuid),
+            literal(solo_entry.queue_type),
+            literal(solo_entry.tier),
+            literal(solo_entry.rank),
+            literal(solo_entry.league_points),
+            literal(solo_entry.wins),
+            literal(solo_entry.losses),
+        ).where(untracked),
+    )
 
 
 class MatchmakingAnalysisService:
@@ -1048,7 +1078,10 @@ class MatchmakingAnalysisService:
             return
 
         await ensure_riot_writer_maintenance_is_inactive(self.db)
-        self.db.add(player_league_from_entry(p_puuid, solo_entry))
+        # INSERT-from-SELECT so the tracked check re-evaluates inside the
+        # insert itself: the check above can go stale if someone starts
+        # tracking this player between it and the commit.
+        await self.db.execute(_untracked_snapshot_insert(p_puuid, solo_entry))
         await self.db.commit()
 
     async def _calculate_player_winrate(
