@@ -108,6 +108,8 @@ export function analysisFailureMessage(
       return "The selected player could not be verified in the latest matches.";
     case "no_matches_analyzed":
       return "No ranked match history could be read for this lobby. Please try again later.";
+    case "rate_limit_wait_exhausted":
+      return "The analysis could not resume within the allowed Riot rate-limit wait. Please try again later.";
     default:
       return "The analysis did not finish. Please try again.";
   }

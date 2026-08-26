@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
+from app.core.enums import LobbyTier
+
 MatchmakingAnalysisStatus = Literal[
     "pending",
     "in_progress",
@@ -12,6 +14,16 @@ MatchmakingAnalysisStatus = Literal[
     "completed",
     "failed",
     "cancelled",
+]
+
+MatchmakingErrorCode = Literal[
+    "not_enough_matches",
+    "player_not_in_match",
+    "no_matches_analyzed",
+    "rate_limit_wait_exhausted",
+    "RIOT_API_KEY_INVALID",
+    "riot_service_error",
+    "analysis_failed",
 ]
 
 # The statuses the one-active-run interlock holds over; the partial unique
@@ -71,7 +83,7 @@ class MatchmakingPerMatchBreakdown(BaseModel):
     duo: bool
     ally_puuids: list[str] | None = Field(
         default=None,
-        description="Non-analyzed allies of this spine match, for rank scoping",
+        description="Allies of this spine match including the analyzed player",
     )
     enemy_puuids: list[str] | None = Field(
         default=None,
@@ -90,8 +102,8 @@ class MatchmakingPerMatchBreakdown(BaseModel):
 class MatchmakingPlayerRank(BaseModel):
     """One participant's rank at run time; value is None for UNRANKED."""
 
-    tier: str
-    value: float | None = None
+    tier: LobbyTier
+    value: int | None = None
 
 
 class MatchmakingRankFreshness(BaseModel):
@@ -144,11 +156,11 @@ class MatchmakingAnalysisResults(BaseModel):
         description="Mean LP-equivalent rank over unique ranked enemies",
         ge=0.0,
     )
-    ally_tier_counts: dict[str, int] | None = Field(
+    ally_tier_counts: dict[LobbyTier, int] | None = Field(
         default=None,
         description="Unique allies per tier, UNRANKED included",
     )
-    enemy_tier_counts: dict[str, int] | None = Field(
+    enemy_tier_counts: dict[LobbyTier, int] | None = Field(
         default=None,
         description="Unique enemies per tier, UNRANKED included",
     )

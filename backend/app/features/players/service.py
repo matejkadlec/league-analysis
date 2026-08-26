@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ServiceException
 from app.core.http_errors import http_error
 from app.core.riot_api.constants import (
+    RANKED_SOLO_QUEUE_TYPE,
     Platform,
     get_region_by_platform,
 )
@@ -598,7 +599,7 @@ class PlayerService:
         return True
 
     async def get_player_league(
-        self, puuid: str, queue_type: str = "RANKED_SOLO_5x5"
+        self, puuid: str, queue_type: str = RANKED_SOLO_QUEUE_TYPE
     ) -> PlayerLeague | None:
         """Get the most recent league for a player.
 

@@ -142,8 +142,11 @@ rerun reports the same split instead of flipping current-day to period-accurate.
 Results also persist `player_ranks` (rank per unique participant, keyed by
 puuid) and per-match `ally_puuids`/`enemy_puuids`, so the client re-slices the
 rank averages and tier distribution for the SoloQ/DuoQ scopes without another
-fetch. Runs stored before these keys existed fall back to the run-wide
-figures, and the card captions that fallback.
+fetch. `ally_puuids` includes the analyzed player; duo classification still
+ignores them, because they appear in every spine match. Runs stored before
+these keys existed fall back to the run-wide figures, and the card captions
+that fallback. The client still injects the analyzed PUUID into a Set, so
+legacy rows that omitted it re-slice correctly and new rows do not double-count.
 
 ### Duo classification (heuristic)
 

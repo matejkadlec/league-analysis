@@ -7,16 +7,28 @@ without constructing a `MatchmakingAnalysisService`.
 from collections import Counter
 from dataclasses import dataclass
 from statistics import fmean
+from typing import TypedDict, cast
 
-from app.core.enums import Tier
+from app.core.enums import UNRANKED, Division, LobbyTier, Tier, lobby_tier_values
 
-UNRANKED = "UNRANKED"
+_LOBBY_TIERS = set(lobby_tier_values())
+
+
+def _lobby_tier(value: str) -> LobbyTier:
+    """Pass a known lobby tier through; anything else is the unranked bucket."""
+    return cast(LobbyTier, value) if value in _LOBBY_TIERS else UNRANKED
+
 
 # LP-equivalent scale: each tier spans 400 points (4 divisions x 100 LP).
 # MASTER and above have no divisions and uncapped LP, so they continue the
 # scale from the shared floor: DIAMOND I 100 LP == MASTER 0 LP == 2800.
 _TIER_INDEX = {tier.value: index for index, tier in enumerate(Tier)}
-_DIVISION_OFFSET = {"IV": 0, "III": 100, "II": 200, "I": 300}
+_DIVISION_OFFSET = {
+    Division.IV.value: 0,
+    Division.III.value: 100,
+    Division.II.value: 200,
+    Division.I.value: 300,
+}
 MASTER_FLOOR = _TIER_INDEX[Tier.MASTER.value] * 400
 
 # The frontend formatter `rankValueToDisplay` mirrors this scale; the shared
@@ -25,11 +37,18 @@ MASTER_FLOOR = _TIER_INDEX[Tier.MASTER.value] * 400
 
 def rank_value(tier: str, rank: str | None, league_points: int) -> int:
     """Map a league entry to one comparable LP-equivalent scalar."""
-    tier_index = _TIER_INDEX[tier]
+    try:
+        tier_index = _TIER_INDEX[tier]
+    except KeyError as error:
+        raise ValueError(f"Unknown tier: {tier}") from error
     if tier_index * 400 >= MASTER_FLOOR:
         return MASTER_FLOOR + league_points
-    division_offset = _DIVISION_OFFSET[rank] if rank else 0
-    return tier_index * 400 + division_offset + league_points
+    if not rank:
+        return tier_index * 400 + league_points
+    try:
+        return tier_index * 400 + _DIVISION_OFFSET[rank] + league_points
+    except KeyError as error:
+        raise ValueError(f"Unknown division: {rank}") from error
 
 
 @dataclass(frozen=True)
@@ -38,19 +57,21 @@ class RankSummary:
 
     ally_avg_rank_value: float | None
     enemy_avg_rank_value: float | None
-    ally_tier_counts: dict[str, int]
-    enemy_tier_counts: dict[str, int]
+    ally_tier_counts: dict[LobbyTier, int]
+    enemy_tier_counts: dict[LobbyTier, int]
 
 
 def _side_summary(
     puuids: set[str],
     tiers: dict[str, str],
     values: dict[str, int | None],
-) -> tuple[float | None, dict[str, int]]:
-    counts = Counter(tiers.get(puuid, UNRANKED) for puuid in puuids)
+) -> tuple[float | None, dict[LobbyTier, int]]:
+    counts: dict[LobbyTier, int] = dict(
+        Counter(_lobby_tier(tiers.get(puuid, UNRANKED)) for puuid in puuids)
+    )
     ranked = [value for puuid in puuids if (value := values.get(puuid)) is not None]
     average = round(fmean(ranked), 1) if ranked else None
-    return average, dict(counts)
+    return average, counts
 
 
 def summarize_ranks(
@@ -75,31 +96,45 @@ def summarize_ranks(
     )
 
 
+class PlayerRankJSON(TypedDict):
+    """One participant's rank at run time, as stored in results JSONB."""
+
+    tier: LobbyTier
+    value: int | None
+
+
 def player_rank_map(
     puuids: set[str],
     tiers: dict[str, str],
     values: dict[str, int | None],
-) -> dict[str, dict[str, object]]:
+) -> dict[str, PlayerRankJSON]:
     """Per-player tier and LP-equivalent value, for client-side scope slicing."""
     return {
-        puuid: {"tier": tiers.get(puuid, UNRANKED), "value": values.get(puuid)}
+        puuid: {
+            "tier": _lobby_tier(tiers.get(puuid, UNRANKED)),
+            "value": values.get(puuid),
+        }
         for puuid in puuids
     }
 
 
 def classify_duo_matches(
     spine_allies: list[tuple[str, list[str]]],
+    *,
+    analyzed_puuid: str,
 ) -> dict[str, bool]:
-    """Flag each spine match as a likely duo game.
+    """Flag spine matches whose non-analyzed allies recur in >= 2 games.
 
-    ``spine_allies`` pairs each spine match id with the analyzed player's
-    teammates; a match is duo when any teammate recurs in >= 2 spine matches.
-    ponytail: heuristic (match-v5 has no party data), false positives at small N.
+    Ignores ``analyzed_puuid`` (they appear in every match). ponytail: no party data.
     """
+
+    def others(allies: list[str]) -> set[str]:
+        return {puuid for puuid in allies if puuid != analyzed_puuid}
+
     appearances = Counter(
-        puuid for _match_id, allies in spine_allies for puuid in set(allies)
+        puuid for _match_id, allies in spine_allies for puuid in others(allies)
     )
     return {
-        match_id: any(appearances[puuid] >= 2 for puuid in allies)
+        match_id: any(appearances[puuid] >= 2 for puuid in others(allies))
         for match_id, allies in spine_allies
     }

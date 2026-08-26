@@ -1,4 +1,5 @@
 import type {
+  LobbyTier,
   MatchmakingPerMatch,
   MatchmakingPlayerRank,
 } from "@/lib/core/schemas";
@@ -60,19 +61,19 @@ export function scopeAggregates(
 export interface RankAggregates {
   allyAvg: number | null;
   enemyAvg: number | null;
-  allyTierCounts: Record<string, number>;
-  enemyTierCounts: Record<string, number>;
+  allyTierCounts: Partial<Record<LobbyTier, number>>;
+  enemyTierCounts: Partial<Record<LobbyTier, number>>;
 }
 
 function sideRanks(
   puuids: Set<string>,
   playerRanks: Record<string, MatchmakingPlayerRank>,
-): { avg: number | null; tierCounts: Record<string, number> } {
-  const tierCounts: Record<string, number> = {};
+): { avg: number | null; tierCounts: Partial<Record<LobbyTier, number>> } {
+  const tierCounts: Partial<Record<LobbyTier, number>> = {};
   const values: number[] = [];
   for (const puuid of puuids) {
     const rank = playerRanks[puuid];
-    const tier = rank?.tier ?? "UNRANKED";
+    const tier: LobbyTier = rank?.tier ?? "UNRANKED";
     tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
     if (rank?.value != null) values.push(rank.value);
   }

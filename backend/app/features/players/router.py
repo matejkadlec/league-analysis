@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from app.core.dependencies import get_riot_client
 from app.core.http_rate_limit import rate_limit
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.constants import Platform
+from app.core.riot_api.constants import LeagueQueueType, Platform
 from app.core.riot_api.errors import (
     RIOT_API_KEY_INVALID_DETAIL,
     AuthenticationError,
@@ -362,8 +362,8 @@ async def get_player_current_league(
     puuid: str,
     player_service: PlayerServiceDep,
     queue_type: Annotated[
-        str, Query(description="Queue type to fetch league for")
-    ] = "RANKED_SOLO_5x5",
+        LeagueQueueType, Query(description="Queue type to fetch league for")
+    ] = LeagueQueueType.RANKED_SOLO_5x5,
 ) -> PlayerLeague | None:
     """
     Get the current league for a player.

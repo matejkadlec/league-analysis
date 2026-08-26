@@ -1,15 +1,16 @@
 import { z } from "zod";
 
+import { LobbyTierSchema } from "./riot";
+import { splitRunOnLifecycle } from "./run-lifecycle";
+
 export const MatchmakingAnalysisRequestSchema = z.object({
   puuid: z.string(),
-  match_count: z.number().int(),
+  match_count: z.number().int().min(5).max(30),
   end_date: z.string().nullable(),
 });
 export type MatchmakingAnalysisRequest = z.infer<
   typeof MatchmakingAnalysisRequestSchema
 >;
-
-import { splitRunOnLifecycle } from "./run-lifecycle";
 
 // ===== MATCHMAKING ANALYSIS SCHEMAS =====
 
@@ -39,8 +40,8 @@ export const MatchmakingPerMatchSchema = z.object({
 
 /** One participant's rank at run time; value is null for UNRANKED. */
 export const MatchmakingPlayerRankSchema = z.object({
-  tier: z.string(),
-  value: z.number().min(0).nullable(),
+  tier: LobbyTierSchema,
+  value: z.number().int().min(0).nullable(),
 });
 
 export const MatchmakingRankFreshnessSchema = z.object({
@@ -61,9 +62,12 @@ export const MatchmakingAnalysisResultsSchema = z.object({
   spine_matches_found: z.number().int().nullable().optional(),
   ally_avg_rank_value: z.number().min(0).nullable().optional(),
   enemy_avg_rank_value: z.number().min(0).nullable().optional(),
-  ally_tier_counts: z.record(z.string(), z.number().int()).nullable().optional(),
+  ally_tier_counts: z
+    .partialRecord(LobbyTierSchema, z.number().int())
+    .nullable()
+    .optional(),
   enemy_tier_counts: z
-    .record(z.string(), z.number().int())
+    .partialRecord(LobbyTierSchema, z.number().int())
     .nullable()
     .optional(),
   per_match: z.array(MatchmakingPerMatchSchema).nullable().optional(),
@@ -108,8 +112,8 @@ export const MatchmakingAnalysisResponseSchema = z
 
 export const MatchmakingAnalysisHistoryItemSchema = z.object({
   created_at: z.string(),
-  team_avg_winrate: z.number(),
-  enemy_avg_winrate: z.number(),
+  team_avg_winrate: z.number().min(0).max(1),
+  enemy_avg_winrate: z.number().min(0).max(1),
   gap: z.number(),
   params: MatchmakingAnalysisParamsSchema,
 });

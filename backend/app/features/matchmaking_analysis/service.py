@@ -29,8 +29,9 @@ from structlog import contextvars as structlog_contextvars
 
 from app.core.database import db_manager
 from app.core.db_session import rollback_quietly
+from app.core.enums import Division, Tier
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_TYPE
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -58,9 +59,14 @@ from app.features.players.leagues import (
 )
 from app.features.players.models import Player
 
-from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
+from .models import (
+    MatchmakingAnalysis,
+    MatchmakingAnalysisResultsJSON,
+    MatchmakingPerMatchJSON,
+)
 from .ranks import (
     UNRANKED,
+    PlayerRankJSON,
     RankSummary,
     classify_duo_matches,
     player_rank_map,
@@ -73,6 +79,7 @@ from .schemas import (
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisParams,
     MatchmakingAnalysisResponse,
+    MatchmakingErrorCode,
 )
 
 logger = structlog.get_logger(__name__)
@@ -85,7 +92,6 @@ MATCHES_FOR_WINRATE = 10
 # complete, or comparing against a month ago fails exactly when it matters.
 MIN_MATCHES_FLOOR = 5
 
-RANKED_SOLO_QUEUE_TYPE = "RANKED_SOLO_5x5"
 # How close a stored league snapshot must sit to the run's reference time to be
 # reused instead of fetched: the last day for latest runs, two weeks around the
 # chosen day for backdated ones, where a period snapshot beats today's rank.
@@ -147,7 +153,10 @@ _running_analyses: dict[tuple[int, str], RunningAnalysis] = {}
 class MatchmakingAnalysisRuntimeError(Exception):
     """Internal failure carrying only reviewed client-safe diagnostics."""
 
-    def __init__(self, code: str, message: str) -> None:
+    code: MatchmakingErrorCode
+    client_message: str
+
+    def __init__(self, code: MatchmakingErrorCode, message: str) -> None:
         super().__init__(code)
         self.code = code
         self.client_message = message
@@ -267,10 +276,13 @@ class SpineMatchStats:
     enemy_damage_share: float | None = None
 
 
-def _per_match_payload(spine_stats: list[SpineMatchStats]) -> list[dict[str, object]]:
+def _per_match_payload(
+    spine_stats: list[SpineMatchStats], *, analyzed_puuid: str
+) -> list[MatchmakingPerMatchJSON]:
     """Both-sided spine matches with their duo flag, for the scope split."""
     duo_by_match = classify_duo_matches(
-        [(s.match_id, s.ally_puuids) for s in spine_stats]
+        [(s.match_id, s.ally_puuids) for s in spine_stats],
+        analyzed_puuid=analyzed_puuid,
     )
 
     def _rounded(value: float | None, digits: int) -> float | None:
@@ -302,9 +314,10 @@ def _build_completion_results(
     matches_analyzed: int,
     matches_requested: int,
     rank_summary: RankSummary,
-    player_ranks: dict[str, dict[str, object]],
+    player_ranks: dict[str, PlayerRankJSON],
     rank_period_accurate: int,
     rank_current_day: int,
+    analyzed_puuid: str,
 ) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
 
@@ -330,7 +343,7 @@ def _build_completion_results(
         "enemy_avg_rank_value": rank_summary.enemy_avg_rank_value,
         "ally_tier_counts": rank_summary.ally_tier_counts,
         "enemy_tier_counts": rank_summary.enemy_tier_counts,
-        "per_match": _per_match_payload(spine_stats),
+        "per_match": _per_match_payload(spine_stats, analyzed_puuid=analyzed_puuid),
         "player_ranks": player_ranks,
         "rank_freshness": {
             "period_accurate": rank_period_accurate,
@@ -352,8 +365,8 @@ def _untracked_snapshot_insert(p_puuid: str, solo_entry: LeagueEntryDTO) -> Inse
         select(
             literal(p_puuid),
             literal(solo_entry.queue_type),
-            literal(solo_entry.tier),
-            literal(solo_entry.rank),
+            literal(solo_entry.tier.value),
+            literal(solo_entry.rank.value),
             literal(solo_entry.league_points),
             literal(solo_entry.wins),
             literal(solo_entry.losses),
@@ -702,7 +715,7 @@ class MatchmakingAnalysisService:
             structlog_contextvars.clear_contextvars()
 
     @staticmethod
-    def _safe_failure_details(error: Exception) -> tuple[str, str]:
+    def _safe_failure_details(error: Exception) -> tuple[MatchmakingErrorCode, str]:
         """Map internal failures to stable, non-technical client messages."""
         if isinstance(error, (AuthenticationError, ForbiddenError)):
             return (
@@ -955,6 +968,7 @@ class MatchmakingAnalysisService:
             ),
             rank_period_accurate=self._rank_period_accurate,
             rank_current_day=self._rank_current_day,
+            analyzed_puuid=puuid,
         )
         self.requests_saved = max(
             theoretical_max_requests(spine_size) - self.api_calls_made, 0
@@ -1030,8 +1044,7 @@ class MatchmakingAnalysisService:
             )
             if team_id == target_team:
                 self._ally_rank_puuids.add(p_puuid)
-                if p_puuid != analysis_puuid:
-                    ally_puuids.append(p_puuid)
+                ally_puuids.append(p_puuid)
             else:
                 self._enemy_rank_puuids.add(p_puuid)
                 enemy_puuids.append(p_puuid)
@@ -1186,14 +1199,18 @@ class MatchmakingAnalysisService:
     def _record_rank(
         self,
         p_puuid: str,
-        tier: str,
-        rank: str | None,
+        tier: str | Tier,
+        rank: str | Division | None,
         league_points: int,
         *,
         period_accurate: bool,
     ) -> None:
-        self._rank_values[p_puuid] = rank_value(tier, rank, league_points)
-        self._rank_tiers[p_puuid] = tier
+        tier_value = tier.value if isinstance(tier, Tier) else tier
+        rank_value_arg = rank.value if isinstance(rank, Division) else rank
+        self._rank_values[p_puuid] = rank_value(
+            tier_value, rank_value_arg, league_points
+        )
+        self._rank_tiers[p_puuid] = tier_value
         if period_accurate:
             self._rank_period_accurate += 1
         else:

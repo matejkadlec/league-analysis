@@ -43,6 +43,35 @@ class MatchType(str, Enum):
     TUTORIAL = "tutorial"
 
 
+class LeagueQueueType(str, Enum):
+    """LEAGUE-V4 `queueType` values this product reads.
+
+    The by-PUUID payload can also carry TFT and other queues; those stay on
+    the DTO as plain strings so an unknown sibling cannot fail the ranked
+    snapshot. Only these two are stored on `core.player_leagues`.
+    """
+
+    RANKED_SOLO_5x5 = "RANKED_SOLO_5x5"
+    RANKED_FLEX_SR = "RANKED_FLEX_SR"
+
+
+class TeamPosition(str, Enum):
+    """MATCH-V5 `teamPosition` values for Summoner's Rift roles."""
+
+    TOP = "TOP"
+    JUNGLE = "JUNGLE"
+    MIDDLE = "MIDDLE"
+    BOTTOM = "BOTTOM"
+    UTILITY = "UTILITY"
+
+
+class TeamId(int, Enum):
+    """MATCH-V5 team ids."""
+
+    BLUE = 100
+    RED = 200
+
+
 class QueueType(int, Enum):
     """Current Riot queue IDs accepted by MATCH-V5 filters.
 
@@ -116,6 +145,12 @@ PRODUCT_SUPPORTED_QUEUE_IDS: tuple[int, ...] = tuple(
 # The one queue every stats surface reports on. Derived from the enum so the
 # Riot fact (420 = ranked solo/duo) is declared exactly once.
 RANKED_SOLO_QUEUE_ID: Final[int] = QueueType.RANKED_SOLO_5X5.value
+RANKED_SOLO_QUEUE_TYPE: Final[str] = LeagueQueueType.RANKED_SOLO_5x5.value
+
+TEAM_POSITIONS: Final[frozenset[str]] = frozenset(
+    position.value for position in TeamPosition
+)
+TEAM_IDS: Final[tuple[int, int]] = (TeamId.BLUE.value, TeamId.RED.value)
 
 
 def normalize_platform(platform: Platform | str) -> str:

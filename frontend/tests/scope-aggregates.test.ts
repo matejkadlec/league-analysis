@@ -10,6 +10,7 @@ import {
 import {
   MatchmakingPerMatchSchema,
   type MatchmakingPerMatch,
+  type MatchmakingPlayerRank,
 } from "@/lib/core/schemas";
 
 const PER_MATCH: MatchmakingPerMatch[] = [
@@ -160,7 +161,7 @@ describe("performanceAggregates", () => {
 });
 
 describe("rankAggregates", () => {
-  const RANKS = {
+  const RANKS: Record<string, MatchmakingPlayerRank> = {
     me: { tier: "GOLD", value: 1500 },
     partner: { tier: "GOLD", value: 1600 },
     stranger: { tier: "PLATINUM", value: 1800 },

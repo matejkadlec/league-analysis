@@ -2,6 +2,10 @@ import { z } from "zod";
 
 import { PLATFORMS } from "@/lib/core/platform-utils";
 
+import { DivisionSchema, LeagueQueueTypeSchema, TierSchema } from "./riot";
+
+export { TierSchema, type Tier } from "./riot";
+
 // Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
@@ -55,30 +59,11 @@ export const PlayerSyncRunSchema = z.object({
 
 export type PlayerSyncRun = z.infer<typeof PlayerSyncRunSchema>;
 
-/**
- * Riot's ten rank tiers, exactly as the API's `Tier` enum spells them. An
- * eleventh tier fails at the parse, where the app can say so, instead of
- * rendering as unranked grey.
- */
-export const TierSchema = z.enum([
-  "IRON",
-  "BRONZE",
-  "SILVER",
-  "GOLD",
-  "PLATINUM",
-  "EMERALD",
-  "DIAMOND",
-  "MASTER",
-  "GRANDMASTER",
-  "CHALLENGER",
-]);
-export type Tier = z.infer<typeof TierSchema>;
-
 export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
-  queue_type: z.string(),
+  queue_type: LeagueQueueTypeSchema,
   tier: TierSchema,
-  rank: z.string().nullable(),
+  rank: DivisionSchema.nullable(),
   league_points: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),

@@ -31,6 +31,24 @@ function matchmakingPayload(overrides: Record<string, unknown>) {
 }
 
 describe("matchmaking run lifecycle split", () => {
+  it("accepts a completed run whose tier counts name only occupied tiers", () => {
+    // Zod 4 `z.record(enum)` requires every member; the backend emits a Counter.
+    const run = MatchmakingAnalysisResponseSchema.parse(
+      matchmakingPayload({
+        results: {
+          ...matchmakingResults,
+          ally_tier_counts: { GOLD: 3 },
+          enemy_tier_counts: { UNRANKED: 2, PLATINUM: 1 },
+        },
+      }),
+    );
+
+    expect(run.status).toBe("completed");
+    expect(run.status === "completed" && run.results?.ally_tier_counts).toEqual({
+      GOLD: 3,
+    });
+  });
+
   it("keeps results on a completed run", () => {
     const run = MatchmakingAnalysisResponseSchema.parse(
       matchmakingPayload({ results: matchmakingResults }),

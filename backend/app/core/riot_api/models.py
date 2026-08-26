@@ -5,6 +5,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.core.enums import Division, Tier
+from app.core.riot_api.constants import TeamId
+
 
 class RiotDTO(BaseModel):
     """Riot spells its JSON camelCase; these models spell their fields snake_case.
@@ -58,8 +61,9 @@ class ParticipantDTO(RiotDTO):
     game_name: str | None = Field(default=None, alias="riotIdGameName")
     tag_line: str | None = Field(default=None, alias="riotIdTagline")
 
-    # Team & Position
-    team_id: int = Field(...)
+    # Team & Position. `team_position` stays a free string at this boundary:
+    # ARAM and Arena send "" / "Invalid", which the transformer stores as NULL.
+    team_id: TeamId = Field(...)
     team_position: str | None = Field(default=None)
 
     # Champions
@@ -212,8 +216,8 @@ class LeagueEntryDTO(RiotDTO):
     # puuid can also be omitted because the requested PUUID is already in the path
     puuid: str | None = Field(default=None, alias="puuid")
     queue_type: str = Field(...)
-    tier: str
-    rank: str
+    tier: Tier
+    rank: Division
     league_points: int = Field(...)
     wins: int
     losses: int

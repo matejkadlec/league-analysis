@@ -22,11 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
+from app.core.riot_api.constants import TEAM_IDS
 from app.core.riot_api.models import (
     MatchTimelineDTO,
     MatchTimelineEventDTO,
     MatchTimelineFrameDTO,
 )
+from app.core.runs import ints_in_sql
 
 logger = structlog.get_logger(__name__)
 
@@ -117,7 +119,7 @@ class MatchTimeline(Base):
             "participant_id BETWEEN 1 AND 10",
             name="participant_id_range",
         ),
-        CheckConstraint("team_id IN (100, 200)", name="team_id_valid"),
+        CheckConstraint(ints_in_sql("team_id", TEAM_IDS), name="team_id_valid"),
         {
             "schema": "core",
             "comment": (

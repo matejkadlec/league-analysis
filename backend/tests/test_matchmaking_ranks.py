@@ -77,7 +77,8 @@ def test_no_recurring_teammates_means_no_duo_matches() -> None:
         [
             ("m1", ["a", "b", "c", "d"]),
             ("m2", ["e", "f", "g", "h"]),
-        ]
+        ],
+        analyzed_puuid="self",
     )
 
     assert flags == {"m1": False, "m2": False}
@@ -89,7 +90,8 @@ def test_a_teammate_in_two_matches_flags_both_as_duo() -> None:
             ("m1", ["partner", "b", "c", "d"]),
             ("m2", ["partner", "f", "g", "h"]),
             ("m3", ["i", "j", "k", "l"]),
-        ]
+        ],
+        analyzed_puuid="self",
     )
 
     assert flags == {"m1": True, "m2": True, "m3": False}
@@ -97,9 +99,26 @@ def test_a_teammate_in_two_matches_flags_both_as_duo() -> None:
 
 def test_a_duplicate_within_one_match_does_not_count_as_recurrence() -> None:
     # Defensive: the same puuid twice in one match's list is one appearance.
-    flags = classify_duo_matches([("m1", ["a", "a", "b", "c"])])
+    flags = classify_duo_matches([("m1", ["a", "a", "b", "c"])], analyzed_puuid="self")
 
     assert flags == {"m1": False}
+
+
+def test_the_analyzed_player_in_every_match_is_not_a_duo() -> None:
+    flags = classify_duo_matches(
+        [
+            ("m1", ["self", "a", "b", "c"]),
+            ("m2", ["self", "e", "f", "g"]),
+        ],
+        analyzed_puuid="self",
+    )
+
+    assert flags == {"m1": False, "m2": False}
+
+
+def test_unknown_tier_is_refused_rather_than_counted_as_iron() -> None:
+    with pytest.raises(ValueError, match="Unknown tier"):
+        rank_value("WOOD", "I", 50)
 
 
 def test_theoretical_max_keeps_the_original_terms_plus_league_calls() -> None:

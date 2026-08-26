@@ -8,9 +8,15 @@ from typing import Any
 
 import structlog
 
+from app.core.riot_api.constants import TEAM_POSITIONS
 from app.core.riot_api.models import ParticipantDTO
 
 logger = structlog.get_logger(__name__)
+
+
+def _recognized_position(value: str | None) -> str | None:
+    """Keep only MATCH-V5 Summoner's Rift roles; "" and Invalid become None."""
+    return value if value in TEAM_POSITIONS else None
 
 
 class MatchDTOTransformer:
@@ -65,9 +71,9 @@ class MatchDTOTransformer:
             "profile_icon": participant_dto.profile_icon,
             "summoner_level": participant_dto.summoner_level,
             # Team & Context
-            "team_id": participant_dto.team_id,
-            "team_position": participant_dto.team_position
-            or participant_dto.individual_position,
+            "team_id": int(participant_dto.team_id),
+            "team_position": _recognized_position(participant_dto.team_position)
+            or _recognized_position(participant_dto.individual_position),
             # Champion
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,

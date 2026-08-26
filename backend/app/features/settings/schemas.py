@@ -14,7 +14,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
-from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, TeamPosition
 from app.core.schemas import is_json_object
 
 
@@ -26,14 +26,9 @@ class CardId(str, PyEnum):
     SMURF_BOOST_DETECTION = "profile.smurf-boost-detection"
 
 
-class CardRole(str, PyEnum):
-    """Canonical Riot team-position values allowed by the card contract."""
-
-    TOP = "TOP"
-    JUNGLE = "JUNGLE"
-    MIDDLE = "MIDDLE"
-    BOTTOM = "BOTTOM"
-    UTILITY = "UTILITY"
+# The card contract name for MATCH-V5 `teamPosition`. Same members, so a role
+# added on one side cannot silently miss the other.
+CardRole = TeamPosition
 
 
 class _CardSettingsBase(BaseModel):

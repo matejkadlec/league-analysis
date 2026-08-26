@@ -15,6 +15,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.models import Base, created_at_column, updated_at_column
+from app.core.riot_api.constants import Platform
+from app.core.runs import values_in_sql
 
 # Imported at runtime, not under TYPE_CHECKING: the name appears in a `Mapped`
 # annotation, and SQLAlchemy resolves those by evaluating them. `participants`
@@ -33,6 +35,10 @@ class Match(Base):
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",
+        ),
+        CheckConstraint(
+            values_in_sql("platform", [p.value for p in Platform]),
+            name="platform_supported",
         ),
         # Created by revision 20260808_0004 but never mirrored here, so
         # autogenerate proposed dropping it.

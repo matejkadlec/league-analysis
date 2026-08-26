@@ -17,13 +17,39 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.enums import LobbyTier
 from app.core.models import Base, created_at_column
 from app.core.runs import values_in_sql
 from app.features.auth.user_reference import user_id_column
+from app.features.matchmaking_analysis.ranks import PlayerRankJSON
 from app.features.matchmaking_analysis.schemas import (
     ACTIVE_ANALYSIS_STATUSES,
     MatchmakingAnalysisStatus,
 )
+
+
+class MatchmakingPerMatchJSON(TypedDict):
+    """One spine match in the results JSONB `per_match` list."""
+
+    match_id: str
+    duo: bool
+    team_avg: float
+    enemy_avg: float
+    ally_puuids: NotRequired[list[str] | None]
+    enemy_puuids: NotRequired[list[str] | None]
+    team_kda: NotRequired[float | None]
+    enemy_kda: NotRequired[float | None]
+    team_kill_participation: NotRequired[float | None]
+    enemy_kill_participation: NotRequired[float | None]
+    team_damage_share: NotRequired[float | None]
+    enemy_damage_share: NotRequired[float | None]
+
+
+class MatchmakingRankFreshnessJSON(TypedDict):
+    """Rank snapshot provenance counts in the results JSONB."""
+
+    period_accurate: int
+    current_day: int
 
 
 class MatchmakingAnalysisResultsJSON(TypedDict):
@@ -44,11 +70,11 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     spine_matches_found: NotRequired[int]
     ally_avg_rank_value: NotRequired[float | None]
     enemy_avg_rank_value: NotRequired[float | None]
-    ally_tier_counts: NotRequired[dict[str, int]]
-    enemy_tier_counts: NotRequired[dict[str, int]]
-    per_match: NotRequired[list[dict[str, object]]]
-    player_ranks: NotRequired[dict[str, dict[str, object]]]
-    rank_freshness: NotRequired[dict[str, int]]
+    ally_tier_counts: NotRequired[dict[LobbyTier, int]]
+    enemy_tier_counts: NotRequired[dict[LobbyTier, int]]
+    per_match: NotRequired[list[MatchmakingPerMatchJSON]]
+    player_ranks: NotRequired[dict[str, PlayerRankJSON]]
+    rank_freshness: NotRequired[MatchmakingRankFreshnessJSON]
 
 
 class MatchmakingAnalysis(Base):

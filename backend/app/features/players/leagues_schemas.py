@@ -4,7 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import Tier
+from app.core.enums import Division, Tier
+from app.core.riot_api.constants import LeagueQueueType
 
 
 class PlayerLeagueResponse(BaseModel):
@@ -18,9 +19,9 @@ class PlayerLeagueResponse(BaseModel):
     puuid: str = Field(
         ..., max_length=78, description="Reference to the player (Riot PUUID)"
     )
-    queue_type: str = Field(..., max_length=32, description="Queue type")
+    queue_type: LeagueQueueType = Field(..., description="Queue type")
     tier: Tier = Field(..., description="Rank tier")
-    rank: str | None = Field(default=None, max_length=4, description="Rank division")
+    rank: Division | None = Field(default=None, description="Rank division")
     league_points: int = Field(..., ge=0, description="League points")
     wins: int = Field(..., ge=0, description="Number of wins")
     losses: int = Field(..., ge=0, description="Number of losses")

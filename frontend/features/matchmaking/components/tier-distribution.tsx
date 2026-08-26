@@ -10,20 +10,10 @@ import {
   YAxis,
 } from "recharts";
 
+import { LobbyTierSchema, type LobbyTier } from "@/lib/core/schemas";
+
 /** Ascending rank order, the unranked bucket last. */
-const TIER_ORDER = [
-  "IRON",
-  "BRONZE",
-  "SILVER",
-  "GOLD",
-  "PLATINUM",
-  "EMERALD",
-  "DIAMOND",
-  "MASTER",
-  "GRANDMASTER",
-  "CHALLENGER",
-  "UNRANKED",
-];
+const TIER_ORDER: LobbyTier[] = [...LobbyTierSchema.options];
 
 // Categorical pair validated with the dataviz palette checker against both
 // surface modes (lightness band, CVD separation, contrast all pass).
@@ -48,8 +38,8 @@ export interface TierShareRow {
  * even though enemies outnumber allies (5 per match vs 4, fewer repeats).
  */
 export function tierShareRows(
-  allyCounts: Record<string, number>,
-  enemyCounts: Record<string, number>,
+  allyCounts: Partial<Record<LobbyTier, number>>,
+  enemyCounts: Partial<Record<LobbyTier, number>>,
 ): TierShareRow[] {
   const allyTotal = Object.values(allyCounts).reduce((sum, n) => sum + n, 0);
   const enemyTotal = Object.values(enemyCounts).reduce((sum, n) => sum + n, 0);
@@ -70,8 +60,8 @@ export function tierShareRows(
 }
 
 interface TierDistributionProps {
-  allyCounts: Record<string, number>;
-  enemyCounts: Record<string, number>;
+  allyCounts: Partial<Record<LobbyTier, number>>;
+  enemyCounts: Partial<Record<LobbyTier, number>>;
 }
 
 /**
