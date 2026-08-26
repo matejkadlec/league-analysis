@@ -108,7 +108,7 @@ export function MatchmakingAnalysisStartCard({
             ))}
           </div>
           {matchCount >= 30 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Larger runs analyze roughly three times as many players and can
               take much longer on a cold cache.
             </p>

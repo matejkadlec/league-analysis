@@ -258,7 +258,7 @@ export function MatchmakingAnalysisResults({
               )}
             </dl>
             {freshness && freshness.current_day > 0 && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {freshness.period_accurate} ranks measured near the analyzed
                 period, {freshness.current_day} are current-day (no historical
                 rank data existed for them yet).
