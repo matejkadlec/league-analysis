@@ -53,6 +53,7 @@ const AHEAD = {
   team_avg_winrate: 0.523,
   enemy_avg_winrate: 0.491,
   gap: 0.032,
+  params: { match_count: 10, end_date: null },
 };
 
 const BEHIND = {
@@ -60,9 +61,10 @@ const BEHIND = {
   team_avg_winrate: 0.474,
   enemy_avg_winrate: 0.512,
   gap: -0.038,
+  params: { match_count: 30, end_date: "2026-02-01" },
 };
 
-function answerWith(items: (typeof AHEAD)[]) {
+function answerWith(items: (typeof AHEAD | typeof BEHIND)[]) {
   getMatchmakingAnalysisHistory.mockResolvedValue({
     success: true,
     data: { items },
@@ -94,6 +96,15 @@ describe("the matchmaking analysis history card", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("labels each run's Type from its own params", async () => {
+    // The backdated day renders in UTC: parsed without the Z suffix it would
+    // shift to Jan 31 west of Greenwich and read "through" the wrong day.
+    renderHistory();
+    const rows = await table();
+    expect(rows.getByText("10 · latest")).toBeTruthy();
+    expect(rows.getByText("30 · through Feb 1, 2026")).toBeTruthy();
   });
 
   it("reads a player with no analyses as empty, not as a failure", async () => {

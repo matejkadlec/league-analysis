@@ -13,6 +13,7 @@ from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from .dependencies import MatchmakingServiceDep
 from .schemas import (
     MatchmakingAnalysisHistoryResponse,
+    MatchmakingAnalysisParams,
     MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
 )
@@ -38,7 +39,13 @@ async def start_analysis(
     happen in the background, so it is never tied to the HTTP request timeout.
     """
     try:
-        return await service.start_analysis(payload.puuid)
+        return await service.start_analysis(
+            payload.puuid,
+            MatchmakingAnalysisParams(
+                match_count=payload.match_count,
+                end_date=payload.end_date,
+            ),
+        )
     except RiotWriterMaintenanceActiveError as error:
         raise HTTPException(
             status_code=503,

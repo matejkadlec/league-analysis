@@ -8,7 +8,16 @@ import {
   type ProgressProjection,
 } from "./matchmaking-progress";
 
-export const EXPECTED_PLAYERS = 100;
+/**
+ * Player-slot expectation before the backend's progress keys exist: 10 slots
+ * per spine match. Reads the run's own params (attach-safe: what is actually
+ * running, not what the form last said), falling back to the 10-match default.
+ */
+export function expectedPlayersForRun(
+  run: { params: { match_count: number } } | null | undefined,
+): number {
+  return (run?.params.match_count ?? 10) * 10;
+}
 
 export const ANALYSIS_CARD_TRANSITION =
   "transition-colors duration-300 ease-in-out";

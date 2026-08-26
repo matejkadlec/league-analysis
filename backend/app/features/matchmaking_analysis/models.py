@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import TypedDict, get_args
+from typing import NotRequired, TypedDict, get_args
 
 from sqlalchemy import (
     CheckConstraint,
@@ -37,6 +37,17 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     team_avg_winrate: float
     enemy_avg_winrate: float
     matches_analyzed: int
+    # Rank/duo extension keys. `NotRequired`, never defaulted to 0 by a
+    # reader: rows completed before the extension lack them, and a missing
+    # value must render as absent, not as Iron IV 0 LP or a 0% figure.
+    matches_requested: NotRequired[int]
+    spine_matches_found: NotRequired[int]
+    ally_avg_rank_value: NotRequired[float | None]
+    enemy_avg_rank_value: NotRequired[float | None]
+    ally_tier_counts: NotRequired[dict[str, int]]
+    enemy_tier_counts: NotRequired[dict[str, int]]
+    per_match: NotRequired[list[dict[str, object]]]
+    rank_freshness: NotRequired[dict[str, int]]
 
 
 class MatchmakingAnalysis(Base):
@@ -58,6 +69,16 @@ class MatchmakingAnalysis(Base):
     )
 
     created_at: Mapped[datetime] = created_at_column("When this analysis was created")
+
+    # Run parameters, read back by the resumed worker and the history Type
+    # column. The server default is the truthful legacy value: every run
+    # persisted before this column was a 10-match latest-window run.
+    params: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default='{"match_count": 10, "end_date": null}',
+        comment="Run parameters as JSON: {match_count, end_date}",
+    )
 
     # Analysis results - stored as JSON for flexibility
     results: Mapped[MatchmakingAnalysisResultsJSON | None] = mapped_column(

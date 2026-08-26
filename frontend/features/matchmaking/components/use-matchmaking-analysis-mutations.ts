@@ -19,13 +19,20 @@ export function useMatchmakingAnalysisMutations(
   puuid: string,
   watchingCreatedAt: string | null,
   dispatch: Dispatch<AnalysisUiAction>,
+  runOptions: { matchCount: number; endDate: string | null },
 ) {
   const toast = useToast();
   const queryClient = useQueryClient();
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      return unwrap(await startMatchmakingAnalysis(puuid));
+      return unwrap(
+        await startMatchmakingAnalysis(
+          puuid,
+          runOptions.matchCount,
+          runOptions.endDate,
+        ),
+      );
     },
     onMutate: async () => {
       queryClient.removeQueries({

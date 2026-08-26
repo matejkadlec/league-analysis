@@ -1,9 +1,9 @@
 """Schemas for matchmaking analysis requests and responses."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 MatchmakingAnalysisStatus = Literal[
     "pending",
@@ -23,15 +23,65 @@ ACTIVE_ANALYSIS_STATUSES: tuple[MatchmakingAnalysisStatus, ...] = (
     "waiting_rate_limit",
 )
 
+DEFAULT_MATCH_COUNT = 10
+MIN_MATCH_COUNT = 5
+MAX_MATCH_COUNT = 30
+
 
 class MatchmakingAnalysisRequest(BaseModel):
     """Request to start a matchmaking analysis."""
 
     puuid: str = Field(..., description="Player PUUID to analyze")
+    match_count: int = Field(
+        default=DEFAULT_MATCH_COUNT,
+        ge=MIN_MATCH_COUNT,
+        le=MAX_MATCH_COUNT,
+        description="Number of the player's ranked matches to analyze",
+    )
+    end_date: date | None = Field(
+        default=None,
+        description="Analyze the matches played on or before this day (UTC); "
+        "omit for the latest matches",
+    )
+
+
+class MatchmakingAnalysisParams(BaseModel):
+    """The parameters one run was started with, echoed on every read.
+
+    Runs persisted before the `params` column existed were all 10-match
+    latest-window runs, so that default is truthful, not a guess.
+    """
+
+    match_count: int = DEFAULT_MATCH_COUNT
+    end_date: date | None = None
+
+
+_LEGACY_PARAMS = MatchmakingAnalysisParams()
+
+
+class MatchmakingPerMatchBreakdown(BaseModel):
+    """Per-spine-match averages, kept so scopes can be recomputed client-side."""
+
+    match_id: str
+    duo: bool
+    team_avg: float = Field(..., ge=0.0, le=1.0)
+    enemy_avg: float = Field(..., ge=0.0, le=1.0)
+
+
+class MatchmakingRankFreshness(BaseModel):
+    """How many participant ranks were measured near the analyzed period."""
+
+    period_accurate: int = Field(..., ge=0)
+    current_day: int = Field(..., ge=0)
 
 
 class MatchmakingAnalysisResults(BaseModel):
-    """Results of matchmaking analysis."""
+    """Results of matchmaking analysis.
+
+    Every field beyond the original three is optional with a None default,
+    never 0: pre-extension runs lack them, and substituting 0 resurrects the
+    "0% average winrate" bug the results TypedDict documents.
+    """
 
     team_avg_winrate: float = Field(
         ...,
@@ -50,6 +100,45 @@ class MatchmakingAnalysisResults(BaseModel):
         description="Number of matches analyzed",
         ge=0,
     )
+    matches_requested: int | None = Field(
+        default=None,
+        description="Spine size the run was asked for (params.match_count)",
+    )
+    spine_matches_found: int | None = Field(
+        default=None,
+        description="Spine matches actually found, <= matches_requested",
+    )
+    ally_avg_rank_value: float | None = Field(
+        default=None,
+        description="Mean LP-equivalent rank over unique ranked allies",
+        ge=0.0,
+    )
+    enemy_avg_rank_value: float | None = Field(
+        default=None,
+        description="Mean LP-equivalent rank over unique ranked enemies",
+        ge=0.0,
+    )
+    ally_tier_counts: dict[str, int] | None = Field(
+        default=None,
+        description="Unique allies per tier, UNRANKED included",
+    )
+    enemy_tier_counts: dict[str, int] | None = Field(
+        default=None,
+        description="Unique enemies per tier, UNRANKED included",
+    )
+    per_match: list[MatchmakingPerMatchBreakdown] | None = Field(
+        default=None,
+        description="Per-spine-match ally/enemy averages with the duo flag",
+    )
+    rank_freshness: MatchmakingRankFreshness | None = Field(
+        default=None,
+        description="Rank snapshot provenance counts for the honesty caption",
+    )
+
+
+def _params_or_legacy_default(value: object) -> object:
+    """Map a NULL `params` column to the truthful legacy default."""
+    return _LEGACY_PARAMS if value is None else value
 
 
 class MatchmakingAnalysisResponse(BaseModel):
@@ -59,6 +148,7 @@ class MatchmakingAnalysisResponse(BaseModel):
 
     puuid: str
     results: MatchmakingAnalysisResults | None = None
+    params: MatchmakingAnalysisParams = _LEGACY_PARAMS
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -71,6 +161,10 @@ class MatchmakingAnalysisResponse(BaseModel):
     puuid_progress: dict[str, bool] | None = Field(default=None, exclude=True)
     requests_saved: int = 0
     rate_limit_reset_at: datetime | None = None
+
+    _default_params = field_validator("params", mode="before")(
+        _params_or_legacy_default
+    )
 
     @computed_field
     @property
@@ -97,6 +191,11 @@ class MatchmakingAnalysisHistoryItem(BaseModel):
     created_at: datetime
     team_avg_winrate: float
     enemy_avg_winrate: float
+    params: MatchmakingAnalysisParams = _LEGACY_PARAMS
+
+    _default_params = field_validator("params", mode="before")(
+        _params_or_legacy_default
+    )
 
     @computed_field
     @property

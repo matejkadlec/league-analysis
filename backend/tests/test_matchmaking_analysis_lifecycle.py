@@ -1,23 +1,33 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import Insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError
+from app.core.riot_api.models import LeagueEntryDTO
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
-from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
+from app.features.matchmaking_analysis.ranks import rank_value, summarize_ranks
+from app.features.matchmaking_analysis.schemas import (
+    MatchmakingAnalysisParams,
+    MatchmakingAnalysisRequest,
+)
+from app.features.matchmaking_analysis.service import (
+    HISTORICAL_RANK_WINDOW,
+    RANK_SNAPSHOT_MAX_AGE,
+    MatchmakingAnalysisService,
+)
 
 # The account these tests act as. Every stored run belongs to one, so a service
 # cannot be built without saying which.
@@ -55,6 +65,7 @@ def _analysis(status: str = "pending") -> MatchmakingAnalysis:
             puuid_progress={},
             requests_saved=0,
             rate_limit_reset_at=None,
+            params=None,
         ),
     )
 
@@ -78,7 +89,7 @@ async def test_start_route_returns_without_riot_preflight() -> None:
     )
 
     assert result is expected
-    service.start_analysis.assert_awaited_once_with(_PUUID)
+    service.start_analysis.assert_awaited_once_with(_PUUID, MatchmakingAnalysisParams())
 
 
 async def test_repeated_start_attaches_to_the_existing_active_run(
@@ -269,13 +280,45 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
         await service._api_fetch_match_ids(_PUUID)
 
 
+def _spine_stat(
+    match_id: str = "EUN1_1",
+    team_avg: float | None = 0.5,
+    enemy_avg: float | None = 0.6,
+    ally_puuids: list[str] | None = None,
+) -> analysis_service_module.SpineMatchStats:
+    return analysis_service_module.SpineMatchStats(
+        match_id=match_id,
+        team_avg=team_avg,
+        enemy_avg=enemy_avg,
+        ally_puuids=ally_puuids or [],
+    )
+
+
+def _completion_results(
+    spine_stats: list[analysis_service_module.SpineMatchStats],
+    matches_analyzed: int = 0,
+) -> analysis_service_module.MatchmakingAnalysisResultsJSON:
+    return analysis_service_module._build_completion_results(
+        spine_stats,
+        matches_analyzed=matches_analyzed,
+        matches_requested=10,
+        rank_summary=summarize_ranks(set(), set(), {}, {}),
+        rank_period_accurate=0,
+        rank_current_day=0,
+    )
+
+
 @pytest.mark.parametrize(
-    ("team_avgs", "enemy_avgs"),
-    [([], []), ([0.5], []), ([], [0.5])],
+    "spine_stats",
+    [
+        [],
+        [_spine_stat(enemy_avg=None)],
+        [_spine_stat(team_avg=None)],
+    ],
     ids=["neither-side", "no-enemies", "no-team"],
 )
 def test_a_run_that_measured_nothing_is_not_a_completed_run(
-    team_avgs: list[float], enemy_avgs: list[float]
+    spine_stats: list[analysis_service_module.SpineMatchStats],
 ) -> None:
     """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
 
@@ -284,9 +327,7 @@ def test_a_run_that_measured_nothing_is_not_a_completed_run(
     The failure path already persists a terminal diagnostic.
     """
     with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
-        analysis_service_module._build_completion_results(
-            team_avgs, enemy_avgs, matches_analyzed=0
-        )
+        _completion_results(spine_stats)
 
 
 def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
@@ -295,11 +336,43 @@ def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
     Nearly every player in this database has fewer than ten ranked games, so
     the number under the verdict was never the number of matches behind it.
     """
-    results = analysis_service_module._build_completion_results(
-        [0.5], [0.6], matches_analyzed=37
-    )
+    results = _completion_results([_spine_stat()], matches_analyzed=37)
 
     assert results["matches_analyzed"] == 37
+
+
+def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
+    """`per_match` exists for scope splits, which need comparable pairs."""
+    results = _completion_results(
+        [
+            _spine_stat("EUN1_1", team_avg=0.4, enemy_avg=0.6),
+            _spine_stat("EUN1_2", team_avg=0.8, enemy_avg=None),
+        ],
+        matches_analyzed=5,
+    )
+
+    assert results["team_avg_winrate"] == pytest.approx(0.6)
+    assert results["enemy_avg_winrate"] == pytest.approx(0.6)
+    per_match = results.get("per_match")
+    assert per_match is not None
+    assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
+
+
+def test_recurring_teammates_flag_their_spine_matches_as_duo() -> None:
+    """The duo flag rides `per_match`, computed from the recurring-ally rule."""
+    results = _completion_results(
+        [
+            _spine_stat("EUN1_1", ally_puuids=["partner", "a", "b", "c"]),
+            _spine_stat("EUN1_2", ally_puuids=["partner", "d", "e", "f"]),
+            _spine_stat("EUN1_3", ally_puuids=["g", "h", "i", "j"]),
+        ],
+        matches_analyzed=30,
+    )
+
+    per_match = results.get("per_match")
+    assert per_match is not None
+    duo_by_match = {e["match_id"]: e["duo"] for e in per_match}
+    assert duo_by_match == {"EUN1_1": True, "EUN1_2": True, "EUN1_3": False}
 
 
 async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
@@ -322,3 +395,245 @@ async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
     assert service.riot_client is None
     with pytest.raises(AuthenticationError):
         _ = service._riot
+
+
+def _bare_service() -> MatchmakingAnalysisService:
+    return MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace()),
+        cast(RiotAPIClient, object()),
+        _USER_ID,
+    )
+
+
+async def test_a_resumed_worker_reads_its_params_from_the_run_row() -> None:
+    """A restarted process has no request payload; the row is the source."""
+    service = _bare_service()
+    run = _analysis()
+    run.params = {"match_count": 20, "end_date": "2026-07-26"}
+    service._get_analysis = AsyncMock(return_value=run)
+
+    await service._load_run_params(_PUUID, run.created_at)
+
+    assert service.match_count == 20
+    assert str(service.end_date) == "2026-07-26"
+    # Exclusive next-midnight UTC: the whole chosen day is inside the window.
+    assert service._spine_end_time_seconds == int(
+        datetime(2026, 7, 27, tzinfo=UTC).timestamp()
+    )
+
+
+async def test_a_legacy_row_without_params_resumes_as_a_ten_match_run() -> None:
+    service = _bare_service()
+    service._get_analysis = AsyncMock(return_value=_analysis())
+
+    await service._load_run_params(_PUUID, datetime.now(UTC))
+
+    assert service.match_count == 10
+    assert service.end_date is None
+    assert service._spine_end_time_seconds is None
+
+
+async def test_spine_fetch_uses_the_runs_count_and_end_time() -> None:
+    service = _bare_service()
+    service.match_count = 20
+    service.end_date = datetime(2026, 7, 26, tzinfo=UTC).date()
+    service._api_fetch_match_ids = AsyncMock(return_value=[f"m{i}" for i in range(20)])
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is not None and len(result) == 20
+    service._api_fetch_match_ids.assert_awaited_once_with(
+        _PUUID,
+        count=20,
+        end_time=int(datetime(2026, 7, 27, tzinfo=UTC).timestamp()),
+        required=True,
+    )
+
+
+async def test_a_sparse_window_above_the_floor_still_analyzes() -> None:
+    """12 of 30 found a month back is a valid run, not a failure."""
+    service = _bare_service()
+    service.match_count = 30
+    service._api_fetch_match_ids = AsyncMock(return_value=[f"m{i}" for i in range(12)])
+    service._complete_with_error = AsyncMock()
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is not None and len(result) == 12
+    service._complete_with_error.assert_not_awaited()
+
+
+async def test_below_the_floor_fails_with_not_enough_matches() -> None:
+    service = _bare_service()
+    service._api_fetch_match_ids = AsyncMock(return_value=["m0", "m1", "m2", "m3"])
+    service._complete_with_error = AsyncMock()
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is None
+    await_args = service._complete_with_error.await_args
+    assert await_args is not None
+    assert await_args.kwargs["error_code"] == "not_enough_matches"
+
+
+def _gold_entry(lp: int = 40) -> LeagueEntryDTO:
+    return LeagueEntryDTO(
+        queue_type="RANKED_SOLO_5x5",
+        tier="GOLD",
+        rank="II",
+        league_points=lp,
+        wins=50,
+        losses=50,
+    )
+
+
+async def test_route_threads_non_default_params_into_the_service() -> None:
+    """A chosen preset and end date must reach start_analysis, not defaults."""
+    service = MagicMock(spec=MatchmakingAnalysisService)
+    service.start_analysis.return_value = _analysis()
+
+    await analysis_router.start_analysis(
+        request=_request(),
+        payload=MatchmakingAnalysisRequest(
+            puuid=_PUUID, match_count=30, end_date=date(2026, 7, 26)
+        ),
+        service=cast(MatchmakingAnalysisService, service),
+    )
+
+    service.start_analysis.assert_awaited_once_with(
+        _PUUID, MatchmakingAnalysisParams(match_count=30, end_date=date(2026, 7, 26))
+    )
+
+
+async def test_a_fresh_snapshot_resolves_a_rank_without_a_league_call() -> None:
+    service = _bare_service()
+    service._find_rank_snapshot = AsyncMock(
+        return_value=SimpleNamespace(tier="GOLD", rank="II", league_points=40)
+    )
+    service._api_call_with_retries = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_values["p1"] == rank_value("GOLD", "II", 40)
+    assert service._rank_period_accurate == 1
+    assert service._rank_current_day == 0
+    service._api_call_with_retries.assert_not_awaited()
+
+
+async def test_a_live_read_near_the_backdated_window_counts_period_accurate() -> None:
+    """The counter must match how a rerun will judge the stored snapshot."""
+    service = _bare_service()
+    service.end_date = datetime.now(UTC).date() - timedelta(days=2)
+    service._find_rank_snapshot = AsyncMock(return_value=None)
+    service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
+    service._store_rank_snapshot = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_period_accurate == 1
+    assert service._rank_current_day == 0
+    service._store_rank_snapshot.assert_awaited_once()
+
+
+async def test_a_live_read_far_from_the_backdated_window_counts_current_day() -> None:
+    service = _bare_service()
+    service.end_date = datetime.now(UTC).date() - timedelta(days=60)
+    service._find_rank_snapshot = AsyncMock(return_value=None)
+    service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
+    service._store_rank_snapshot = AsyncMock()
+
+    await service._cached_player_rank("p1")
+
+    assert service._rank_period_accurate == 0
+    assert service._rank_current_day == 1
+
+
+async def test_snapshot_window_is_a_day_back_for_latest_runs() -> None:
+    service = _bare_service()
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._find_rank_snapshot("p1")
+
+    assert execute.await_args is not None
+    statement = execute.await_args.args[0]
+    bounds = [v for v in _compiled_values(statement) if isinstance(v, datetime)]
+    assert len(bounds) == 2
+    assert max(bounds) - min(bounds) == RANK_SNAPSHOT_MAX_AGE
+
+
+async def test_snapshot_window_straddles_the_backdated_reference() -> None:
+    service = _bare_service()
+    service.end_date = date(2026, 7, 26)
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._find_rank_snapshot("p1")
+
+    assert execute.await_args is not None
+    statement = execute.await_args.args[0]
+    bounds = [v for v in _compiled_values(statement) if isinstance(v, datetime)]
+    assert len(bounds) == 2
+    assert max(bounds) - min(bounds) == 2 * HISTORICAL_RANK_WINDOW
+
+
+async def test_store_rank_snapshot_skips_tracked_players() -> None:
+    """Match Fetcher owns tracked players' cadence; see `match_lp.py`."""
+    service = _bare_service()
+    execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: True))
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._store_rank_snapshot("p1", _gold_entry())
+
+    # Only the tracked probe ran; no insert statement followed it.
+    assert execute.await_count == 1
+
+
+async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
+    service = _bare_service()
+    entry = _gold_entry()
+    identical = SimpleNamespace(
+        tier="GOLD", rank="II", league_points=40, wins=50, losses=50
+    )
+    execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(scalar_one_or_none=lambda: identical),
+        ]
+    )
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute))
+
+    await service._store_rank_snapshot("p1", entry)
+
+    # Tracked probe and latest-snapshot read only; no insert statement.
+    assert execute.await_count == 2
+
+
+async def test_store_rank_snapshot_inserts_a_changed_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _bare_service()
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(scalar_one_or_none=lambda: None),
+            MagicMock(),
+        ]
+    )
+    commit = AsyncMock()
+    service.db = cast(AsyncSession, SimpleNamespace(execute=execute, commit=commit))
+
+    await service._store_rank_snapshot("p1", _gold_entry())
+
+    # The write is an INSERT ... FROM SELECT re-checking the tracked flag at
+    # insert time, so a tracking activation racing the earlier probe cannot
+    # land an analysis-time snapshot for a tracked player.
+    inserted = execute.await_args_list[2].args[0]
+    assert isinstance(inserted, Insert)
+    assert "core.players" in str(inserted.compile())
+    commit.assert_awaited_once()

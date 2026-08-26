@@ -226,15 +226,31 @@ const matchmakingAnalysis = {
   status: "completed" as const,
   progress: 50,
   total_puuids: 50,
+  // Extension-shaped: without ranks, tiers and per_match the axe and reflow
+  // specs would never mount the rank block, tier chart or scope Select.
   results: {
     team_avg_winrate: 0.4812,
     enemy_avg_winrate: 0.5431,
     matches_analyzed: 10,
+    matches_requested: 10,
+    spine_matches_found: 10,
+    ally_avg_rank_value: 1743.2,
+    enemy_avg_rank_value: 1801.5,
+    ally_tier_counts: { GOLD: 22, PLATINUM: 14, EMERALD: 6, UNRANKED: 3 },
+    enemy_tier_counts: { GOLD: 18, PLATINUM: 17, EMERALD: 8, UNRANKED: 2 },
+    per_match: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => ({
+      match_id: `EUN1_${7100000000 + index}`,
+      duo: index < 3,
+      team_avg: 0.45 + index * 0.01,
+      enemy_avg: 0.55 - index * 0.01,
+    })),
+    rank_freshness: { period_accurate: 78, current_day: 13 },
   },
   created_at: NOW,
   started_at: NOW,
   completed_at: NOW,
   requests_saved: 41,
+  params: { match_count: 10, end_date: null },
 };
 
 const matchmakingHistory = {
@@ -243,6 +259,7 @@ const matchmakingHistory = {
     team_avg_winrate: 0.48 + index * 0.004,
     enemy_avg_winrate: 0.54 - index * 0.003,
     gap: -0.06 + index * 0.007,
+    params: { match_count: 10, end_date: null },
   })),
 };
 

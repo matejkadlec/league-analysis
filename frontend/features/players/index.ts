@@ -11,3 +11,5 @@ export { formatRiotId } from "./utils/riot-id";
 export { usePlayerSyncRun } from "./use-player-sync-run";
 export { isPlayerCentricPath, playerNavigationRoute } from "./player-routes";
 export { useAnalyzedPlayer } from "./use-analyzed-player";
+export { getRankColors } from "./utils/rank-colors";
+export { rankValueToDisplay } from "./utils/rank-display";

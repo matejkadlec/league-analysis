@@ -114,12 +114,14 @@ describe("player-api wire shapes", () => {
 });
 
 describe("matchmaking-api wire shapes", () => {
-  it("starts an analysis with the puuid in the body", async () => {
-    await startMatchmakingAnalysis("p-1");
+  it("starts an analysis with the puuid and run params in the body", async () => {
+    await startMatchmakingAnalysis("p-1", 20, "2026-07-26");
 
     expect(request().method).toBe("post");
     expect(request().url).toBe("/matchmaking-analysis/start");
-    expect(request().data).toBe(JSON.stringify({ puuid: "p-1" }));
+    expect(request().data).toBe(
+      JSON.stringify({ puuid: "p-1", match_count: 20, end_date: "2026-07-26" }),
+    );
   });
 
   it("asks for status with the created_at the row is keyed by", async () => {

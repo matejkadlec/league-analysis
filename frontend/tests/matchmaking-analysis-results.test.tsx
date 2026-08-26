@@ -36,6 +36,7 @@ function completed(
       puuid: "puuid",
       status: "completed",
       created_at: createdAt,
+      params: { match_count: 10, end_date: null },
       results,
     },
   };
@@ -102,6 +103,7 @@ describe("the last matchmaking analysis result", () => {
         puuid: "puuid",
         status: "running",
         created_at: CREATED_AT,
+        params: { match_count: 10, end_date: null },
         results: {
           team_avg_winrate: 0.9,
           enemy_avg_winrate: 0.1,
@@ -263,6 +265,77 @@ describe("the last matchmaking analysis result", () => {
     await waitFor(() =>
       expect(screen.getByText(/Based on 455 ranked matches/)).toBeTruthy(),
     );
+    queryClient.clear();
+  });
+
+  it("mounts none of the extension surfaces for a legacy run", async () => {
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(completed(EVEN));
+    const { queryClient } = renderResults();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Last 10 Matches/)).toBeTruthy(),
+    );
+    expect(screen.queryByLabelText("Match scope filter")).toBeNull();
+    expect(screen.queryByText("Average Rank")).toBeNull();
+    expect(screen.queryByText("Tier Distribution")).toBeNull();
+    queryClient.clear();
+  });
+
+  it("mounts the scope filter, ranks, freshness and tiers for an extended run", async () => {
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({
+        ...EVEN,
+        matches_requested: 10,
+        spine_matches_found: 10,
+        ally_avg_rank_value: 1575,
+        enemy_avg_rank_value: 2120,
+        ally_tier_counts: { GOLD: 20, UNRANKED: 2 },
+        enemy_tier_counts: { EMERALD: 19, UNRANKED: 3 },
+        per_match: [
+          { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+          { match_id: "m2", duo: false, team_avg: 0.5, enemy_avg: 0.5 },
+        ],
+        rank_freshness: { period_accurate: 78, current_day: 13 },
+      } as never),
+    );
+    const { queryClient } = renderResults();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Match scope filter")).toBeTruthy(),
+    );
+    expect(screen.getByText(/1 likely duo \/ 1 solo matches/)).toBeTruthy();
+    // The shared-scale fixtures: 1575 is Gold I, 2120 Emerald III.
+    expect(screen.getByText("Gold I")).toBeTruthy();
+    expect(screen.getByText("Emerald III")).toBeTruthy();
+    expect(screen.getByText(/78 ranks measured near/)).toBeTruthy();
+    expect(screen.getByText("Tier Distribution")).toBeTruthy();
+    queryClient.clear();
+  });
+
+  it("captions a partial backdated window honestly, never as latest", async () => {
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
+      success: true,
+      data: {
+        id: 1,
+        puuid: "puuid",
+        status: "completed",
+        created_at: CREATED_AT,
+        params: { match_count: 30, end_date: "2026-07-26" },
+        results: {
+          ...EVEN,
+          matches_requested: 30,
+          spine_matches_found: 8,
+        },
+      },
+    });
+    const { queryClient } = renderResults();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/8 of 30 Matches through Jul 26, 2026/),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/Last 30 Matches/)).toBeNull();
     queryClient.clear();
   });
 
