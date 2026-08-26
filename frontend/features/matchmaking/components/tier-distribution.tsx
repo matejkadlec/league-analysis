@@ -35,13 +35,47 @@ function tierLabel(tier: string): string {
   return tier.charAt(0) + tier.slice(1).toLowerCase();
 }
 
+export interface TierShareRow {
+  tier: string;
+  Allies: number;
+  Enemies: number;
+  allyCount: number;
+  enemyCount: number;
+}
+
+/**
+ * Percent-of-side rows: each side sums to 100 so the bars stay comparable
+ * even though enemies outnumber allies (5 per match vs 4, fewer repeats).
+ */
+export function tierShareRows(
+  allyCounts: Record<string, number>,
+  enemyCounts: Record<string, number>,
+): TierShareRow[] {
+  const allyTotal = Object.values(allyCounts).reduce((sum, n) => sum + n, 0);
+  const enemyTotal = Object.values(enemyCounts).reduce((sum, n) => sum + n, 0);
+
+  return TIER_ORDER.filter(
+    (tier) => (allyCounts[tier] ?? 0) + (enemyCounts[tier] ?? 0) > 0,
+  ).map((tier) => {
+    const allyCount = allyCounts[tier] ?? 0;
+    const enemyCount = enemyCounts[tier] ?? 0;
+    return {
+      tier: tierLabel(tier),
+      Allies: allyTotal > 0 ? (allyCount / allyTotal) * 100 : 0,
+      Enemies: enemyTotal > 0 ? (enemyCount / enemyTotal) * 100 : 0,
+      allyCount,
+      enemyCount,
+    };
+  });
+}
+
 interface TierDistributionProps {
   allyCounts: Record<string, number>;
   enemyCounts: Record<string, number>;
 }
 
 /**
- * Unique allies vs enemies per tier over one run, as paired horizontal bars.
+ * Share of each side's unique players per tier, as paired horizontal bars.
  * Rows exist only for tiers someone actually occupies, so a Gold-lobby chart
  * is two or three rows, not eleven.
  */
@@ -49,21 +83,11 @@ export function TierDistribution({
   allyCounts,
   enemyCounts,
 }: TierDistributionProps) {
-  const rows = TIER_ORDER.filter(
-    (tier) => (allyCounts[tier] ?? 0) + (enemyCounts[tier] ?? 0) > 0,
-  ).map((tier) => ({
-    tier: tierLabel(tier),
-    Allies: allyCounts[tier] ?? 0,
-    Enemies: enemyCounts[tier] ?? 0,
-  }));
+  const rows = tierShareRows(allyCounts, enemyCounts);
 
   if (rows.length === 0) {
     return null;
   }
-
-  const maxCount = Math.max(
-    ...rows.map((row) => Math.max(row.Allies, row.Enemies)),
-  );
 
   return (
     <figure aria-label="Tier distribution of allies and enemies">
@@ -77,8 +101,8 @@ export function TierDistribution({
         >
           <XAxis
             type="number"
-            allowDecimals={false}
-            domain={[0, maxCount]}
+            domain={[0, "dataMax"]}
+            tickFormatter={(value: number) => `${Math.round(value)}%`}
             tick={{ fill: INK, fontSize: 12 }}
             axisLine={false}
             tickLine={false}
@@ -93,6 +117,14 @@ export function TierDistribution({
           />
           <Tooltip
             cursor={{ fill: "var(--color-muted)", opacity: 0.35 }}
+            formatter={(value, name, item) => {
+              const row = item.payload as TierShareRow;
+              const count = name === "Allies" ? row.allyCount : row.enemyCount;
+              return [
+                `${Number(value).toFixed(1)}% (${count} players)`,
+                String(name),
+              ];
+            }}
             contentStyle={{
               backgroundColor: "var(--color-popover)",
               border: "1px solid var(--color-border)",

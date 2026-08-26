@@ -357,8 +357,9 @@ describe("the last matchmaking analysis result", () => {
     );
     expect(screen.getByText(/1 likely duo \/ 1 solo matches/)).toBeTruthy();
     // The shared-scale fixtures: 1575 is Gold I, 2120 Emerald III.
-    expect(screen.getByText("Gold I")).toBeTruthy();
-    expect(screen.getByText("Emerald III")).toBeTruthy();
+    expect(screen.getByText("Gold I · 75 LP")).toBeTruthy();
+    expect(screen.getByText("Emerald III · 20 LP")).toBeTruthy();
+    expect(screen.getByText(/Enemies average 545 LP higher/)).toBeTruthy();
     expect(screen.getByText(/78 ranks measured near/)).toBeTruthy();
     expect(screen.getByText("Tier Distribution")).toBeTruthy();
     queryClient.clear();

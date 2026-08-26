@@ -13,12 +13,12 @@ from app.features.matchmaking_analysis.service import theoretical_max_requests
 # triples must produce the same values and display strings on both sides, or
 # the two implementations of the scale drift apart silently.
 SCALE_FIXTURES = [
-    ("IRON", "IV", 0, 0, "Iron IV"),
-    ("IRON", "IV", 99, 99, "Iron IV"),
-    ("SILVER", "II", 40, 1040, "Silver II"),
-    ("GOLD", "I", 75, 1575, "Gold I"),
-    ("EMERALD", "III", 20, 2120, "Emerald III"),
-    ("DIAMOND", "I", 0, 2700, "Diamond I"),
+    ("IRON", "IV", 0, 0, "Iron IV · 0 LP"),
+    ("IRON", "IV", 99, 99, "Iron IV · 99 LP"),
+    ("SILVER", "II", 40, 1040, "Silver II · 40 LP"),
+    ("GOLD", "I", 75, 1575, "Gold I · 75 LP"),
+    ("EMERALD", "III", 20, 2120, "Emerald III · 20 LP"),
+    ("DIAMOND", "I", 0, 2700, "Diamond I · 0 LP"),
     # The DIAMOND -> MASTER boundary: DIAMOND I 100 LP == MASTER 0 LP.
     ("DIAMOND", "I", 100, 2800, "Diamond I"),
     ("MASTER", None, 0, 2800, "Master"),

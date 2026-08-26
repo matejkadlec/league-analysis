@@ -345,6 +345,15 @@ export function MatchmakingAnalysisResults({
                 <RankFigure label="Enemies" value={enemyRank} />
               )}
             </dl>
+            {allyRank !== null &&
+              enemyRank !== null &&
+              Math.round(Math.abs(enemyRank - allyRank)) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {enemyRank > allyRank ? "Enemies" : "Allies"} average{" "}
+                  {Math.round(Math.abs(enemyRank - allyRank))} LP higher (a
+                  division spans 100 LP).
+                </p>
+              )}
             {freshness && freshness.current_day > 0 && (
               <p className="text-sm text-muted-foreground">
                 {freshness.period_accurate} ranks measured near the analyzed
