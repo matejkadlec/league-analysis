@@ -1,10 +1,14 @@
 """The computed fields every matchmaking status/history response serialises."""
 
+from datetime import date
+
 import pytest
 from pydantic import ValidationError
 
 from app.features.matchmaking_analysis.schemas import (
     MatchmakingAnalysisHistoryItem,
+    MatchmakingAnalysisParams,
+    MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisResults,
 )
@@ -88,3 +92,59 @@ def test_winrates_are_fractions_not_percentages() -> None:
         MatchmakingAnalysisResults(
             team_avg_winrate=0.5, enemy_avg_winrate=-0.1, matches_analyzed=10
         )
+
+
+def test_request_bounds_reject_out_of_range_match_counts() -> None:
+    # 5-30 is the backend contract; the UI presets (10/20/30) are a subset.
+    with pytest.raises(ValidationError):
+        MatchmakingAnalysisRequest(puuid="p-1", match_count=4)
+    with pytest.raises(ValidationError):
+        MatchmakingAnalysisRequest(puuid="p-1", match_count=31)
+    assert MatchmakingAnalysisRequest(puuid="p-1").match_count == 10
+    assert MatchmakingAnalysisRequest(puuid="p-1").end_date is None
+
+
+def test_a_legacy_results_blob_parses_with_new_fields_absent_not_zero() -> None:
+    # Pre-extension rows carry only the three original keys. Every new field
+    # must read back as None -- a 0 here is the "0% average winrate" bug
+    # reborn as "average rank Iron IV".
+    results = MatchmakingAnalysisResults.model_validate(
+        {"team_avg_winrate": 0.5, "enemy_avg_winrate": 0.5, "matches_analyzed": 10}
+    )
+
+    assert results.ally_avg_rank_value is None
+    assert results.enemy_avg_rank_value is None
+    assert results.ally_tier_counts is None
+    assert results.per_match is None
+    assert results.rank_freshness is None
+    assert results.matches_requested is None
+
+
+def test_a_null_params_column_reads_as_the_truthful_legacy_default() -> None:
+    # Every run persisted before the params column was a 10-match latest run.
+    r = response(params=None)
+    assert r.params.match_count == 10
+    assert r.params.end_date is None
+
+    item = MatchmakingAnalysisHistoryItem.model_validate(
+        {
+            "created_at": "2026-08-19T10:00:00Z",
+            "team_avg_winrate": 0.55,
+            "enemy_avg_winrate": 0.50,
+            "params": None,
+        }
+    )
+    assert item.params.match_count == 10
+
+
+def test_params_round_trip_through_their_json_persistence_shape() -> None:
+    # `start_analysis` persists `model_dump(mode="json")`; the worker and the
+    # readers re-validate that exact shape.
+    params = MatchmakingAnalysisParams.model_validate(
+        MatchmakingAnalysisParams(
+            match_count=30, end_date=date(2026, 7, 26)
+        ).model_dump(mode="json")
+    )
+
+    assert params.match_count == 30
+    assert params.end_date == date(2026, 7, 26)

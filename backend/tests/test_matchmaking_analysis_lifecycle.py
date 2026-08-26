@@ -16,7 +16,11 @@ from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
+from app.features.matchmaking_analysis.ranks import summarize_ranks
+from app.features.matchmaking_analysis.schemas import (
+    MatchmakingAnalysisParams,
+    MatchmakingAnalysisRequest,
+)
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
 # The account these tests act as. Every stored run belongs to one, so a service
@@ -55,6 +59,7 @@ def _analysis(status: str = "pending") -> MatchmakingAnalysis:
             puuid_progress={},
             requests_saved=0,
             rate_limit_reset_at=None,
+            params=None,
         ),
     )
 
@@ -78,7 +83,7 @@ async def test_start_route_returns_without_riot_preflight() -> None:
     )
 
     assert result is expected
-    service.start_analysis.assert_awaited_once_with(_PUUID)
+    service.start_analysis.assert_awaited_once_with(_PUUID, MatchmakingAnalysisParams())
 
 
 async def test_repeated_start_attaches_to_the_existing_active_run(
@@ -269,13 +274,45 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
         await service._api_fetch_match_ids(_PUUID)
 
 
+def _spine_stat(
+    match_id: str = "EUN1_1",
+    team_avg: float | None = 0.5,
+    enemy_avg: float | None = 0.6,
+    ally_puuids: list[str] | None = None,
+) -> analysis_service_module.SpineMatchStats:
+    return analysis_service_module.SpineMatchStats(
+        match_id=match_id,
+        team_avg=team_avg,
+        enemy_avg=enemy_avg,
+        ally_puuids=ally_puuids or [],
+    )
+
+
+def _completion_results(
+    spine_stats: list[analysis_service_module.SpineMatchStats],
+    matches_analyzed: int = 0,
+) -> analysis_service_module.MatchmakingAnalysisResultsJSON:
+    return analysis_service_module._build_completion_results(
+        spine_stats,
+        matches_analyzed=matches_analyzed,
+        matches_requested=10,
+        rank_summary=summarize_ranks(set(), set(), {}, {}),
+        rank_period_accurate=0,
+        rank_current_day=0,
+    )
+
+
 @pytest.mark.parametrize(
-    ("team_avgs", "enemy_avgs"),
-    [([], []), ([0.5], []), ([], [0.5])],
+    "spine_stats",
+    [
+        [],
+        [_spine_stat(enemy_avg=None)],
+        [_spine_stat(team_avg=None)],
+    ],
     ids=["neither-side", "no-enemies", "no-team"],
 )
 def test_a_run_that_measured_nothing_is_not_a_completed_run(
-    team_avgs: list[float], enemy_avgs: list[float]
+    spine_stats: list[analysis_service_module.SpineMatchStats],
 ) -> None:
     """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
 
@@ -284,9 +321,7 @@ def test_a_run_that_measured_nothing_is_not_a_completed_run(
     The failure path already persists a terminal diagnostic.
     """
     with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
-        analysis_service_module._build_completion_results(
-            team_avgs, enemy_avgs, matches_analyzed=0
-        )
+        _completion_results(spine_stats)
 
 
 def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
@@ -295,11 +330,43 @@ def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
     Nearly every player in this database has fewer than ten ranked games, so
     the number under the verdict was never the number of matches behind it.
     """
-    results = analysis_service_module._build_completion_results(
-        [0.5], [0.6], matches_analyzed=37
-    )
+    results = _completion_results([_spine_stat()], matches_analyzed=37)
 
     assert results["matches_analyzed"] == 37
+
+
+def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
+    """`per_match` exists for scope splits, which need comparable pairs."""
+    results = _completion_results(
+        [
+            _spine_stat("EUN1_1", team_avg=0.4, enemy_avg=0.6),
+            _spine_stat("EUN1_2", team_avg=0.8, enemy_avg=None),
+        ],
+        matches_analyzed=5,
+    )
+
+    assert results["team_avg_winrate"] == pytest.approx(0.6)
+    assert results["enemy_avg_winrate"] == pytest.approx(0.6)
+    per_match = results.get("per_match")
+    assert per_match is not None
+    assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
+
+
+def test_recurring_teammates_flag_their_spine_matches_as_duo() -> None:
+    """The duo flag rides `per_match`, computed from the recurring-ally rule."""
+    results = _completion_results(
+        [
+            _spine_stat("EUN1_1", ally_puuids=["partner", "a", "b", "c"]),
+            _spine_stat("EUN1_2", ally_puuids=["partner", "d", "e", "f"]),
+            _spine_stat("EUN1_3", ally_puuids=["g", "h", "i", "j"]),
+        ],
+        matches_analyzed=30,
+    )
+
+    per_match = results.get("per_match")
+    assert per_match is not None
+    duo_by_match = {e["match_id"]: e["duo"] for e in per_match}
+    assert duo_by_match == {"EUN1_1": True, "EUN1_2": True, "EUN1_3": False}
 
 
 async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
@@ -322,3 +389,82 @@ async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
     assert service.riot_client is None
     with pytest.raises(AuthenticationError):
         _ = service._riot
+
+
+def _bare_service() -> MatchmakingAnalysisService:
+    return MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace()),
+        cast(RiotAPIClient, object()),
+        _USER_ID,
+    )
+
+
+async def test_a_resumed_worker_reads_its_params_from_the_run_row() -> None:
+    """A restarted process has no request payload; the row is the source."""
+    service = _bare_service()
+    run = _analysis()
+    run.params = {"match_count": 20, "end_date": "2026-07-26"}
+    service._get_analysis = AsyncMock(return_value=run)
+
+    await service._load_run_params(_PUUID, run.created_at)
+
+    assert service.match_count == 20
+    assert str(service.end_date) == "2026-07-26"
+    # Exclusive next-midnight UTC: the whole chosen day is inside the window.
+    assert service._spine_end_time_seconds == int(
+        datetime(2026, 7, 27, tzinfo=UTC).timestamp()
+    )
+
+
+async def test_a_legacy_row_without_params_resumes_as_a_ten_match_run() -> None:
+    service = _bare_service()
+    service._get_analysis = AsyncMock(return_value=_analysis())
+
+    await service._load_run_params(_PUUID, datetime.now(UTC))
+
+    assert service.match_count == 10
+    assert service.end_date is None
+    assert service._spine_end_time_seconds is None
+
+
+async def test_spine_fetch_uses_the_runs_count_and_end_time() -> None:
+    service = _bare_service()
+    service.match_count = 20
+    service.end_date = datetime(2026, 7, 26, tzinfo=UTC).date()
+    service._api_fetch_match_ids = AsyncMock(return_value=[f"m{i}" for i in range(20)])
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is not None and len(result) == 20
+    service._api_fetch_match_ids.assert_awaited_once_with(
+        _PUUID,
+        count=20,
+        end_time=int(datetime(2026, 7, 27, tzinfo=UTC).timestamp()),
+        required=True,
+    )
+
+
+async def test_a_sparse_window_above_the_floor_still_analyzes() -> None:
+    """12 of 30 found a month back is a valid run, not a failure."""
+    service = _bare_service()
+    service.match_count = 30
+    service._api_fetch_match_ids = AsyncMock(return_value=[f"m{i}" for i in range(12)])
+    service._complete_with_error = AsyncMock()
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is not None and len(result) == 12
+    service._complete_with_error.assert_not_awaited()
+
+
+async def test_below_the_floor_fails_with_not_enough_matches() -> None:
+    service = _bare_service()
+    service._api_fetch_match_ids = AsyncMock(return_value=["m0", "m1", "m2", "m3"])
+    service._complete_with_error = AsyncMock()
+
+    result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
+
+    assert result is None
+    await_args = service._complete_with_error.await_args
+    assert await_args is not None
+    assert await_args.kwargs["error_code"] == "not_enough_matches"

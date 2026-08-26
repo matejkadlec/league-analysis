@@ -15,7 +15,10 @@ from app.core.riot_api.models import MatchDTO
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
-from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
+from app.features.matchmaking_analysis.schemas import (
+    MatchmakingAnalysisParams,
+    MatchmakingAnalysisRequest,
+)
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
 # The account these tests act as. Every stored run belongs to one, so a service
@@ -69,7 +72,9 @@ async def test_matchmaking_start_returns_maintenance_status() -> None:
         )
 
     assert error.value.status_code == 503
-    service.start_analysis.assert_awaited_once_with("test-puuid")
+    service.start_analysis.assert_awaited_once_with(
+        "test-puuid", MatchmakingAnalysisParams()
+    )
 
 
 async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(

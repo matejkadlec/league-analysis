@@ -37,7 +37,12 @@ export function MatchmakingExplanationCard() {
       <CardContent className="pt-2 pb-4">
         <p className="text-sm text-muted-foreground mb-3">
           A visual representation of how the matchmaking analysis is being
-          calculated, step-by-step.
+          calculated, step-by-step. Two notes on the newer figures: DuoQ games
+          are inferred from a teammate recurring across the analyzed matches
+          (Riot does not expose party data), and player ranks come from the
+          nearest stored rank snapshot — for backdated runs, ranks without a
+          snapshot near that period fall back to current-day rank, which the
+          result labels honestly.
         </p>
 
         <div

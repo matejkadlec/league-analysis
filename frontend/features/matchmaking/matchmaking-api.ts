@@ -16,11 +16,17 @@ import {
 
 export async function startMatchmakingAnalysis(
   puuid: string,
+  matchCount: number,
+  endDate: string | null,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedPost(
     MatchmakingAnalysisResponseSchema,
     "/matchmaking-analysis/start",
-    { puuid } satisfies MatchmakingAnalysisRequest,
+    {
+      puuid,
+      match_count: matchCount,
+      end_date: endDate,
+    } satisfies MatchmakingAnalysisRequest,
   );
 }
 

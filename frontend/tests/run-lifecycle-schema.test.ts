@@ -25,6 +25,7 @@ function matchmakingPayload(overrides: Record<string, unknown>) {
     total_puuids: 10,
     created_at: "2026-08-15T00:00:00Z",
     requests_saved: 0,
+    params: { match_count: 10, end_date: null },
     ...overrides,
   };
 }

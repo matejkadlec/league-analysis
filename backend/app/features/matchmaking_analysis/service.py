@@ -1,14 +1,14 @@
 """Matchmaking analysis service for analyzing League of Legends matchmaking fairness.
 
-Averages ally against enemy winrates over the current player's last 10 ranked
-matches. Each spine match anchors its participants' own 10-match samples to that
-match's start timestamp. Matches are read from the DB before the Riot API.
+Averages ally against enemy winrates and ranks over the analyzed player's last
+N ranked matches (N and an optional end date are run params). Each spine match
+anchors its participants' samples; the DB is read before the Riot API.
 """
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from statistics import fmean
 from typing import Any
 
@@ -27,7 +27,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
     RiotAPIError,
 )
-from app.core.riot_api.models import MatchDTO
+from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
 from app.core.riot_api.scoped_client import tracked_riot_client
 from app.core.runs import (
     active_run_filter,
@@ -41,13 +41,27 @@ from app.features.matches.match_persistence import (
 )
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
+from app.features.players.leagues import (
+    PlayerLeague,
+    league_snapshot_matches,
+    player_league_from_entry,
+    solo_duo_league_entry,
+)
 from app.features.players.models import Player
 
 from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
+from .ranks import (
+    UNRANKED,
+    RankSummary,
+    classify_duo_matches,
+    rank_value,
+    summarize_ranks,
+)
 from .schemas import (
     ACTIVE_ANALYSIS_STATUSES,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
+    MatchmakingAnalysisParams,
     MatchmakingAnalysisResponse,
 )
 
@@ -55,19 +69,35 @@ logger = structlog.get_logger(__name__)
 
 MAX_RATE_LIMIT_WAIT = 120
 
-MATCHES_TO_ANALYZE = 10
 MATCHES_FOR_WINRATE = 10
-MIN_MATCHES_REQUIRED = 10
+# Absolute floor, deliberately below the smallest selectable spine size: a
+# backdated run that finds only part of its requested window must still
+# complete, or the "compare against a month ago" use case fails exactly when
+# it matters.
+MIN_MATCHES_FLOOR = 5
 
-# Theoretical request maximum with an empty database: the spine ID list, one
-# match-ID list per other player, one detail per spine match, and each other
-# player's remaining details (one of theirs is the known spine match).
-_OTHER_PLAYERS = MATCHES_TO_ANALYZE * 9
-THEORETICAL_MAX_REQUESTS = (
-    (1 + _OTHER_PLAYERS)
-    + MATCHES_TO_ANALYZE
-    + _OTHER_PLAYERS * max(1, MATCHES_FOR_WINRATE - 1)
-)
+RANKED_SOLO_QUEUE_TYPE = "RANKED_SOLO_5x5"
+# How close a stored league snapshot must sit to the run's reference time to be
+# reused instead of fetched: the last day for latest runs, two weeks around the
+# chosen day for backdated ones, where a period snapshot beats today's rank.
+RANK_SNAPSHOT_MAX_AGE = timedelta(hours=24)
+HISTORICAL_RANK_WINDOW = timedelta(days=14)
+
+
+def theoretical_max_requests(spine_size: int) -> int:
+    """Request maximum with an empty database, as a function of spine size.
+
+    The spine ID list, one match-ID list per other player, one detail per spine
+    match, each other player's remaining details (one of theirs is the known
+    spine match), and one league-v4 call per unique player.
+    """
+    others = spine_size * 9
+    return (
+        (1 + others)
+        + spine_size
+        + others * max(1, MATCHES_FOR_WINRATE - 1)
+        + (others + 1)
+    )
 
 
 # The retry policy `_api_call_with_retries` runs under, as plain rules --
@@ -128,18 +158,50 @@ def _team_id_for_player(
     return None
 
 
+@dataclass(frozen=True)
+class SpineMatchStats:
+    """One spine match's side averages, plus the allies who defined them."""
+
+    match_id: str
+    team_avg: float | None
+    enemy_avg: float | None
+    ally_puuids: list[str]
+
+
+def _per_match_payload(spine_stats: list[SpineMatchStats]) -> list[dict[str, object]]:
+    """Both-sided spine matches with their duo flag, for the scope split."""
+    duo_by_match = classify_duo_matches(
+        [(s.match_id, s.ally_puuids) for s in spine_stats]
+    )
+    return [
+        {
+            "match_id": s.match_id,
+            "duo": duo_by_match[s.match_id],
+            "team_avg": round(s.team_avg, 4),
+            "enemy_avg": round(s.enemy_avg, 4),
+        }
+        for s in spine_stats
+        if s.team_avg is not None and s.enemy_avg is not None
+    ]
+
+
 def _build_completion_results(
-    team_avgs: list[float],
-    enemy_avgs: list[float],
+    spine_stats: list[SpineMatchStats],
     *,
     matches_analyzed: int,
+    matches_requested: int,
+    rank_summary: RankSummary,
+    rank_period_accurate: int,
+    rank_current_day: int,
 ) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
 
-    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict.
-    `matches_analyzed` is measured, not expected -- the UI prints it as the
-    basis of the verdict, and a shallow database reaches nowhere near the max.
+    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict. The
+    headline averages keep their full per-side lists, while `per_match` keeps
+    only both-sided matches -- the SoloQ/DuoQ scope split needs comparable pairs.
     """
+    team_avgs = [s.team_avg for s in spine_stats if s.team_avg is not None]
+    enemy_avgs = [s.enemy_avg for s in spine_stats if s.enemy_avg is not None]
     if not team_avgs or not enemy_avgs:
         raise MatchmakingAnalysisRuntimeError(
             "no_matches_analyzed",
@@ -150,6 +212,16 @@ def _build_completion_results(
         "team_avg_winrate": round(fmean(team_avgs), 4),
         "enemy_avg_winrate": round(fmean(enemy_avgs), 4),
         "matches_analyzed": matches_analyzed,
+        "matches_requested": matches_requested,
+        "ally_avg_rank_value": rank_summary.ally_avg_rank_value,
+        "enemy_avg_rank_value": rank_summary.enemy_avg_rank_value,
+        "ally_tier_counts": rank_summary.ally_tier_counts,
+        "enemy_tier_counts": rank_summary.enemy_tier_counts,
+        "per_match": _per_match_payload(spine_stats),
+        "rank_freshness": {
+            "period_accurate": rank_period_accurate,
+            "current_day": rank_current_day,
+        },
     }
 
 
@@ -217,13 +289,34 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid: str | None = None
         self._current_analysis_created_at: datetime | None = None
         self._winrate_cache: dict[str, float | None] = {}
+        # Run parameters; the worker re-reads them from the run row so a
+        # resumed run keeps the values it was started with.
+        self.match_count: int = MatchmakingAnalysisParams().match_count
+        self.end_date: date | None = None
+        # Rank state, keyed like the winrate cache. `None` in `_rank_values`
+        # means unranked or unreadable; the tier bucket then says UNRANKED.
+        self._rank_values: dict[str, int | None] = {}
+        self._rank_tiers: dict[str, str] = {}
+        self._ally_rank_puuids: set[str] = set()
+        self._enemy_rank_puuids: set[str] = set()
+        self._rank_period_accurate: int = 0
+        self._rank_current_day: int = 0
 
     # ================================================================
     # Public API
     # ================================================================
 
-    async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
-        """Create or attach to one active analysis and return immediately."""
+    async def start_analysis(
+        self,
+        puuid: str,
+        params: MatchmakingAnalysisParams | None = None,
+    ) -> MatchmakingAnalysisResponse:
+        """Create or attach to one active analysis and return immediately.
+
+        On attach the existing run's persisted params win over the request's:
+        the response carries them so the client shows what is actually
+        running, not what the form last said.
+        """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
 
         running = _running_analyses.get((self.user_id, puuid))
@@ -243,6 +336,7 @@ class MatchmakingAnalysisService:
             created_at=now,
             status="pending",
             puuid_progress={},
+            params=(params or MatchmakingAnalysisParams()).model_dump(mode="json"),
         )
         conflict = await commit_new_run(self.db, analysis)
         if conflict is None:
@@ -364,6 +458,7 @@ class MatchmakingAnalysisService:
                         created_at=a.created_at,
                         team_avg_winrate=a.results["team_avg_winrate"],
                         enemy_avg_winrate=a.results["enemy_avg_winrate"],
+                        params=MatchmakingAnalysisParams.model_validate(a.params or {}),
                     )
                 )
         return MatchmakingAnalysisHistoryResponse(items=items)
@@ -496,6 +591,7 @@ class MatchmakingAnalysisService:
         """
         logger.info("Starting matchmaking analysis")
         self._reset_run_state(puuid, created_at)
+        await self._load_run_params(puuid, created_at)
         await self._mark_analysis_in_progress(puuid, created_at)
 
         try:
@@ -507,11 +603,11 @@ class MatchmakingAnalysisService:
             ):
                 return
             await self._initialize_progress_keys(puuid, created_at, spine_match_ids)
-            team_avgs, enemy_avgs = await self._collect_match_averages(
+            spine_stats = await self._collect_match_averages(
                 puuid, created_at, spine_match_ids
             )
             await self._finalize_completed_analysis(
-                puuid, created_at, team_avgs, enemy_avgs
+                puuid, created_at, spine_stats, spine_size=len(spine_match_ids)
             )
         except Exception as e:
             logger.error("Analysis failed", error_type=type(e).__name__, exc_info=True)
@@ -524,6 +620,36 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
+        self._rank_values = {}
+        self._rank_tiers = {}
+        self._ally_rank_puuids = set()
+        self._enemy_rank_puuids = set()
+        self._rank_period_accurate = 0
+        self._rank_current_day = 0
+
+    async def _load_run_params(self, puuid: str, created_at: datetime) -> None:
+        """Read the run's persisted params; a resumed worker has no request."""
+        analysis = await self._get_analysis(puuid, created_at)
+        params = MatchmakingAnalysisParams.model_validate(analysis.params or {})
+        self.match_count = params.match_count
+        self.end_date = params.end_date
+
+    @property
+    def _spine_end_time_seconds(self) -> int | None:
+        """match-v5 `endTime` for the chosen day: exclusive next midnight UTC."""
+        if self.end_date is None:
+            return None
+        next_midnight = datetime.combine(
+            self.end_date + timedelta(days=1), time.min, tzinfo=UTC
+        )
+        return int(next_midnight.timestamp())
+
+    @property
+    def _rank_reference_time(self) -> datetime:
+        """The moment participant ranks should describe."""
+        if self.end_date is None:
+            return datetime.now(UTC)
+        return datetime.combine(self.end_date, time.max, tzinfo=UTC)
 
     async def _write_active_run(
         self, puuid: str, created_at: datetime, **values: Any
@@ -563,20 +689,23 @@ class MatchmakingAnalysisService:
     async def _load_spine_match_ids(
         self, puuid: str, created_at: datetime
     ) -> list[str] | None:
-        # No endTime — actual latest matches. This call cannot be skipped.
+        # This call cannot be skipped. Without an end date it has no endTime —
+        # the actual latest matches; with one, endTime bounds the spine to the
+        # matches played on or before that day.
         spine_match_ids = await self._api_fetch_match_ids(
             puuid,
-            count=MATCHES_TO_ANALYZE,
+            count=self.match_count,
+            end_time=self._spine_end_time_seconds,
             required=True,
         )
         found = len(spine_match_ids) if spine_match_ids else 0
-        if found < MIN_MATCHES_REQUIRED:
+        if found < MIN_MATCHES_FLOOR:
             await self._complete_with_error(
                 puuid,
                 created_at,
                 "Player doesn't have enough ranked matches for this analysis. "
                 f"Found {found}, "
-                f"need {MIN_MATCHES_REQUIRED}.",
+                f"need at least {MIN_MATCHES_FLOOR}.",
                 error_code="not_enough_matches",
             )
             return None
@@ -632,9 +761,8 @@ class MatchmakingAnalysisService:
 
     async def _collect_match_averages(
         self, puuid: str, created_at: datetime, spine_match_ids: list[str]
-    ) -> tuple[list[float], list[float]]:
-        team_avgs: list[float] = []
-        enemy_avgs: list[float] = []
+    ) -> list[SpineMatchStats]:
+        spine_stats: list[SpineMatchStats] = []
 
         for idx, match_id in enumerate(spine_match_ids):
             match_anchor = await self._get_game_start_timestamp(match_id)
@@ -656,24 +784,34 @@ class MatchmakingAnalysisService:
                 puuid, created_at, match_id, match_anchor_seconds
             )
             if result:
-                if result["team"]:
-                    team_avgs.append(fmean(result["team"]))
-                if result["enemy"]:
-                    enemy_avgs.append(fmean(result["enemy"]))
+                spine_stats.append(result)
 
-        return team_avgs, enemy_avgs
+        return spine_stats
 
     async def _finalize_completed_analysis(
         self,
         puuid: str,
         created_at: datetime,
-        team_avgs: list[float],
-        enemy_avgs: list[float],
+        spine_stats: list[SpineMatchStats],
+        *,
+        spine_size: int,
     ) -> None:
         results = _build_completion_results(
-            team_avgs, enemy_avgs, matches_analyzed=self.matches_analyzed
+            spine_stats,
+            matches_analyzed=self.matches_analyzed,
+            matches_requested=self.match_count,
+            rank_summary=summarize_ranks(
+                self._ally_rank_puuids,
+                self._enemy_rank_puuids,
+                self._rank_tiers,
+                self._rank_values,
+            ),
+            rank_period_accurate=self._rank_period_accurate,
+            rank_current_day=self._rank_current_day,
         )
-        self.requests_saved = max(THEORETICAL_MAX_REQUESTS - self.api_calls_made, 0)
+        self.requests_saved = max(
+            theoretical_max_requests(spine_size) - self.api_calls_made, 0
+        )
         now = datetime.now(UTC)
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
@@ -723,8 +861,8 @@ class MatchmakingAnalysisService:
         analysis_created_at: datetime,
         match_id: str,
         end_time_seconds: int,
-    ) -> dict[str, list[float]] | None:
-        """Process a single spine match: compute winrates for all participants."""
+    ) -> SpineMatchStats | None:
+        """Process a single spine match: winrates and ranks for all participants."""
         participants = await self._get_match_participants(match_id)
         if not participants:
             return None
@@ -736,6 +874,7 @@ class MatchmakingAnalysisService:
 
         team_wrs: list[float] = []
         enemy_wrs: list[float] = []
+        ally_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
             wr = await self._cached_player_winrate(
@@ -743,8 +882,20 @@ class MatchmakingAnalysisService:
             )
             if wr is not None:
                 (team_wrs if team_id == target_team else enemy_wrs).append(wr)
+            await self._cached_player_rank(p_puuid)
+            if team_id == target_team:
+                self._ally_rank_puuids.add(p_puuid)
+                if p_puuid != analysis_puuid:
+                    ally_puuids.append(p_puuid)
+            else:
+                self._enemy_rank_puuids.add(p_puuid)
 
-        return {"team": team_wrs, "enemy": enemy_wrs}
+        return SpineMatchStats(
+            match_id=match_id,
+            team_avg=fmean(team_wrs) if team_wrs else None,
+            enemy_avg=fmean(enemy_wrs) if enemy_wrs else None,
+            ally_puuids=ally_puuids,
+        )
 
     async def _cached_player_winrate(
         self,
@@ -772,6 +923,130 @@ class MatchmakingAnalysisService:
             if key.startswith(f"{p_puuid}:"):
                 progress[key] = True
         await self._update_progress(analysis_puuid, analysis_created_at, progress)
+
+    # ================================================================
+    # Participant Ranks
+    # ================================================================
+
+    async def _cached_player_rank(self, p_puuid: str) -> None:
+        """Resolve one participant's Solo/Duo rank once per run.
+
+        Snapshot-first: a `player_leagues` row near the run's reference time
+        is reused without an API call, and every live fetch for a non-tracked
+        player leaves a snapshot behind -- so backdated runs get progressively
+        more period-accurate as the tool is used. A failed or empty league
+        read degrades the player to UNRANKED; it never fails the run (auth
+        errors still re-raise inside `_api_call_with_retries`).
+        """
+        if p_puuid in self._rank_values:
+            return
+
+        snapshot = await self._find_rank_snapshot(p_puuid)
+        if snapshot is not None:
+            self._record_rank(
+                p_puuid,
+                snapshot.tier,
+                snapshot.rank,
+                snapshot.league_points,
+                period_accurate=True,
+            )
+            return
+
+        entries = await self._api_call_with_retries(
+            lambda: self._riot.get_league_entries_by_puuid(p_puuid),
+            required=False,
+            operation="league entry fetch",
+            target_puuid=p_puuid,
+        )
+        solo_entry = solo_duo_league_entry(entries) if entries is not None else None
+        if solo_entry is None:
+            self._rank_values[p_puuid] = None
+            self._rank_tiers[p_puuid] = UNRANKED
+            return
+
+        # A live fetch is the period itself for a latest run, but only
+        # today's rank for a backdated one -- the honesty caption's split.
+        self._record_rank(
+            p_puuid,
+            solo_entry.tier,
+            solo_entry.rank,
+            solo_entry.league_points,
+            period_accurate=self.end_date is None,
+        )
+        await self._store_rank_snapshot(p_puuid, solo_entry)
+
+    def _record_rank(
+        self,
+        p_puuid: str,
+        tier: str,
+        rank: str | None,
+        league_points: int,
+        *,
+        period_accurate: bool,
+    ) -> None:
+        self._rank_values[p_puuid] = rank_value(tier, rank, league_points)
+        self._rank_tiers[p_puuid] = tier
+        if period_accurate:
+            self._rank_period_accurate += 1
+        else:
+            self._rank_current_day += 1
+
+    async def _find_rank_snapshot(self, p_puuid: str) -> PlayerLeague | None:
+        """The stored snapshot nearest the run's reference time, if fresh enough."""
+        reference = self._rank_reference_time
+        if self.end_date is None:
+            window_start, window_end = reference - RANK_SNAPSHOT_MAX_AGE, reference
+        else:
+            window_start = reference - HISTORICAL_RANK_WINDOW
+            window_end = reference + HISTORICAL_RANK_WINDOW
+        distance = func.abs(
+            func.extract("epoch", PlayerLeague.created_at) - reference.timestamp()
+        )
+        result = await self.db.execute(
+            select(PlayerLeague)
+            .where(
+                PlayerLeague.puuid == p_puuid,
+                PlayerLeague.queue_type == RANKED_SOLO_QUEUE_TYPE,
+                PlayerLeague.created_at >= window_start,
+                PlayerLeague.created_at <= window_end,
+            )
+            .order_by(distance)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _store_rank_snapshot(
+        self, p_puuid: str, solo_entry: LeagueEntryDTO
+    ) -> None:
+        """Persist a live league read as a snapshot for future runs.
+
+        Tracked players are skipped: Match Fetcher owns their snapshot
+        cadence, and an analysis-time snapshot landing inside its
+        before/after observation window would downgrade LP attribution to
+        `counter_mismatch` (see `match_lp.py`).
+        """
+        tracked = await self.db.execute(
+            select(Player.is_tracked_by_anyone).where(Player.puuid == p_puuid)
+        )
+        if tracked.scalar_one_or_none():
+            return
+
+        latest = await self.db.execute(
+            select(PlayerLeague)
+            .where(
+                PlayerLeague.puuid == p_puuid,
+                PlayerLeague.queue_type == RANKED_SOLO_QUEUE_TYPE,
+            )
+            .order_by(PlayerLeague.created_at.desc())
+            .limit(1)
+        )
+        current = latest.scalar_one_or_none()
+        if current is not None and league_snapshot_matches(current, solo_entry):
+            return
+
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
+        self.db.add(player_league_from_entry(p_puuid, solo_entry))
+        await self.db.commit()
 
     async def _calculate_player_winrate(
         self,

@@ -12,9 +12,9 @@ import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 import { MatchmakingAnalysisActiveCard } from "./matchmaking-analysis-active-card";
 import { MatchmakingAnalysisStartCard } from "./matchmaking-analysis-start-card";
 import {
-  EXPECTED_PLAYERS,
   analysisFailureMessage,
   analysisUiReducer,
+  expectedPlayersForRun,
   initAnalysisUiState,
   isActiveAnalysisStatus,
   isSameAnalysisInstance,
@@ -53,10 +53,15 @@ export function MatchmakingAnalysisSession({
     initAnalysisUiState,
   );
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [matchCount, setMatchCount] = useState(10);
+  const [endDate, setEndDate] = useState<string | null>(null);
 
   const watchingCreatedAt = resolveWatchingCreatedAt(state, latestAnalysis);
   const { toast, queryClient, startMutation, cancelMutation } =
-    useMatchmakingAnalysisMutations(puuid, watchingCreatedAt, dispatch);
+    useMatchmakingAnalysisMutations(puuid, watchingCreatedAt, dispatch, {
+      matchCount,
+      endDate,
+    });
   const storedWatching = state.phase === "running" || state.phase === "starting";
   const latestMatchesCurrent =
     Boolean(watchingCreatedAt) &&
@@ -92,7 +97,7 @@ export function MatchmakingAnalysisSession({
         type: "consider-reanchor",
         analysisCreatedAt: watchingCreatedAt,
         authoritativeProgress: status.progress || 0,
-        totalPlayers: status.total_puuids || EXPECTED_PLAYERS,
+        totalPlayers: status.total_puuids || expectedPlayersForRun(status),
       });
       return status;
     },
@@ -255,7 +260,8 @@ export function MatchmakingAnalysisSession({
   const displayData = shouldPoll
     ? (validStatusUpdate ?? latestForCurrent)
     : latestAnalysis;
-  const totalPlayers = displayData?.total_puuids || EXPECTED_PLAYERS;
+  const totalPlayers =
+    displayData?.total_puuids || expectedPlayersForRun(displayData);
   const authoritativeProgress = displayData?.progress || 0;
   const projectedPlayerProgress = projectMatchmakingProgress({
     ...state.progressProjection,
@@ -274,6 +280,13 @@ export function MatchmakingAnalysisSession({
     totalPlayers,
   );
 
+  const startCardControls = {
+    matchCount,
+    onMatchCountChange: setMatchCount,
+    endDate,
+    onEndDateChange: setEndDate,
+  };
+
   if (displayPhase === "idle") {
     return (
       <MatchmakingAnalysisStartCard
@@ -282,6 +295,7 @@ export function MatchmakingAnalysisSession({
         startPending={startMutation.isPending}
         startLabel={latestAnalysis ? "Run New Analysis" : "Start Analysis"}
         onStart={() => startMutation.mutate()}
+        {...startCardControls}
       />
     );
   }
@@ -294,6 +308,7 @@ export function MatchmakingAnalysisSession({
         startPending={startMutation.isPending}
         startLabel="Run New Analysis"
         onStart={() => startMutation.mutate()}
+        {...startCardControls}
       />
     );
   }

@@ -10,20 +10,38 @@
 > `backend/app/features/matchmaking_analysis/` and
 > `frontend/features/matchmaking/` and are not mirrored here.
 
-> Analyzes matchmaking fairness by comparing the average win rates of a
-> player's allies vs enemies across their last 10 ranked matches.
+> Analyzes matchmaking fairness by comparing the average win rates and average
+> ranks of a player's allies vs enemies across their last N ranked matches.
 
 ## Product Question and Fairness Threshold
 
 The analysis answers **"Is matchmaking fair for this player?"** by computing:
 
 - **Average Ally Team Win Rate** — the average of per-match ally-team win
-  rates across 10 matches
+  rates across the analyzed matches
 - **Average Enemy Team Win Rate** — the same for the opposing teams
+- **Average Ally / Enemy Rank** — per-side means over the unique players'
+  LP-equivalent rank values, with per-tier distribution buckets
+- **Per-match Solo/Duo classification** — so the client can split the
+  aggregate by scope (All / SoloQ / DuoQ)
 
-If both numbers are close, matchmaking is fair. The product threshold is a
-**3-percentage-point gap** (`winrateDiff >= 0.03` favorable,
+If the win-rate numbers are close, matchmaking is fair. The product threshold
+is a **3-percentage-point gap** (`winrateDiff >= 0.03` favorable,
 `<= -0.03` unfavorable, otherwise "relatively fair").
+
+### Run parameters
+
+A run is parameterized (persisted in `matchmaking_analyses.params`, echoed on
+every read; `NULL` = legacy = `{match_count: 10, end_date: null}`):
+
+- **`match_count`** — spine size, 5–30 (UI presets 10/20/30, default 10).
+- **`end_date`** — optional UTC day; the spine becomes the last N matches
+  played **on or before that day** (match-v5 `endTime` = exclusive next
+  midnight UTC). This is what makes "run it for games a month back and compare
+  against today" possible.
+
+The resumed worker re-reads params from the run row — a restarted process has
+no request payload.
 
 ---
 
@@ -34,10 +52,13 @@ Changing any element below is a product change.
 
 ### Spine and anchors
 
-1. Fetch the current player's **last 10 ranked Solo/Duo (queue 420) match
-   IDs** with no `endTime` — the actual latest matches. This is always 1 API
-   call that cannot be skipped. These 10 matches are the **spine**; all
-   subsequent work is relative to them.
+1. Fetch the current player's **last N ranked Solo/Duo (queue 420) match
+   IDs** (`endTime` only when the run has an `end_date`). This is always 1
+   API call that cannot be skipped. These N matches are the **spine**; all
+   subsequent work is relative to them. **Floor: 5 found matches** — a
+   backdated window that yields fewer than requested but at least 5 still
+   completes (failing it would break the month-back use case); below 5 the
+   run fails `not_enough_matches`.
 2. **Each spine match has its own anchor timestamp** — that match's effective
    `game_start_timestamp` (its `game_start_timestamp_source` distinguishes an
    actual Riot start from a preserved legacy creation-time fallback). A spine
@@ -63,22 +84,62 @@ Average of averages of averages:
 1. Per player: wins / matches over their ≤10 anchored matches.
 2. Per spine match: mean of the 5 ally win rates and mean of the 5 enemy win
    rates (the current player counts on the ally side of every spine match).
-3. Final: mean of the 10 per-match ally averages and of the 10 per-match enemy
-   averages → `{ team_avg_winrate, enemy_avg_winrate }`.
+3. Final: mean of the N per-match ally averages and of the N per-match enemy
+   averages → `{ team_avg_winrate, enemy_avg_winrate }`. The per-match pairs
+   are also persisted (`per_match`, both-sided matches only) so the client can
+   recompute the aggregate for a SoloQ- or DuoQ-only scope; the "All" scope
+   always displays the stored aggregate, never a client recomputation.
+
+### Participant ranks (nearest-snapshot rule)
+
+Each unique participant gets one Solo/Duo rank per run, resolved
+snapshot-first against `core.player_leagues`:
+
+1. The stored snapshot **nearest the run's reference time** (now for latest
+   runs, the chosen day for backdated runs) is reused without an API call
+   when it falls inside the freshness window — 24 h for latest runs, ±14 days
+   around `end_date` for backdated runs.
+2. Otherwise one league-v4 call fetches the current entry, and — for
+   **non-tracked players only** — persists it as a new snapshot, so backdated
+   runs get progressively more period-accurate as the tool is used. Tracked
+   players are never written here: Match Fetcher owns their snapshot cadence,
+   and an analysis-time snapshot inside its before/after observation window
+   would downgrade LP attribution to `counter_mismatch` (`match_lp.py`).
+3. A failed or empty league read degrades the player to **UNRANKED** (never
+   fails the run); UNRANKED players are excluded from the averages and
+   counted in their own tier bucket.
+
+Ranks are mapped to one LP-equivalent scalar
+(`tier_index × 400 + division × 100 + LP`; MASTER+ = `2800 + LP`) in
+`ranks.py`; the frontend formatter mirrors the scale and shared test fixtures
+guard drift. `rank_freshness` records how many ranks were period-accurate vs
+current-day so the UI can caption backdated runs honestly — historical rank
+data starts as "today's ranks" and improves with use.
+
+### Duo classification (heuristic)
+
+A spine match is classified **DuoQ** when any non-analyzed player appears on
+the analyzed player's team in ≥ 2 spine matches (`classify_duo_matches`,
+pure, zero API calls — computed from stored participants). Riot's match-v5
+carries no party data, so this is a deliberate co-occurrence heuristic; false
+positives are possible at small windows, and `per_match` retains the flags so
+the rule can be tightened later without refetching.
 
 ### Call and count accounting
 
-With 10 spine matches:
+With N spine matches (formulas in `theoretical_max_requests`):
 
-- `players_analyzed` = **91** (current player + 9 others per spine match).
-- `matches_analyzed` = **910** (10 + 90 × 10): the basis size shown in the UI;
-  every player's win-rate model uses 10 matches.
-- The internal additional-match-detail workload is **820** (10 spine details +
-  90 participants × 9 non-spine details — one of each participant's 10 matches
-  is the already-known spine match).
-- Theoretical maximum without any DB cache: **911** calls
-  (1 + 90 match-list calls, plus 820 match-detail calls). `requests_saved` is
-  this maximum minus actual API calls made.
+- `players_analyzed` = **9N + 1** unique-slot maximum (current player + 9
+  others per spine match).
+- `matches_analyzed` = N + 9N × 10: the basis size shown in the UI; every
+  player's win-rate model uses ≤10 matches.
+- The internal additional-match-detail workload is N spine details +
+  9N participants × 9 non-spine details — one of each participant's 10
+  matches is the already-known spine match.
+- One league-v4 call per unique player: **9N + 1**.
+- Theoretical maximum without any DB cache: `(1 + 9N) + N + 81N + (9N + 1)`
+  — **1,002** at N=10, ~3,000 at N=30. `requests_saved` is this maximum minus
+  actual API calls made.
 
 ---
 
@@ -96,8 +157,10 @@ The analysis checks the database before every Riot call:
 - With <10 DB rows, the match-ID list comes from the API and each match is
   still checked in the DB before a detail fetch.
 
-A fully warm cache therefore completes a run with 1 API call (the spine list),
-saving up to 910 of the theoretical 911.
+A fully warm cache (matches **and** fresh rank snapshots) therefore completes
+a run with 1 API call (the spine list). Rank snapshots warm separately from
+matches: the first run after the extension pays up to 9N+1 league calls even
+over a warm match cache.
 
 ---
 
@@ -228,7 +291,9 @@ completion reaches 100% and triggers result/history refresh.
   stored suggestions include their server, while a new `Name#Tag` asks for a
   server only before the non-tracking discovery request.
 - The component polls the exact `created_at` run every 3 seconds, rehydrates an
-  active run on reload, and keeps the `X / 100` count backend-authoritative.
+  active run on reload, and keeps the `X / N×10` count backend-authoritative
+  (the fallback expectation before progress keys exist is
+  `params.match_count × 10`).
 - **DB-only fast flow** detection: a run that completes without ever being
   observed `in_progress`/`waiting_rate_limit`, or with backend progress still
   < 10, plays the artificial fast animation
@@ -245,7 +310,9 @@ completion reaches 100% and triggers result/history refresh.
 
 | Scenario                                      | Handling                                                        |
 | --------------------------------------------- | --------------------------------------------------------------- |
-| Player has <10 ranked matches                 | Fast start succeeds; background run becomes retryable `failed`  |
+| Player has <5 ranked matches in the window    | Fast start succeeds; background run becomes retryable `failed`  |
+| 5 ≤ found < requested (sparse backdated window) | Run completes over the found matches; `matches_requested` records the ask |
+| League read fails/empty for a participant     | Player counted UNRANKED; excluded from rank averages            |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
 | Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |
 | Riot 401/403 during **any** provider call     | Run terminates with `RIOT_API_KEY_INVALID`; global warning header appears |

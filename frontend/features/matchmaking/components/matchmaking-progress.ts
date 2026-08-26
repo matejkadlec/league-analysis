@@ -1,8 +1,9 @@
 const RIOT_LONG_WINDOW_SECONDS = 120;
-// A representative warm-cache analysis completes about six Riot requests per
-// logical player. This drives display-only interpolation; every real backend
-// milestone still moves the projection forward immediately.
-const ESTIMATED_PLAYERS_PER_WINDOW = 100 / 6;
+// A representative warm-cache analysis completes about seven Riot requests
+// per logical player (six match reads plus the league-v4 rank read). This
+// drives display-only interpolation; every real backend milestone still moves
+// the projection forward immediately.
+const ESTIMATED_PLAYERS_PER_WINDOW = 100 / 7;
 
 export interface ProgressProjection {
   analysisCreatedAt: string | null;

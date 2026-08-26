@@ -13,6 +13,7 @@ function failed(error_code: string, error_message: string | null = null) {
     error_code,
     error_message,
     requests_saved: 0,
+    params: { match_count: 10, end_date: null },
   });
 }
 

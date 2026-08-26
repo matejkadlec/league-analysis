@@ -36,6 +36,7 @@ function completed(
       puuid: "puuid",
       status: "completed",
       created_at: createdAt,
+      params: { match_count: 10, end_date: null },
       results,
     },
   };
@@ -102,6 +103,7 @@ describe("the last matchmaking analysis result", () => {
         puuid: "puuid",
         status: "running",
         created_at: CREATED_AT,
+        params: { match_count: 10, end_date: null },
         results: {
           team_avg_winrate: 0.9,
           enemy_avg_winrate: 0.1,

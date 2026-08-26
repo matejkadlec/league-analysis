@@ -67,6 +67,7 @@ function analysis(
     error_message: null,
     requests_saved: 0,
     rate_limit_reset_at: null,
+    params: { match_count: 10, end_date: null },
     ...overrides,
   };
 }
@@ -200,11 +201,13 @@ describe("MatchmakingAnalysis lifecycle", () => {
       nowTimestamp: anchorTimestamp + 120_000,
     });
 
+    // Interpolation rate is 100/7 players per 120s window (the rank read
+    // added a seventh request per player).
     expect(Math.round(initial)).toBe(17);
-    expect(Math.round(afterOneMinute)).toBe(25);
+    expect(Math.round(afterOneMinute)).toBe(24);
     expect(Math.round(atNextWindow)).toBe(34);
-    expect(estimateMatchmakingMinutesRemaining(initial, 100)).toBe(10);
-    expect(estimateMatchmakingMinutesRemaining(afterOneMinute, 100)).toBe(9);
+    expect(estimateMatchmakingMinutesRemaining(initial, 100)).toBe(12);
+    expect(estimateMatchmakingMinutesRemaining(afterOneMinute, 100)).toBe(11);
   });
 
   it("cancels the exact persisted run and keeps the UI retryable", async () => {

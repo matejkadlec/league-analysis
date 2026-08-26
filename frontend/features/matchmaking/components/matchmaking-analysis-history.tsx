@@ -29,6 +29,7 @@ import {
   matchmakingHistoryQueryKey,
 } from "../matchmaking-query";
 import { gapVerdict } from "../gap-verdict";
+import { formatRunType } from "../run-type";
 
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
@@ -87,8 +88,8 @@ function DeleteAnalysisButton({
 }
 
 /**
- * One analysis stacked for a narrow screen. The table's five columns need
- * ~430px before the win-rate headings wrap, and scrolling sideways would put
+ * One analysis stacked for a narrow screen. The table's six columns need
+ * ~520px before the win-rate headings wrap, and scrolling sideways would put
  * the gap -- the number the whole card exists to show -- behind a gesture.
  */
 function AnalysisBlock({
@@ -114,6 +115,9 @@ function AnalysisBlock({
           onDelete={onDelete}
         />
       </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {formatRunType(item.params)}
+      </p>
       <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
         {historyFigures(item).map((figure) => (
           <div key={figure.label}>
@@ -249,13 +253,14 @@ export function MatchmakingAnalysisHistory({
                 <TableHead className="min-w-[140px] text-left">
                   Date & Time
                 </TableHead>
-                <TableHead className="w-[24%] text-right">
+                <TableHead className="min-w-[90px] text-left">Type</TableHead>
+                <TableHead className="w-[19%] text-right">
                   Ally Team WR
                 </TableHead>
-                <TableHead className="w-[24%] text-right">
+                <TableHead className="w-[19%] text-right">
                   Enemy Team WR
                 </TableHead>
-                <TableHead className="w-[24%] text-right">
+                <TableHead className="w-[19%] text-right">
                   Win Rates Gap
                 </TableHead>
                 <TableHead className="w-auto min-w-[40px]" />
@@ -279,6 +284,9 @@ export function MatchmakingAnalysisHistory({
                   >
                     <TableCell className="text-left text-sm">
                       {formatDateTime(item.created_at)}
+                    </TableCell>
+                    <TableCell className="text-left text-sm text-muted-foreground">
+                      {formatRunType(item.params)}
                     </TableCell>
                     {historyFigures(item).map((figure) => (
                       <TableCell

@@ -53,6 +53,7 @@ const AHEAD = {
   team_avg_winrate: 0.523,
   enemy_avg_winrate: 0.491,
   gap: 0.032,
+  params: { match_count: 10, end_date: null },
 };
 
 const BEHIND = {
@@ -60,9 +61,10 @@ const BEHIND = {
   team_avg_winrate: 0.474,
   enemy_avg_winrate: 0.512,
   gap: -0.038,
+  params: { match_count: 30, end_date: "2026-02-01" },
 };
 
-function answerWith(items: (typeof AHEAD)[]) {
+function answerWith(items: (typeof AHEAD | typeof BEHIND)[]) {
   getMatchmakingAnalysisHistory.mockResolvedValue({
     success: true,
     data: { items },
