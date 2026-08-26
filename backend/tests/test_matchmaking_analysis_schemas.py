@@ -120,6 +120,25 @@ def test_a_legacy_results_blob_parses_with_new_fields_absent_not_zero() -> None:
     assert results.matches_requested is None
 
 
+def test_an_lga_105_per_match_entry_parses_with_performance_absent() -> None:
+    # Runs from the rank/duo extension carry per_match entries without the
+    # performance keys; each must read back as None, not 0.00 KDA.
+    from app.features.matchmaking_analysis.schemas import (
+        MatchmakingPerMatchBreakdown,
+    )
+
+    entry = MatchmakingPerMatchBreakdown.model_validate(
+        {"match_id": "EUN1_1", "duo": False, "team_avg": 0.5, "enemy_avg": 0.5}
+    )
+
+    assert entry.team_kda is None
+    assert entry.enemy_kda is None
+    assert entry.team_kill_participation is None
+    assert entry.enemy_kill_participation is None
+    assert entry.team_damage_share is None
+    assert entry.enemy_damage_share is None
+
+
 def test_a_null_params_column_reads_as_the_truthful_legacy_default() -> None:
     # Every run persisted before the params column was a 10-match latest run.
     r = response(params=None)

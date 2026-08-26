@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { unwrapOr404 } from "@/lib/core/api";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
-import { Medal, TrendingUp, Users } from "lucide-react";
+import { Medal, Shield, Swords, TrendingUp } from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 
@@ -33,8 +33,10 @@ import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
 import { formatRunEndDate } from "../run-type";
 import {
   effectiveScope as resolveScope,
+  performanceAggregates,
   scopeAggregates,
   type MatchScope,
+  type SidePerformance,
 } from "../scope-aggregates";
 import { TierDistribution } from "./tier-distribution";
 
@@ -52,6 +54,41 @@ function RankFigure({ label, value }: { label: string; value: number }) {
         {display.label}
       </dd>
     </div>
+  );
+}
+
+function PerformanceRow({
+  icon,
+  label,
+  side,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  side: SidePerformance;
+}) {
+  const cell = (value: string | null) => (
+    <TableCell className="text-right font-mono">{value ?? "—"}</TableCell>
+  );
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          {icon}
+          {label}
+        </div>
+      </TableCell>
+      {cell(
+        side.damageShare !== null
+          ? formatFractionAsPercent(side.damageShare)
+          : null,
+      )}
+      {cell(side.kda !== null ? side.kda.toFixed(2) : null)}
+      {cell(
+        side.killParticipation !== null
+          ? formatFractionAsPercent(side.killParticipation)
+          : null,
+      )}
+    </TableRow>
   );
 }
 
@@ -137,6 +174,9 @@ export function MatchmakingAnalysisResults({
     enemy: enemyColor,
   } = gapVerdict(winrateDiff, GAP_FAIRNESS_THRESHOLD);
 
+  const performance = perMatch
+    ? performanceAggregates(perMatch, effectiveScope)
+    : null;
   const allyRank = results.ally_avg_rank_value ?? null;
   const enemyRank = results.enemy_avg_rank_value ?? null;
   const allyTiers = results.ally_tier_counts ?? null;
@@ -203,7 +243,7 @@ export function MatchmakingAnalysisResults({
             <TableRow>
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
+                  <Shield className="h-4 w-4" />
                   Analyzed Player&apos;s Team
                 </div>
               </TableCell>
@@ -216,7 +256,7 @@ export function MatchmakingAnalysisResults({
             <TableRow>
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
+                  <Swords className="h-4 w-4" />
                   Opponent Team
                 </div>
               </TableCell>
@@ -257,6 +297,39 @@ export function MatchmakingAnalysisResults({
             </p>
           )}
         </div>
+
+        {performance && (
+          <div className="space-y-2 border-t border-border/40 pt-4">
+            <p className="text-sm font-medium">Recent Form</p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Team</TableHead>
+                  <TableHead className="text-right">Damage Share</TableHead>
+                  <TableHead className="text-right">KDA</TableHead>
+                  <TableHead className="text-right">Kill Part.</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <PerformanceRow
+                  icon={<Shield className="h-4 w-4" />}
+                  label="Analyzed Player's Team"
+                  side={performance.team}
+                />
+                <PerformanceRow
+                  icon={<Swords className="h-4 w-4" />}
+                  label="Opponent Team"
+                  side={performance.enemy}
+                />
+              </TableBody>
+            </Table>
+            <p className="text-sm text-muted-foreground">
+              Each player&apos;s form over the same recent matches the win
+              rates use: median KDA, plus their share of team kills and team
+              damage.
+            </p>
+          </div>
+        )}
 
         {(allyRank !== null || enemyRank !== null) && (
           <div className="space-y-2 border-t border-border/40 pt-4">

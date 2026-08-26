@@ -20,11 +20,19 @@ export const MatchmakingAnalysisParamsSchema = z.object({
   end_date: z.string().nullable(),
 });
 
+/** The six performance fields are absent on runs stored before they existed;
+ * kill participation has no upper bound (shared kills can push it past 1). */
 export const MatchmakingPerMatchSchema = z.object({
   match_id: z.string(),
   duo: z.boolean(),
   team_avg: z.number().min(0).max(1),
   enemy_avg: z.number().min(0).max(1),
+  team_kda: z.number().min(0).nullable().optional(),
+  enemy_kda: z.number().min(0).nullable().optional(),
+  team_kill_participation: z.number().min(0).nullable().optional(),
+  enemy_kill_participation: z.number().min(0).nullable().optional(),
+  team_damage_share: z.number().min(0).max(1).nullable().optional(),
+  enemy_damage_share: z.number().min(0).max(1).nullable().optional(),
 });
 
 export const MatchmakingRankFreshnessSchema = z.object({

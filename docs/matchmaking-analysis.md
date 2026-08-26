@@ -84,11 +84,32 @@ Average of averages of averages:
 1. Per player: wins / matches over their ≤10 anchored matches.
 2. Per spine match: mean of the 5 ally win rates and mean of the 5 enemy win
    rates (the current player counts on the ally side of every spine match).
-3. Final: mean of the N per-match ally averages and of the N per-match enemy
-   averages → `{ team_avg_winrate, enemy_avg_winrate }`. The per-match pairs
-   are also persisted (`per_match`, both-sided matches only) so the client can
-   recompute the aggregate for a SoloQ- or DuoQ-only scope; the "All" scope
-   always displays the stored aggregate, never a client recomputation.
+3. Final: **10%-trimmed mean** of the N per-match ally averages and of the N
+   per-match enemy averages → `{ team_avg_winrate, enemy_avg_winrate }`. The
+   trim count is floored (`int(N × 0.1)`), so runs under 10 sided matches are
+   effectively plain means; 10–19 drop the single most extreme match from each
+   end, 20–29 drop two, 30 drops three. The client's SoloQ/DuoQ recomputation applies the same
+   rule (`trimmedMean`, fixtures shared with the backend); the "All" scope
+   always displays the stored aggregate, never a client recomputation. Runs
+   stored before the trim are plain means — cross-boundary history
+   comparisons can shift by up to about a point.
+
+### Recent-form performance (zero extra API calls)
+
+Each participant's trailing form is read from **exactly the matches their
+win rate counted** (the winrate pass records its sampled match IDs), after
+that pass has persisted any API-fetched matches — so the read is DB-only,
+adds no Riot calls, and can never describe a different window than the
+win-rate figure beside it. Per
+player: **median** per-game KDA (a single stomp skews a mean at this sample
+size), mean kill participation, mean team-damage share; the two ratios are
+averaged only over the games that carry them (older stored rows may lack the
+columns). Per spine match, each side's players are averaged per metric and
+persisted on `per_match` (`team_kda`, `team_kill_participation`,
+`team_damage_share` + enemy counterparts, nullable); the client aggregates
+scopes with the same trimmed mean. These three metrics were chosen by
+measuring predictive signal on production data (trailing damage share AUC
+0.530, KDA 0.519, kill participation 0.515 vs winrate 0.502 ≈ chance).
 
 ### Participant ranks (nearest-snapshot rule)
 
