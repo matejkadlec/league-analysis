@@ -47,6 +47,7 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     ally_tier_counts: NotRequired[dict[str, int]]
     enemy_tier_counts: NotRequired[dict[str, int]]
     per_match: NotRequired[list[dict[str, object]]]
+    player_ranks: NotRequired[dict[str, dict[str, object]]]
     rank_freshness: NotRequired[dict[str, int]]
 
 

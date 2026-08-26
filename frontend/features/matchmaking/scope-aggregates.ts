@@ -1,4 +1,7 @@
-import type { MatchmakingPerMatch } from "@/lib/core/schemas";
+import type {
+  MatchmakingPerMatch,
+  MatchmakingPlayerRank,
+} from "@/lib/core/schemas";
 
 export type MatchScope = "all" | "solo" | "duo";
 
@@ -51,6 +54,65 @@ export function scopeAggregates(
     teamAvg: trimmedMean(scoped.map((m) => m.team_avg)),
     enemyAvg: trimmedMean(scoped.map((m) => m.enemy_avg)),
     matchCount: scoped.length,
+  };
+}
+
+export interface RankAggregates {
+  allyAvg: number | null;
+  enemyAvg: number | null;
+  allyTierCounts: Record<string, number>;
+  enemyTierCounts: Record<string, number>;
+}
+
+function sideRanks(
+  puuids: Set<string>,
+  playerRanks: Record<string, MatchmakingPlayerRank>,
+): { avg: number | null; tierCounts: Record<string, number> } {
+  const tierCounts: Record<string, number> = {};
+  const values: number[] = [];
+  for (const puuid of puuids) {
+    const rank = playerRanks[puuid];
+    const tier = rank?.tier ?? "UNRANKED";
+    tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
+    if (rank?.value != null) values.push(rank.value);
+  }
+  const avg =
+    values.length > 0
+      ? values.reduce((sum, v) => sum + v, 0) / values.length
+      : null;
+  return { avg, tierCounts };
+}
+
+/**
+ * Rank averages and tier buckets over one scope's unique players, mirroring
+ * the backend's run-wide semantics (plain mean over ranked players, unranked
+ * bucketed). Null when the run predates the per-match puuid lists.
+ */
+export function rankAggregates(
+  perMatch: MatchmakingPerMatch[],
+  playerRanks: Record<string, MatchmakingPlayerRank> | null | undefined,
+  scope: Exclude<MatchScope, "all">,
+  analysisPuuid: string,
+): RankAggregates | null {
+  if (!playerRanks) return null;
+  const scoped = perMatch.filter((m) => m.duo === (scope === "duo"));
+  if (scoped.length === 0) return null;
+  if (scoped.some((m) => m.ally_puuids == null || m.enemy_puuids == null)) {
+    return null;
+  }
+  const allies = new Set<string>([analysisPuuid]);
+  const enemies = new Set<string>();
+  for (const m of scoped) {
+    for (const puuid of m.ally_puuids ?? []) allies.add(puuid);
+    for (const puuid of m.enemy_puuids ?? []) enemies.add(puuid);
+  }
+  const ally = sideRanks(allies, playerRanks);
+  const enemy = sideRanks(enemies, playerRanks);
+  return {
+    allyAvg: ally.avg,
+    enemyAvg: enemy.avg,
+    allyTierCounts: ally.tierCounts,
+    enemyTierCounts: enemy.tierCounts,
   };
 }
 

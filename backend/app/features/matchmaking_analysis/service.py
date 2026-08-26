@@ -63,6 +63,7 @@ from .ranks import (
     UNRANKED,
     RankSummary,
     classify_duo_matches,
+    player_rank_map,
     rank_value,
     summarize_ranks,
 )
@@ -257,6 +258,7 @@ class SpineMatchStats:
     team_avg: float | None
     enemy_avg: float | None
     ally_puuids: list[str]
+    enemy_puuids: list[str]
     team_kda: float | None = None
     enemy_kda: float | None = None
     team_kill_participation: float | None = None
@@ -278,6 +280,8 @@ def _per_match_payload(spine_stats: list[SpineMatchStats]) -> list[dict[str, obj
         {
             "match_id": s.match_id,
             "duo": duo_by_match[s.match_id],
+            "ally_puuids": s.ally_puuids,
+            "enemy_puuids": s.enemy_puuids,
             "team_avg": round(s.team_avg, 4),
             "enemy_avg": round(s.enemy_avg, 4),
             "team_kda": _rounded(s.team_kda, 2),
@@ -298,6 +302,7 @@ def _build_completion_results(
     matches_analyzed: int,
     matches_requested: int,
     rank_summary: RankSummary,
+    player_ranks: dict[str, dict[str, object]],
     rank_period_accurate: int,
     rank_current_day: int,
 ) -> MatchmakingAnalysisResultsJSON:
@@ -326,6 +331,7 @@ def _build_completion_results(
         "ally_tier_counts": rank_summary.ally_tier_counts,
         "enemy_tier_counts": rank_summary.enemy_tier_counts,
         "per_match": _per_match_payload(spine_stats),
+        "player_ranks": player_ranks,
         "rank_freshness": {
             "period_accurate": rank_period_accurate,
             "current_day": rank_current_day,
@@ -942,6 +948,11 @@ class MatchmakingAnalysisService:
                 self._rank_tiers,
                 self._rank_values,
             ),
+            player_ranks=player_rank_map(
+                self._ally_rank_puuids | self._enemy_rank_puuids,
+                self._rank_tiers,
+                self._rank_values,
+            ),
             rank_period_accurate=self._rank_period_accurate,
             rank_current_day=self._rank_current_day,
         )
@@ -1010,6 +1021,7 @@ class MatchmakingAnalysisService:
 
         team, enemy = _SideSamples([], []), _SideSamples([], [])
         ally_puuids: list[str] = []
+        enemy_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
             side = team if team_id == target_team else enemy
@@ -1022,6 +1034,7 @@ class MatchmakingAnalysisService:
                     ally_puuids.append(p_puuid)
             else:
                 self._enemy_rank_puuids.add(p_puuid)
+                enemy_puuids.append(p_puuid)
 
         team_side = _side_performance(team.performances)
         enemy_side = _side_performance(enemy.performances)
@@ -1030,6 +1043,7 @@ class MatchmakingAnalysisService:
             team_avg=fmean(team.winrates) if team.winrates else None,
             enemy_avg=fmean(enemy.winrates) if enemy.winrates else None,
             ally_puuids=ally_puuids,
+            enemy_puuids=enemy_puuids,
             team_kda=team_side.kda,
             enemy_kda=enemy_side.kda,
             team_kill_participation=team_side.kill_participation,

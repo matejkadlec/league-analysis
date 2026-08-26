@@ -4,6 +4,7 @@ import pytest
 
 from app.features.matchmaking_analysis.ranks import (
     classify_duo_matches,
+    player_rank_map,
     rank_value,
     summarize_ranks,
 )
@@ -49,6 +50,17 @@ def test_summary_excludes_unranked_from_the_average_but_counts_them() -> None:
     assert summary.ally_tier_counts == {"GOLD": 2, "UNRANKED": 1}
     assert summary.enemy_avg_rank_value == pytest.approx(1000.0)
     assert summary.enemy_tier_counts == {"SILVER": 1}
+
+
+def test_player_rank_map_marks_unknown_players_unranked() -> None:
+    ranks = player_rank_map(
+        {"a", "b"}, tiers={"a": "GOLD"}, values={"a": 1500, "b": None}
+    )
+
+    assert ranks == {
+        "a": {"tier": "GOLD", "value": 1500},
+        "b": {"tier": "UNRANKED", "value": None},
+    }
 
 
 def test_summary_of_no_ranked_players_is_none_not_zero() -> None:

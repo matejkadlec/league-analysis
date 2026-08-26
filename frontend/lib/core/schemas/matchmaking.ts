@@ -25,6 +25,8 @@ export const MatchmakingAnalysisParamsSchema = z.object({
 export const MatchmakingPerMatchSchema = z.object({
   match_id: z.string(),
   duo: z.boolean(),
+  ally_puuids: z.array(z.string()).nullable().optional(),
+  enemy_puuids: z.array(z.string()).nullable().optional(),
   team_avg: z.number().min(0).max(1),
   enemy_avg: z.number().min(0).max(1),
   team_kda: z.number().min(0).nullable().optional(),
@@ -33,6 +35,12 @@ export const MatchmakingPerMatchSchema = z.object({
   enemy_kill_participation: z.number().min(0).nullable().optional(),
   team_damage_share: z.number().min(0).max(1).nullable().optional(),
   enemy_damage_share: z.number().min(0).max(1).nullable().optional(),
+});
+
+/** One participant's rank at run time; value is null for UNRANKED. */
+export const MatchmakingPlayerRankSchema = z.object({
+  tier: z.string(),
+  value: z.number().min(0).nullable(),
 });
 
 export const MatchmakingRankFreshnessSchema = z.object({
@@ -59,6 +67,10 @@ export const MatchmakingAnalysisResultsSchema = z.object({
     .nullable()
     .optional(),
   per_match: z.array(MatchmakingPerMatchSchema).nullable().optional(),
+  player_ranks: z
+    .record(z.string(), MatchmakingPlayerRankSchema)
+    .nullable()
+    .optional(),
   rank_freshness: MatchmakingRankFreshnessSchema.nullable().optional(),
 });
 
@@ -110,6 +122,9 @@ export type MatchmakingAnalysisParams = z.infer<
   typeof MatchmakingAnalysisParamsSchema
 >;
 export type MatchmakingPerMatch = z.infer<typeof MatchmakingPerMatchSchema>;
+export type MatchmakingPlayerRank = z.infer<
+  typeof MatchmakingPlayerRankSchema
+>;
 export type MatchmakingAnalysisResults = z.infer<
   typeof MatchmakingAnalysisResultsSchema
 >;
