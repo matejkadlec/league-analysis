@@ -4,11 +4,8 @@ import { rankValueToDisplay } from "@/features/players";
 
 /**
  * Shared with the backend scale test (`test_matchmaking_ranks.py`): the same
- * (tier, division, LP) -> value quadruples must hold on both sides, or the
- * two implementations of the LP-equivalent scale drift apart silently. The
- * display column is this side's own inverse; everything at or above the
- * MASTER floor collapses to "Master+" because the value alone cannot tell
- * Master, Grandmaster and Challenger apart.
+ * fixtures must hold on both sides, or the two scale implementations drift.
+ * Everything at or above the MASTER floor collapses to "Master+".
  */
 const SCALE_FIXTURES: Array<[number, string, string]> = [
   [0, "IRON", "Iron IV"],

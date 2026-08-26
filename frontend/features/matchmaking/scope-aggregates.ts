@@ -11,9 +11,7 @@ export interface ScopeAggregates {
 /**
  * Recompute the two headline averages for one duo scope from the persisted
  * per-match breakdown. The "All" scope must NOT go through this: the card
- * shows the stored `team_avg_winrate`/`enemy_avg_winrate` for it, so the
- * figure can never drift from what history shows (per-match values are
- * rounded to 4 decimals before storage).
+ * shows the stored aggregates for it, so the figure never drifts from history.
  */
 export function scopeAggregates(
   perMatch: MatchmakingPerMatch[],

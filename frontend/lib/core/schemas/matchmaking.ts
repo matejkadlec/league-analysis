@@ -33,11 +33,9 @@ export const MatchmakingRankFreshnessSchema = z.object({
 });
 
 /**
- * Every field beyond the original three is optional and read as
- * null-or-absent, never defaulted to a number: runs completed before the
- * rank/duo extension lack them, and a 0 here renders as "average rank
- * Iron IV" — the same class of bug as the 0% winrate the backend TypedDict
- * documents.
+ * Every field beyond the original three is optional and read as null-or-absent,
+ * never defaulted to a number: pre-extension runs lack them, and a 0 renders as
+ * "average rank Iron IV" — the same bug class as the backend's 0% winrate.
  */
 export const MatchmakingAnalysisResultsSchema = z.object({
   team_avg_winrate: z.number().min(0).max(1),

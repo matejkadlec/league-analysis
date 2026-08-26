@@ -81,12 +81,8 @@ def classify_duo_matches(
     """Flag each spine match as a likely duo game.
 
     ``spine_allies`` pairs each spine match id with the analyzed player's
-    teammates (their own puuid excluded). A match counts as duo when any
-    teammate recurs on the analyzed player's side in >= 2 spine matches.
-
-    # ponytail: co-occurrence heuristic -- match-v5 carries no party data, so
-    # false positives are possible at small windows; tighten from stored
-    # per_match data if it matters.
+    teammates; a match is duo when any teammate recurs in >= 2 spine matches.
+    ponytail: heuristic (match-v5 has no party data), false positives at small N.
     """
     appearances = Counter(
         puuid for _match_id, allies in spine_allies for puuid in set(allies)

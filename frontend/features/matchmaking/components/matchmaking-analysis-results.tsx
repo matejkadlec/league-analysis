@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { unwrapOr404 } from "@/lib/core/api";
+import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { Medal, TrendingUp, Users } from "lucide-react";
 
@@ -42,7 +43,7 @@ function RankFigure({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className={`text-sm font-medium ${getRankColors(display.tier).text}`}>
+      <dd className={cn("text-sm font-medium", getRankColors(display.tier).text)}>
         {display.label}
       </dd>
     </div>

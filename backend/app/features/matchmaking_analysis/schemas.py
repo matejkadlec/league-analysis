@@ -79,9 +79,8 @@ class MatchmakingAnalysisResults(BaseModel):
     """Results of matchmaking analysis.
 
     Every field beyond the original three is optional with a None default,
-    never 0: runs completed before the rank/duo extension lack them, and a
-    reader that substitutes 0 resurrects the "0% average winrate" bug the
-    results TypedDict documents.
+    never 0: pre-extension runs lack them, and substituting 0 resurrects the
+    "0% average winrate" bug the results TypedDict documents.
     """
 
     team_avg_winrate: float = Field(

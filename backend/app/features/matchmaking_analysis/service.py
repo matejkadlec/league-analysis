@@ -72,8 +72,7 @@ MAX_RATE_LIMIT_WAIT = 120
 MATCHES_FOR_WINRATE = 10
 # Absolute floor, deliberately below the smallest selectable spine size: a
 # backdated run that finds only part of its requested window must still
-# complete, or the "compare against a month ago" use case fails exactly when
-# it matters.
+# complete, or comparing against a month ago fails exactly when it matters.
 MIN_MATCHES_FLOOR = 5
 
 RANKED_SOLO_QUEUE_TYPE = "RANKED_SOLO_5x5"
@@ -931,12 +930,9 @@ class MatchmakingAnalysisService:
     async def _cached_player_rank(self, p_puuid: str) -> None:
         """Resolve one participant's Solo/Duo rank once per run.
 
-        Snapshot-first: a `player_leagues` row near the run's reference time
-        is reused without an API call, and every live fetch for a non-tracked
-        player leaves a snapshot behind -- so backdated runs get progressively
-        more period-accurate as the tool is used. A failed or empty league
-        read degrades the player to UNRANKED; it never fails the run (auth
-        errors still re-raise inside `_api_call_with_retries`).
+        Snapshot-first: a `player_leagues` row near the run's reference time is
+        reused without an API call, and live fetches leave snapshots behind. A
+        failed or empty read degrades to UNRANKED (auth errors still re-raise).
         """
         if p_puuid in self._rank_values:
             return
@@ -1020,10 +1016,9 @@ class MatchmakingAnalysisService:
     ) -> None:
         """Persist a live league read as a snapshot for future runs.
 
-        Tracked players are skipped: Match Fetcher owns their snapshot
-        cadence, and an analysis-time snapshot landing inside its
-        before/after observation window would downgrade LP attribution to
-        `counter_mismatch` (see `match_lp.py`).
+        Tracked players are skipped: Match Fetcher owns their snapshot cadence,
+        and an analysis-time snapshot inside its before/after observation
+        window would downgrade LP attribution to `counter_mismatch`.
         """
         tracked = await self.db.execute(
             select(Player.is_tracked_by_anyone).where(Player.puuid == p_puuid)
