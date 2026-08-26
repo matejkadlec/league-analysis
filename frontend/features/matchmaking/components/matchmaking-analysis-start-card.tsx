@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 
 import { ANALYSIS_CARD_TRANSITION } from "./matchmaking-analysis-state";
 
-export const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
+const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
 
 interface MatchmakingAnalysisStartCardProps {
   playerSelector: ReactNode;
