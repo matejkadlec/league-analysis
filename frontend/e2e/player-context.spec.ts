@@ -162,7 +162,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
           total_lanes: 1,
           lanes: [
             {
-              lane: "MIDDLE",
+              lane: "Mid",
               games_played: 10,
               wins: 6,
               losses: 4,

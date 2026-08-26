@@ -89,10 +89,12 @@ const championStats = {
   })),
 };
 
+const LANE_DISPLAY_NAMES = ["Top", "Jungle", "Mid", "Bottom", "Support"] as const;
+
 const laneStats = {
   puuid: PUUID,
-  total_lanes: LANES.length,
-  lanes: LANES.map((lane, index) => ({
+  total_lanes: LANE_DISPLAY_NAMES.length,
+  lanes: LANE_DISPLAY_NAMES.map((lane, index) => ({
     lane,
     games_played: 40 - index * 6,
     wins: 24 - index * 3,
