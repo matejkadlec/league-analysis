@@ -285,12 +285,14 @@ def _spine_stat(
     team_avg: float | None = 0.5,
     enemy_avg: float | None = 0.6,
     ally_puuids: list[str] | None = None,
+    **performance: float | None,
 ) -> analysis_service_module.SpineMatchStats:
     return analysis_service_module.SpineMatchStats(
         match_id=match_id,
         team_avg=team_avg,
         enemy_avg=enemy_avg,
         ally_puuids=ally_puuids or [],
+        **performance,
     )
 
 
@@ -356,6 +358,88 @@ def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
     per_match = results.get("per_match")
     assert per_match is not None
     assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
+
+
+"""Shared with `trimmedMean` fixtures in scope-aggregates.test.ts: the two
+implementations must agree, or the stored All-scope figure and the client's
+slice figures drift apart. n=10 is the smallest input that actually trims."""
+TRIM_FIXTURES: list[tuple[list[float], float]] = [
+    ([0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625),
+    ([0.0, 0.5, 0.5, 0.5, 1.0], 0.5),
+]
+
+
+@pytest.mark.parametrize(("values", "expected"), TRIM_FIXTURES)
+def test_trimmed_mean_matches_the_shared_fixtures(
+    values: list[float], expected: float
+) -> None:
+    assert analysis_service_module.trimmed_mean(values) == pytest.approx(expected)
+
+
+def test_headline_averages_trim_the_extreme_matches() -> None:
+    """One 0%-winrate side in ten matches should not drag the headline the
+    way a plain mean lets it."""
+    stats = [
+        _spine_stat(f"EUN1_{i}", team_avg=wr, enemy_avg=0.5)
+        for i, wr in enumerate(TRIM_FIXTURES[0][0])
+    ]
+    results = _completion_results(stats, matches_analyzed=100)
+
+    assert results["team_avg_winrate"] == pytest.approx(0.5063, abs=1e-4)
+
+
+def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
+    """kda and the two ratios are NUMERIC columns: SQLAlchemy hands back
+    Decimals, and one leaking into the results payload fails JSON
+    serialization at finalize -- after the run's API work is already spent."""
+    from decimal import Decimal
+
+    perf = analysis_service_module.player_performance_from_rows(
+        [
+            (Decimal("3.50"), Decimal("0.6120"), Decimal("0.2005")),
+            (Decimal("1.25"), None, None),
+            (Decimal("2.00"), Decimal("0.5000"), Decimal("0.1800")),
+        ]
+    )
+    assert perf is not None
+    assert perf.kda == pytest.approx(2.0)  # median, not mean
+    assert perf.kill_participation == pytest.approx(0.556)
+    assert perf.damage_share == pytest.approx(0.19025)
+
+    side = analysis_service_module._side_performance([perf])
+    results = _completion_results(
+        [
+            _spine_stat(
+                team_kda=side.kda,
+                enemy_kda=None,
+                team_kill_participation=side.kill_participation,
+                team_damage_share=side.damage_share,
+            )
+        ],
+        matches_analyzed=3,
+    )
+    import json
+
+    payload = json.dumps(results)
+    assert '"team_kda": 2.0' in payload
+    assert '"enemy_kda": null' in payload
+
+
+def test_a_side_metric_skips_only_the_players_missing_it() -> None:
+    """Old stored games lack the ratio columns; that player still counts
+    toward the side's KDA instead of dragging the ratios to zero."""
+    with_ratios = analysis_service_module.PlayerPerformance(
+        kda=4.0, kill_participation=0.5, damage_share=0.2
+    )
+    without_ratios = analysis_service_module.PlayerPerformance(
+        kda=2.0, kill_participation=None, damage_share=None
+    )
+    side = analysis_service_module._side_performance([with_ratios, without_ratios])
+
+    assert side.kda == pytest.approx(3.0)
+    assert side.kill_participation == pytest.approx(0.5)
+    assert side.damage_share == pytest.approx(0.2)
+    assert analysis_service_module.player_performance_from_rows([]) is None
 
 
 def test_recurring_teammates_flag_their_spine_matches_as_duo() -> None:

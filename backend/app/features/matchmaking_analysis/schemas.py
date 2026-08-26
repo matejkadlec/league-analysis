@@ -60,12 +60,23 @@ _LEGACY_PARAMS = MatchmakingAnalysisParams()
 
 
 class MatchmakingPerMatchBreakdown(BaseModel):
-    """Per-spine-match averages, kept so scopes can be recomputed client-side."""
+    """Per-spine-match averages, kept so scopes can be recomputed client-side.
+
+    The performance fields default to None for runs stored before they
+    existed; kill participation is deliberately unbounded above -- Riot's
+    challenge value can exceed 1.0 on shared kills.
+    """
 
     match_id: str
     duo: bool
     team_avg: float = Field(..., ge=0.0, le=1.0)
     enemy_avg: float = Field(..., ge=0.0, le=1.0)
+    team_kda: float | None = Field(default=None, ge=0.0)
+    enemy_kda: float | None = Field(default=None, ge=0.0)
+    team_kill_participation: float | None = Field(default=None, ge=0.0)
+    enemy_kill_participation: float | None = Field(default=None, ge=0.0)
+    team_damage_share: float | None = Field(default=None, ge=0.0, le=1.0)
+    enemy_damage_share: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class MatchmakingRankFreshness(BaseModel):

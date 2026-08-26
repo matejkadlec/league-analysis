@@ -42,7 +42,10 @@ export function MatchmakingExplanationCard() {
           (Riot does not expose party data), and player ranks come from the
           nearest stored rank snapshot — for backdated runs, ranks without a
           snapshot near that period fall back to current-day rank, which the
-          result labels honestly.
+          result labels honestly. Averages over ten or more matches trim the
+          single most extreme match from each end before averaging, and the
+          Recent Form figures read each player&apos;s KDA, kill participation
+          and damage share over the same recent matches the win rates use.
         </p>
 
         <div

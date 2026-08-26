@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   effectiveScope,
+  performanceAggregates,
   scopeAggregates,
+  trimmedMean,
 } from "@/features/matchmaking/scope-aggregates";
 import type { MatchmakingPerMatch } from "@/lib/core/schemas";
 
@@ -31,6 +33,91 @@ describe("scopeAggregates", () => {
 
     expect(scopeAggregates(allSolo, "duo")).toBeNull();
     expect(scopeAggregates([], "solo")).toBeNull();
+  });
+});
+
+/**
+ * Shared with TRIM_FIXTURES in the backend lifecycle test: the two trimmed
+ * mean implementations must agree, or the stored All-scope figure and the
+ * client's slice figures drift apart. n=10 is the smallest input that trims.
+ */
+const TRIM_FIXTURES: Array<[number[], number]> = [
+  [[0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625],
+  [[0.0, 0.5, 0.5, 0.5, 1.0], 0.5],
+];
+
+describe("trimmedMean", () => {
+  it.each(TRIM_FIXTURES)("averages %j to %d", (values, expected) => {
+    expect(trimmedMean(values)).toBeCloseTo(expected, 10);
+  });
+
+  it("trims inside scopeAggregates once a scope holds ten matches", () => {
+    const perMatch = TRIM_FIXTURES[0]![0].map((wr, i) => ({
+      match_id: `m${i}`,
+      duo: true,
+      team_avg: wr,
+      enemy_avg: 0.5,
+    }));
+
+    expect(scopeAggregates(perMatch, "duo")?.teamAvg).toBeCloseTo(0.50625, 10);
+  });
+});
+
+describe("performanceAggregates", () => {
+  const RICH = {
+    match_id: "m1",
+    duo: true,
+    team_avg: 0.5,
+    enemy_avg: 0.5,
+    team_kda: 3.0,
+    enemy_kda: 2.0,
+    team_kill_participation: 0.6,
+    enemy_kill_participation: 0.5,
+    team_damage_share: 0.2,
+    enemy_damage_share: 0.21,
+  };
+  // A run stored while some players' games lacked the ratio columns: the
+  // match still carries KDA, and null must not drag anything to NaN.
+  const SPARSE = {
+    match_id: "m2",
+    duo: false,
+    team_avg: 0.5,
+    enemy_avg: 0.5,
+    team_kda: 1.0,
+    enemy_kda: null,
+    team_kill_participation: null,
+    enemy_kill_participation: null,
+    team_damage_share: null,
+    enemy_damage_share: null,
+  };
+
+  it("averages each metric over only the matches that carry it", () => {
+    const all = performanceAggregates([RICH, SPARSE], "all");
+
+    expect(all?.team).toEqual({
+      kda: 2.0,
+      killParticipation: 0.6,
+      damageShare: 0.2,
+    });
+    expect(all?.enemy).toEqual({
+      kda: 2.0,
+      killParticipation: 0.5,
+      damageShare: 0.21,
+    });
+  });
+
+  it("scopes to the duo flag like the winrate aggregates do", () => {
+    expect(performanceAggregates([RICH, SPARSE], "solo")?.team.kda).toBe(1.0);
+    expect(performanceAggregates([RICH, SPARSE], "duo")?.team.kda).toBe(3.0);
+  });
+
+  it("returns null for a legacy run rather than a table of dashes", () => {
+    const preExtension = [
+      { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+    ];
+
+    expect(performanceAggregates(preExtension, "all")).toBeNull();
+    expect(performanceAggregates([], "all")).toBeNull();
   });
 });
 

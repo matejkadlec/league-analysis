@@ -278,6 +278,58 @@ describe("the last matchmaking analysis result", () => {
     expect(screen.queryByLabelText("Match scope filter")).toBeNull();
     expect(screen.queryByText("Average Rank")).toBeNull();
     expect(screen.queryByText("Tier Distribution")).toBeNull();
+    expect(screen.queryByText("Recent Form")).toBeNull();
+    queryClient.clear();
+  });
+
+  it("hides Recent Form for a run whose per_match predates the metrics", async () => {
+    // LGA-105 runs carry per_match but no performance fields; a table of
+    // dashes would read as "these teams did nothing".
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({
+        ...EVEN,
+        per_match: [
+          { match_id: "m1", duo: true, team_avg: 0.5, enemy_avg: 0.5 },
+        ],
+      } as never),
+    );
+    const { queryClient } = renderResults();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Match scope filter")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Recent Form")).toBeNull();
+    queryClient.clear();
+  });
+
+  it("renders Recent Form per side, dashing only the missing metric", async () => {
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({
+        ...EVEN,
+        per_match: [
+          {
+            match_id: "m1",
+            duo: false,
+            team_avg: 0.5,
+            enemy_avg: 0.5,
+            team_kda: 2.5,
+            enemy_kda: 3.1,
+            team_kill_participation: 0.55,
+            enemy_kill_participation: null,
+            team_damage_share: 0.2,
+            enemy_damage_share: 0.25,
+          },
+        ],
+      } as never),
+    );
+    const { queryClient } = renderResults();
+
+    await waitFor(() => expect(screen.getByText("Recent Form")).toBeTruthy());
+    expect(screen.getByText("2.50")).toBeTruthy();
+    expect(screen.getByText("3.10")).toBeTruthy();
+    expect(screen.getByText("55%")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.getByText("25%")).toBeTruthy();
     queryClient.clear();
   });
 

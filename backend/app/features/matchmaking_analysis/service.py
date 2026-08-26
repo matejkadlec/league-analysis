@@ -9,7 +9,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from statistics import fmean
+from statistics import fmean, median
 from typing import Any
 
 import structlog
@@ -165,6 +165,89 @@ def _team_id_for_player(
     return None
 
 
+def trimmed_mean(values: Sequence[float]) -> float:
+    """Mean with 10% trimmed from each end -- a floor'd count, so below ten
+    values nothing is trimmed and this is the plain mean.
+
+    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the two
+    implementations share test fixtures so they cannot drift apart.
+    """
+    k = int(len(values) * 0.1)
+    kept = sorted(values)[k : len(values) - k]
+    return fmean(kept)
+
+
+@dataclass(frozen=True)
+class PlayerPerformance:
+    """One participant's form over their trailing ranked matches.
+
+    KDA is the median of their per-game KDAs -- single stomps or zero-death
+    games skew a mean badly at this sample size. The two team-normalized
+    ratios are means over the games that carry them.
+    """
+
+    kda: float
+    kill_participation: float | None
+    damage_share: float | None
+
+
+@dataclass
+class _SideSamples:
+    """One side's accumulating winrate and form samples for a spine match."""
+
+    winrates: list[float]
+    performances: list[PlayerPerformance]
+
+
+@dataclass(frozen=True)
+class SidePerformance:
+    """One side's per-metric means over the players who carry each metric."""
+
+    kda: float | None
+    kill_participation: float | None
+    damage_share: float | None
+
+
+def player_performance_from_rows(
+    rows: Sequence[tuple[Any, Any, Any]],
+) -> PlayerPerformance | None:
+    """Fold one player's trailing (kda, kill_participation, damage_share) rows.
+
+    Casts every value to float at this boundary: the columns are NUMERIC, and
+    a Decimal that survives into the results payload fails JSON serialization
+    at finalize -- after the whole run's API work is already spent.
+    """
+    if not rows:
+        return None
+    kdas = [float(kda) for kda, _, _ in rows]
+    kps = [float(kp) for _, kp, _ in rows if kp is not None]
+    shares = [float(share) for _, _, share in rows if share is not None]
+    return PlayerPerformance(
+        kda=median(kdas),
+        kill_participation=fmean(kps) if kps else None,
+        damage_share=fmean(shares) if shares else None,
+    )
+
+
+def _side_performance(players: list[PlayerPerformance]) -> SidePerformance:
+    """Average each metric over the players that have it, independently:
+    a player whose stored games predate the ratio columns still counts
+    toward the side's KDA."""
+
+    def _mean_of(values: list[float]) -> float | None:
+        return fmean(values) if values else None
+
+    return SidePerformance(
+        kda=_mean_of([p.kda for p in players]),
+        kill_participation=_mean_of(
+            [p.kill_participation for p in players if p.kill_participation is not None]
+        ),
+        damage_share=_mean_of(
+            [p.damage_share for p in players if p.damage_share is not None]
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class SpineMatchStats:
     """One spine match's side averages, plus the allies who defined them."""
@@ -173,6 +256,12 @@ class SpineMatchStats:
     team_avg: float | None
     enemy_avg: float | None
     ally_puuids: list[str]
+    team_kda: float | None = None
+    enemy_kda: float | None = None
+    team_kill_participation: float | None = None
+    enemy_kill_participation: float | None = None
+    team_damage_share: float | None = None
+    enemy_damage_share: float | None = None
 
 
 def _per_match_payload(spine_stats: list[SpineMatchStats]) -> list[dict[str, object]]:
@@ -180,12 +269,22 @@ def _per_match_payload(spine_stats: list[SpineMatchStats]) -> list[dict[str, obj
     duo_by_match = classify_duo_matches(
         [(s.match_id, s.ally_puuids) for s in spine_stats]
     )
+
+    def _rounded(value: float | None, digits: int) -> float | None:
+        return None if value is None else round(value, digits)
+
     return [
         {
             "match_id": s.match_id,
             "duo": duo_by_match[s.match_id],
             "team_avg": round(s.team_avg, 4),
             "enemy_avg": round(s.enemy_avg, 4),
+            "team_kda": _rounded(s.team_kda, 2),
+            "enemy_kda": _rounded(s.enemy_kda, 2),
+            "team_kill_participation": _rounded(s.team_kill_participation, 4),
+            "enemy_kill_participation": _rounded(s.enemy_kill_participation, 4),
+            "team_damage_share": _rounded(s.team_damage_share, 4),
+            "enemy_damage_share": _rounded(s.enemy_damage_share, 4),
         }
         for s in spine_stats
         if s.team_avg is not None and s.enemy_avg is not None
@@ -216,8 +315,8 @@ def _build_completion_results(
             "Please try again later.",
         )
     return {
-        "team_avg_winrate": round(fmean(team_avgs), 4),
-        "enemy_avg_winrate": round(fmean(enemy_avgs), 4),
+        "team_avg_winrate": round(trimmed_mean(team_avgs), 4),
+        "enemy_avg_winrate": round(trimmed_mean(enemy_avgs), 4),
         "matches_analyzed": matches_analyzed,
         "matches_requested": matches_requested,
         "spine_matches_found": len(spine_stats),
@@ -319,6 +418,7 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid: str | None = None
         self._current_analysis_created_at: datetime | None = None
         self._winrate_cache: dict[str, float | None] = {}
+        self._performance_cache: dict[str, PlayerPerformance | None] = {}
         # Run parameters; the worker re-reads them from the run row so a
         # resumed run keeps the values it was started with.
         self.match_count: int = MatchmakingAnalysisParams().match_count
@@ -650,6 +750,7 @@ class MatchmakingAnalysisService:
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
+        self._performance_cache = {}
         self._rank_values = {}
         self._rank_tiers = {}
         self._ally_rank_puuids = set()
@@ -902,17 +1003,14 @@ class MatchmakingAnalysisService:
             logger.warning("Current player not in match", match_id=match_id)
             return None
 
-        team_wrs: list[float] = []
-        enemy_wrs: list[float] = []
+        team, enemy = _SideSamples([], []), _SideSamples([], [])
         ally_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
-            wr = await self._cached_player_winrate(
-                p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
+            side = team if team_id == target_team else enemy
+            await self._sample_participant(
+                side, p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
             )
-            if wr is not None:
-                (team_wrs if team_id == target_team else enemy_wrs).append(wr)
-            await self._cached_player_rank(p_puuid)
             if team_id == target_team:
                 self._ally_rank_puuids.add(p_puuid)
                 if p_puuid != analysis_puuid:
@@ -920,12 +1018,41 @@ class MatchmakingAnalysisService:
             else:
                 self._enemy_rank_puuids.add(p_puuid)
 
+        team_side = _side_performance(team.performances)
+        enemy_side = _side_performance(enemy.performances)
         return SpineMatchStats(
             match_id=match_id,
-            team_avg=fmean(team_wrs) if team_wrs else None,
-            enemy_avg=fmean(enemy_wrs) if enemy_wrs else None,
+            team_avg=fmean(team.winrates) if team.winrates else None,
+            enemy_avg=fmean(enemy.winrates) if enemy.winrates else None,
             ally_puuids=ally_puuids,
+            team_kda=team_side.kda,
+            enemy_kda=enemy_side.kda,
+            team_kill_participation=team_side.kill_participation,
+            enemy_kill_participation=enemy_side.kill_participation,
+            team_damage_share=team_side.damage_share,
+            enemy_damage_share=enemy_side.damage_share,
         )
+
+    async def _sample_participant(
+        self,
+        side: _SideSamples,
+        p_puuid: str,
+        end_time_seconds: int,
+        analysis_puuid: str,
+        analysis_created_at: datetime,
+    ) -> None:
+        """One participant's winrate, trailing form and rank, onto their side."""
+        wr = await self._cached_player_winrate(
+            p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
+        )
+        if wr is not None:
+            side.winrates.append(wr)
+        # After the winrate pass: any API-fetched trailing matches are now
+        # stored, so this read is DB-only and costs no Riot calls.
+        perf = await self._cached_player_performance(p_puuid, end_time_seconds)
+        if perf is not None:
+            side.performances.append(perf)
+        await self._cached_player_rank(p_puuid)
 
     async def _cached_player_winrate(
         self,
@@ -940,6 +1067,38 @@ class MatchmakingAnalysisService:
         self._winrate_cache[p_puuid] = wr
         await self._mark_player_progress(analysis_puuid, analysis_created_at, p_puuid)
         return wr
+
+    async def _cached_player_performance(
+        self, p_puuid: str, end_time_seconds: int
+    ) -> PlayerPerformance | None:
+        """One player's trailing form, from the same window the winrate read.
+
+        DB-only by design: it runs after the winrate pass has stored any
+        API-fetched matches, so whatever the database holds by then is the
+        sample -- fewer rows just mean a smaller per-player sample.
+        """
+        if p_puuid in self._performance_cache:
+            return self._performance_cache[p_puuid]
+
+        result = await self.db.execute(
+            select(
+                MatchParticipant.kda,
+                MatchParticipant.kill_participation,
+                MatchParticipant.team_damage_percentage,
+            )
+            .join(Match, MatchParticipant.match_id == Match.match_id)
+            .where(
+                MatchParticipant.puuid == p_puuid,
+                Match.queue_id == RANKED_SOLO_QUEUE_ID,
+                Match.game_start_timestamp <= end_time_seconds * 1000,
+                Match.fully_analyzed.is_(True),
+            )
+            .order_by(Match.game_start_timestamp.desc())
+            .limit(MATCHES_FOR_WINRATE)
+        )
+        perf = player_performance_from_rows(result.tuples().all())
+        self._performance_cache[p_puuid] = perf
+        return perf
 
     async def _mark_player_progress(
         self,
