@@ -35,6 +35,7 @@ class MatchmakingPerMatchJSON(TypedDict):
     duo: bool
     team_avg: float
     enemy_avg: float
+    win: NotRequired[bool | None]
     ally_puuids: NotRequired[list[str] | None]
     enemy_puuids: NotRequired[list[str] | None]
     team_kda: NotRequired[float | None]

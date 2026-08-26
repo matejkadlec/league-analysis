@@ -33,9 +33,11 @@ import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
 import { formatRunEndDate } from "../run-type";
 import {
   effectiveScope as resolveScope,
+  lobbyGap,
   performanceAggregates,
   rankAggregates,
   scopeAggregates,
+  winLossRecord,
   type MatchScope,
   type SidePerformance,
 } from "../scope-aggregates";
@@ -203,6 +205,16 @@ export function MatchmakingAnalysisResults({
     : (results.enemy_tier_counts ?? null);
   const ranksAreRunWide = effectiveScope !== "all" && !scopedRanks;
   const freshness = results.rank_freshness ?? null;
+  const record = perMatch ? winLossRecord(perMatch, effectiveScope) : null;
+  const gap = perMatch
+    ? lobbyGap(
+        perMatch,
+        results.player_ranks,
+        effectiveScope,
+        latestAnalysis.puuid,
+      )
+    : null;
+  const gapLp = gap ? Math.round(gap.lobbyAvg - gap.playerValue) : 0;
 
   return (
     <Card>
@@ -298,6 +310,15 @@ export function MatchmakingAnalysisResults({
               : ""}
           </p>
 
+          {record && (
+            <p className="text-sm text-muted-foreground">
+              Analyzed player&apos;s record in these matches:{" "}
+              <span className="font-mono font-medium text-foreground">
+                {record.wins}W – {record.losses}L
+              </span>
+            </p>
+          )}
+
           {verdict === "favorable" && (
             <p className="text-sm text-green-400">
               ✓ The analyzed player&apos;s teammates had higher average win
@@ -375,6 +396,21 @@ export function MatchmakingAnalysisResults({
                   division spans 100 LP).
                 </p>
               )}
+            {gap && gapLp !== 0 && (
+              <p className="text-sm text-muted-foreground">
+                These lobbies average{" "}
+                <span
+                  className={cn(
+                    "font-medium",
+                    getRankColors(rankValueToDisplay(gap.lobbyAvg).tier).text,
+                  )}
+                >
+                  {rankValueToDisplay(gap.lobbyAvg).label}
+                </span>{" "}
+                — {Math.abs(gapLp)} LP {gapLp > 0 ? "above" : "below"} the
+                analyzed player&apos;s own rank.
+              </p>
+            )}
             {ranksAreRunWide && (
               <p className="text-sm text-muted-foreground">
                 Rank figures cover the whole run; this run predates per-scope

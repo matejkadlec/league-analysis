@@ -131,6 +131,7 @@ def test_an_lga_105_per_match_entry_parses_with_performance_absent() -> None:
         {"match_id": "EUN1_1", "duo": False, "team_avg": 0.5, "enemy_avg": 0.5}
     )
 
+    assert entry.win is None
     assert entry.team_kda is None
     assert entry.enemy_kda is None
     assert entry.team_kill_participation is None

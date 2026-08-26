@@ -26,6 +26,7 @@ export const MatchmakingAnalysisParamsSchema = z.object({
 export const MatchmakingPerMatchSchema = z.object({
   match_id: z.string(),
   duo: z.boolean(),
+  win: z.boolean().nullable().optional(),
   ally_puuids: z.array(z.string()).nullable().optional(),
   enemy_puuids: z.array(z.string()).nullable().optional(),
   team_avg: z.number().min(0).max(1),

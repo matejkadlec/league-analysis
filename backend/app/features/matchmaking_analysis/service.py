@@ -268,6 +268,7 @@ class SpineMatchStats:
     enemy_avg: float | None
     ally_puuids: list[str]
     enemy_puuids: list[str]
+    win: bool | None = None
     team_kda: float | None = None
     enemy_kda: float | None = None
     team_kill_participation: float | None = None
@@ -292,6 +293,7 @@ def _per_match_payload(
         {
             "match_id": s.match_id,
             "duo": duo_by_match[s.match_id],
+            "win": s.win,
             "ally_puuids": s.ally_puuids,
             "enemy_puuids": s.enemy_puuids,
             "team_avg": round(s.team_avg, 4),
@@ -1057,6 +1059,8 @@ class MatchmakingAnalysisService:
             enemy_avg=fmean(enemy.winrates) if enemy.winrates else None,
             ally_puuids=ally_puuids,
             enemy_puuids=enemy_puuids,
+            # DB-only by now: the participants query above stored the match.
+            win=await self._get_win_status(match_id, analysis_puuid),
             team_kda=team_side.kda,
             enemy_kda=enemy_side.kda,
             team_kill_participation=team_side.kill_participation,
