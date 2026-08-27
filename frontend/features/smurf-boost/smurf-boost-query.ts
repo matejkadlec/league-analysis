@@ -14,7 +14,8 @@ export function smurfBoostQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: smurfBoostQueryKey(puuid),
     queryFn: puuid
-      ? async () => unwrapOr404(await getLatestSmurfBoostDetection(puuid), null)
+      ? async ({ signal }) =>
+          unwrapOr404(await getLatestSmurfBoostDetection(puuid, signal), null)
       : skipToken,
     retry: false,
     staleTime: 30000,

@@ -30,7 +30,11 @@ vi.mock("@/features/auth", () => ({
   }),
 }));
 
-vi.mock("@/features/cookie-consent", () => ({
+// Spread, not a literal: a factory listing exports by hand drops every one
+// the module gains, and the reader that needed a storage key was throwing
+// inside a `try` that answered with the empty default.
+vi.mock("@/features/cookie-consent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/cookie-consent")>()),
   COOKIE_CONSENT_UPDATED_EVENT: "cookie-consent-updated",
   canUseOptionalStorage: () => false,
 }));

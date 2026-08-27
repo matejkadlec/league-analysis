@@ -103,6 +103,7 @@ describe("the executions list's paging", () => {
       expect.anything(),
       "/jobs/executions/all",
       { page: 2, size: 20 },
+      expect.any(AbortSignal),
     );
   });
 

@@ -50,8 +50,15 @@ export function playerQueryOptions(puuid: string | null) {
     // option, so a caller spreading these options and setting its own drops
     // the guard -- on `queryFn` the guard cannot be spread away.
     queryFn: puuid
-      ? async () =>
-          unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
+      ? async ({ signal }) =>
+          unwrap(
+            await validatedGet(
+              PlayerSchema,
+              `/players/${puuid}`,
+              undefined,
+              signal,
+            ),
+          )
       : skipToken,
     // The copy `player-context.tsx` seeds from `/players/context` is only
     // worth seeding while it counts as fresh: at `staleTime: 0` every route
@@ -69,7 +76,7 @@ export function playerQueryOptions(puuid: string | null) {
 export function playerStatsQueryOptions(puuid: string, limit?: number) {
   return queryOptions({
     queryKey: ["player-stats", puuid, RANKED_SOLO_QUEUE_ID, limit ?? null],
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           MatchStatsResponseSchema,
@@ -81,6 +88,7 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
             queues: String(RANKED_SOLO_QUEUE_ID),
             ...(limit !== undefined && { limit }),
           },
+          signal,
         ),
       ),
     retry: false,

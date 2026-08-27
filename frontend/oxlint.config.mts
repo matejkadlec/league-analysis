@@ -111,11 +111,13 @@ export default defineConfig({
     "house/session-teardown-syntax": "error",
     "house/no-long-comments": "error",
     "house/no-deferral-comments": "error",
+    "house/no-raw-json-parse": "error",
     "house/no-compat-shims": "error",
     "house/no-spread-input-in-query-key": "error",
     "house/require-cn-for-classname-composition": "error",
     "house/require-fetch-timeout": "error",
     "house/require-query-key-factory": "error",
+    "house/require-query-signal": "error",
 
     // New under oxlint, and a ratchet rather than a bug this change is about.
     "vitest/require-mock-type-parameters": "off",
@@ -164,6 +166,12 @@ export default defineConfig({
         // A test names the key it is asserting on; routing that through the
         // factory would hide the thing under test.
         "house/require-query-key-factory": "off",
+        // A test's `queryFn` is a stub with nothing to abort; the rule is
+        // about the requests the application actually leaves in flight.
+        "house/require-query-signal": "off",
+        // A test reads back a payload it serialized itself, so there is no
+        // foreign shape for a schema to stand between.
+        "house/no-raw-json-parse": "off",
       },
     },
     // The repo-wide import guard. Every later block that sets this rule
@@ -284,6 +292,20 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/fixtures/require-fetch-timeout.fixture.ts"],
       rules: { "house/require-fetch-timeout": "error" },
+    },
+    {
+      files: [".oxlint-plugins/fixtures/require-query-signal.fixture.ts"],
+      rules: { "house/require-query-signal": "error" },
+    },
+    {
+      files: [".oxlint-plugins/fixtures/no-raw-json-parse.fixture.ts"],
+      rules: { "house/no-raw-json-parse": "error" },
+    },
+    // The one module that owns the call, and the reason the rule can be
+    // absolute everywhere else.
+    {
+      files: ["lib/core/untrusted-json.ts"],
+      rules: { "house/no-raw-json-parse": "off" },
     },
     // A ratchet, not a sitting. Naming these files keeps the rule live for
     // every test written from here on; delete a name as its file grows an

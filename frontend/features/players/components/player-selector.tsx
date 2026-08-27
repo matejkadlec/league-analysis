@@ -115,12 +115,15 @@ export function PlayerSelector({
 
   const suggestionsQuery = useQuery({
     queryKey: [...PLAYER_SUGGESTIONS_QUERY_KEY, debouncedSearch, "all-platforms"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrap(
-        await searchPlayerSuggestions({
-          q: debouncedSearch,
-          limit: 5,
-        }),
+        await searchPlayerSuggestions(
+          {
+            q: debouncedSearch,
+            limit: 5,
+          },
+          signal,
+        ),
       );
     },
     // Focus, not just length: a seeded box already holds a Riot ID, and the

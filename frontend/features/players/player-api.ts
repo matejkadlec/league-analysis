@@ -32,12 +32,18 @@ export interface SearchSuggestionsParams {
 
 export async function searchPlayerSuggestions(
   params: SearchSuggestionsParams,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<Player[]>> {
-  return validatedGet(PlayerArraySchema, "/players/suggestions", {
-    q: params.q,
-    ...(params.platform !== undefined && { platform: params.platform }),
-    ...(params.limit !== undefined && { limit: params.limit }),
-  });
+  return validatedGet(
+    PlayerArraySchema,
+    "/players/suggestions",
+    {
+      q: params.q,
+      ...(params.platform !== undefined && { platform: params.platform }),
+      ...(params.limit !== undefined && { limit: params.limit }),
+    },
+    signal,
+  );
 }
 
 export type DiscoverPlayerParams = Record<"game_name" | "tag_line", string> & {

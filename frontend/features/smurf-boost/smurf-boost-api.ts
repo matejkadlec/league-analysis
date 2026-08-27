@@ -31,31 +31,38 @@ export async function startSmurfBoostDetection(
 
 export async function getLatestSmurfBoostDetection(
   puuid: string,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<SmurfBoostAnalysisResponse>> {
   return validatedGet(
     SmurfBoostAnalysisResponseSchema,
     `/smurf-boost-detection/player/${puuid}`,
+    undefined,
+    signal,
   );
 }
 
-export async function getSmurfBoostPresets(): Promise<
-  ApiResponse<SmurfBoostPresetsResponse>
-> {
+export async function getSmurfBoostPresets(
+  signal?: AbortSignal,
+): Promise<ApiResponse<SmurfBoostPresetsResponse>> {
   return validatedGet(
     SmurfBoostPresetsResponseSchema,
     "/smurf-boost-detection/presets",
+    undefined,
+    signal,
   );
 }
 
 // Card preferences live here because the smurf-boost settings card is their
 // only consumer today; move them to a shared home when a second card needs
 // them.
-export async function getCardPreferences(): Promise<
-  ApiResponse<CardPreference[]>
-> {
+export async function getCardPreferences(
+  signal?: AbortSignal,
+): Promise<ApiResponse<CardPreference[]>> {
   return validatedGet(
     z.array(CardPreferenceSchema),
     "/settings/card-preferences",
+    undefined,
+    signal,
   );
 }
 

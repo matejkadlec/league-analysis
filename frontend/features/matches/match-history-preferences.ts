@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+
 import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
@@ -17,6 +21,8 @@ import {
   type MatchHistoryQueueSelection,
 } from "./queue-catalog";
 
+const STORED_QUEUE_FILTERS_SCHEMA = z.array(z.unknown());
+
 export interface MatchHistoryPreferences {
   pageSize: MatchHistoryPageSize;
   queueFilters: MatchHistoryQueueSelection;
@@ -33,42 +39,36 @@ export function parseStoredMatchHistoryPageSize(
 export function parseStoredMatchHistoryQueueFilters(
   storedValue: string | null,
 ): MatchHistoryQueueSelection {
-  if (!storedValue) {
+  // Element-wise `unknown`: an id this build no longer offers is dropped
+  // below rather than discarding the rest of a viewer's selection with it.
+  const parsedValue = parseUntrustedJson(
+    STORED_QUEUE_FILTERS_SCHEMA,
+    storedValue,
+  );
+  if (parsedValue === null) {
     return [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION];
   }
 
-  try {
-    const parsedValue: unknown = JSON.parse(storedValue);
-    if (!Array.isArray(parsedValue)) {
-      return [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION];
-    }
-
-    const validFilters = new Set<MatchHistoryQueueFilter>(
-      MATCH_HISTORY_QUEUE_FILTERS.map(({ id }) => id),
-    );
-    const requestedFilters = new Set(
-      parsedValue.filter(
-        (value): value is MatchHistoryQueueFilter =>
-          (typeof value === "number" || value === "ALL") &&
-          validFilters.has(value),
-      ),
-    );
-    if (requestedFilters.has("ALL")) {
-      return ["ALL"];
-    }
-
-    const orderedFilters = MATCH_HISTORY_QUEUE_FILTERS.map(({ id }) =>
-      id,
-    ).filter(
-      (filter): filter is MatchHistoryQueueFilter =>
-        requestedFilters.has(filter),
-    );
-    return orderedFilters.length > 0
-      ? orderedFilters
-      : [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION];
-  } catch {
-    return [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION];
+  // `unknown`, so membership in the catalog is the whole check: a stored id
+  // is whatever the last build wrote, or whatever a viewer typed in.
+  const validFilters: ReadonlySet<unknown> = new Set(
+    MATCH_HISTORY_QUEUE_FILTERS.map(({ id }) => id),
+  );
+  const requestedFilters = new Set(
+    parsedValue.filter((value): value is MatchHistoryQueueFilter =>
+      validFilters.has(value),
+    ),
+  );
+  if (requestedFilters.has("ALL")) {
+    return ["ALL"];
   }
+
+  const orderedFilters = MATCH_HISTORY_QUEUE_FILTERS.map(({ id }) => id).filter(
+    (filter): filter is MatchHistoryQueueFilter => requestedFilters.has(filter),
+  );
+  return orderedFilters.length > 0
+    ? orderedFilters
+    : [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION];
 }
 
 export function readMatchHistoryPreferences(): MatchHistoryPreferences {

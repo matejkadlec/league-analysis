@@ -19,6 +19,9 @@ import {
   SERVICE_STATUS_QUERY_KEY,
   serviceStatusQueryOptions,
 } from "@/lib/core/service-status-query";
+import { z } from "zod";
+
+import { parseUntrustedJson } from "@/lib/core/untrusted-json";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
@@ -87,17 +90,15 @@ function HeaderBanner({
   );
 }
 
+const CLOSED_MESSAGES_SCHEMA = z.array(z.string());
+
 function readClosedMessages(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(
-      readOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY) ?? "",
-    );
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : [];
-  } catch {
-    return [];
-  }
+  return (
+    parseUntrustedJson(
+      CLOSED_MESSAGES_SCHEMA,
+      readOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY),
+    ) ?? []
+  );
 }
 
 export function HeaderMessages() {

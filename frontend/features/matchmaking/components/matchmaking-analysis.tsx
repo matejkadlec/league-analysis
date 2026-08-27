@@ -25,8 +25,11 @@ export function MatchmakingAnalysis({
 }: MatchmakingAnalysisProps) {
   const { data: latestAnalysis, isLoading } = useQuery({
     queryKey: matchmakingAnalysisQueryKey(puuid),
-    queryFn: async () => {
-      return unwrapOr404(await getLatestMatchmakingAnalysis(puuid), null);
+    queryFn: async ({ signal }) => {
+      return unwrapOr404(
+        await getLatestMatchmakingAnalysis(puuid, signal),
+        null,
+      );
     },
     retry: false,
     staleTime: 1000,

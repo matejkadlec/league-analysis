@@ -144,9 +144,9 @@ export function MatchmakingAnalysisHistory({
 
   const { data, isLoading, error } = useQuery({
     queryKey: matchmakingHistoryQueryKey(puuid),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrapOr404(
-        await getMatchmakingAnalysisHistory(puuid, HISTORY_FETCH_LIMIT),
+        await getMatchmakingAnalysisHistory(puuid, HISTORY_FETCH_LIMIT, signal),
         { items: [] },
       );
     },

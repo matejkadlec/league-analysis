@@ -189,12 +189,20 @@ async function validatedRequest<T>(
  */
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
+/**
+ * `signal` is TanStack Query's own, and reading it off the `queryFn` context
+ * is what makes React Query abort the request when the last observer goes --
+ * without it a page left mid-fetch holds its connection to completion.
+ */
 export function validatedGet<T>(
   schema: z.ZodType<T>,
   url: string,
   params?: QueryParams,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () => api.get(url, { params }));
+  return validatedRequest(schema, url, () =>
+    api.get(url, { params, ...(signal && { signal }) }),
+  );
 }
 
 export function validatedPost<T>(

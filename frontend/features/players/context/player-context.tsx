@@ -63,9 +63,14 @@ export function PlayerContextProvider({
 
   const contextQuery = useQuery({
     queryKey: playerContextQueryKey(user?.id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const context = unwrap(
-        await validatedGet(PlayerContextSchema, "/players/context"),
+        await validatedGet(
+          PlayerContextSchema,
+          "/players/context",
+          undefined,
+          signal,
+        ),
       );
       // Seeding the player cache turns every route's later `/players/{puuid}`
       // into a cache hit. In the `queryFn` rather than an effect: children's

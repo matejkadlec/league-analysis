@@ -59,8 +59,8 @@ export function SmurfBoostSettingsDialog() {
 
   const presetsQuery = useQuery({
     queryKey: PRESETS_KEY,
-    queryFn: async () => {
-      return unwrap(await getSmurfBoostPresets());
+    queryFn: async ({ signal }) => {
+      return unwrap(await getSmurfBoostPresets(signal));
     },
     staleTime: 3600000,
     retry: false,
@@ -68,8 +68,8 @@ export function SmurfBoostSettingsDialog() {
 
   const preferenceQuery = useQuery({
     queryKey: PREFERENCE_KEY,
-    queryFn: async () => {
-      return unwrap(await getCardPreferences());
+    queryFn: async ({ signal }) => {
+      return unwrap(await getCardPreferences(signal));
     },
     retry: false,
   });

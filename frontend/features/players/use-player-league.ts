@@ -13,11 +13,13 @@ import { PlayerLeagueSchema } from "@/lib/core/schemas";
 export function usePlayerLeague(puuid: string) {
   return useQuery({
     queryKey: ["player-league", puuid],
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           PlayerLeagueSchema.nullable(),
           `/players/${puuid}/league`,
+          undefined,
+          signal,
         ),
       ),
     retry: false,

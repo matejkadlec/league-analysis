@@ -15,12 +15,13 @@ import {
 export function championStatsQueryOptions(puuid: string) {
   return queryOptions({
     queryKey: ["champion-stats", puuid, RANKED_SOLO_QUEUE_ID],
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           ChampionStatsResponseSchema,
           `/matches/player/${puuid}/champion-stats`,
           { queues: String(RANKED_SOLO_QUEUE_ID) },
+          signal,
         ),
       ),
   });
@@ -29,12 +30,13 @@ export function championStatsQueryOptions(puuid: string) {
 export function laneStatsQueryOptions(puuid: string) {
   return queryOptions({
     queryKey: ["lane-stats", puuid, RANKED_SOLO_QUEUE_ID],
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           LaneStatsResponseSchema,
           `/matches/player/${puuid}/lane-stats`,
           { queues: String(RANKED_SOLO_QUEUE_ID) },
+          signal,
         ),
       ),
   });

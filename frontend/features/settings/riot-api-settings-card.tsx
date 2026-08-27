@@ -46,10 +46,15 @@ export function RiotApiSettingsCard() {
 
   const { data: setting = null, isLoading } = useQuery({
     queryKey: RIOT_API_KEY_QUERY_KEY,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // No key saved yet is an ordinary state: the panel below prompts for one.
       return unwrapOr404(
-        await validatedGet(SettingSchema, "/settings/riot_api_key"),
+        await validatedGet(
+          SettingSchema,
+          "/settings/riot_api_key",
+          undefined,
+          signal,
+        ),
         null,
       );
     },

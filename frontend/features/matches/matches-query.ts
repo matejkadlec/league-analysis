@@ -22,12 +22,13 @@ export function matchHistoryStatsQueryOptions(
 ) {
   return queryOptions({
     queryKey: [MATCH_HISTORY_STATS_KEY, puuid, queueQueryParam] as const,
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
           { queues: queueQueryParam },
+          signal,
         ),
       ),
   });
@@ -50,7 +51,7 @@ export function matchHistoryDetailedQueryOptions(args: {
       page,
       pageSize,
     ] as const,
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           MatchListWithPlayerDataResponseSchema,
@@ -61,6 +62,7 @@ export function matchHistoryDetailedQueryOptions(args: {
             start: (page - 1) * pageSize,
             count: pageSize,
           },
+          signal,
         ),
       ),
   });
