@@ -36,8 +36,11 @@ vi.mock("sonner", () => ({ toast }));
 
 import { MatchmakingAnalysis } from "../features/matchmaking/components/matchmaking-analysis";
 import {
+  appendThroughputSample,
   estimateMatchmakingMinutesRemaining,
+  observedPlayersPerSecond,
   projectMatchmakingProgress,
+  type ThroughputSample,
 } from "../features/matchmaking/components/matchmaking-progress";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
@@ -210,24 +213,41 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(estimateMatchmakingMinutesRemaining(afterOneMinute, 100)).toBe(11);
   });
 
-  it("trusts the run's observed pace over the static rate once warmed up", () => {
-    const startedAt = "2026-08-27T10:00:00.000Z";
-    const start = new Date(startedAt).getTime();
+  it("trusts the recent observed pace over the static rate", () => {
+    // 30 players in the last 30 seconds: 70 remaining ≈ 70s → 2 minutes.
+    expect(estimateMatchmakingMinutesRemaining(30, 100, 1)).toBe(2);
+    // A rate-limited crawl reports the slower pace honestly.
+    expect(estimateMatchmakingMinutesRemaining(10, 100, 1 / 60)).toBe(90);
+    // No usable window yet → the static warm-cache rate applies.
+    expect(estimateMatchmakingMinutesRemaining(17, 100, null)).toBe(12);
+  });
 
-    // 50 of 100 players in one minute (a cache-heavy run): 1 minute left,
-    // not the ~7 the static rate would claim.
-    expect(
-      estimateMatchmakingMinutesRemaining(50, 100, startedAt, start + 60_000),
-    ).toBe(1);
-    // A rate-limited crawl (10 players in 10 minutes) honestly reports the
-    // slower pace instead of the optimistic static estimate.
-    expect(
-      estimateMatchmakingMinutesRemaining(10, 100, startedAt, start + 600_000),
-    ).toBe(90);
-    // Below the warm-up threshold the static rate still applies.
-    expect(
-      estimateMatchmakingMinutesRemaining(5, 100, startedAt, start + 1_000),
-    ).toBe(14);
+  it("measures pace over a trailing window so a cache burst ages out", () => {
+    const t0 = 1_000_000;
+    let samples: ThroughputSample[] = [];
+    // A cached prefix races to 400 players in 10 seconds...
+    samples = appendThroughputSample(samples, t0, 0);
+    samples = appendThroughputSample(samples, t0 + 10_000, 400);
+    // ...too short a span to extrapolate from yet.
+    expect(observedPlayersPerSecond(samples)).toBeNull();
+
+    // Sixty-plus seconds later the burst has aged out of the window and
+    // only the cold pace remains: 12 players over 60s.
+    samples = appendThroughputSample(samples, t0 + 40_000, 406);
+    samples = appendThroughputSample(samples, t0 + 70_000, 409);
+    samples = appendThroughputSample(samples, t0 + 100_000, 412);
+    expect(samples[0]?.timestamp).toBe(t0 + 40_000);
+    expect(observedPlayersPerSecond(samples)).toBeCloseTo(0.1, 10);
+
+    // A stalled window (rate-limit wait) yields null, not a zero division.
+    const stalled = [
+      { timestamp: t0, progress: 50 },
+      { timestamp: t0 + 30_000, progress: 50 },
+    ];
+    expect(observedPlayersPerSecond(stalled)).toBeNull();
+
+    // A progress drop means a new run took over; history resets with it.
+    expect(appendThroughputSample(samples, t0 + 101_000, 3)).toHaveLength(1);
   });
 
   it("cancels the exact persisted run and keeps the UI retryable", async () => {
