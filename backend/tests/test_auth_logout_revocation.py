@@ -216,6 +216,7 @@ async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     row = MagicMock()
     row.id = 4321
     row.user_id = 9
+    row.revoked_at = None
     db = _RecordingDb(row)
     service = AuthService(cast("AsyncSession", db))
 
@@ -224,26 +225,6 @@ async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     bound = db.statements[0].compile().params
     assert AuthService._hash_refresh_token("raw-token") in bound.values()
     assert "raw-token" not in bound.values()
-
-
-async def test_a_revoked_refresh_token_names_nobody() -> None:
-    """Otherwise a token already revoked can still revoke every other session.
-
-    There is no DB in this suite, so the guard is read off the statement the
-    service builds. Crude, but it fails if the filter is dropped, which is the
-    only thing standing between a spent credential and mass revocation.
-    """
-    db = _RecordingDb(None)
-    service = AuthService(cast("AsyncSession", db))
-
-    assert await service.resolve_user_id_for_refresh_token("spent-token") is None
-
-    sql = str(db.statements[0]).lower()
-    assert "revoked_at is null" in sql
-    # Without this the filter assertion alone passes even if the lookup stops
-    # matching on the token at all, which would hand every caller the first
-    # unrevoked session in the table.
-    assert "token_hash =" in sql
 
 
 def _live_access_token() -> str:

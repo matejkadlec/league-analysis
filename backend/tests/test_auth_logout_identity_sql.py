@@ -107,8 +107,44 @@ async def test_a_token_this_server_rotated_out_still_names_its_owner(
     """
     service = _service(session)
     _store(session, service, "rotated", token_id="t1", revoked=True, replaced_by="t2")
+    _store(session, service, "replacement", row_id=2, token_id="t2")
 
     assert await service.resolve_user_id_for_refresh_token("rotated") == 9
+
+
+async def test_a_token_whose_replacement_was_used_names_nobody(
+    session: Session,
+) -> None:
+    """Only the just-superseded holder, not every ancestor of the live token.
+
+    A stolen cookie from weeks ago is revoked-with-a-replacement too, and
+    logout is the one route that takes it for 30 days: it would sign the owner
+    out of every device on a credential `/refresh` already refuses.
+    """
+    service = _service(session)
+    _store(session, service, "old", token_id="t1", revoked=True, replaced_by="t2")
+    _store(
+        session,
+        service,
+        "middle",
+        row_id=2,
+        token_id="t2",
+        revoked=True,
+        replaced_by="t3",
+    )
+    _store(session, service, "live", row_id=3, token_id="t3")
+
+    assert await service.resolve_user_id_for_refresh_token("old") is None
+
+
+async def test_a_token_whose_replacement_is_missing_names_nobody(
+    session: Session,
+) -> None:
+    """Cleanup deletes expired rows, so a recorded replacement can be gone."""
+    service = _service(session)
+    _store(session, service, "orphan", token_id="t1", revoked=True, replaced_by="t2")
+
+    assert await service.resolve_user_id_for_refresh_token("orphan") is None
 
 
 async def test_a_token_revoked_without_a_replacement_names_nobody(
@@ -162,3 +198,58 @@ async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
         for row in session.query(RefreshToken).all()
     }
     assert revoked == {"t1": True, "t2": True, "t4": False}
+
+
+def _rotate_after_pass(
+    session: Session,
+    service: AuthService,
+    target_pass: int,
+) -> None:
+    """Commit a replacement row once the given revoke pass has committed.
+
+    A row inserted after a statement started is invisible to it however the
+    statement is locked, which is the whole reason the revoke loops.
+    """
+    shim = cast(Any, service.db)
+    original_commit = shim.commit
+    passes = 0
+
+    async def _commit() -> None:
+        nonlocal passes
+        await original_commit()
+        passes += 1
+        if passes == target_pass:
+            _store(session, service, "rotated-in", row_id=99, token_id="t99")
+
+    shim.commit = _commit
+
+
+async def test_a_logout_revokes_a_token_a_racing_rotation_committed(
+    session: Session,
+) -> None:
+    """The replacement did not exist when the first pass read the table."""
+    service = _service(session)
+    _store(session, service, "live", token_id="t1")
+    _rotate_after_pass(session, service, target_pass=1)
+
+    await service.revoke_all_refresh_tokens_for_user(9)
+
+    assert all(row.revoked_at is not None for row in session.query(RefreshToken).all())
+
+
+async def test_a_logout_that_revoked_nothing_still_looks_again(
+    session: Session,
+) -> None:
+    """The first pass can be the statement the rotation made wait.
+
+    It resumes with the presented token already revoked and the replacement
+    below its snapshot, so it stamps nothing -- and stopping there is how the
+    fresh token survives a logout.
+    """
+    service = _service(session)
+    _store(session, service, "spent", token_id="t1", revoked=True)
+    _rotate_after_pass(session, service, target_pass=1)
+
+    await service.revoke_all_refresh_tokens_for_user(9)
+
+    assert all(row.revoked_at is not None for row in session.query(RefreshToken).all())

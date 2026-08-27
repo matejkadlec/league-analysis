@@ -14,7 +14,7 @@ import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +70,9 @@ logger = structlog.get_logger(__name__)
 EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
+
+# Enough passes for any real rotation race; a backstop, not a retry budget.
+_REVOKE_ALL_MAX_PASSES = 10
 
 
 class AuthService:
@@ -501,6 +504,14 @@ class AuthService:
             refresh_expires_at,
         )
 
+    async def _get_refresh_token_by_token_id(
+        self, token_id: str
+    ) -> RefreshToken | None:
+        result = await self.db.execute(
+            select(RefreshToken).where(RefreshToken.token_id == token_id)
+        )
+        return result.scalar_one_or_none()
+
     async def _lock_refresh_token_by_token_id(
         self, token_id: str
     ) -> RefreshToken | None:
@@ -512,7 +523,13 @@ class AuthService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    def _successor_is_unused(successor: RefreshToken) -> bool:
+        """Nothing has been done with the replacement since it was issued."""
+        return successor.revoked_at is None and successor.replaced_by_token_id is None
+
+    @classmethod
     def _reuse_is_healable(
+        cls,
         token_record: RefreshToken,
         successor: RefreshToken,
         now: datetime,
@@ -524,8 +541,7 @@ class AuthService:
         the table until cleanup deletes it.
         """
         return (
-            successor.revoked_at is None
-            and successor.replaced_by_token_id is None
+            cls._successor_is_unused(successor)
             and successor.expires_at > now
             and token_record.expires_at > now
         )
@@ -605,22 +621,37 @@ class AuthService:
         return None
 
     async def revoke_all_refresh_tokens_for_user(self, user_id: int) -> None:
-        """Revoke all active refresh tokens for a user."""
-        result = await self.db.execute(
-            select(RefreshToken).where(
-                RefreshToken.user_id == user_id,
-                RefreshToken.revoked_at.is_(None),
+        """Revoke every refresh token a user holds, re-reading until none is left.
+
+        One stamped pass cannot see a row that did not exist when it started,
+        and a rotation racing it commits exactly that -- so logout would answer
+        "Successfully logged out" with the replacement still live.
+        """
+        for pass_number in range(_REVOKE_ALL_MAX_PASSES):
+            result = await self.db.execute(
+                update(RefreshToken)
+                .where(
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=datetime.now(UTC))
+                .returning(RefreshToken.id)
+                # The rows are counted from RETURNING, so there is nothing for
+                # the ORM to synchronize; nobody reads these objects again.
+                .execution_options(synchronize_session=False)
             )
+            revoked = len(result.scalars().all())
+            await self.db.commit()
+            # Never on the first pass: that one can be the statement a racing
+            # rotation blocked, and it resumes holding a snapshot taken before
+            # the replacement row was inserted. The next one is a new snapshot.
+            if revoked == 0 and pass_number > 0:
+                return
+        logger.warning(
+            "refresh_token_revoke_all_unsettled",
+            user_id=user_id,
+            passes=_REVOKE_ALL_MAX_PASSES,
         )
-        active_tokens = list(result.scalars().all())
-        if not active_tokens:
-            return
-
-        now = datetime.now(UTC)
-        for token in active_tokens:
-            token.revoked_at = now
-
-        await self.db.commit()
 
     async def resolve_user_id_for_refresh_token(
         self,
@@ -635,17 +666,25 @@ class AuthService:
         result = await self.db.execute(
             select(RefreshToken).where(
                 RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token),
-                # A revoked token must not authorise revoking everything else,
-                # except one this server rotated out itself, which a Sign Out
-                # racing a refresh still carries.
-                or_(
-                    RefreshToken.revoked_at.is_(None),
-                    RefreshToken.replaced_by_token_id.is_not(None),
-                ),
             )
         )
         token_record = result.scalar_one_or_none()
-        return None if token_record is None else token_record.user_id
+        if token_record is None:
+            return None
+        if token_record.revoked_at is None:
+            return token_record.user_id
+
+        # A revoked token authorises this only in the case the route exists
+        # for: the Sign Out that raced the refresh superseding it, so the
+        # replacement is the one this server has just issued and nobody used.
+        if token_record.replaced_by_token_id is None:
+            return None
+        successor = await self._get_refresh_token_by_token_id(
+            token_record.replaced_by_token_id
+        )
+        if successor is None or not self._successor_is_unused(successor):
+            return None
+        return token_record.user_id
 
     async def revoke_access_token(
         self,
