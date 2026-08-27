@@ -602,13 +602,14 @@ export function MatchRow({
     ? (opponent.total_cs / (match.game_duration / 60)).toFixed(1)
     : "0";
 
-  const getBlueTeamStats = () => teamStats?.blue_team || null;
-  const getRedTeamStats = () => teamStats?.red_team || null;
-
-  const blueTeamStats = getBlueTeamStats();
-  const redTeamStats = getRedTeamStats();
+  const blueTeamStats = teamStats?.blue_team ?? null;
+  const redTeamStats = teamStats?.red_team ?? null;
   const playerTeamStats =
-    participant?.team_id === 100 ? blueTeamStats : redTeamStats;
+    participant?.team_id === 100
+      ? blueTeamStats
+      : participant?.team_id === 200
+        ? redTeamStats
+        : null;
   const enemyTeamStats =
     participant?.team_id === 100
       ? redTeamStats

@@ -36,7 +36,6 @@ import { RIOT_API_KEY_QUERY_KEY } from "./settings-helpers";
 export function RiotApiSettingsCard() {
   const toast = useToast();
   const [apiKey, setApiKey] = useState("");
-  const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -133,10 +132,7 @@ export function RiotApiSettingsCard() {
       toast.warning("Enter a Riot API key");
       return;
     }
-    setTestingKey(true);
-    testMutation.mutate(apiKey, {
-      onSettled: () => setTestingKey(false),
-    });
+    testMutation.mutate(apiKey);
   };
 
   const handleSaveKey = () => {
@@ -242,9 +238,9 @@ export function RiotApiSettingsCard() {
             <Button
               onClick={handleTestKey}
               variant="outline"
-              disabled={!apiKey.trim() || testingKey || testMutation.isPending}
+              disabled={!apiKey.trim() || testMutation.isPending}
             >
-              {testingKey || testMutation.isPending ? (
+              {testMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Testing...

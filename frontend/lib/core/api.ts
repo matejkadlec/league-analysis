@@ -143,8 +143,7 @@ api.interceptors.response.use(
     return api(originalRequest);
   },
 );
-function logValidationError(url: string, data: unknown, error: z.ZodError) {
-  void data;
+function logValidationError(url: string, error: z.ZodError) {
   console.error("API response validation failed", {
     url,
     issues: error.issues.map((issue) => ({
@@ -154,15 +153,15 @@ function logValidationError(url: string, data: unknown, error: z.ZodError) {
   });
 }
 
-async function validateResponse<T>(
+function validateResponse<T>(
   schema: z.ZodType<T>,
   url: string,
   responseData: unknown,
-): Promise<ApiResponse<T>> {
+): ApiResponse<T> {
   const parsed = schema.safeParse(responseData);
 
   if (!parsed.success) {
-    logValidationError(url, responseData, parsed.error);
+    logValidationError(url, parsed.error);
     return { success: false, error: normalizeApiError(parsed.error) };
   }
 

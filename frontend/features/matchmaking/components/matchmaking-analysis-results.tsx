@@ -55,6 +55,12 @@ interface MatchmakingAnalysisResultsProps {
   onShowLatest: () => void;
 }
 
+// The one place a plain string still becomes a `MatchScope`: Radix types
+// Select's onValueChange as (value: string) => void.
+function isMatchScope(value: string): value is MatchScope {
+  return value === "all" || value === "solo" || value === "duo";
+}
+
 function RankFigure({ label, value }: { label: string; value: number }) {
   const display = rankValueToDisplay(value);
   return (
@@ -290,7 +296,9 @@ export function MatchmakingAnalysisResults({
             </span>
             <Select
               value={effectiveScope}
-              onValueChange={(value) => setScope(value as MatchScope)}
+              onValueChange={(value) =>
+                setScope(isMatchScope(value) ? value : "all")
+              }
             >
               <SelectTrigger
                 className="w-[120px]"

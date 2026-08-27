@@ -57,7 +57,7 @@ export const BAND_MEANINGS: Record<SmurfBoostBand, string> = {
 };
 
 export function bandMeaning(band: SmurfBoostBand): string {
-  return BAND_MEANINGS[band] ?? "";
+  return BAND_MEANINGS[band];
 }
 
 export const CONFIDENCE_LABELS: Record<SmurfBoostConfidenceBand, string> = {

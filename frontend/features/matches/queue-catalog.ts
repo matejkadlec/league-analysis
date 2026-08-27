@@ -63,6 +63,7 @@ export function getMatchHistoryEmptyMessage(
   return `No matches found for ${getMatchQueueName(filter)}.`;
 }
 
+/** Next selection, or null when the selection would not change (caller skips the update). */
 export function selectMatchHistoryQueue(
   currentFilters: ReadonlyArray<MatchHistoryQueueFilter>,
   nextFilter: MatchHistoryQueueFilter,
