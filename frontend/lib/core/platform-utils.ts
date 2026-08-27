@@ -1,9 +1,4 @@
 /**
- * Platform display name mappings and utilities
- * Maps Riot API platform codes to community-friendly names
- */
-
-/**
  * Every platform the API accepts, and what to call it on screen. The key order
  * IS the order of the server picker, so alphabetising would move EUNE out of
  * first place. `tests/api-contract-alignment.test.ts` pins the key set.

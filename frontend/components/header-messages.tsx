@@ -105,7 +105,6 @@ export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  // Store closed server-revision message identifiers.
   const [closedMessages, setClosedMessages] = useState<string[]>(
     readClosedMessages,
   );
@@ -173,7 +172,6 @@ export function HeaderMessages() {
     serviceStatus?.has_recent_recovery,
   );
 
-  // Wait until auth state is known
   if (isAuthLoading) {
     return null;
   }
@@ -202,7 +200,7 @@ export function HeaderMessages() {
     );
   }
 
-  // 2. Non-admin maintenance message (closable)
+  // Non-admin maintenance message (closable)
   if (isNonAdminAuthenticated) {
     if (isUnderMaintenance && !isMaintenanceClosed) {
       return (
@@ -239,9 +237,8 @@ export function HeaderMessages() {
     return null;
   }
 
-  // 3. Admin Messages
+  // Admin messages
   if (isAdmin && serviceStatus) {
-    // RED: API Key Invalid/Expired
     // Based only on the backend-owned state for the effective generation.
     if (serviceStatus.credential_status === "invalid") {
       return (
@@ -262,7 +259,6 @@ export function HeaderMessages() {
       );
     }
 
-    // RED: No Key configured at all
     if (serviceStatus.credential_status === "missing") {
       return (
         <HeaderBanner

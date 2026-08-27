@@ -6,7 +6,6 @@ import { DivisionSchema, LeagueQueueTypeSchema, TierSchema } from "./riot";
 
 export { TierSchema, type Tier } from "./riot";
 
-// Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
   game_name: z.string(),

@@ -102,7 +102,6 @@ export function SignInForm() {
         }}
       >
         <div className="flex w-full max-w-5xl items-center gap-12">
-          {/* Logo Section */}
           <div className="hidden lg:block flex-shrink-0">
             <div className="relative w-[400px] h-[400px]">
               <Image
@@ -116,7 +115,6 @@ export function SignInForm() {
             </div>
           </div>
 
-          {/* Form Section */}
           <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-lg">
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Sign In</h1>

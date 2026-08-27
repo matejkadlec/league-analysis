@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// ===== SYSTEM SETTINGS SCHEMA =====
 export const SettingSchema = z.object({
   key: z.string(),
   masked_value: z.string(),

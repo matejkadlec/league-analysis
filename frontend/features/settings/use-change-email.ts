@@ -48,9 +48,6 @@ export function useChangeEmail() {
 
     const lockDurationMs =
       emailChangeLockedUntil.getTime() - lockCheckTimestamp;
-    if (lockDurationMs <= 0) {
-      return;
-    }
 
     const unlockTimer = window.setTimeout(() => {
       setLockCheckTimestamp(Date.now());

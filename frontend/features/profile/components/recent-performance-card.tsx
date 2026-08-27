@@ -126,12 +126,11 @@ export function RecentPerformanceCard({
   puuid,
   lastUpdated,
 }: RecentPerformanceCardProps) {
-  // Fetch recent stats (last 10 games for comparison)
+  // Same query as the overall one below, limited to RECENT_GAME_COUNT games.
   const { data: recent = null, isLoading: isRecentLoading } = useQuery(
     playerStatsQueryOptions(puuid, RECENT_GAME_COUNT),
   );
 
-  // Fetch overall stats (all games)
   const { data: overall = null, isLoading: isOverallLoading } = useQuery(
     playerStatsQueryOptions(puuid),
   );
@@ -165,7 +164,6 @@ export function RecentPerformanceCard({
     );
   }
 
-  // Calculate trends
   const winRateTrend = getTrendIndicator(
     recent.win_rate,
     overall.win_rate,
@@ -214,7 +212,6 @@ export function RecentPerformanceCard({
         />
       </CardHeader>
       <CardContent>
-        {/* Row 1: Win Rate | KDA */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <StatComparisonRow
             label="Win Rate"
@@ -233,7 +230,6 @@ export function RecentPerformanceCard({
 
         <Separator className="my-4 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
 
-        {/* Row 2: Avg Kills | Avg Deaths | Avg Assists (smaller) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-4.5">
           <StatComparisonRow
             small
@@ -260,7 +256,6 @@ export function RecentPerformanceCard({
 
         <Separator className="my-4 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
 
-        {/* Row 3: Avg CS | Avg Vision */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <StatComparisonRow
             label="Avg CS"

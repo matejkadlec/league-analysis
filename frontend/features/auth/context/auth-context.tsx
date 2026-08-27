@@ -222,10 +222,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         queryClient.clear();
 
-        // Fetch user data
         await checkAuth();
 
-        // Redirect to home page
         router.push("/");
       } catch (error) {
         setIsLoading(false);
