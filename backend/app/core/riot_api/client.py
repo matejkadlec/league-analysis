@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 import httpx
 import structlog
+from pydantic import ValidationError
 from tenacity import (
     AsyncRetrying,
     RetryCallState,
@@ -15,7 +16,14 @@ from tenacity import (
     stop_after_attempt,
 )
 
-from .constants import MatchType, Platform, QueueType, Region, enum_str
+from .constants import (
+    LeagueQueueType,
+    MatchType,
+    Platform,
+    QueueType,
+    Region,
+    enum_str,
+)
 from .credential_vocabulary import RiotCredentialStatus
 from .endpoints import (
     ACCOUNT_BY_PUUID,
@@ -651,7 +659,40 @@ class RiotAPIClient:
                 f"Expected list response for league entries, got {type(response)}"
             )
 
-        return [LeagueEntryDTO(**entry) for entry in response]
+        return self._league_entries_without_foreign_ladders(response, puuid)
+
+    @staticmethod
+    def _league_entries_without_foreign_ladders(
+        entries: list[Any], puuid: str
+    ) -> list[LeagueEntryDTO]:
+        """Parse the by-PUUID entries, dropping unreadable foreign ladders.
+
+        An entry naming a queue this product does not store is dropped; an
+        unreadable `RANKED_SOLO_5x5` or `RANKED_FLEX_SR` entry, or one naming
+        no queue at all, still raises.
+
+        Raises:
+            ValidationError: a stored ladder's entry does not parse.
+        """
+        # The route answers for every ladder the account plays, and Riot keeps
+        # adding ones with their own vocabulary: `JADE_RANKED_SOLO_5x5` returns
+        # tier `SALT`. Parsed eagerly, that sibling failed the whole list.
+        stored_queues = {queue.value for queue in LeagueQueueType}
+        parsed: list[LeagueEntryDTO] = []
+        for entry in entries:
+            try:
+                parsed.append(LeagueEntryDTO(**entry))
+            except ValidationError:
+                queue_type = entry.get("queueType")
+                if queue_type is None or queue_type in stored_queues:
+                    raise
+                logger.info(
+                    "riot_league_entry_foreign_ladder_skipped",
+                    puuid=puuid,
+                    queue_type=queue_type,
+                    tier=entry.get("tier"),
+                )
+        return parsed
 
     # Utility methods
 

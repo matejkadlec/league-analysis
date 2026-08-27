@@ -3,9 +3,13 @@ import { z } from "zod";
 import { LobbyTierSchema } from "./riot";
 import { splitRunOnLifecycle } from "./run-lifecycle";
 
+/** The backend's `MIN_MATCH_COUNT`/`MAX_MATCH_COUNT`, and the start card's. */
+export const MIN_MATCH_COUNT = 10;
+export const MAX_MATCH_COUNT = 100;
+
 export const MatchmakingAnalysisRequestSchema = z.object({
   puuid: z.string(),
-  match_count: z.number().int().min(5).max(30),
+  match_count: z.number().int().min(MIN_MATCH_COUNT).max(MAX_MATCH_COUNT),
   end_date: z.string().nullable(),
 });
 export type MatchmakingAnalysisRequest = z.infer<
