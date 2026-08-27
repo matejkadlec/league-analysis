@@ -260,7 +260,7 @@ describe("persisting the player named in the URL", () => {
     // without it each success schedules the next write -- a PUT loop.
     holdThePut();
     search.current = "puuid=url-puuid";
-    const { rerender } = renderContext();
+    const { rerender, result } = renderContext();
 
     await waitFor(() => expect(validatedPut).toHaveBeenCalledTimes(1));
     rerender();
@@ -268,6 +268,9 @@ describe("persisting the player named in the URL", () => {
     rerender();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(validatedPut).toHaveBeenCalledTimes(1);
+    // Still showing the player the URL asked for, with that one write in
+    // flight -- a loop would be the only way the rerenders changed anything.
+    expect(result.current.currentPlayer?.puuid).toBe("url-puuid");
   });
 
   it("does not re-save the player who is already current", async () => {
@@ -400,6 +403,11 @@ describe("choosing a player from the picker", () => {
     expect(push).toHaveBeenCalledWith("/player-overview?puuid=url-puuid", {
       scroll: false,
     });
+    // `/settings` carries no `?puuid=`, so the chosen player can only become
+    // current through the record the persist wrote back.
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe("url-puuid"),
+    );
   });
 });
 

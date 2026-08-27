@@ -95,6 +95,9 @@ describe("changing an account password", () => {
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPost).not.toHaveBeenCalled();
+    // The red mark beside the repeat field is the same verdict as the toast,
+    // and it is the one still on screen once the toast has gone.
+    expect(document.querySelectorAll(".lucide-circle-x")).toHaveLength(1);
 
     queryClient.clear();
   });
@@ -110,6 +113,7 @@ describe("changing an account password", () => {
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPost).not.toHaveBeenCalled();
+    expect(document.querySelectorAll(".lucide-circle-x")).toHaveLength(1);
 
     queryClient.clear();
   });
@@ -191,6 +195,10 @@ describe("changing an account password", () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
+    // What actually holds the second click off, and what the person sees:
+    // the button says the change is under way and refuses the press.
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain("Changing...");
     fireEvent.click(button);
     fireEvent.click(button);
 

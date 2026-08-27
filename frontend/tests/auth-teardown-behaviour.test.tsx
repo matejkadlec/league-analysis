@@ -9,6 +9,7 @@ import { AuthGate } from "@/components/auth-gate";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
+  clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
 
@@ -241,6 +242,11 @@ describe("the can't-reach-the-server surface", () => {
     // exists for the server that is not answering, so its Sign out is the one
     // caller that must act anyway.
     setHint();
+    // The teardown the real `logout` performs, so the button is observable by
+    // what it releases the visitor from rather than by the mock it called.
+    auth.logout.mockImplementation(async () => {
+      clearAuthStateCookie();
+    });
 
     render(<AuthGate>protected content</AuthGate>);
     await act(async () => {
@@ -254,6 +260,7 @@ describe("the can't-reach-the-server surface", () => {
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
     });
+    expect(screen.queryByText("Can't reach the server")).toBeNull();
   });
 });
 

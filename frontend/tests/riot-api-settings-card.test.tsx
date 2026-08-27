@@ -135,11 +135,14 @@ describe("the card that swaps the Riot API key", () => {
     // mis-pasted string from becoming the live credential.
     const queryClient = renderCard();
 
-    await typeKey("not-a-riot-key");
+    const input = await typeKey("not-a-riot-key");
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPut).not.toHaveBeenCalled();
+    // Only a saved key is cleared away. The mis-pasted one stays on screen to
+    // be corrected, next to the toast that says what is wrong with it.
+    expect((input as HTMLInputElement).value).toBe("not-a-riot-key");
 
     queryClient.clear();
   });
@@ -159,7 +162,7 @@ describe("the card that swaps the Riot API key", () => {
     });
     const queryClient = renderCard();
 
-    await typeKey(VALID_KEY);
+    const input = await typeKey(VALID_KEY);
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() =>
@@ -168,6 +171,9 @@ describe("the card that swaps the Riot API key", () => {
         expect.anything(),
       ),
     );
+    // A save that failed leaves the key to retry with: clearing the field
+    // here would send the operator back to the Riot portal for it.
+    expect((input as HTMLInputElement).value).toBe(VALID_KEY);
 
     queryClient.clear();
   });
@@ -270,7 +276,7 @@ describe("the card that swaps the Riot API key", () => {
 
     const queryClient = renderCard();
 
-    await typeKey(VALID_KEY);
+    const input = await typeKey(VALID_KEY);
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(heard).toHaveBeenCalled());
@@ -279,6 +285,9 @@ describe("the card that swaps the Riot API key", () => {
       "/settings/riot_api_key",
       { value: VALID_KEY },
     );
+    // The saved key is now the stored one, so the entry field empties: a key
+    // left sitting in it reads as still pending.
+    await waitFor(() => expect((input as HTMLInputElement).value).toBe(""));
 
     window.removeEventListener(RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT, heard);
     queryClient.clear();

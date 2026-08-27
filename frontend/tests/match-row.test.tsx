@@ -478,6 +478,9 @@ describe("a match history row", () => {
     const garen = screen.getByRole("button", {
       name: "Garen \u2014 view Garen#EUN1",
     });
+    // Label and art must name the same participant: a Riot ID over somebody
+    // else's champion sends the click somewhere the row did not offer.
+    expect(garen.querySelector("img")?.getAttribute("alt")).toBe("Garen");
     await user.click(garen);
 
     expect(onSelectPlayer).toHaveBeenCalledTimes(1);
@@ -489,9 +492,13 @@ describe("a match history row", () => {
     const user = userEvent.setup();
     renderRow({}, onSelectPlayer);
 
-    await user.click(
-      screen.getByRole("button", { name: "Zed \u2014 view Shadow#EUN1" }),
-    );
+    const portrait = screen.getByRole("button", {
+      name: "Zed \u2014 view Shadow#EUN1",
+    });
+    // The enemy composition icon shows the same champion under their own Riot
+    // ID; only the matchup portrait pairs Zed with the lane opponent.
+    expect(portrait.querySelector("img")?.getAttribute("alt")).toBe("Zed");
+    await user.click(portrait);
 
     expect(onSelectPlayer).toHaveBeenCalledWith("opponent-puuid");
   });

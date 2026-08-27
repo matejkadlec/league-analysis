@@ -141,20 +141,24 @@ describe("a session the API rejected", () => {
       clearHint();
     });
 
-    const { getByRole } = render(<AuthGate>protected content</AuthGate>);
+    const { getByRole, queryByText } = render(
+      <AuthGate>protected content</AuthGate>,
+    );
 
     getByRole("button", { name: "Try again" }).click();
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
+    expect(queryByText("Can't reach the server")).toBeNull();
   });
 
   it("does not redirect while the session is still being checked", async () => {
     auth.isLoading = true;
 
-    render(<AuthGate>protected content</AuthGate>);
+    const { queryByText } = render(<AuthGate>protected content</AuthGate>);
 
     await settle();
     expect(nav.replace).not.toHaveBeenCalled();
+    expect(queryByText("protected content")).toBeNull();
   });
 
   it("says what it is doing once the probe has run long enough to look broken", async () => {
@@ -206,10 +210,11 @@ describe("a session the API rejected", () => {
     // the sweep above and let anyone read any page signed out.
     nav.pathname = "/players";
 
-    render(<AuthGate>protected content</AuthGate>);
+    const { queryByText } = render(<AuthGate>protected content</AuthGate>);
 
     await settle();
     expect(nav.replace).toHaveBeenCalledWith("/sign-in");
+    expect(queryByText("protected content")).toBeNull();
   });
 });
 
@@ -269,11 +274,14 @@ describe("the can't-reach-the-server surface", () => {
       clearHint();
     });
 
-    const { getByRole } = render(<AuthGate>protected content</AuthGate>);
+    const { getByRole, queryByText } = render(
+      <AuthGate>protected content</AuthGate>,
+    );
 
     getByRole("button", { name: "Sign out" }).click();
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
+    expect(queryByText("Can't reach the server")).toBeNull();
   });
 
   it("stops drawing the signed-in shell the moment the session is given up", async () => {

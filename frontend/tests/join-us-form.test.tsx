@@ -315,6 +315,10 @@ describe("what happens after the send", () => {
     fireEvent.submit(form);
 
     await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
+    // What the sender sees while it is going, and the reason a fourth click
+    // never reaches the guard.
+    expect(submitButton().textContent).toContain("Sending");
+    expect(isSubmitDisabled()).toBe(true);
     pending.release?.();
   });
 });

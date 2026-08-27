@@ -122,6 +122,10 @@ describe("the consent banner when the signed-in account changes", () => {
     await mount();
 
     expect(validatedPut).not.toHaveBeenCalled();
+    // Asked rather than inherited: the banner offers the two choices and no
+    // "Keep current", which would hand this account the previous one's answer.
+    expect(screen.getByRole("button", { name: "Accept all" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Keep current" })).toBeNull();
   });
 
   it("lets an account's own stored record overrule the jar", async () => {
@@ -182,6 +186,10 @@ describe("the consent banner when the signed-in account changes", () => {
       "/settings/user/cookie-consent",
       expect.objectContaining({ consent_level: "all" }),
     );
+    // Their answer stands after signing in: the banner is gone and the jar
+    // carries the level the record was written from.
+    expect(screen.queryByText(BANNER_TITLE)).toBeNull();
+    expect(readCookieConsentFromBrowser()?.level).toBe("all");
   });
 
   it("does not carry one account's choice through a sign-out into the next", async () => {

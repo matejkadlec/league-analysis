@@ -60,13 +60,18 @@ describe("player sync start refusal", () => {
       },
     });
     const onStartRefused = vi.fn();
-    const { result } = renderHookWithQueryClient(() =>
+    const { result, queryClient } = renderHookWithQueryClient(() =>
       usePlayerProfileUpdate({ onStartRefused }),
     );
 
     result.current.mutate({ puuid: PUUID });
     await vi.waitFor(() => expect(onStartRefused).toHaveBeenCalledWith(PUUID));
 
+    // No run was created, so nothing may be seeded as the active one: a
+    // surface that adopted it would poll a run id the backend never issued.
+    expect(queryClient.getQueryData(["player-sync-active", PUUID])).toBe(
+      undefined,
+    );
     expect(toastInfo).toHaveBeenCalledWith("Player update not started", {
       description: BUSY_MESSAGE,
     });
@@ -78,13 +83,16 @@ describe("player sync start refusal", () => {
       success: false,
       error: { kind: "service", status: 503, message: "unavailable" },
     });
-    const { result } = renderHookWithQueryClient(() =>
+    const { result, queryClient } = renderHookWithQueryClient(() =>
       usePlayerProfileUpdate(),
     );
 
     result.current.mutate({ puuid: PUUID });
     await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
 
+    expect(queryClient.getQueryData(["player-sync-active", PUUID])).toBe(
+      undefined,
+    );
     expect(toastInfo).not.toHaveBeenCalled();
   });
 });
@@ -122,7 +130,9 @@ describe("player sync failure reporting", () => {
       }
       return { success: true, data: failed };
     });
-    renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, {}));
+    const { result } = renderHookWithQueryClient(() =>
+      usePlayerSyncRun(PUUID, {}),
+    );
 
     await vi.advanceTimersByTimeAsync(3_000);
 
@@ -131,5 +141,8 @@ describe("player sync failure reporting", () => {
         description: errorMessage,
       }),
     );
+    // A failed run is a finished run: the surface that reported it has to stop
+    // showing the update as in progress, or the spinner outlives the toast.
+    expect(result.current.isUpdating).toBe(false);
   });
 });

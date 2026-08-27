@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { useEffect } from "react";
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, screen } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +26,11 @@ import {
   AUTH_PROBE_TIMEOUT_MS,
   LOGIN_REQUEST_TIMEOUT_MS,
 } from "../features/auth/utils/login-error";
+import {
+  AUTH_STATE_COOKIE_NAME,
+  AUTH_STATE_COOKIE_VALUE,
+  clearAuthStateCookie,
+} from "../features/auth/utils/auth-state-cookie";
 import type { AuthContextType } from "../features/auth/types";
 
 function AuthProbe({
@@ -203,21 +208,75 @@ function LogoutProbe({
 }: {
   onLogout: (logout: AuthContextType["logout"]) => void;
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     onLogout(logout);
   }, [logout, onLogout]);
 
-  return null;
+  return <span data-testid="account">{user?.email ?? "signed out"}</span>;
+}
+
+// The shape `GET /auth/me` answers with; it has to survive
+// `UserResponseSchema.parse` or the provider adopts nobody.
+const SIGNED_IN_USER = {
+  id: 1,
+  email: "user@example.com",
+  display_name: "User",
+  is_active: true,
+  is_admin: false,
+  email_verified: true,
+  email_verified_at: null,
+  last_login: null,
+  created_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-01-01T00:00:00.000Z",
+};
+
+function account(): string {
+  return screen.getByTestId("account").textContent ?? "";
 }
 
 describe("AuthProvider logout", () => {
   afterEach(() => {
     cleanup();
+    clearAuthStateCookie();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
+
+  // Signed in first, because "changes nothing" and "tore the session down"
+  // are the same set of un-called mocks otherwise: only a rendered account
+  // tells them apart.
+  async function renderSignedIn(answerLogout: () => Promise<Response>) {
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).includes("/auth/logout")
+          ? answerLogout()
+          : Promise.resolve({
+              ok: true,
+              status: 200,
+              json: () => Promise.resolve(SIGNED_IN_USER),
+            } as Response),
+      ),
+    );
+
+    let logout: AuthContextType["logout"] | undefined;
+    renderWithQueryClient(
+      <AuthProvider>
+        <LogoutProbe onLogout={(next) => (logout = next)} />
+      </AuthProvider>,
+    );
+    await screen.findByText(SIGNED_IN_USER.email);
+    if (!logout) {
+      throw new Error("Auth logout callback was not initialized");
+    }
+
+    removeAuthTokens.mockReset();
+    routerPush.mockReset();
+    return logout;
+  }
 
   function renderLogout(): AuthContextType["logout"] {
     let logout: AuthContextType["logout"] | undefined;
@@ -236,23 +295,15 @@ describe("AuthProvider logout", () => {
     // Why the unconditional teardown is opt-in: calling `logout()` on a timer
     // whenever a refresh failed strands a live 30-day refresh token behind a
     // cleared hint.
-    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new Error("offline"))),
+    const logout = await renderSignedIn(() =>
+      Promise.reject(new Error("offline")),
     );
-
-    const logout = renderLogout();
-    await act(async () => {
-      await Promise.resolve();
-    });
-    removeAuthTokens.mockReset();
-    routerPush.mockReset();
 
     await act(async () => {
       await logout();
     });
 
+    expect(account()).toBe(SIGNED_IN_USER.email);
     expect(removeAuthTokens).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
@@ -265,30 +316,23 @@ describe("AuthProvider logout", () => {
     // `sendBeacon` returns true for *queued*, even against a refused
     // connection, so counting it as answered makes the opt-in above dead
     // code. jsdom has no `sendBeacon`, so the test supplies one.
-    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     const sendBeacon = vi.fn(() => true);
     Object.defineProperty(navigator, "sendBeacon", {
       value: sendBeacon,
       configurable: true,
       writable: true,
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new Error("offline"))),
-    );
 
     try {
-      const logout = renderLogout();
-      await act(async () => {
-        await Promise.resolve();
-      });
-      removeAuthTokens.mockReset();
-      routerPush.mockReset();
+      const logout = await renderSignedIn(() =>
+        Promise.reject(new Error("offline")),
+      );
 
       await act(async () => {
         await logout();
       });
 
+      expect(account()).toBe(SIGNED_IN_USER.email);
       expect(removeAuthTokens).not.toHaveBeenCalled();
       expect(routerPush).not.toHaveBeenCalled();
     } finally {
@@ -299,23 +343,15 @@ describe("AuthProvider logout", () => {
   it("tears down without the flag when the server did answer", async () => {
     // The mirror-image failure: a 200 means the family is revoked, so stopping
     // there leaves the visitor on a signed-in shell whose credentials are dead.
-    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve({ ok: true, status: 200 } as Response)),
+    const logout = await renderSignedIn(() =>
+      Promise.resolve({ ok: true, status: 200 } as Response),
     );
-
-    const logout = renderLogout();
-    await act(async () => {
-      await Promise.resolve();
-    });
-    removeAuthTokens.mockReset();
-    routerPush.mockReset();
 
     await act(async () => {
       await logout();
     });
 
+    expect(account()).toBe("signed out");
     expect(removeAuthTokens).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
   });
@@ -324,23 +360,15 @@ describe("AuthProvider logout", () => {
     // `/auth/logout` has no auth dependency and cannot answer 401, so a 401
     // was minted by the maintenance Worker in front of it and nothing was
     // revoked. Reading it as "already signed out" strands a live token.
-    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve({ ok: false, status: 401 } as Response)),
+    const logout = await renderSignedIn(() =>
+      Promise.resolve({ ok: false, status: 401 } as Response),
     );
-
-    const logout = renderLogout();
-    await act(async () => {
-      await Promise.resolve();
-    });
-    removeAuthTokens.mockReset();
-    routerPush.mockReset();
 
     await act(async () => {
       await logout();
     });
 
+    expect(account()).toBe(SIGNED_IN_USER.email);
     expect(removeAuthTokens).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
   });
@@ -349,23 +377,15 @@ describe("AuthProvider logout", () => {
     // The other half: for a person who just pressed the button, being left
     // staring at an account they asked to leave is the worse failure. Both
     // call sites that pass this flag are a control under someone's finger.
-    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new Error("offline"))),
+    const logout = await renderSignedIn(() =>
+      Promise.reject(new Error("offline")),
     );
-
-    const logout = renderLogout();
-    await act(async () => {
-      await Promise.resolve();
-    });
-    removeAuthTokens.mockReset();
-    routerPush.mockReset();
 
     await act(async () => {
       await logout({ evenIfTheServerCannotBeReached: true });
     });
 
+    expect(account()).toBe("signed out");
     expect(removeAuthTokens).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
   });

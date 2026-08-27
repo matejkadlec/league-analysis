@@ -103,7 +103,8 @@ describe("Match History update", () => {
     const user = userEvent.setup();
     renderHistory();
 
-    await user.click(await screen.findByRole("button", { name: /update/i }));
+    const button = await screen.findByRole("button", { name: /update/i });
+    await user.click(button);
 
     // The jobs route returns only `{success, message}`, which is why the old
     // code had to guess at a delay. This one returns a run to watch.
@@ -111,6 +112,11 @@ describe("Match History update", () => {
     expect(validatedPost).toHaveBeenCalledWith(
       expect.anything(),
       "/players/player-puuid/sync",
+    );
+    // And the run it answered with is adopted: a response with nothing to
+    // watch leaves the button live again the moment the request settles.
+    await waitFor(() =>
+      expect((button as HTMLButtonElement).disabled).toBe(true),
     );
   });
 

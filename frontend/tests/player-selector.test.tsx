@@ -177,9 +177,14 @@ describe("PlayerSelector", () => {
     // not fired either, so an immediate assertion would pass either way.
     await new Promise((resolve) => setTimeout(resolve, 350));
     expect(searchPlayerSuggestions).not.toHaveBeenCalled();
+    expect(screen.queryByRole("option")).toBeNull();
 
     await user.click(screen.getByLabelText("Choose test player"));
     await waitFor(() => expect(searchPlayerSuggestions).toHaveBeenCalled());
+    // The list is what the request is for, and it only exists once focused.
+    expect(
+      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
+    ).toBeTruthy();
   });
 
   it("selects a saved suggestion through the shared non-tracking contract", async () => {

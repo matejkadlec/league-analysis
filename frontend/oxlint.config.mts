@@ -307,35 +307,5 @@ export default defineConfig({
       files: ["lib/core/untrusted-json.ts"],
       rules: { "house/no-raw-json-parse": "off" },
     },
-    // A ratchet, not a sitting. Naming these files keeps the rule live for
-    // every test written from here on; delete a name as its file grows an
-    // observable assertion. Never widen this to `tests/**`.
-    {
-      files: [
-        "tests/api-error-logging.test.ts",
-        "tests/api-key-status-signals.test.ts",
-        "tests/auth-context.test.tsx",
-        "tests/auth-stranded-session.test.tsx",
-        "tests/auth-teardown-behaviour.test.tsx",
-        "tests/cookie-consent-account-change.test.tsx",
-        "tests/display-name-field.test.tsx",
-        "tests/job-card-queues.test.tsx",
-        "tests/join-us-form.test.tsx",
-        "tests/match-history-update-sync.test.tsx",
-        "tests/match-row.test.tsx",
-        "tests/matchmaking-analysis-history.test.tsx",
-        "tests/password-change-section.test.tsx",
-        "tests/player-card.test.tsx",
-        "tests/player-context.test.tsx",
-        "tests/player-selector.test.tsx",
-        "tests/player-sync-refusal.test.tsx",
-        "tests/riot-api-settings-card.test.tsx",
-        "tests/section-quick-navigation.test.tsx",
-        "tests/sidebar-sign-out.test.tsx",
-        "tests/toast-host.test.tsx",
-        "tests/track-player-button.test.tsx",
-      ],
-      rules: { "house/meaningful-tests": "off" },
-    },
   ],
 });

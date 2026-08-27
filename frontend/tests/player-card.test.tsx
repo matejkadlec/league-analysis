@@ -249,11 +249,28 @@ describe("the profile icon", () => {
 
 describe("the update button", () => {
   it("starts a sync and hands completion to the page's refresh", () => {
-    const onRefreshAll = vi.fn();
+    let refreshes = 0;
+    let completeSync: () => void = () => {
+      throw new Error("usePlayerSyncRun was never called");
+    };
+    // Being handed the callback is not the same as it running, so the run's
+    // completion is reported here the way the hook would report it.
+    usePlayerSyncRun.mockImplementation(
+      (_puuid: string, options: { onCompleted?: () => void }) => {
+        completeSync = () => options.onCompleted?.();
+        return { isUpdating: false, startSync };
+      },
+    );
+    const onRefreshAll = () => {
+      refreshes += 1;
+    };
     renderCard(player(), onRefreshAll);
 
     fireEvent.click(screen.getByRole("button", { name: /Update/ }));
     expect(startSync).toHaveBeenCalledTimes(1);
+
+    completeSync();
+    expect(refreshes).toBe(1);
 
     // The card does not refetch anything itself; the page-wide refresh it was
     // given must ride the sync's completion or the button updates nothing.

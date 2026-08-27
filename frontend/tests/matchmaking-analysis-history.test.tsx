@@ -190,8 +190,18 @@ describe("the matchmaking analysis history card", () => {
       success: true,
       data: { message: "deleted" },
     });
-    const resultsQuery = vi.fn().mockResolvedValue("results");
-    const analysisQuery = vi.fn().mockResolvedValue("analysis");
+    let resultsRuns = 0;
+    let analysisRuns = 0;
+    // Numbered answers, so each panel's rendered text says which fetch it is
+    // showing rather than only how many went out.
+    const resultsQuery = vi.fn(async () => {
+      resultsRuns += 1;
+      return `results ${resultsRuns}`;
+    });
+    const analysisQuery = vi.fn(async () => {
+      analysisRuns += 1;
+      return `analysis ${analysisRuns}`;
+    });
     function Probe({
       queryKey,
       queryFn,
@@ -201,8 +211,8 @@ describe("the matchmaking analysis history card", () => {
     }) {
       // Stands in for a sibling panel: same key, and deliberately never
       // stale on its own, so a refetch can only come from the invalidation.
-      useQuery({ queryKey, queryFn, staleTime: Infinity });
-      return null;
+      const { data } = useQuery({ queryKey, queryFn, staleTime: Infinity });
+      return <span>{data}</span>;
     }
 
     const { queryClient } = renderWithQueryClient(
@@ -241,6 +251,8 @@ describe("the matchmaking analysis history card", () => {
     // it is showing leaves it offering "Run New Analysis" for a record that
     // no longer exists.
     await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("results 2")).toBeTruthy();
+    expect(await screen.findByText("analysis 2")).toBeTruthy();
 
     queryClient.clear();
   });

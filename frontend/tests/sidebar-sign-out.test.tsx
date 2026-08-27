@@ -39,6 +39,7 @@ vi.mock("@/features/players", () => ({
 import { SidebarNav } from "@/components/sidebar-nav";
 
 beforeEach(() => {
+  auth.isAuthenticated = true;
   auth.logout.mockReset();
   auth.logout.mockImplementation(async () => {});
 });
@@ -49,6 +50,12 @@ afterEach(() => {
 
 describe("the sidebar Sign Out button", () => {
   it("signs the visitor out even when the server cannot be reached", async () => {
+    // The context is mocked, so the only thing left to watch is what the
+    // sidebar does with the signed-out state a completed logout leaves.
+    auth.logout.mockImplementation(async () => {
+      auth.isAuthenticated = false;
+    });
+
     render(<SidebarNav />);
 
     // The menu is closed on a narrow viewport; open it if there is a toggle.
@@ -66,6 +73,8 @@ describe("the sidebar Sign Out button", () => {
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
     });
+    expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull();
+    expect(screen.queryByText("Signed In")).toBeNull();
   });
 
   it("goes dead while the request is in flight", async () => {

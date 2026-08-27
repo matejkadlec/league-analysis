@@ -41,11 +41,19 @@ describe("Riot credential-health refresh signals", () => {
 
   it("does not treat accepting or polling an active analysis as key validation", async () => {
     responseData = { status: "pending", error_code: null };
-    await api.post("/matchmaking-analysis/start", { puuid: "test-puuid" });
+    const started = await api.post("/matchmaking-analysis/start", {
+      puuid: "test-puuid",
+    });
 
     responseData = { status: "in_progress", error_code: null };
-    await api.get("/matchmaking-analysis/player/test-puuid/status");
+    const polled = await api.get(
+      "/matchmaking-analysis/player/test-puuid/status",
+    );
 
+    // The interceptor's other output: whatever it decides about the key, the
+    // caller still gets the payload the backend sent.
+    expect(started.data).toEqual({ status: "pending", error_code: null });
+    expect(polled.data).toEqual({ status: "in_progress", error_code: null });
     expect(notifyRiotCredentialHealthUpdated).not.toHaveBeenCalled();
   });
 
@@ -55,18 +63,27 @@ describe("Riot credential-health refresh signals", () => {
       error_code: "RIOT_API_KEY_INVALID",
     };
 
-    await api.get("/matchmaking-analysis/player/test-puuid/status");
+    const status = await api.get(
+      "/matchmaking-analysis/player/test-puuid/status",
+    );
 
+    expect(status.data).toEqual({
+      status: "failed",
+      error_code: "RIOT_API_KEY_INVALID",
+    });
     expect(notifyRiotCredentialHealthUpdated).toHaveBeenCalledTimes(1);
   });
 
   it("does not infer validity from completed or cached local work", async () => {
     responseData = { status: "completed", error_code: null };
-    await api.get("/matchmaking-analysis/player/test-puuid/status");
+    const status = await api.get(
+      "/matchmaking-analysis/player/test-puuid/status",
+    );
 
     await api.get("/matchmaking-analysis/player/test-puuid/latest-completed");
     await api.get("/players/suggestions?q=cached-player");
 
+    expect(status.data).toEqual({ status: "completed", error_code: null });
     expect(notifyRiotCredentialHealthUpdated).not.toHaveBeenCalled();
   });
 });

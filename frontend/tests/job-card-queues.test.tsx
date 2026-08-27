@@ -125,6 +125,11 @@ describe("Match Fetcher job card", () => {
       });
     });
 
+    // The card reads the same execution the toast was raised from, so the
+    // Last Execution row has to have stopped saying the job never ran.
+    expect(screen.getByText("SUCCESS")).toBeTruthy();
+    expect(screen.queryByText("Never")).toBeNull();
+
     queryClient.clear();
   });
 });
