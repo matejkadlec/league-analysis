@@ -278,6 +278,8 @@ export function MatchmakingAnalysisSession({
   const estimatedMinutesRemaining = estimateMatchmakingMinutesRemaining(
     projectedPlayerProgress,
     totalPlayers,
+    displayData?.started_at ?? displayData?.created_at,
+    nowTimestamp,
   );
 
   const startCardControls = {

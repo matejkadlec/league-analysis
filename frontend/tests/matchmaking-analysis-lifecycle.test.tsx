@@ -210,6 +210,26 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(estimateMatchmakingMinutesRemaining(afterOneMinute, 100)).toBe(11);
   });
 
+  it("trusts the run's observed pace over the static rate once warmed up", () => {
+    const startedAt = "2026-08-27T10:00:00.000Z";
+    const start = new Date(startedAt).getTime();
+
+    // 50 of 100 players in one minute (a cache-heavy run): 1 minute left,
+    // not the ~7 the static rate would claim.
+    expect(
+      estimateMatchmakingMinutesRemaining(50, 100, startedAt, start + 60_000),
+    ).toBe(1);
+    // A rate-limited crawl (10 players in 10 minutes) honestly reports the
+    // slower pace instead of the optimistic static estimate.
+    expect(
+      estimateMatchmakingMinutesRemaining(10, 100, startedAt, start + 600_000),
+    ).toBe(90);
+    // Below the warm-up threshold the static rate still applies.
+    expect(
+      estimateMatchmakingMinutesRemaining(5, 100, startedAt, start + 1_000),
+    ).toBe(14);
+  });
+
   it("cancels the exact persisted run and keeps the UI retryable", async () => {
     const active = analysis("in_progress", { progress: 12 });
     getLatestMatchmakingAnalysis

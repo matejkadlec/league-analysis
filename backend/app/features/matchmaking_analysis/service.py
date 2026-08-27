@@ -69,6 +69,7 @@ from .ranks import (
     PlayerRankJSON,
     RankSummary,
     classify_duo_matches,
+    duo_partner_puuids,
     player_rank_map,
     rank_value,
     summarize_ranks,
@@ -204,10 +205,10 @@ class PlayerPerformance:
 
 @dataclass
 class _SideSamples:
-    """One side's accumulating winrate and form samples for a spine match."""
+    """One side's per-player winrate and form samples for a spine match."""
 
-    winrates: list[float]
-    performances: list[PlayerPerformance]
+    winrates: dict[str, float]
+    performances: dict[str, PlayerPerformance]
 
 
 @dataclass(frozen=True)
@@ -261,30 +262,53 @@ def _side_performance(players: list[PlayerPerformance]) -> SidePerformance:
 
 @dataclass(frozen=True)
 class SpineMatchStats:
-    """One spine match's side averages, plus the allies who defined them."""
+    """One spine match's per-player samples, keyed by puuid per side.
+
+    Aggregation happens at completion time, once the whole spine is known:
+    the duo partners can only be identified globally, and they are excluded
+    from ally averages just like the analyzed player.
+    """
 
     match_id: str
-    team_avg: float | None
-    enemy_avg: float | None
     ally_puuids: list[str]
     enemy_puuids: list[str]
-    win: bool | None = None
-    team_kda: float | None = None
-    enemy_kda: float | None = None
-    team_kill_participation: float | None = None
-    enemy_kill_participation: float | None = None
-    team_damage_share: float | None = None
-    enemy_damage_share: float | None = None
+    win: bool | None
+    ally_winrates: dict[str, float]
+    enemy_winrates: dict[str, float]
+    ally_performances: dict[str, PlayerPerformance]
+    enemy_performances: dict[str, PlayerPerformance]
+
+
+@dataclass(frozen=True)
+class _MatchAggregates:
+    """One spine match's side averages after the ally-side exclusions."""
+
+    team_avg: float | None
+    enemy_avg: float | None
+    team: SidePerformance
+    enemy: SidePerformance
+
+
+def _aggregate_match(s: SpineMatchStats, excluded: set[str]) -> _MatchAggregates:
+    """Side averages excluding the players matchmaking never chose: the
+    analyzed player and their inferred duo partners, ally side only."""
+    team_wrs = [wr for p, wr in s.ally_winrates.items() if p not in excluded]
+    enemy_wrs = list(s.enemy_winrates.values())
+    return _MatchAggregates(
+        team_avg=fmean(team_wrs) if team_wrs else None,
+        enemy_avg=fmean(enemy_wrs) if enemy_wrs else None,
+        team=_side_performance(
+            [perf for p, perf in s.ally_performances.items() if p not in excluded]
+        ),
+        enemy=_side_performance(list(s.enemy_performances.values())),
+    )
 
 
 def _per_match_payload(
-    spine_stats: list[SpineMatchStats], *, analyzed_puuid: str
+    aggregated: list[tuple[SpineMatchStats, _MatchAggregates]],
+    duo_by_match: dict[str, bool],
 ) -> list[MatchmakingPerMatchJSON]:
     """Both-sided spine matches with their duo flag, for the scope split."""
-    duo_by_match = classify_duo_matches(
-        [(s.match_id, s.ally_puuids) for s in spine_stats],
-        analyzed_puuid=analyzed_puuid,
-    )
 
     def _rounded(value: float | None, digits: int) -> float | None:
         return None if value is None else round(value, digits)
@@ -296,17 +320,17 @@ def _per_match_payload(
             "win": s.win,
             "ally_puuids": s.ally_puuids,
             "enemy_puuids": s.enemy_puuids,
-            "team_avg": round(s.team_avg, 4),
-            "enemy_avg": round(s.enemy_avg, 4),
-            "team_kda": _rounded(s.team_kda, 2),
-            "enemy_kda": _rounded(s.enemy_kda, 2),
-            "team_kill_participation": _rounded(s.team_kill_participation, 4),
-            "enemy_kill_participation": _rounded(s.enemy_kill_participation, 4),
-            "team_damage_share": _rounded(s.team_damage_share, 4),
-            "enemy_damage_share": _rounded(s.enemy_damage_share, 4),
+            "team_avg": round(a.team_avg, 4),
+            "enemy_avg": round(a.enemy_avg, 4),
+            "team_kda": _rounded(a.team.kda, 2),
+            "enemy_kda": _rounded(a.enemy.kda, 2),
+            "team_kill_participation": _rounded(a.team.kill_participation, 4),
+            "enemy_kill_participation": _rounded(a.enemy.kill_participation, 4),
+            "team_damage_share": _rounded(a.team.damage_share, 4),
+            "enemy_damage_share": _rounded(a.enemy.damage_share, 4),
         }
-        for s in spine_stats
-        if s.team_avg is not None and s.enemy_avg is not None
+        for s, a in aggregated
+        if a.team_avg is not None and a.enemy_avg is not None
     ]
 
 
@@ -327,8 +351,13 @@ def _build_completion_results(
     headline averages keep their full per-side lists, while `per_match` keeps
     only both-sided matches -- the SoloQ/DuoQ scope split needs comparable pairs.
     """
-    team_avgs = [s.team_avg for s in spine_stats if s.team_avg is not None]
-    enemy_avgs = [s.enemy_avg for s in spine_stats if s.enemy_avg is not None]
+    spine_allies = [(s.match_id, s.ally_puuids) for s in spine_stats]
+    excluded = duo_partner_puuids(spine_allies, analyzed_puuid=analyzed_puuid) | {
+        analyzed_puuid
+    }
+    aggregated = [(s, _aggregate_match(s, excluded)) for s in spine_stats]
+    team_avgs = [a.team_avg for _, a in aggregated if a.team_avg is not None]
+    enemy_avgs = [a.enemy_avg for _, a in aggregated if a.enemy_avg is not None]
     if not team_avgs or not enemy_avgs:
         raise MatchmakingAnalysisRuntimeError(
             "no_matches_analyzed",
@@ -345,7 +374,10 @@ def _build_completion_results(
         "enemy_avg_rank_value": rank_summary.enemy_avg_rank_value,
         "ally_tier_counts": rank_summary.ally_tier_counts,
         "enemy_tier_counts": rank_summary.enemy_tier_counts,
-        "per_match": _per_match_payload(spine_stats, analyzed_puuid=analyzed_puuid),
+        "per_match": _per_match_payload(
+            aggregated,
+            classify_duo_matches(spine_allies, analyzed_puuid=analyzed_puuid),
+        ),
         "player_ranks": player_ranks,
         "rank_freshness": {
             "period_accurate": rank_period_accurate,
@@ -953,20 +985,25 @@ class MatchmakingAnalysisService:
         *,
         spine_size: int,
     ) -> None:
+        # The ally rank aggregates exclude the players matchmaking never
+        # chose: the analyzed player and the inferred duo partners. Both stay
+        # in `player_ranks` for the client's lobby-gap line.
+        excluded_allies = duo_partner_puuids(
+            [(s.match_id, s.ally_puuids) for s in spine_stats],
+            analyzed_puuid=puuid,
+        ) | {puuid}
         results = _build_completion_results(
             spine_stats,
             matches_analyzed=self.matches_analyzed,
             matches_requested=self.match_count,
             rank_summary=summarize_ranks(
-                self._ally_rank_puuids,
+                self._ally_rank_puuids - excluded_allies,
                 self._enemy_rank_puuids,
                 self._rank_tiers,
                 self._rank_values,
             ),
-            # The analyzed player's own rank stays in the map for the client's
-            # lobby-gap line, even though the side averages exclude them.
             player_ranks=player_rank_map(
-                self._ally_rank_puuids | self._enemy_rank_puuids | {puuid},
+                self._ally_rank_puuids | self._enemy_rank_puuids,
                 self._rank_tiers,
                 self._rank_values,
             ),
@@ -1037,46 +1074,35 @@ class MatchmakingAnalysisService:
             logger.warning("Current player not in match", match_id=match_id)
             return None
 
-        team, enemy = _SideSamples([], []), _SideSamples([], [])
+        team, enemy = _SideSamples({}, {}), _SideSamples({}, {})
         ally_puuids: list[str] = []
         enemy_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
-            # The analyzed player is the constant in every lobby: sampled for
-            # progress and rank, but kept out of their own side's averages.
-            is_analyzed = p_puuid == analysis_puuid
+            # Everyone is sampled keyed by puuid; the analyzed player and the
+            # duo partners are excluded later, at completion-time aggregation,
+            # once the whole spine is known.
             side = team if team_id == target_team else enemy
             await self._sample_participant(
-                _SideSamples([], []) if is_analyzed else side,
-                p_puuid,
-                end_time_seconds,
-                analysis_puuid,
-                analysis_created_at,
+                side, p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
             )
             if team_id == target_team:
-                if not is_analyzed:
-                    self._ally_rank_puuids.add(p_puuid)
+                self._ally_rank_puuids.add(p_puuid)
                 ally_puuids.append(p_puuid)
             else:
                 self._enemy_rank_puuids.add(p_puuid)
                 enemy_puuids.append(p_puuid)
 
-        team_side = _side_performance(team.performances)
-        enemy_side = _side_performance(enemy.performances)
         return SpineMatchStats(
             match_id=match_id,
-            team_avg=fmean(team.winrates) if team.winrates else None,
-            enemy_avg=fmean(enemy.winrates) if enemy.winrates else None,
             ally_puuids=ally_puuids,
             enemy_puuids=enemy_puuids,
             # DB-only by now: the participants query above stored the match.
             win=await self._get_win_status(match_id, analysis_puuid),
-            team_kda=team_side.kda,
-            enemy_kda=enemy_side.kda,
-            team_kill_participation=team_side.kill_participation,
-            enemy_kill_participation=enemy_side.kill_participation,
-            team_damage_share=team_side.damage_share,
-            enemy_damage_share=enemy_side.damage_share,
+            ally_winrates=team.winrates,
+            enemy_winrates=enemy.winrates,
+            ally_performances=team.performances,
+            enemy_performances=enemy.performances,
         )
 
     async def _sample_participant(
@@ -1092,11 +1118,11 @@ class MatchmakingAnalysisService:
             p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
         )
         if wr is not None:
-            side.winrates.append(wr)
+            side.winrates[p_puuid] = wr
         # After the winrate above, so the sampled match IDs it recorded exist.
         perf = await self._cached_player_performance(p_puuid)
         if perf is not None:
-            side.performances.append(perf)
+            side.performances[p_puuid] = perf
         await self._cached_player_rank(p_puuid)
 
     async def _cached_player_winrate(

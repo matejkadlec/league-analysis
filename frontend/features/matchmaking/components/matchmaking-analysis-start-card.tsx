@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertCircle, Loader2, PlayCircle, Scale } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,6 +13,17 @@ import { cn } from "@/lib/core/utils";
 import { ANALYSIS_CARD_TRANSITION } from "./matchmaking-analysis-state";
 
 const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
+// Mirrors the backend request bounds (MIN_MATCH_COUNT/MAX_MATCH_COUNT).
+const MIN_MATCH_COUNT = 10;
+const MAX_MATCH_COUNT = 100;
+
+function clampMatchCount(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    return MIN_MATCH_COUNT;
+  }
+  return Math.min(MAX_MATCH_COUNT, Math.max(MIN_MATCH_COUNT, Math.round(value)));
+}
 
 interface MatchmakingAnalysisStartCardProps {
   playerSelector: ReactNode;
@@ -54,6 +65,12 @@ export function MatchmakingAnalysisStartCard({
   onStart,
 }: MatchmakingAnalysisStartCardProps) {
   const today = new Date().toISOString().slice(0, 10);
+  const isPresetCount = (MATCH_COUNT_PRESETS as readonly number[]).includes(
+    matchCount,
+  );
+  const [customActive, setCustomActive] = useState(!isPresetCount);
+  const [customText, setCustomText] = useState(String(matchCount));
+  const customShown = customActive || !isPresetCount;
 
   return (
     <Card className={ANALYSIS_CARD_TRANSITION}>
@@ -96,22 +113,68 @@ export function MatchmakingAnalysisStartCard({
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-pressed={matchCount === preset}
+                aria-pressed={!customShown && matchCount === preset}
                 className={cn(
-                  matchCount === preset
+                  !customShown && matchCount === preset
                     ? "border-primary text-primary"
                     : "text-muted-foreground",
                 )}
-                onClick={() => onMatchCountChange(preset)}
+                onClick={() => {
+                  setCustomActive(false);
+                  onMatchCountChange(preset);
+                }}
               >
                 {preset}
               </Button>
             ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-pressed={customShown}
+              className={cn(
+                customShown
+                  ? "border-primary text-primary"
+                  : "text-muted-foreground",
+              )}
+              onClick={() => {
+                setCustomActive(true);
+                setCustomText(String(matchCount));
+              }}
+            >
+              Custom
+            </Button>
+            {customShown && (
+              <Input
+                type="number"
+                min={MIN_MATCH_COUNT}
+                max={MAX_MATCH_COUNT}
+                value={customText}
+                aria-label="Custom match count"
+                className="h-8 w-20"
+                onChange={(event) => {
+                  setCustomText(event.target.value);
+                  const value = Number(event.target.value);
+                  if (
+                    Number.isInteger(value) &&
+                    value >= MIN_MATCH_COUNT &&
+                    value <= MAX_MATCH_COUNT
+                  ) {
+                    onMatchCountChange(value);
+                  }
+                }}
+                onBlur={() => {
+                  const clamped = clampMatchCount(customText);
+                  setCustomText(String(clamped));
+                  onMatchCountChange(clamped);
+                }}
+              />
+            )}
           </div>
           {matchCount >= 30 && (
             <p className="text-sm text-muted-foreground">
-              Larger runs analyze roughly three times as many players and can
-              take much longer on a cold cache.
+              Larger runs analyze many more players and can take much longer
+              on a cold cache — a 100-match run may need over an hour.
             </p>
           )}
         </div>

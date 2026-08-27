@@ -288,16 +288,48 @@ def _spine_stat(
     ally_puuids: list[str] | None = None,
     enemy_puuids: list[str] | None = None,
     win: bool | None = None,
-    **performance: float | None,
+    team_kda: float | None = None,
+    enemy_kda: float | None = None,
+    team_kill_participation: float | None = None,
+    enemy_kill_participation: float | None = None,
+    team_damage_share: float | None = None,
+    enemy_damage_share: float | None = None,
 ) -> analysis_service_module.SpineMatchStats:
+    """One spine match whose per-side aggregates resolve to the given values.
+
+    Samples sit under synthetic per-match puuids, so they never recur across
+    matches and the duo-partner exclusion cannot swallow them."""
+
+    def side(
+        avg: float | None, kda: float | None, kp: float | None, ds: float | None
+    ) -> tuple[dict[str, float], dict[str, analysis_service_module.PlayerPerformance]]:
+        winrates = {} if avg is None else {f"wr-{match_id}": avg}
+        performances = (
+            {}
+            if kda is None
+            else {
+                f"perf-{match_id}": analysis_service_module.PlayerPerformance(
+                    kda=kda, kill_participation=kp, damage_share=ds
+                )
+            }
+        )
+        return winrates, performances
+
+    ally_winrates, ally_performances = side(
+        team_avg, team_kda, team_kill_participation, team_damage_share
+    )
+    enemy_winrates, enemy_performances = side(
+        enemy_avg, enemy_kda, enemy_kill_participation, enemy_damage_share
+    )
     return analysis_service_module.SpineMatchStats(
         match_id=match_id,
-        team_avg=team_avg,
-        enemy_avg=enemy_avg,
         ally_puuids=ally_puuids or [],
         enemy_puuids=enemy_puuids or [],
         win=win,
-        **performance,
+        ally_winrates=ally_winrates,
+        enemy_winrates=enemy_winrates,
+        ally_performances=ally_performances,
+        enemy_performances=enemy_performances,
     )
 
 
@@ -367,36 +399,47 @@ def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
     assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
 
 
-async def test_the_analyzed_player_is_sampled_but_kept_out_of_side_averages() -> None:
-    """They are the constant in every lobby: progress and rank sampling still
-    run for them, but their samples must not tilt their own team's averages."""
-    service = MatchmakingAnalysisService(
-        cast(AsyncSession, SimpleNamespace()),
-        cast(RiotAPIClient, SimpleNamespace()),
-        _USER_ID,
+def _raw_stat(
+    match_id: str,
+    allies: list[str],
+    ally_winrates: dict[str, float],
+) -> analysis_service_module.SpineMatchStats:
+    return analysis_service_module.SpineMatchStats(
+        match_id=match_id,
+        ally_puuids=allies,
+        enemy_puuids=[f"foe-{match_id}"],
+        win=None,
+        ally_winrates=ally_winrates,
+        enemy_winrates={f"foe-{match_id}": 0.5},
+        ally_performances={},
+        enemy_performances={},
     )
-    service._get_match_participants = AsyncMock(
-        return_value=[("analyzed", 100), ("ally", 100), ("foe", 200)]
+
+
+def test_analyzed_player_and_duo_partner_stay_out_of_ally_averages() -> None:
+    """Matchmaking never chose either of them: the analyzed player and the
+    inferred duo partners must not tilt the ally winrate averages."""
+    results = _completion_results(
+        [
+            _raw_stat(
+                "EUN1_1",
+                ["analyzed", "partner", "r1"],
+                {"analyzed": 1.0, "partner": 1.0, "r1": 0.4},
+            ),
+            _raw_stat(
+                "EUN1_2",
+                ["analyzed", "partner", "r2"],
+                {"analyzed": 1.0, "partner": 1.0, "r2": 0.6},
+            ),
+        ],
+        matches_analyzed=2,
     )
-    service._get_win_status = AsyncMock(return_value=True)
-    sampled: list[str] = []
 
-    async def fake_sample(
-        side: analysis_service_module._SideSamples, p_puuid: str, *_args: object
-    ) -> None:
-        sampled.append(p_puuid)
-        side.winrates.append(1.0 if p_puuid == "analyzed" else 0.5)
-
-    service._sample_participant = AsyncMock(side_effect=fake_sample)
-
-    stats = await service._process_match("analyzed", datetime.now(UTC), "EUN1_1", 0)
-
-    assert stats is not None
-    assert stats.team_avg == 0.5  # the 1.0 self-sample landed in a discard side
-    assert stats.enemy_avg == 0.5
-    assert stats.ally_puuids == ["analyzed", "ally"]  # stored for the client
-    assert service._ally_rank_puuids == {"ally"}
-    assert sampled == ["analyzed", "ally", "foe"]
+    assert results["team_avg_winrate"] == pytest.approx(0.5)
+    per_match = results.get("per_match")
+    assert per_match is not None
+    assert [entry["team_avg"] for entry in per_match] == [0.4, 0.6]
+    assert all(entry["duo"] for entry in per_match)
 
 
 def test_the_analyzed_players_win_flag_rides_per_match() -> None:

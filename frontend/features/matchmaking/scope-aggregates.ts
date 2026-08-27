@@ -85,9 +85,30 @@ function sideRanks(
 }
 
 /**
- * Rank averages and tier buckets over one scope's unique players, mirroring
- * backend run-wide semantics. Excludes the analyzed player — the constant in
- * every lobby. Null when the run predates the per-match puuid lists.
+ * Non-analyzed allies recurring in >= 2 of the run's matches: the likely duo
+ * partners. Mirrors the backend's `duo_partner_puuids` rule.
+ */
+export function duoPartnerPuuids(
+  perMatch: MatchmakingPerMatch[],
+  analysisPuuid: string,
+): Set<string> {
+  const appearances = new Map<string, number>();
+  for (const m of perMatch) {
+    for (const puuid of new Set(m.ally_puuids ?? [])) {
+      if (puuid !== analysisPuuid) {
+        appearances.set(puuid, (appearances.get(puuid) ?? 0) + 1);
+      }
+    }
+  }
+  return new Set(
+    [...appearances].filter(([, count]) => count >= 2).map(([puuid]) => puuid),
+  );
+}
+
+/**
+ * Rank averages and tier buckets over one scope's unique matchmade players
+ * (analyzed player and duo partners excluded, mirroring the backend). Null
+ * when the run predates the per-match puuid lists.
  */
 export function rankAggregates(
   perMatch: MatchmakingPerMatch[],
@@ -108,6 +129,11 @@ export function rankAggregates(
     for (const puuid of m.enemy_puuids ?? []) enemies.add(puuid);
   }
   allies.delete(analysisPuuid);
+  // Partners come from the whole run, not the scoped slice: a partner's one
+  // stray solo-flagged appearance must not sneak them into a solo average.
+  for (const partner of duoPartnerPuuids(perMatch, analysisPuuid)) {
+    allies.delete(partner);
+  }
   const ally = sideRanks(allies, playerRanks);
   const enemy = sideRanks(enemies, playerRanks);
   return {

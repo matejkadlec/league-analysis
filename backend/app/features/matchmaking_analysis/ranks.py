@@ -118,23 +118,31 @@ def player_rank_map(
     }
 
 
+def duo_partner_puuids(
+    spine_allies: list[tuple[str, list[str]]],
+    *,
+    analyzed_puuid: str,
+) -> set[str]:
+    """Non-analyzed allies recurring in >= 2 spine matches: the likely duo.
+
+    Ignores ``analyzed_puuid`` (they appear in every match). ponytail: no party data.
+    """
+    appearances = Counter(
+        puuid
+        for _match_id, allies in spine_allies
+        for puuid in set(allies)
+        if puuid != analyzed_puuid
+    )
+    return {puuid for puuid, count in appearances.items() if count >= 2}
+
+
 def classify_duo_matches(
     spine_allies: list[tuple[str, list[str]]],
     *,
     analyzed_puuid: str,
 ) -> dict[str, bool]:
-    """Flag spine matches whose non-analyzed allies recur in >= 2 games.
-
-    Ignores ``analyzed_puuid`` (they appear in every match). ponytail: no party data.
-    """
-
-    def others(allies: list[str]) -> set[str]:
-        return {puuid for puuid in allies if puuid != analyzed_puuid}
-
-    appearances = Counter(
-        puuid for _match_id, allies in spine_allies for puuid in others(allies)
-    )
+    """Flag spine matches in which a likely duo partner played."""
+    partners = duo_partner_puuids(spine_allies, analyzed_puuid=analyzed_puuid)
     return {
-        match_id: any(appearances[puuid] >= 2 for puuid in others(allies))
-        for match_id, allies in spine_allies
+        match_id: not partners.isdisjoint(allies) for match_id, allies in spine_allies
     }

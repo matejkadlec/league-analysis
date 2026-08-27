@@ -36,8 +36,8 @@ ACTIVE_ANALYSIS_STATUSES: tuple[MatchmakingAnalysisStatus, ...] = (
 )
 
 DEFAULT_MATCH_COUNT = 10
-MIN_MATCH_COUNT = 5
-MAX_MATCH_COUNT = 30
+MIN_MATCH_COUNT = 10
+MAX_MATCH_COUNT = 100
 
 
 class MatchmakingAnalysisRequest(BaseModel):

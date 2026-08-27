@@ -40,17 +40,37 @@ export function projectMatchmakingProgress({
   );
 }
 
+// Below this many completed players the observed rate is too noisy to trust,
+// so the static warm-cache estimate holds until the run has shown its pace.
+const MIN_OBSERVED_PLAYERS = 10;
+
 export function estimateMatchmakingMinutesRemaining(
   projectedProgress: number,
   totalPlayers: number,
+  startedAt?: string | null,
+  nowTimestamp = Date.now(),
 ): number | null {
   const remainingPlayers = Math.max(0, totalPlayers - projectedProgress);
   if (remainingPlayers <= 0) {
     return null;
   }
 
-  const remainingSeconds =
+  let remainingSeconds =
     (remainingPlayers / ESTIMATED_PLAYERS_PER_WINDOW) *
     RIOT_LONG_WINDOW_SECONDS;
+
+  // Once enough players finished, the run's own throughput is the better
+  // predictor: DB-cached players complete near-instantly and rate-limit
+  // waits slow everything down, and both show up in the observed rate.
+  const startedTimestamp = startedAt ? new Date(startedAt).getTime() : NaN;
+  const elapsedSeconds = (nowTimestamp - startedTimestamp) / 1000;
+  if (
+    Number.isFinite(elapsedSeconds) &&
+    elapsedSeconds > 0 &&
+    projectedProgress >= MIN_OBSERVED_PLAYERS
+  ) {
+    remainingSeconds = remainingPlayers / (projectedProgress / elapsedSeconds);
+  }
+
   return Math.max(1, Math.ceil(remainingSeconds / 60));
 }
