@@ -11,8 +11,10 @@ from typing import Any, cast
 
 import pytest
 from sqlalchemy import Engine, Table, create_engine, event
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
+from app.features.auth.models import User
 from app.features.auth.refresh_token import RefreshToken
 from app.features.auth.service import AuthService
 
@@ -39,10 +41,22 @@ def session() -> Iterator[Session]:
         # only if a database is attached under it.
         dbapi_connection.execute("ATTACH DATABASE ':memory:' AS auth")
 
+    def _as_utc(target: RefreshToken, _context: Any) -> None:
+        # `TIMESTAMPTZ` hands back an aware value and SQLite cannot; without
+        # this the service's own expiry comparison raises here and nowhere else.
+        for field in ("issued_at", "expires_at", "revoked_at"):
+            stored = getattr(target, field)
+            if stored is not None and stored.tzinfo is None:
+                setattr(target, field, stored.replace(tzinfo=UTC))
+
     event.listen(engine, "connect", _attach_auth_schema)
+    event.listen(RefreshToken, "load", _as_utc)
     cast(Table, RefreshToken.__table__).create(engine)
+    # `revoke_all_refresh_tokens_for_user` locks the owner before it stamps.
+    cast(Table, User.__table__).create(engine)
     with Session(engine) as open_session:
         yield open_session
+    event.remove(RefreshToken, "load", _as_utc)
     engine.dispose()
 
 
@@ -86,14 +100,41 @@ async def test_a_live_token_names_its_owner(session: Session) -> None:
     assert await service.resolve_user_id_for_refresh_token("live") == 9
 
 
-async def test_an_expired_but_unrevoked_token_still_names_its_owner(
-    session: Session,
-) -> None:
-    """The ordinary logout after an idle week, and the reason logout exists."""
+async def test_an_expired_token_names_nobody(session: Session) -> None:
+    """An expired cookie carries no session, so it has none to end.
+
+    Honouring one lets a copy kept past its 30 days sign the owner out of
+    every device, on a credential `/refresh` refuses outright. The route still
+    answers 200 and still clears the browser's cookies.
+    """
     service = _service(session)
     _store(session, service, "old", token_id="t1", expired=True)
 
-    assert await service.resolve_user_id_for_refresh_token("old") == 9
+    assert await service.resolve_user_id_for_refresh_token("old") is None
+
+
+async def test_an_expired_token_with_an_unused_replacement_names_nobody(
+    session: Session,
+) -> None:
+    """The gap the reuse-heal rule closed on `/refresh` and this route kept.
+
+    `_reuse_is_healable` requires the presented token to be live on its own
+    terms; reading identity by anything weaker left the superseded-holder case
+    open for as long as the replacement went unused.
+    """
+    service = _service(session)
+    _store(
+        session,
+        service,
+        "old",
+        token_id="t1",
+        revoked=True,
+        replaced_by="t2",
+        expired=True,
+    )
+    _store(session, service, "replacement", row_id=2, token_id="t2")
+
+    assert await service.resolve_user_id_for_refresh_token("old") is None
 
 
 async def test_a_token_this_server_rotated_out_still_names_its_owner(
@@ -200,56 +241,37 @@ async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
     assert revoked == {"t1": True, "t2": True, "t4": False}
 
 
-def _rotate_after_pass(
-    session: Session,
-    service: AuthService,
-    target_pass: int,
-) -> None:
-    """Commit a replacement row once the given revoke pass has committed.
-
-    A row inserted after a statement started is invisible to it however the
-    statement is locked, which is the whole reason the revoke loops.
-    """
+def _executed_statements(service: AuthService) -> list[Any]:
+    """Record every statement the service runs, in order."""
     shim = cast(Any, service.db)
-    original_commit = shim.commit
-    passes = 0
+    original_execute = shim.execute
+    recorded: list[Any] = []
 
-    async def _commit() -> None:
-        nonlocal passes
-        await original_commit()
-        passes += 1
-        if passes == target_pass:
-            _store(session, service, "rotated-in", row_id=99, token_id="t99")
+    async def _execute(statement: Any) -> Any:
+        recorded.append(statement)
+        return await original_execute(statement)
 
-    shim.commit = _commit
+    shim.execute = _execute
+    return recorded
 
 
-async def test_a_logout_revokes_a_token_a_racing_rotation_committed(
-    session: Session,
-) -> None:
-    """The replacement did not exist when the first pass read the table."""
+async def test_a_logout_locks_the_owner_before_it_stamps(session: Session) -> None:
+    """SQLite drops `FOR UPDATE`, so the lock is read off the compiled SQL.
+
+    Without it a rotation commits a replacement between this statement's
+    snapshot and its write, and no amount of re-reading sees that row: it is
+    below the snapshot however long the statement waited on a lock.
+    """
     service = _service(session)
     _store(session, service, "live", token_id="t1")
-    _rotate_after_pass(session, service, target_pass=1)
+    recorded = _executed_statements(service)
 
     await service.revoke_all_refresh_tokens_for_user(9)
 
-    assert all(row.revoked_at is not None for row in session.query(RefreshToken).all())
-
-
-async def test_a_logout_that_revoked_nothing_still_looks_again(
-    session: Session,
-) -> None:
-    """The first pass can be the statement the rotation made wait.
-
-    It resumes with the presented token already revoked and the replacement
-    below its snapshot, so it stamps nothing -- and stopping there is how the
-    fresh token survives a logout.
-    """
-    service = _service(session)
-    _store(session, service, "spent", token_id="t1", revoked=True)
-    _rotate_after_pass(session, service, target_pass=1)
-
-    await service.revoke_all_refresh_tokens_for_user(9)
-
-    assert all(row.revoked_at is not None for row in session.query(RefreshToken).all())
+    compiled = [
+        str(statement.compile(dialect=postgresql.dialect())) for statement in recorded
+    ]
+    assert len(compiled) == 2
+    assert "FROM auth.users" in compiled[0]
+    assert compiled[0].rstrip().endswith("FOR UPDATE")
+    assert compiled[1].startswith("UPDATE auth.refresh_tokens")

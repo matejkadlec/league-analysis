@@ -71,9 +71,6 @@ EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
 
-# Enough passes for any real rotation race; a backstop, not a retry budget.
-_REVOKE_ALL_MAX_PASSES = 10
-
 
 class AuthService:
     """Service for authentication operations."""
@@ -386,6 +383,7 @@ class AuthService:
         expires_delta: timedelta | None = None,
     ) -> tuple[str, datetime, str]:
         """Create and persist a refresh token, returning the raw token once."""
+        await self._lock_token_family(user_id)
         now = datetime.now(UTC)
         expires_at = now + (
             expires_delta or timedelta(days=self.settings.jwt_refresh_token_expire_days)
@@ -433,6 +431,15 @@ class AuthService:
         with 401 and the browser ends the session, so let real errors raise.
         """
         token_hash = self._hash_refresh_token(raw_refresh_token)
+        # The owner first, and before the row below: a logout takes the same
+        # lock, and two writers taking them in opposite orders deadlock.
+        owner_id = await self.db.scalar(
+            select(RefreshToken.user_id).where(RefreshToken.token_hash == token_hash)
+        )
+        if owner_id is None:
+            return None
+        await self._lock_token_family(owner_id)
+
         # `FOR UPDATE`: this reads `revoked_at` and then writes it, so two
         # requests carrying one cookie both read NULL and both rotate, forking
         # one token into two valid families with the reuse alarm skipped.
@@ -521,6 +528,17 @@ class AuthService:
             .with_for_update()
         )
         return result.scalar_one_or_none()
+
+    async def _lock_token_family(self, user_id: int) -> None:
+        """Serialise everyone who writes one user's refresh tokens.
+
+        Logout stamps the whole set in one statement, and a row committed
+        after that statement began is below its snapshot however it waited.
+        Taking the owner first is what stops a rotation inserting under it.
+        """
+        await self.db.execute(
+            select(User.id).where(User.id == user_id).with_for_update()
+        )
 
     @staticmethod
     def _successor_is_unused(successor: RefreshToken) -> bool:
@@ -621,37 +639,25 @@ class AuthService:
         return None
 
     async def revoke_all_refresh_tokens_for_user(self, user_id: int) -> None:
-        """Revoke every refresh token a user holds, re-reading until none is left.
+        """Revoke every refresh token a user holds, under the owner's lock.
 
-        One stamped pass cannot see a row that did not exist when it started,
-        and a rotation racing it commits exactly that -- so logout would answer
-        "Successfully logged out" with the replacement still live.
+        Without the lock a rotation commits a replacement this statement's
+        snapshot cannot see, and logout answers "Successfully logged out"
+        with that fresh token live.
         """
-        for pass_number in range(_REVOKE_ALL_MAX_PASSES):
-            result = await self.db.execute(
-                update(RefreshToken)
-                .where(
-                    RefreshToken.user_id == user_id,
-                    RefreshToken.revoked_at.is_(None),
-                )
-                .values(revoked_at=datetime.now(UTC))
-                .returning(RefreshToken.id)
-                # The rows are counted from RETURNING, so there is nothing for
-                # the ORM to synchronize; nobody reads these objects again.
-                .execution_options(synchronize_session=False)
+        await self._lock_token_family(user_id)
+        await self.db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
             )
-            revoked = len(result.scalars().all())
-            await self.db.commit()
-            # Never on the first pass: that one can be the statement a racing
-            # rotation blocked, and it resumes holding a snapshot taken before
-            # the replacement row was inserted. The next one is a new snapshot.
-            if revoked == 0 and pass_number > 0:
-                return
-        logger.warning(
-            "refresh_token_revoke_all_unsettled",
-            user_id=user_id,
-            passes=_REVOKE_ALL_MAX_PASSES,
+            .values(revoked_at=datetime.now(UTC))
+            # Nobody reads these objects again, so there is nothing for the
+            # ORM to synchronize.
+            .execution_options(synchronize_session=False)
         )
+        await self.db.commit()
 
     async def resolve_user_id_for_refresh_token(
         self,
@@ -671,6 +677,12 @@ class AuthService:
         token_record = result.scalar_one_or_none()
         if token_record is None:
             return None
+        # An expired cookie carries no session, so there is nothing here for
+        # it to end -- and honouring one would let a stale copy revoke every
+        # device its owner still holds.
+        now = datetime.now(UTC)
+        if token_record.expires_at <= now:
+            return None
         if token_record.revoked_at is None:
             return token_record.user_id
 
@@ -682,7 +694,9 @@ class AuthService:
         successor = await self._get_refresh_token_by_token_id(
             token_record.replaced_by_token_id
         )
-        if successor is None or not self._successor_is_unused(successor):
+        if successor is None or not self._reuse_is_healable(
+            token_record, successor, now
+        ):
             return None
         return token_record.user_id
 

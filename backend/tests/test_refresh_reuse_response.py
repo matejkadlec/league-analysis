@@ -52,7 +52,10 @@ def _user() -> MagicMock:
 def _service(lookups: list[MagicMock]) -> tuple[AuthService, list[Any], MagicMock]:
     added: list[Any] = []
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=lookups)
+    # The owner lookup and the family lock precede every rotation query; the
+    # lock's result is never read.
+    db.scalar = AsyncMock(return_value=5)
+    db.execute = AsyncMock(side_effect=[MagicMock(), *lookups])
     db.add = MagicMock(side_effect=added.append)
     db.commit = AsyncMock()
     service = AuthService(db)
@@ -141,8 +144,8 @@ async def test_a_token_with_no_replacement_refuses_without_wider_revocation() ->
     """One zombie cookie no longer signs the user out of every device.
 
     A token revoked with no replacement recorded -- a logout, or a chain
-    already killed -- names no descendants, so the answer is to refuse the
-    caller and touch nothing else: one query, the presented token's lookup.
+    already killed -- names no descendants, so the answer is to refuse and
+    touch nothing else: the family lock, the lookup, and no walk after them.
     """
     presented = _token("dead", revoked_at=NOW - timedelta(days=2), replaced_by=None)
     service, added, db = _service([_lookup(presented)])
@@ -151,4 +154,4 @@ async def test_a_token_with_no_replacement_refuses_without_wider_revocation() ->
 
     assert rotated is None
     assert added == []
-    assert cast(AsyncMock, db.execute).await_count == 1
+    assert cast(AsyncMock, db.execute).await_count == 2

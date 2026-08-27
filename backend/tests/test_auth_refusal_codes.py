@@ -119,9 +119,10 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
 
     fault = DBAPIError("SELECT", {}, Exception("connection terminated"))
 
-    # 1. The lookup that finds the token record.
+    # 1. The lookup that finds the token record, after the family lock.
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=fault)
+    db.scalar = AsyncMock(return_value=5)
+    db.execute = AsyncMock(side_effect=[MagicMock(), fault])
     db.commit = AsyncMock()
     with pytest.raises(DBAPIError):
         await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
@@ -138,7 +139,8 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     lookup = MagicMock()
     lookup.scalar_one_or_none = MagicMock(return_value=record)
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=[lookup, fault])
+    db.scalar = AsyncMock(return_value=5)
+    db.execute = AsyncMock(side_effect=[MagicMock(), lookup, fault])
     db.commit = AsyncMock()
     with pytest.raises(DBAPIError):
         await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
@@ -154,7 +156,8 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     reused_lookup = MagicMock()
     reused_lookup.scalar_one_or_none = MagicMock(return_value=reused)
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=[reused_lookup, fault])
+    db.scalar = AsyncMock(return_value=5)
+    db.execute = AsyncMock(side_effect=[MagicMock(), reused_lookup, fault])
     db.commit = AsyncMock()
     with pytest.raises(DBAPIError):
         await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
@@ -167,6 +170,7 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     user = MagicMock()
     user.id = 5
     db = MagicMock()
+    db.scalar = AsyncMock(return_value=5)
     lookup = MagicMock()
     lookup.scalar_one_or_none = MagicMock(return_value=record)
     db.execute = AsyncMock(return_value=lookup)

@@ -217,6 +217,7 @@ async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     row.id = 4321
     row.user_id = 9
     row.revoked_at = None
+    row.expires_at = datetime.now(UTC) + timedelta(days=30)
     db = _RecordingDb(row)
     service = AuthService(cast("AsyncSession", db))
 
