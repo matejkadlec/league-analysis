@@ -9,7 +9,7 @@ import {
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
 
-const scrollIntoView = vi.fn();
+const scrollIntoView = vi.fn<typeof Element.prototype.scrollIntoView>();
 
 // Module level, exactly as the pages declare theirs: an array literal rebuilt
 // on each render is a new dependency every time, which re-runs the effect and
@@ -153,13 +153,18 @@ describe("SectionQuickNavigation", () => {
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
 
     render(<Page withResult />);
+    // The reason there is nothing to watch, and the observable the spies
+    // above stand on: a shut panel lists nothing, before or after.
+    expect(screen.queryByRole("button", { name: "Result" })).toBeNull();
     expect(observe).not.toHaveBeenCalled();
 
     const quickNavigation = screen.getByTestId("section-quick-navigation");
     await user.hover(quickNavigation);
+    expect(screen.getByRole("button", { name: "Result" })).toBeTruthy();
     expect(observe).toHaveBeenCalledTimes(1);
 
     await user.unhover(quickNavigation);
+    expect(screen.queryByRole("button", { name: "Result" })).toBeNull();
     expect(disconnect).toHaveBeenCalledTimes(1);
 
     observe.mockRestore();

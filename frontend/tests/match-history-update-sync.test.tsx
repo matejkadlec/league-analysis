@@ -6,9 +6,13 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { validatedGet, validatedPost } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPost: vi.fn(),
+  validatedGet: vi.fn<Api["validatedGet"]>(),
+  validatedPost: vi.fn<Api["validatedPost"]>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -19,15 +23,15 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
 
 vi.mock("@/lib/core/hooks", () => ({
   useToast: () => ({
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
-    success: vi.fn(),
+    error: vi.fn<AppToast["error"]>(),
+    info: vi.fn<AppToast["info"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    success: vi.fn<AppToast["success"]>(),
   }),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn<AppRouter["refresh"]>() }),
 }));
 
 vi.mock("@/lib/core/data-dragon-context", () => ({
@@ -38,8 +42,12 @@ vi.mock("@/lib/core/use-relative-time", () => ({
   useRelativeTime: () => "just now",
 }));
 
+import type { ComponentProps } from "react";
+
 import { MatchHistory } from "@/features/matches/components/match-history";
 import { installMemoryLocalStorage } from "./test-browser-storage";
+
+type SelectPlayer = ComponentProps<typeof MatchHistory>["onSelectPlayer"];
 
 installMemoryLocalStorage();
 
@@ -53,7 +61,10 @@ const EMPTY_HISTORY = {
 
 function renderHistory(): void {
   renderWithQueryClient(
-    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
+    <MatchHistory
+      puuid="player-puuid"
+      onSelectPlayer={vi.fn<SelectPlayer>()}
+    />,
   );
 }
 
@@ -103,7 +114,8 @@ describe("Match History update", () => {
     const user = userEvent.setup();
     renderHistory();
 
-    await user.click(await screen.findByRole("button", { name: /update/i }));
+    const button = await screen.findByRole("button", { name: /update/i });
+    await user.click(button);
 
     // The jobs route returns only `{success, message}`, which is why the old
     // code had to guess at a delay. This one returns a run to watch.
@@ -111,6 +123,11 @@ describe("Match History update", () => {
     expect(validatedPost).toHaveBeenCalledWith(
       expect.anything(),
       "/players/player-puuid/sync",
+    );
+    // And the run it answered with is adopted: a response with nothing to
+    // watch leaves the button live again the moment the request settles.
+    await waitFor(() =>
+      expect((button as HTMLButtonElement).disabled).toBe(true),
     );
   });
 

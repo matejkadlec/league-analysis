@@ -5,8 +5,8 @@ import { renderHookWithQueryClient } from "./render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
-  validatedPost: vi.fn(),
-  toast: vi.fn(),
+  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  toast: vi.fn<typeof import("@/lib/core/hooks").appToast.toast>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -20,6 +20,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { useJobCardControls } from "@/features/jobs/components/use-job-card-controls";
+import type { ApiResponse } from "@/lib/core/api";
 import type { JobConfiguration, JobExecution } from "@/lib/core/schemas";
 
 const JOB: JobConfiguration = {
@@ -223,22 +224,35 @@ describe("the one button that does five different things", () => {
   // Each control has three endings and only success changes the card, because
   // the job flags come from a refetch. On either failure the card is unchanged,
   // so the toast is the only thing that says the press did nothing.
-  const REFUSED = {
-    success: true,
-    data: {
-      success: false,
-      message: "no",
-      is_running: true,
-      is_paused: false,
-      is_stopping: false,
-      is_force_stopping: false,
-    },
-  };
+  const FAILURES: [string, ApiResponse<unknown>][] = [
+    [
+      "refused by the server",
+      {
+        success: true,
+        data: {
+          success: false,
+          message: "no",
+          is_running: true,
+          is_paused: false,
+          is_stopping: false,
+          is_force_stopping: false,
+        },
+      },
+    ],
+    [
+      "never delivered",
+      {
+        success: false,
+        error: {
+          status: 500,
+          kind: "service",
+          message: "The service is unavailable.",
+        },
+      },
+    ],
+  ];
 
-  it.each([
-    ["refused by the server", REFUSED],
-    ["never delivered", { success: false, error: { status: 500 } }],
-  ])(
+  it.each(FAILURES)(
     "says so when a pause is %s rather than leaving the card unchanged in silence",
     async (_label, response) => {
       validatedPost.mockResolvedValue(response);
@@ -255,10 +269,7 @@ describe("the one button that does five different things", () => {
     },
   );
 
-  it.each([
-    ["refused by the server", REFUSED],
-    ["never delivered", { success: false, error: { status: 500 } }],
-  ])(
+  it.each(FAILURES)(
     "says so when a stop is %s rather than leaving the card unchanged in silence",
     async (_label, response) => {
       validatedPost.mockResolvedValue(response);

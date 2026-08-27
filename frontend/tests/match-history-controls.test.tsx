@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import axios from "axios";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -7,8 +8,11 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -18,14 +22,14 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
 
 vi.mock("@/lib/core/hooks", () => ({
   useToast: () => ({
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
+    error: vi.fn<AppToast["error"]>(),
+    info: vi.fn<AppToast["info"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
   }),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn<AppRouter["refresh"]>() }),
 }));
 
 vi.mock("@/lib/core/data-dragon-context", () => ({
@@ -44,6 +48,8 @@ import {
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
 } from "@/features/cookie-consent";
 import { installMemoryLocalStorage } from "./test-browser-storage";
+
+type MatchHistoryProps = ComponentProps<typeof MatchHistory>;
 
 const CONSENT_COOKIE = "league_analysis_cookie_consent";
 
@@ -68,7 +74,10 @@ function hasDetailedRequest(expectedParams: Record<string, unknown>): boolean {
 
 function renderHistory() {
   return renderWithQueryClient(
-    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
+    <MatchHistory
+      puuid="player-puuid"
+      onSelectPlayer={vi.fn<MatchHistoryProps["onSelectPlayer"]>()}
+    />,
   ).queryClient;
 }
 

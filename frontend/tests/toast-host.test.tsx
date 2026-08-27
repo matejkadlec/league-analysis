@@ -1,20 +1,33 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import type { ToasterProps } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+type Toast = typeof import("sonner").toast;
+
 const sonner = vi.hoisted(() => ({
-  toaster: vi.fn(),
-  toast: vi.fn(),
-  success: vi.fn(),
-  warning: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  dismiss: vi.fn(),
+  toaster: vi.fn<(props: ToasterProps) => void>(),
+  toast: vi.fn<Toast>(),
+  success: vi.fn<Toast["success"]>(),
+  warning: vi.fn<Toast["warning"]>(),
+  error: vi.fn<Toast["error"]>(),
+  info: vi.fn<Toast["info"]>(),
+  dismiss: vi.fn<Toast["dismiss"]>(),
 }));
 
-vi.mock("sonner", () => {
+vi.mock("sonner", async (importOriginal) => {
+  // Spies in front of the real toaster rather than instead of it: the
+  // recorded call shows what the adapter asked for, the rendered toast shows
+  // what a person is left looking at.
+  const actual = await importOriginal<typeof import("sonner")>();
+  sonner.toast.mockImplementation(actual.toast);
+  sonner.success.mockImplementation(actual.toast.success);
+  sonner.warning.mockImplementation(actual.toast.warning);
+  sonner.error.mockImplementation(actual.toast.error);
+  sonner.info.mockImplementation(actual.toast.info);
+  sonner.dismiss.mockImplementation(actual.toast.dismiss);
+
   const toast = Object.assign(sonner.toast, {
     success: sonner.success,
     warning: sonner.warning,
@@ -25,22 +38,16 @@ vi.mock("sonner", () => {
 
   return {
     toast,
-    Toaster: (props: {
-      closeButton: boolean;
-      duration: number;
-      icons: Record<string, ReactNode>;
-      richColors: boolean;
-      theme: string;
-      visibleToasts: number;
-    }) => {
+    Toaster: (props: ToasterProps) => {
       sonner.toaster(props);
       return (
         <div>
-          {Object.entries(props.icons).map(([variant, icon]) => (
+          {Object.entries(props.icons ?? {}).map(([variant, icon]) => (
             <span key={variant} data-testid={`${variant}-icon`}>
               {icon}
             </span>
           ))}
+          <actual.Toaster {...props} />
         </div>
       );
     },
@@ -90,23 +97,27 @@ describe("ToastHost", () => {
     );
   });
 
-  it("accepts development preview events through the shared toast adapter", () => {
+  it("accepts development preview events through the shared toast adapter", async () => {
     render(<ToastHost />);
 
-    window.dispatchEvent(
-      new CustomEvent("league-analysis:toast", {
-        detail: {
-          variant: "success",
-          title: "Sample success",
-          description: "The operation finished.",
-          duration: 4000,
-        },
-      }),
-    );
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("league-analysis:toast", {
+          detail: {
+            variant: "success",
+            title: "Sample success",
+            description: "The operation finished.",
+            duration: 4000,
+          },
+        }),
+      );
+    });
 
     expect(sonner.success).toHaveBeenCalledWith("Sample success", {
       description: "The operation finished.",
       duration: 4000,
     });
+    expect(await screen.findByText("Sample success")).toBeDefined();
+    expect(screen.getByText("The operation finished.")).toBeDefined();
   });
 });

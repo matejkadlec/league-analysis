@@ -6,15 +6,20 @@ Split across two commits, the visitor is signed out with nothing to refresh.
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import Select
+from sqlalchemy import Select, Table
 
 from app.features.auth.service import AuthService
 
 LONG_USER_AGENT = "u" * 400
+
+
+def _locked_table(statement: Select[Any]) -> str:
+    table = cast(Table, statement.get_final_froms()[0])
+    return f"{table.schema}.{table.name}"
 
 
 def _rotating_service() -> tuple[AuthService, list[Any], MagicMock, MagicMock]:
@@ -32,6 +37,8 @@ def _rotating_service() -> tuple[AuthService, list[Any], MagicMock, MagicMock]:
     added: list[Any] = []
     db = MagicMock()
     db.execute = AsyncMock(return_value=lookup)
+    # The owner lookup that precedes the family lock.
+    db.scalar = AsyncMock(return_value=5)
     db.add = MagicMock(side_effect=added.append)
     db.commit = AsyncMock()
 
@@ -53,6 +60,7 @@ def _rotating_service() -> tuple[AuthService, list[Any], MagicMock, MagicMock]:
 def _issuing_service() -> tuple[AuthService, list[Any], MagicMock]:
     added: list[Any] = []
     db = MagicMock()
+    db.execute = AsyncMock()
     db.add = MagicMock(side_effect=added.append)
     db.commit = AsyncMock()
     return AuthService(db), added, db
@@ -107,20 +115,24 @@ async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     assert record.replaced_by_token_id == added[0].token_id
 
 
-async def test_rotation_locks_the_row_it_is_about_to_revoke() -> None:
-    """Without the lock, two tabs sharing one cookie both rotate it.
+async def test_rotation_locks_the_owner_then_the_row_it_revokes() -> None:
+    """Two locks, and the order between them is the deadlock-free one.
 
     The check-then-write on `revoked_at` is only a check if the row is held
-    for the duration: otherwise both readers see NULL, one token forks into
-    two live families, and reuse detection never fires.
+    for the duration. The owner comes first because logout locks the owner
+    and then the same rows; taking them in opposite orders deadlocks.
     """
     service, _added, db, _record = _rotating_service()
 
     await service.rotate_refresh_token("raw-token")
 
-    lookup = db.execute.await_args_list[0].args[0]
-    assert isinstance(lookup, Select)
-    assert lookup._for_update_arg is not None
+    locks = [call.args[0] for call in db.execute.await_args_list[:2]]
+    assert all(isinstance(lock, Select) for lock in locks)
+    assert all(lock._for_update_arg is not None for lock in locks)
+    assert [_locked_table(lock) for lock in locks] == [
+        "auth.users",
+        "auth.refresh_tokens",
+    ]
 
 
 async def test_issuing_honours_an_explicit_lifetime() -> None:

@@ -3,9 +3,13 @@
 import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type UsePlayerSyncRun =
+  typeof import("@/features/players/use-player-sync-run").usePlayerSyncRun;
+
 const { validatedGet, usePlayerSyncRun } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  usePlayerSyncRun: vi.fn(),
+  validatedGet: vi.fn<ValidatedGet>(),
+  usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -69,7 +73,11 @@ const player: Player = {
 beforeEach(() => {
   validatedGet.mockReset();
   validatedGet.mockResolvedValue({ success: true, data: stats });
-  usePlayerSyncRun.mockReturnValue({ isUpdating: false, startSync: vi.fn() });
+  usePlayerSyncRun.mockReturnValue({
+    isUpdating: false,
+    isFetchingMatches: false,
+    startSync: vi.fn<ReturnType<UsePlayerSyncRun>["startSync"]>(),
+  });
 });
 
 afterEach(cleanup);

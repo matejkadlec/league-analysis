@@ -34,8 +34,13 @@ function userBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn<Router["push"]>(),
+    replace: vi.fn<Router["replace"]>(),
+  }),
 }));
 
 let triggerRecheck: (() => Promise<void>) | null = null;

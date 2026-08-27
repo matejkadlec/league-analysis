@@ -215,6 +215,15 @@ function hasFurtherArgument(after: string): boolean {
 }
 
 /**
+ * Whether the params slot is a literal `undefined` -- what a call site writes
+ * to reach a later argument, and readable as "sends nothing" rather than as an
+ * argument this cannot resolve.
+ */
+function passesNoParams(after: string): boolean {
+  return /^\s*,\s*undefined\s*(?=[,)])/.test(after);
+}
+
+/**
  * The query names every call site sends -- one entry per call site, not per
  * endpoint, since keying by endpoint drops all but one site on a shared path.
  * Both the object literal and a `?name=` written into the path count.
@@ -262,7 +271,8 @@ function calledQueryParams(): QueryCall[] {
         // A params argument this cannot read is not the same as no params: a
         // ternary of two object literals reads as sending nothing, which
         // passes. A trailing comma before `)` is not an argument.
-        resolved: body !== null || !hasFurtherArgument(after),
+        resolved:
+          body !== null || !hasFurtherArgument(after) || passesNoParams(after),
       });
     }
   }

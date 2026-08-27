@@ -3,6 +3,7 @@
 import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AuthContextType } from "@/features/auth/types";
 import { renderWithQueryClient } from "./render-support";
 
 /**
@@ -12,9 +13,9 @@ import { renderWithQueryClient } from "./render-support";
  */
 
 const { validatedGet, validatedPut, useAuth } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPut: vi.fn(),
-  useAuth: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedPut: vi.fn<typeof import("@/lib/core/api").validatedPut>(),
+  useAuth: vi.fn<typeof import("@/features/auth").useAuth>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -35,8 +36,33 @@ import {
 /** The banner is the only element that is blocking, so its title identifies it. */
 const BANNER_TITLE = "Cookie and Local Storage Preferences";
 
+/** The whole context, because that is what `useAuth` answers with. */
+function authState(user: AuthContextType["user"]): AuthContextType {
+  return {
+    user,
+    isAuthenticated: user !== null,
+    isLoading: false,
+    login: async () => {},
+    logout: async () => {},
+    checkAuth: async () => {},
+  };
+}
+
 function signedInAs(id: number) {
-  useAuth.mockReturnValue({ isAuthenticated: true, user: { id } });
+  useAuth.mockReturnValue(
+    authState({
+      id,
+      email: `account-${id}@example.test`,
+      display_name: `Account ${id}`,
+      is_active: true,
+      is_admin: false,
+      email_verified: true,
+      email_verified_at: null,
+      last_login: null,
+      created_at: "2026-08-01T00:00:00Z",
+      updated_at: "2026-08-01T00:00:00Z",
+    }),
+  );
 }
 
 /** A choice already in the jar, as though the previous account had accepted. */
@@ -122,6 +148,10 @@ describe("the consent banner when the signed-in account changes", () => {
     await mount();
 
     expect(validatedPut).not.toHaveBeenCalled();
+    // Asked rather than inherited: the banner offers the two choices and no
+    // "Keep current", which would hand this account the previous one's answer.
+    expect(screen.getByRole("button", { name: "Accept all" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Keep current" })).toBeNull();
   });
 
   it("lets an account's own stored record overrule the jar", async () => {
@@ -161,7 +191,7 @@ describe("the consent banner when the signed-in account changes", () => {
     // The one branch that writes to an audit trail: nobody is signed in, the
     // person answers the banner, then signs in. That choice is theirs, so
     // re-asking at authentication would be the wrong kind of careful.
-    useAuth.mockReturnValue({ isAuthenticated: false, user: null });
+    useAuth.mockReturnValue(authState(null));
     serverAnswers(null);
     const { rerender } = await mount();
 
@@ -182,6 +212,10 @@ describe("the consent banner when the signed-in account changes", () => {
       "/settings/user/cookie-consent",
       expect.objectContaining({ consent_level: "all" }),
     );
+    // Their answer stands after signing in: the banner is gone and the jar
+    // carries the level the record was written from.
+    expect(screen.queryByText(BANNER_TITLE)).toBeNull();
+    expect(readCookieConsentFromBrowser()?.level).toBe("all");
   });
 
   it("does not carry one account's choice through a sign-out into the next", async () => {
@@ -199,7 +233,7 @@ describe("the consent banner when the signed-in account changes", () => {
     validatedPut.mockClear();
 
     // Signed out, then in as somebody else -- no remount in between.
-    useAuth.mockReturnValue({ isAuthenticated: false, user: null });
+    useAuth.mockReturnValue(authState(null));
     await act(async () => {
       rerender(<CookieConsentManager />);
       await Promise.resolve();
@@ -222,7 +256,7 @@ describe("the consent banner when the signed-in account changes", () => {
     signedInAs(1);
     validatedGet.mockResolvedValue({
       success: false,
-      error: { status: 503, message: "unavailable" },
+      error: { status: 503, message: "unavailable", kind: "service" },
     });
 
     await mount();

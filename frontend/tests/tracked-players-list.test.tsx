@@ -6,7 +6,7 @@ import { renderWithQueryClient } from "./render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
 }));
 
 const trackedPlayers = Array.from({ length: 6 }, (_, index) => ({
@@ -27,12 +27,15 @@ vi.mock("@/features/auth", () => ({
 // straggler, and its absence surfaced as a render timeout rather than an error.
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
-  api: { delete: vi.fn() },
+  api: { delete: vi.fn<typeof import("@/lib/core/api").api.delete>() },
   validatedGet,
 }));
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: {
+    success: vi.fn<typeof import("sonner").toast.success>(),
+    error: vi.fn<typeof import("sonner").toast.error>(),
+  },
 }));
 
 import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";

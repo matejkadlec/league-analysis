@@ -19,6 +19,9 @@ import {
   SERVICE_STATUS_QUERY_KEY,
   serviceStatusQueryOptions,
 } from "@/lib/core/service-status-query";
+import { z } from "zod";
+
+import { parseUntrustedJson } from "@/lib/core/untrusted-json";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
@@ -87,17 +90,15 @@ function HeaderBanner({
   );
 }
 
+const CLOSED_MESSAGES_SCHEMA = z.array(z.string());
+
 function readClosedMessages(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(
-      readOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY) ?? "",
-    );
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : [];
-  } catch {
-    return [];
-  }
+  return (
+    parseUntrustedJson(
+      CLOSED_MESSAGES_SCHEMA,
+      readOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY),
+    ) ?? []
+  );
 }
 
 export function HeaderMessages() {
@@ -248,14 +249,15 @@ export function HeaderMessages() {
           tone="red"
           icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
         >
-          Riot API Key is invalid or expired! Please update it in{" "}
+          Riot API Key is invalid or expired. Fetching new data from Riot fails
+          until it is replaced in{" "}
           <Link
             href="/settings"
             className="underline hover:text-white transition-colors font-bold"
           >
             settings
-          </Link>{" "}
-          to restore functionality.
+          </Link>
+          ; everything already stored still reads.
         </HeaderBanner>
       );
     }
@@ -267,8 +269,9 @@ export function HeaderMessages() {
           tone="red"
           icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
         >
-          No active Riot API Key found! System cannot function. Please configure
-          it in settings immediately.
+          No active Riot API Key is configured. Fetching new data from Riot
+          fails until one is added in settings; everything already stored still
+          reads.
         </HeaderBanner>
       );
     }

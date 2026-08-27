@@ -4,19 +4,26 @@ import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
 import { MutationObserver } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type Toast = typeof import("sonner").toast;
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { reportApiError, sonnerToast } = vi.hoisted(() => ({
-  reportApiError: vi.fn(),
+  reportApiError:
+    vi.fn<typeof import("@/lib/core/api-error-logging").reportApiError>(),
   sonnerToast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
-    dismiss: vi.fn(),
+    success: vi.fn<Toast["success"]>(),
+    error: vi.fn<Toast["error"]>(),
+    warning: vi.fn<Toast["warning"]>(),
+    info: vi.fn<Toast["info"]>(),
+    dismiss: vi.fn<Toast["dismiss"]>(),
   },
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn<AppRouter["push"]>(),
+    replace: vi.fn<AppRouter["replace"]>(),
+  }),
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
 }));

@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { login } = vi.hoisted(() => ({ login: vi.fn() }));
+import type { AuthContextType } from "@/features/auth/types";
+
+const { login } = vi.hoisted(() => ({
+  login: vi.fn<AuthContextType["login"]>(),
+}));
 
 vi.mock("next/image", () => ({
   default: () => null,

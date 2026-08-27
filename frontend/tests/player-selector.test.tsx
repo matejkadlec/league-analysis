@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import { screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
@@ -7,9 +8,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { discoverPlayer, searchPlayerSuggestions, toast } = vi.hoisted(() => ({
-  discoverPlayer: vi.fn(),
-  searchPlayerSuggestions: vi.fn(),
-  toast: vi.fn(),
+  discoverPlayer:
+    vi.fn<typeof import("@/features/players/player-api").discoverPlayer>(),
+  searchPlayerSuggestions:
+    vi.fn<
+      typeof import("@/features/players/player-api").searchPlayerSuggestions
+    >(),
+  toast: vi.fn<ReturnType<typeof import("@/lib/core/hooks").useToast>["toast"]>(),
 }));
 
 vi.mock("@/features/players/player-api", () => ({
@@ -23,17 +28,28 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { PlayerSelector } from "@/features/players/components/player-selector";
 import { RIOT_ID_SEARCH_MAX_LENGTH } from "@/features/players/utils/riot-id";
+import type { Player } from "@/lib/core/schemas";
 
-const player = {
+type SelectPlayer = ComponentProps<typeof PlayerSelector>["onPlayerSelected"];
+
+const player: Player = {
   puuid: "selected-player-puuid",
   game_name: "Selected",
   tag_line: "TAG",
   platform: "euw1",
+  summoner_level: 300,
+  profile_icon_id: 1,
+  is_tracked: false,
+  analyzed_matches: 0,
+  total_matches: 0,
   created_at: "2026-08-13T00:00:00Z",
   updated_at: "2026-08-13T00:00:00Z",
 };
 
-function renderSelector(onPlayerSelected = vi.fn(), initialSearchValue = "") {
+function renderSelector(
+  onPlayerSelected: SelectPlayer = vi.fn<SelectPlayer>(),
+  initialSearchValue = "",
+) {
   renderWithQueryClient(
     <PlayerSelector
       id="test-player-selector"
@@ -177,9 +193,14 @@ describe("PlayerSelector", () => {
     // not fired either, so an immediate assertion would pass either way.
     await new Promise((resolve) => setTimeout(resolve, 350));
     expect(searchPlayerSuggestions).not.toHaveBeenCalled();
+    expect(screen.queryByRole("option")).toBeNull();
 
     await user.click(screen.getByLabelText("Choose test player"));
     await waitFor(() => expect(searchPlayerSuggestions).toHaveBeenCalled());
+    // The list is what the request is for, and it only exists once focused.
+    expect(
+      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
+    ).toBeTruthy();
   });
 
   it("selects a saved suggestion through the shared non-tracking contract", async () => {

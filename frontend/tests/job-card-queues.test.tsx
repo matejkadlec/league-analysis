@@ -6,9 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { toast, validatedGet, validatedPost } = vi.hoisted(() => ({
-  toast: vi.fn(),
-  validatedGet: vi.fn(),
-  validatedPost: vi.fn(),
+  toast: vi.fn<typeof import("@/lib/core/hooks").appToast.toast>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
 }));
 
 // Spread the real module: a literal factory silently omits any export the
@@ -124,6 +124,11 @@ describe("Match Fetcher job card", () => {
         variant: "success",
       });
     });
+
+    // The card reads the same execution the toast was raised from, so the
+    // Last Execution row has to have stopped saying the job never ran.
+    expect(screen.getByText("SUCCESS")).toBeTruthy();
+    expect(screen.queryByText("Never")).toBeNull();
 
     queryClient.clear();
   });

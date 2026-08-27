@@ -6,6 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type MatchmakingApi = typeof import("@/features/matchmaking/matchmaking-api");
+type SonnerToast = typeof import("sonner").toast;
+
 const {
   cancelMatchmakingAnalysis,
   getLatestMatchmakingAnalysis,
@@ -13,15 +16,18 @@ const {
   startMatchmakingAnalysis,
   toast,
 } = vi.hoisted(() => ({
-  cancelMatchmakingAnalysis: vi.fn(),
-  getLatestMatchmakingAnalysis: vi.fn(),
-  getMatchmakingAnalysisStatus: vi.fn(),
-  startMatchmakingAnalysis: vi.fn(),
+  cancelMatchmakingAnalysis:
+    vi.fn<MatchmakingApi["cancelMatchmakingAnalysis"]>(),
+  getLatestMatchmakingAnalysis:
+    vi.fn<MatchmakingApi["getLatestMatchmakingAnalysis"]>(),
+  getMatchmakingAnalysisStatus:
+    vi.fn<MatchmakingApi["getMatchmakingAnalysisStatus"]>(),
+  startMatchmakingAnalysis: vi.fn<MatchmakingApi["startMatchmakingAnalysis"]>(),
   toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
+    error: vi.fn<SonnerToast["error"]>(),
+    info: vi.fn<SonnerToast["info"]>(),
+    success: vi.fn<SonnerToast["success"]>(),
+    warning: vi.fn<SonnerToast["warning"]>(),
   },
 }));
 
@@ -42,20 +48,22 @@ import {
   projectMatchmakingProgress,
   type ThroughputSample,
 } from "../features/matchmaking/components/matchmaking-progress";
+import type { ApiResponse } from "@/lib/core/api";
+import {
+  MatchmakingAnalysisResponseSchema,
+  type MatchmakingAnalysisResponse,
+  type MatchmakingAnalysisStatus,
+} from "@/lib/core/schemas";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 
+// Parsed through the real schema so a fixture that production could never
+// receive fails here rather than agreeing with a mock's stale shape.
 function analysis(
-  status:
-    | "pending"
-    | "in_progress"
-    | "waiting_rate_limit"
-    | "completed"
-    | "failed"
-    | "cancelled",
+  status: MatchmakingAnalysisStatus,
   overrides: Record<string, unknown> = {},
-) {
-  return {
+): MatchmakingAnalysisResponse {
+  return MatchmakingAnalysisResponseSchema.parse({
     puuid: "test-puuid",
     status,
     progress: 0,
@@ -72,7 +80,7 @@ function analysis(
     rate_limit_reset_at: null,
     params: { match_count: 10, end_date: null },
     ...overrides,
-  };
+  });
 }
 
 function renderComponent(existingQueryClient?: QueryClient) {
@@ -107,13 +115,17 @@ describe("MatchmakingAnalysis lifecycle", () => {
 
 
   it("switches to authoritative running state after the first fast start response", async () => {
-    let resolveStart: ((value: unknown) => void) | undefined;
-    const startResponse = new Promise((resolve) => {
-      resolveStart = resolve;
-    });
+    let resolveStart:
+      | ((value: ApiResponse<MatchmakingAnalysisResponse>) => void)
+      | undefined;
+    const startResponse = new Promise<ApiResponse<MatchmakingAnalysisResponse>>(
+      (resolve) => {
+        resolveStart = resolve;
+      },
+    );
     getLatestMatchmakingAnalysis.mockResolvedValue({
       success: false,
-      error: { status: 404, message: "Not found" },
+      error: { kind: "not-found", status: 404, message: "Not found" },
     });
     getMatchmakingAnalysisStatus.mockResolvedValue({
       success: true,
@@ -311,7 +323,9 @@ describe("MatchmakingAnalysis lifecycle", () => {
       "The analysis did not finish. Please try again.",
     );
 
-    startMatchmakingAnalysis.mockReturnValue(new Promise(() => undefined));
+    startMatchmakingAnalysis.mockReturnValue(
+      new Promise<ApiResponse<MatchmakingAnalysisResponse>>(() => undefined),
+    );
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: "Run New Analysis" }));
@@ -403,7 +417,11 @@ describe("MatchmakingAnalysis lifecycle", () => {
   it("resolves a missing analysis to an empty state instead of an error", async () => {
     getLatestMatchmakingAnalysis.mockResolvedValue({
       success: false,
-      error: { status: 404, message: "The requested item could not be found." },
+      error: {
+        kind: "not-found",
+        status: 404,
+        message: "The requested item could not be found.",
+      },
     });
     const queryClient = renderComponent();
 
@@ -424,6 +442,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     getLatestMatchmakingAnalysis.mockResolvedValue({
       success: false,
       error: {
+        kind: "service",
         status: 500,
         message:
           "The League Analysis service could not complete the request. Please try again later.",

@@ -3,12 +3,15 @@
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AuthContext = import("@/features/auth/types").AuthContextType;
+
 const { validatedPost, checkAuth, toastError, toastSuccess } = vi.hoisted(
   () => ({
-    validatedPost: vi.fn(),
-    checkAuth: vi.fn(),
-    toastError: vi.fn(),
-    toastSuccess: vi.fn(),
+    validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+    checkAuth: vi.fn<AuthContext["checkAuth"]>(),
+    toastError: vi.fn<AppToast["error"]>(),
+    toastSuccess: vi.fn<AppToast["success"]>(),
   }),
 );
 
@@ -25,8 +28,8 @@ vi.mock("@/lib/core/hooks", () => ({
   useToast: () => ({
     success: toastSuccess,
     error: toastError,
-    info: vi.fn(),
-    warning: vi.fn(),
+    info: vi.fn<AppToast["info"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
   }),
 }));
 

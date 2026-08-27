@@ -5,7 +5,9 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
+const { validatedGet } = vi.hoisted(() => ({
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+}));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
@@ -60,14 +62,19 @@ const IMPROVED: Stats = {
  * a `limit` is the recent window, the one without is the whole history.
  */
 function respondWith(recent: Stats | null, overall: Stats | null) {
-  validatedGet.mockImplementation(
-    async (_schema: unknown, _path: string, params: Record<string, unknown>) => {
-      const stats = params.limit === undefined ? overall : recent;
-      return stats === null
-        ? { success: false, error: { status: 404, kind: "not_found" } }
-        : { success: true, data: { puuid: PUUID, wins: 0, losses: 0, ...stats } };
-    },
-  );
+  validatedGet.mockImplementation(async (_schema, _path, params) => {
+    const stats = params?.limit === undefined ? overall : recent;
+    return stats === null
+      ? {
+          success: false,
+          error: {
+            status: 404,
+            kind: "not-found",
+            message: "This player has no stats yet.",
+          },
+        }
+      : { success: true, data: { puuid: PUUID, wins: 0, losses: 0, ...stats } };
+  });
 }
 
 function renderCard() {

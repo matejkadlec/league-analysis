@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, normalizeApiError } from "@/lib/core/api";
 import { queryErrorToast } from "@/lib/core/hooks";
 import { AuthGate } from "@/components/auth-gate";
+import type { AuthContextType } from "@/features/auth/types";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
+  clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
 
@@ -16,7 +18,12 @@ import {
 // recognise shapes of code, so these assert the effect instead: each surface
 // put where a refusal and an outage look alike, hint still there.
 
-const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
+const nav = vi.hoisted(() => ({
+  replace: vi.fn<Router["replace"]>(),
+  push: vi.fn<Router["push"]>(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: nav.replace, push: nav.push }),
@@ -26,8 +33,8 @@ vi.mock("next/navigation", () => ({
 const auth = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
-  checkAuth: vi.fn(async () => {}),
-  logout: vi.fn(async () => {}),
+  checkAuth: vi.fn<AuthContextType["checkAuth"]>(async () => {}),
+  logout: vi.fn<AuthContextType["logout"]>(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({ useAuth: () => auth }));
@@ -241,6 +248,11 @@ describe("the can't-reach-the-server surface", () => {
     // exists for the server that is not answering, so its Sign out is the one
     // caller that must act anyway.
     setHint();
+    // The teardown the real `logout` performs, so the button is observable by
+    // what it releases the visitor from rather than by the mock it called.
+    auth.logout.mockImplementation(async () => {
+      clearAuthStateCookie();
+    });
 
     render(<AuthGate>protected content</AuthGate>);
     await act(async () => {
@@ -254,6 +266,7 @@ describe("the can't-reach-the-server surface", () => {
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
     });
+    expect(screen.queryByText("Can't reach the server")).toBeNull();
   });
 });
 

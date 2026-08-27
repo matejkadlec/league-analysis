@@ -11,15 +11,20 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type MatchmakingApi = typeof import("@/features/matchmaking/matchmaking-api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+
 const { getMatchmakingAnalysisHistory, deleteMatchmakingAnalysisRecord, toast } =
   vi.hoisted(() => ({
-    getMatchmakingAnalysisHistory: vi.fn(),
-    deleteMatchmakingAnalysisRecord: vi.fn(),
+    getMatchmakingAnalysisHistory:
+      vi.fn<MatchmakingApi["getMatchmakingAnalysisHistory"]>(),
+    deleteMatchmakingAnalysisRecord:
+      vi.fn<MatchmakingApi["deleteMatchmakingAnalysisRecord"]>(),
     toast: {
-      success: vi.fn(),
-      error: vi.fn(),
-      warning: vi.fn(),
-      info: vi.fn(),
+      success: vi.fn<AppToast["success"]>(),
+      error: vi.fn<AppToast["error"]>(),
+      warning: vi.fn<AppToast["warning"]>(),
+      info: vi.fn<AppToast["info"]>(),
     },
   }));
 
@@ -113,7 +118,11 @@ describe("the matchmaking analysis history card", () => {
     // provider client: what separates the branches is `queryCache.onError`.
     getMatchmakingAnalysisHistory.mockResolvedValue({
       success: false,
-      error: { status: 404, kind: "not_found" },
+      error: {
+        status: 404,
+        kind: "not-found",
+        message: "The requested item could not be found.",
+      },
     });
     const announce = vi.spyOn(appToast, "toast").mockImplementation(() => "");
     const queryClient = createProvidersQueryClient();
@@ -142,7 +151,12 @@ describe("the matchmaking analysis history card", () => {
   it("says the history could not be loaded when it could not be", async () => {
     getMatchmakingAnalysisHistory.mockResolvedValue({
       success: false,
-      error: { status: 500, kind: "server" },
+      error: {
+        status: 500,
+        kind: "service",
+        message:
+          "The League Analysis service could not complete the request. Please try again later.",
+      },
     });
     const queryClient = renderHistory();
 
@@ -190,8 +204,18 @@ describe("the matchmaking analysis history card", () => {
       success: true,
       data: { message: "deleted" },
     });
-    const resultsQuery = vi.fn().mockResolvedValue("results");
-    const analysisQuery = vi.fn().mockResolvedValue("analysis");
+    let resultsRuns = 0;
+    let analysisRuns = 0;
+    // Numbered answers, so each panel's rendered text says which fetch it is
+    // showing rather than only how many went out.
+    const resultsQuery = vi.fn<() => Promise<string>>(async () => {
+      resultsRuns += 1;
+      return `results ${resultsRuns}`;
+    });
+    const analysisQuery = vi.fn<() => Promise<string>>(async () => {
+      analysisRuns += 1;
+      return `analysis ${analysisRuns}`;
+    });
     function Probe({
       queryKey,
       queryFn,
@@ -201,8 +225,8 @@ describe("the matchmaking analysis history card", () => {
     }) {
       // Stands in for a sibling panel: same key, and deliberately never
       // stale on its own, so a refetch can only come from the invalidation.
-      useQuery({ queryKey, queryFn, staleTime: Infinity });
-      return null;
+      const { data } = useQuery({ queryKey, queryFn, staleTime: Infinity });
+      return <span>{data}</span>;
     }
 
     const { queryClient } = renderWithQueryClient(
@@ -241,6 +265,8 @@ describe("the matchmaking analysis history card", () => {
     // it is showing leaves it offering "Run New Analysis" for a record that
     // no longer exists.
     await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("results 2")).toBeTruthy();
+    expect(await screen.findByText("analysis 2")).toBeTruthy();
 
     queryClient.clear();
   });
@@ -251,7 +277,12 @@ describe("the matchmaking analysis history card", () => {
     // row that flickered and stayed, with no sign the delete was refused.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
-      error: { status: 500, kind: "server" },
+      error: {
+        status: 500,
+        kind: "service",
+        message:
+          "The League Analysis service could not complete the request. Please try again later.",
+      },
     });
     const queryClient = renderHistory();
 

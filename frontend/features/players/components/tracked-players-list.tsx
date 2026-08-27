@@ -140,9 +140,14 @@ export function TrackedPlayersList({
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: trackedPlayersQueryKey(userId),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrap(
-        await validatedGet(TrackedPlayersSchema, "/players/tracked/list"),
+        await validatedGet(
+          TrackedPlayersSchema,
+          "/players/tracked/list",
+          undefined,
+          signal,
+        ),
       );
     },
     enabled: !!userId,

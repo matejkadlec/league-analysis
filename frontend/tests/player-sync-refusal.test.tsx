@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQueryClient } from "./render-support";
 
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+
 const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
   vi.hoisted(() => ({
-    validatedGet: vi.fn(),
-    validatedPost: vi.fn(),
-    toastError: vi.fn(),
-    toastInfo: vi.fn(),
-    toastWarning: vi.fn(),
+    validatedGet: vi.fn<Api["validatedGet"]>(),
+    validatedPost: vi.fn<Api["validatedPost"]>(),
+    toastError: vi.fn<AppToast["error"]>(),
+    toastInfo: vi.fn<AppToast["info"]>(),
+    toastWarning: vi.fn<AppToast["warning"]>(),
   }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -24,7 +27,7 @@ vi.mock("@/lib/core/hooks", () => ({
     error: toastError,
     info: toastInfo,
     warning: toastWarning,
-    success: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
   }),
 }));
 
@@ -59,14 +62,19 @@ describe("player sync start refusal", () => {
         message: BUSY_MESSAGE,
       },
     });
-    const onStartRefused = vi.fn();
-    const { result } = renderHookWithQueryClient(() =>
+    const onStartRefused = vi.fn<(puuid: string) => void>();
+    const { result, queryClient } = renderHookWithQueryClient(() =>
       usePlayerProfileUpdate({ onStartRefused }),
     );
 
     result.current.mutate({ puuid: PUUID });
     await vi.waitFor(() => expect(onStartRefused).toHaveBeenCalledWith(PUUID));
 
+    // No run was created, so nothing may be seeded as the active one: a
+    // surface that adopted it would poll a run id the backend never issued.
+    expect(queryClient.getQueryData(["player-sync-active", PUUID])).toBe(
+      undefined,
+    );
     expect(toastInfo).toHaveBeenCalledWith("Player update not started", {
       description: BUSY_MESSAGE,
     });
@@ -78,13 +86,16 @@ describe("player sync start refusal", () => {
       success: false,
       error: { kind: "service", status: 503, message: "unavailable" },
     });
-    const { result } = renderHookWithQueryClient(() =>
+    const { result, queryClient } = renderHookWithQueryClient(() =>
       usePlayerProfileUpdate(),
     );
 
     result.current.mutate({ puuid: PUUID });
     await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
 
+    expect(queryClient.getQueryData(["player-sync-active", PUUID])).toBe(
+      undefined,
+    );
     expect(toastInfo).not.toHaveBeenCalled();
   });
 });
@@ -122,7 +133,9 @@ describe("player sync failure reporting", () => {
       }
       return { success: true, data: failed };
     });
-    renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, {}));
+    const { result } = renderHookWithQueryClient(() =>
+      usePlayerSyncRun(PUUID, {}),
+    );
 
     await vi.advanceTimersByTimeAsync(3_000);
 
@@ -131,5 +144,8 @@ describe("player sync failure reporting", () => {
         description: errorMessage,
       }),
     );
+    // A failed run is a finished run: the surface that reported it has to stop
+    // showing the update as in progress, or the spinner outlives the toast.
+    expect(result.current.isUpdating).toBe(false);
   });
 });

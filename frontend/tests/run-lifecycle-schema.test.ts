@@ -79,6 +79,18 @@ describe("matchmaking run lifecycle split", () => {
     expect("results" in run).toBe(false);
   });
 
+  it("strips results a run in flight should never have carried", () => {
+    // The type cannot express this one: a card holding a run typed as
+    // in-flight has no `results` key to read, so only the runtime split can
+    // say what happens when a row carries partial averages anyway.
+    const run = MatchmakingAnalysisResponseSchema.parse(
+      matchmakingPayload({ status: "in_progress", results: matchmakingResults }),
+    );
+
+    expect(run.status).toBe("in_progress");
+    expect("results" in run).toBe(false);
+  });
+
   it("preserves a genuine failure untouched", () => {
     const run = MatchmakingAnalysisResponseSchema.parse(
       matchmakingPayload({

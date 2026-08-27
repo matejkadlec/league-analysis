@@ -5,10 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
 
+type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type UsePlayerSyncRun =
+  typeof import("@/features/players/use-player-sync-run").usePlayerSyncRun;
+
 const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  usePlayerSyncRun: vi.fn(),
-  startSync: vi.fn(),
+  validatedGet: vi.fn<ValidatedGet>(),
+  usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
+  startSync: vi.fn<ReturnType<UsePlayerSyncRun>["startSync"]>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -122,7 +126,11 @@ function failLeagueWith(status: number) {
     if (url.endsWith("/league")) {
       return {
         success: false,
-        error: { status, message: "The service is unavailable." },
+        error: {
+          status,
+          message: "The service is unavailable.",
+          kind: "service" as const,
+        },
       };
     }
     return { success: true, data: stats };
@@ -144,7 +152,11 @@ beforeEach(() => {
   answerWith();
   startSync.mockReset();
   usePlayerSyncRun.mockReset();
-  usePlayerSyncRun.mockReturnValue({ isUpdating: false, startSync });
+  usePlayerSyncRun.mockReturnValue({
+    isUpdating: false,
+    isFetchingMatches: false,
+    startSync,
+  });
 });
 
 
@@ -249,11 +261,26 @@ describe("the profile icon", () => {
 
 describe("the update button", () => {
   it("starts a sync and hands completion to the page's refresh", () => {
-    const onRefreshAll = vi.fn();
+    let refreshes = 0;
+    let completeSync: () => void = () => {
+      throw new Error("usePlayerSyncRun was never called");
+    };
+    // Being handed the callback is not the same as it running, so the run's
+    // completion is reported here the way the hook would report it.
+    usePlayerSyncRun.mockImplementation((_puuid, options) => {
+      completeSync = () => void options?.onCompleted?.();
+      return { isUpdating: false, isFetchingMatches: false, startSync };
+    });
+    const onRefreshAll = () => {
+      refreshes += 1;
+    };
     renderCard(player(), onRefreshAll);
 
     fireEvent.click(screen.getByRole("button", { name: /Update/ }));
     expect(startSync).toHaveBeenCalledTimes(1);
+
+    completeSync();
+    expect(refreshes).toBe(1);
 
     // The card does not refetch anything itself; the page-wide refresh it was
     // given must ride the sync's completion or the button updates nothing.
@@ -263,7 +290,11 @@ describe("the update button", () => {
   });
 
   it("cannot be pressed again while the sync is running", () => {
-    usePlayerSyncRun.mockReturnValue({ isUpdating: true, startSync });
+    usePlayerSyncRun.mockReturnValue({
+      isUpdating: true,
+      isFetchingMatches: false,
+      startSync,
+    });
     renderCard();
 
     const button = screen.getByRole("button", {

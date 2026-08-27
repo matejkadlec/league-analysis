@@ -37,7 +37,12 @@ function userBody(overrides: Record<string, unknown> = {}) {
  * route reading "Checking your session..." for the rest of the tab's life.
  */
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
+const nav = vi.hoisted(() => ({
+  push: vi.fn<Router["push"]>(),
+  replace: vi.fn<Router["replace"]>(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => nav,

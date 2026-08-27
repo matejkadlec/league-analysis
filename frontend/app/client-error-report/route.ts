@@ -4,6 +4,7 @@ import {
   ClientErrorReportSchema,
   writeClientErrorLog,
 } from "@/lib/core/client-error-report";
+import { parseUntrustedJson } from "@/lib/core/untrusted-json";
 
 const MAX_BODY_BYTES = 1024;
 const WINDOW_MS = 10_000;
@@ -37,16 +38,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse(null, { status: 204 });
   }
 
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(raw) as unknown;
-  } catch {
-    return new NextResponse(null, { status: 204 });
-  }
-
-  const parsed = ClientErrorReportSchema.safeParse(parsedJson);
-  if (parsed.success) {
-    writeClientErrorLog(parsed.data);
+  const report = parseUntrustedJson(ClientErrorReportSchema, raw);
+  if (report) {
+    writeClientErrorLog(report);
   }
   return new NextResponse(null, { status: 204 });
 }

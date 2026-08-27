@@ -14,9 +14,14 @@ export const SERVICE_STATUS_QUERY_KEY = ["service-status"] as const;
 export function serviceStatusQueryOptions(options?: { enabled?: boolean }) {
   return queryOptions({
     queryKey: SERVICE_STATUS_QUERY_KEY,
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
-        await validatedGet(ServiceStatusSchema, "/settings/service-status"),
+        await validatedGet(
+          ServiceStatusSchema,
+          "/settings/service-status",
+          undefined,
+          signal,
+        ),
       ),
     enabled: options?.enabled ?? true,
     staleTime: 5 * 1000,

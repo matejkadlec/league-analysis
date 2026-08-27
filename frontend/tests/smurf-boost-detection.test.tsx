@@ -10,6 +10,15 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  SmurfBoostAnalysisResponseSchema,
+  type SmurfBoostAnalysisResponse,
+} from "@/lib/core/schemas";
+
+type Api = typeof import("@/lib/core/api");
+type SmurfBoostApi = typeof import("@/features/smurf-boost/smurf-boost-api");
+type Toast = typeof import("sonner").toast;
+
 const {
   getLatestSmurfBoostDetection,
   startSmurfBoostDetection,
@@ -17,16 +26,17 @@ const {
   validatedGet,
   validatedPost,
 } = vi.hoisted(() => ({
-  getLatestSmurfBoostDetection: vi.fn(),
-  startSmurfBoostDetection: vi.fn(),
+  getLatestSmurfBoostDetection:
+    vi.fn<SmurfBoostApi["getLatestSmurfBoostDetection"]>(),
+  startSmurfBoostDetection: vi.fn<SmurfBoostApi["startSmurfBoostDetection"]>(),
   toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
+    error: vi.fn<Toast["error"]>(),
+    info: vi.fn<Toast["info"]>(),
+    success: vi.fn<Toast["success"]>(),
+    warning: vi.fn<Toast["warning"]>(),
   },
-  validatedGet: vi.fn(),
-  validatedPost: vi.fn(),
+  validatedGet: vi.fn<Api["validatedGet"]>(),
+  validatedPost: vi.fn<Api["validatedPost"]>(),
 }));
 
 vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
@@ -134,8 +144,15 @@ function results(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function analysis(overrides: Record<string, unknown> = {}) {
-  return {
+/**
+ * A stored run as the wire reports it, parsed through the real schema so the
+ * fixture is split on its lifecycle exactly the way production splits it --
+ * a hand-written literal would claim `results` on a failed run.
+ */
+function analysis(
+  overrides: Record<string, unknown> = {},
+): SmurfBoostAnalysisResponse {
+  return SmurfBoostAnalysisResponseSchema.parse({
     puuid: "test-puuid",
     created_at: "2026-08-14T20:00:00.000Z",
     status: "completed",
@@ -149,7 +166,7 @@ function analysis(overrides: Record<string, unknown> = {}) {
     is_stale: false,
     results: results(),
     ...overrides,
-  };
+  });
 }
 
 /** The same run reported with too few games for the model to compare. */
@@ -1037,7 +1054,7 @@ describe("SmurfBoostDetection", () => {
     }
 
     /** Click Run and hold the fetch open, so the alert stays on screen. */
-    async function fetchInProgress(latest: Record<string, unknown>) {
+    async function fetchInProgress(latest: SmurfBoostAnalysisResponse) {
       getLatestSmurfBoostDetection.mockResolvedValue({
         success: true,
         data: latest,
@@ -1302,6 +1319,35 @@ describe("SmurfBoostDetection", () => {
         screen.getByText(/newest games could not be fetched/),
       ).toBeTruthy(),
     );
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
+  });
+
+  it("re-reads the stored count for a fetch that did not finish", async () => {
+    // A rate-limited run still stored whatever it got through first, and the
+    // hook refreshes this player's caches on a completed run only -- so the
+    // pool this card names would stay at the number from before the click.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    noActiveSync(syncRun({ status: "rate_limited" }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 84\./)).toBeTruthy(),
+    );
+    storedRankedGames = 96;
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 96\./)).toBeTruthy(),
+    );
+    // Still unsaid: a run that did not finish cannot account for what it got.
     expect(screen.queryByText(/The last fetch/)).toBeNull();
   });
 

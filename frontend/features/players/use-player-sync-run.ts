@@ -136,11 +136,13 @@ export function usePlayerSyncRun(
 
   const activeSyncQuery = useQuery({
     queryKey: playerSyncActiveQueryKey(puuid),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrap(
         await validatedGet(
           PlayerSyncRunSchema.nullable(),
           `/players/${puuid}/sync/active`,
+          undefined,
+          signal,
         ),
       );
     },
@@ -166,11 +168,13 @@ export function usePlayerSyncRun(
 
   const exactSyncQuery = useQuery({
     queryKey: ["player-sync", puuid, observedSyncId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrap(
         await validatedGet(
           PlayerSyncRunSchema,
           `/players/${puuid}/sync/${observedSyncId}`,
+          undefined,
+          signal,
         ),
       );
     },

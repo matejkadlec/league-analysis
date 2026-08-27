@@ -5,14 +5,17 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AuthContext = import("@/features/auth/types").AuthContextType;
+
 const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
-  validatedPatch: vi.fn(),
-  checkAuth: vi.fn(),
+  validatedPatch: vi.fn<typeof import("@/lib/core/api").validatedPatch>(),
+  checkAuth: vi.fn<AuthContext["checkAuth"]>(),
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
+    error: vi.fn<AppToast["error"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    info: vi.fn<AppToast["info"]>(),
   },
 }));
 
@@ -35,6 +38,7 @@ vi.mock("@/features/auth", async (importOriginal) => ({
 }));
 
 import { DisplayNameField } from "@/features/settings/display-name-field";
+import { USER_QUERY_KEY } from "@/features/settings/settings-helpers";
 
 function renderField() {
   const { queryClient } = renderWithQueryClient(
@@ -86,6 +90,9 @@ describe("the display name on the settings page", () => {
         { display_name: "Padded Name" },
       ),
     );
+    // Once the save lands the box follows the session again, so the padding
+    // is gone from the screen and not only from the request.
+    await waitFor(() => expect(field().value).toBe("Original Name"));
 
     queryClient.clear();
   });
@@ -103,6 +110,9 @@ describe("the display name on the settings page", () => {
       expect(toast.warning).toHaveBeenCalledWith("Enter a display name"),
     );
     expect(validatedPatch).not.toHaveBeenCalled();
+    // A refusal leaves the draft in the box: resetting it to the stored name
+    // would make someone retype from scratch to fix a typo.
+    expect(field().value).toBe("     ");
 
     queryClient.clear();
   });
@@ -115,6 +125,7 @@ describe("the display name on the settings page", () => {
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPatch).not.toHaveBeenCalled();
+    expect(field().value).toBe("Jo");
 
     queryClient.clear();
   });
@@ -135,6 +146,7 @@ describe("the display name on the settings page", () => {
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPatch).not.toHaveBeenCalled();
+    expect(field().value).toBe(name);
 
     queryClient.clear();
   });
@@ -156,6 +168,7 @@ describe("the display name on the settings page", () => {
       ),
     );
     expect(toast.warning).not.toHaveBeenCalled();
+    await waitFor(() => expect(field().value).toBe("Original Name"));
 
     queryClient.clear();
   });
@@ -165,11 +178,15 @@ describe("the display name on the settings page", () => {
     // not off this mutation. Without the re-read the field shows the new name
     // and every other surface keeps the old one until a full page reload.
     const queryClient = renderField();
+    // Seeded so the invalidation has something to mark: the surfaces that
+    // read the user off this key are the ones the re-read is for.
+    queryClient.setQueryData(USER_QUERY_KEY, { display_name: "Original Name" });
 
     type("Renamed Person");
     save();
 
     await waitFor(() => expect(checkAuth).toHaveBeenCalled());
+    expect(queryClient.getQueryState(USER_QUERY_KEY)?.isInvalidated).toBe(true);
 
     queryClient.clear();
   });
@@ -177,7 +194,11 @@ describe("the display name on the settings page", () => {
   it("says so when the rename did not happen", async () => {
     validatedPatch.mockResolvedValue({
       success: false,
-      error: { status: 500, kind: "server" },
+      error: {
+        status: 500,
+        kind: "service",
+        message: "The rename could not be saved.",
+      },
     });
     const queryClient = renderField();
 

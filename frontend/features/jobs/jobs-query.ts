@@ -47,12 +47,13 @@ const EXECUTIONS_PAGE_SIZE = 20;
 export function jobExecutionsInfiniteQueryOptions() {
   return infiniteQueryOptions({
     queryKey: jobExecutionsInfiniteQueryKey(),
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
       return unwrap(
         await validatedGet(
           JobExecutionListResponseSchema,
           "/jobs/executions/all",
           { page: pageParam, size: EXECUTIONS_PAGE_SIZE },
+          signal,
         ),
       );
     },
@@ -75,11 +76,14 @@ export function jobExecutionsInfiniteQueryOptions() {
 export function jobsQueryOptions() {
   return queryOptions({
     queryKey: jobsQueryKey(),
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
-        await validatedGet(z.array(JobConfigurationSchema), "/jobs/", {
-          active_only: false,
-        }),
+        await validatedGet(
+          z.array(JobConfigurationSchema),
+          "/jobs/",
+          { active_only: false },
+          signal,
+        ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
   });
@@ -89,9 +93,14 @@ export function jobsQueryOptions() {
 export function jobStatusQueryOptions() {
   return queryOptions({
     queryKey: jobStatusQueryKey(),
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
-        await validatedGet(JobStatusResponseSchema, "/jobs/status/overview"),
+        await validatedGet(
+          JobStatusResponseSchema,
+          "/jobs/status/overview",
+          undefined,
+          signal,
+        ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
   });
@@ -101,12 +110,13 @@ export function jobStatusQueryOptions() {
 export function jobRecentExecutionsQueryOptions(jobId: number) {
   return queryOptions({
     queryKey: jobExecutionsQueryKey(jobId),
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       unwrap(
         await validatedGet(
           JobExecutionListResponseSchema,
           `/jobs/${jobId}/executions`,
           { page: 1, size: 5, execution_type: "REGULAR" },
+          signal,
         ),
       ),
     enabled: !!jobId,

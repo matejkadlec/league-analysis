@@ -2,10 +2,15 @@ import type { AxiosAdapter, AxiosRequestConfig } from "axios";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/core/riot-credential-health-events", () => ({
-  notifyRiotCredentialHealthUpdated: vi.fn(),
+  notifyRiotCredentialHealthUpdated:
+    vi.fn<
+      typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+    >(),
 }));
 vi.mock("@/features/auth/utils/token-manager", () => ({
-  refreshAccessToken: vi.fn().mockResolvedValue({ outcome: "refused" }),
+  refreshAccessToken: vi
+    .fn<typeof import("@/features/auth/utils/token-manager").refreshAccessToken>()
+    .mockResolvedValue({ outcome: "refused" }),
 }));
 
 import {

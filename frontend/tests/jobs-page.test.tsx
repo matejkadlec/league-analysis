@@ -6,8 +6,9 @@ import { renderWithQueryClient } from "./render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet, useAuth } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  useAuth: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  useAuth:
+    vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -52,14 +53,45 @@ vi.mock("@/features/jobs", async (importOriginal) => ({
 }));
 
 import JobsPage from "@/app/jobs/page";
+import type { ApiResponse } from "@/lib/core/api";
+import type { AuthContextType } from "@/features/auth/types";
 
 const JOB = { id: 1, name: "Match Fetcher" };
 
-function answer(url: string) {
+function answer(url: string): ApiResponse<unknown> {
   if (url === "/jobs/") return { success: true, data: [JOB] };
   if (url === "/jobs/executions/all")
     return { success: true, data: { items: [], total: 0, page: 1, size: 20 } };
   return { success: true, data: { scheduler_running: true } };
+}
+
+/** The whole context, because that is what `useAuth` answers with. */
+function signedInAs({
+  id,
+  is_admin,
+}: {
+  id: number;
+  is_admin: boolean;
+}): AuthContextType {
+  return {
+    user: {
+      id,
+      is_admin,
+      email: `account-${id}@example.test`,
+      display_name: `Account ${id}`,
+      is_active: true,
+      email_verified: true,
+      email_verified_at: null,
+      last_login: null,
+      created_at: "2026-08-01T00:00:00Z",
+      updated_at: "2026-08-01T00:00:00Z",
+    },
+    isAuthenticated: true,
+    isLoading: false,
+    login: async () => {},
+    logout: async () => {},
+    checkAuth: async () => {},
+  };
 }
 
 function renderPage() {
@@ -71,11 +103,7 @@ beforeEach(() => {
   validatedGet.mockImplementation((_schema: unknown, url: string) =>
     Promise.resolve(answer(url)),
   );
-  useAuth.mockReturnValue({
-    user: { id: 1, is_admin: true, is_active: true },
-    isAuthenticated: true,
-    isLoading: false,
-  });
+  useAuth.mockReturnValue(signedInAs({ id: 1, is_admin: true }));
 });
 
 
@@ -84,11 +112,7 @@ describe("the background jobs page", () => {
     // The page lists every player's sync state and the Riot key's health. The
     // `requireAdmin` flag is asserted as source text elsewhere; this asserts
     // what a non-admin actually sees, which is the refusal and none of it.
-    useAuth.mockReturnValue({
-      user: { id: 2, is_admin: false, is_active: true },
-      isAuthenticated: true,
-      isLoading: false,
-    });
+    useAuth.mockReturnValue(signedInAs({ id: 2, is_admin: false }));
     const { queryClient } = renderPage();
 
     expect(screen.getByText(/limited to administrators/)).toBeTruthy();
@@ -125,7 +149,14 @@ describe("the background jobs page", () => {
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
         url === "/jobs/"
-          ? { success: false, error: { status: 500, kind: "server" } }
+          ? {
+              success: false,
+              error: {
+                status: 500,
+                kind: "service",
+                message: "The service is unavailable.",
+              },
+            }
           : answer(url),
       ),
     );
@@ -162,7 +193,14 @@ describe("the background jobs page", () => {
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
         url === "/jobs/status/overview"
-          ? { success: false, error: { status: 200, kind: "validation" } }
+          ? {
+              success: false,
+              error: {
+                status: 200,
+                kind: "validation",
+                message: "The response did not match the schema.",
+              },
+            }
           : answer(url),
       ),
     );

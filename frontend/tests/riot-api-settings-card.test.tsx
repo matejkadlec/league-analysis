@@ -11,16 +11,20 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatDateTime } from "@/lib/core/format";
+import type { ApiResponse } from "@/lib/core/api";
+
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPut, validatedPost, toast } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPut: vi.fn(),
-  validatedPost: vi.fn(),
+  validatedGet: vi.fn<Api["validatedGet"]>(),
+  validatedPut: vi.fn<Api["validatedPut"]>(),
+  validatedPost: vi.fn<Api["validatedPost"]>(),
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
+    error: vi.fn<AppToast["error"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    info: vi.fn<AppToast["info"]>(),
   },
 }));
 
@@ -82,7 +86,7 @@ function status(overrides: Record<string, unknown> = {}) {
 
 /** Answers the card's two GETs: the stored setting, then its health status. */
 function respondWith(options: {
-  setting?: { success: boolean; data?: unknown; error?: unknown };
+  setting?: ApiResponse<unknown>;
   status?: Record<string, unknown>;
 }) {
   validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
@@ -135,11 +139,14 @@ describe("the card that swaps the Riot API key", () => {
     // mis-pasted string from becoming the live credential.
     const queryClient = renderCard();
 
-    await typeKey("not-a-riot-key");
+    const input = await typeKey("not-a-riot-key");
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPut).not.toHaveBeenCalled();
+    // Only a saved key is cleared away. The mis-pasted one stays on screen to
+    // be corrected, next to the toast that says what is wrong with it.
+    expect((input as HTMLInputElement).value).toBe("not-a-riot-key");
 
     queryClient.clear();
   });
@@ -159,7 +166,7 @@ describe("the card that swaps the Riot API key", () => {
     });
     const queryClient = renderCard();
 
-    await typeKey(VALID_KEY);
+    const input = await typeKey(VALID_KEY);
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() =>
@@ -168,6 +175,9 @@ describe("the card that swaps the Riot API key", () => {
         expect.anything(),
       ),
     );
+    // A save that failed leaves the key to retry with: clearing the field
+    // here would send the operator back to the Riot portal for it.
+    expect((input as HTMLInputElement).value).toBe(VALID_KEY);
 
     queryClient.clear();
   });
@@ -235,7 +245,10 @@ describe("the card that swaps the Riot API key", () => {
     // `setting` is null either way. The global `queryCache.onError` separates
     // them, so letting the 404 through raises an error over a working card.
     respondWith({
-      setting: { success: false, error: { status: 404, kind: "not_found" } },
+      setting: {
+        success: false,
+        error: { message: "Not found", status: 404, kind: "not-found" },
+      },
       status: status({ credential_status: "missing", evidence: "missing" }),
     });
     const announce = vi.spyOn(appToast, "toast").mockImplementation(() => "");
@@ -265,12 +278,12 @@ describe("the card that swaps the Riot API key", () => {
     // off this event, so without it they keep showing the old key's verdict
     // -- including a red "invalid" beside a key that was just fixed.
     validatedPut.mockResolvedValue({ success: true, data: DB_SETTING });
-    const heard = vi.fn();
+    const heard = vi.fn<EventListener>();
     window.addEventListener(RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT, heard);
 
     const queryClient = renderCard();
 
-    await typeKey(VALID_KEY);
+    const input = await typeKey(VALID_KEY);
     fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(heard).toHaveBeenCalled());
@@ -279,6 +292,9 @@ describe("the card that swaps the Riot API key", () => {
       "/settings/riot_api_key",
       { value: VALID_KEY },
     );
+    // The saved key is now the stored one, so the entry field empties: a key
+    // left sitting in it reads as still pending.
+    await waitFor(() => expect((input as HTMLInputElement).value).toBe(""));
 
     window.removeEventListener(RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT, heard);
     queryClient.clear();

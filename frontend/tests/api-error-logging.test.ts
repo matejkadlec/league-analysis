@@ -68,6 +68,10 @@ describe("reportApiError", () => {
       "API error",
       expect.objectContaining({ kind: apiError.kind, source: "query" }),
     );
+    // The scrubbed product message, not the raw axios one: the record is the
+    // developer's only account of a failure the viewer already saw worded.
+    const payload = consoleError.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.message).toBe(apiError.message);
   });
 
   it.each([
@@ -85,6 +89,11 @@ describe("reportApiError", () => {
     reportApiError(apiError, { source: "mutation", key: '["x"]' });
 
     expect(consoleError).not.toHaveBeenCalled();
+    // Silence read against a record that does arrive: "nothing was logged"
+    // also holds for a reporter that logs nothing at all.
+    reportApiError(normalizedError(new Error("boom")), { source: "mutation" });
+    const records = consoleError.mock.calls as [string, { kind: string }][];
+    expect(records.map(([, payload]) => payload.kind)).toEqual(["unexpected"]);
   });
 
   it("records a structured, secret-safe payload", () => {

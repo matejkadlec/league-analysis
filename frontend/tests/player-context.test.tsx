@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
 const {
   validatedGet,
   validatedPost,
@@ -13,12 +15,13 @@ const {
   pathname,
   search,
 } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPost: vi.fn(),
-  validatedPut: vi.fn(),
-  useAuth: vi.fn(),
-  replace: vi.fn(),
-  push: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedPut: vi.fn<typeof import("@/lib/core/api").validatedPut>(),
+  useAuth:
+    vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
+  replace: vi.fn<AppRouter["replace"]>(),
+  push: vi.fn<AppRouter["push"]>(),
   pathname: { current: "/player-overview" },
   search: { current: "" },
 }));
@@ -50,6 +53,8 @@ import {
   usePlayerContext,
 } from "@/features/players/context/player-context";
 import { playerContextQueryKey } from "@/features/players/player-query";
+import type { AuthContextType } from "@/features/auth/types";
+import type { ApiResponse } from "@/lib/core/api";
 import type { Player, PlayerContext } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./render-support";
 
@@ -80,11 +85,11 @@ const FROM_URL = player("url-puuid", "UrlPlayer");
 // account does not track them and they are not in the sidebar.
 const STRANGER: Player = { ...player("stranger-puuid", "Stranger"), is_tracked: false };
 
-function answer(url: string) {
+function answer(url: string): ApiResponse<Player | PlayerContext> {
   if (url === "/players/context") {
     return {
       success: true,
-      data: { current_player: SAVED, tracked_players: [SAVED] },
+      data: { current_player: SAVED },
     };
   }
   if (url === `/players/${FROM_URL.puuid}`) {
@@ -93,8 +98,40 @@ function answer(url: string) {
   if (url === `/players/${STRANGER.puuid}`) {
     return { success: true, data: STRANGER };
   }
-  return { success: false, error: { status: 404, kind: "not_found" } };
+  return {
+    success: false,
+    error: { status: 404, kind: "not-found", message: "No such player." },
+  };
 }
+
+/**
+ * A whole session, because the mock is typed against the real `useAuth`: the
+ * provider reads three fields, but a partial object would only say the mock
+ * agrees with today's reading of it.
+ */
+function session(user: AuthContextType["user"]): AuthContextType {
+  return {
+    user,
+    isAuthenticated: user !== null,
+    isLoading: false,
+    login: async () => {},
+    logout: async () => {},
+    checkAuth: async () => {},
+  };
+}
+
+const ACCOUNT = {
+  id: 1,
+  email: "user@example.com",
+  display_name: "User",
+  is_active: true,
+  is_admin: false,
+  email_verified: true,
+  email_verified_at: null,
+  last_login: null,
+  created_at: "2026-08-01T00:00:00Z",
+  updated_at: "2026-08-01T00:00:00Z",
+};
 
 /**
  * Leave the persist round-trip in flight: its `onSuccess` overwrites the saved
@@ -125,7 +162,7 @@ beforeEach(() => {
   validatedPut.mockReset();
   validatedPut.mockResolvedValue({
     success: true,
-    data: { current_player: FROM_URL, tracked_players: [SAVED] },
+    data: { current_player: FROM_URL },
   });
   validatedPost.mockReset();
   validatedPost.mockResolvedValue({
@@ -139,11 +176,7 @@ beforeEach(() => {
       updated_at: "2026-08-16T10:00:00Z",
     },
   });
-  useAuth.mockReturnValue({
-    user: { id: 1, is_admin: false, is_active: true },
-    isAuthenticated: true,
-    isLoading: false,
-  });
+  useAuth.mockReturnValue(session(ACCOUNT));
 });
 
 describe("which player the app thinks you are looking at", () => {
@@ -260,7 +293,7 @@ describe("persisting the player named in the URL", () => {
     // without it each success schedules the next write -- a PUT loop.
     holdThePut();
     search.current = "puuid=url-puuid";
-    const { rerender } = renderContext();
+    const { rerender, result } = renderContext();
 
     await waitFor(() => expect(validatedPut).toHaveBeenCalledTimes(1));
     rerender();
@@ -268,6 +301,9 @@ describe("persisting the player named in the URL", () => {
     rerender();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(validatedPut).toHaveBeenCalledTimes(1);
+    // Still showing the player the URL asked for, with that one write in
+    // flight -- a loop would be the only way the rerenders changed anything.
+    expect(result.current.currentPlayer?.puuid).toBe("url-puuid");
   });
 
   it("does not re-save the player who is already current", async () => {
@@ -313,11 +349,7 @@ describe("whether the app says it is still loading", () => {
 
   it("does not ask the API anything while nobody is signed in", async () => {
     // The signed-out probe was a real bug once already. `enabled` carries it.
-    useAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+    useAuth.mockReturnValue(session(null));
     const { result } = renderContext();
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -330,11 +362,7 @@ describe("whether the app says it is still loading", () => {
     // auth half of `enabled` survives. This one does not: the PUUID guard sits
     // on `queryFn`, so dropping `enabled` sends an unauthenticated request.
     search.current = `puuid=${FROM_URL.puuid}`;
-    useAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+    useAuth.mockReturnValue(session(null));
     const { result } = renderContext();
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -400,6 +428,11 @@ describe("choosing a player from the picker", () => {
     expect(push).toHaveBeenCalledWith("/player-overview?puuid=url-puuid", {
       scroll: false,
     });
+    // `/settings` carries no `?puuid=`, so the chosen player can only become
+    // current through the record the persist wrote back.
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe("url-puuid"),
+    );
   });
 });
 

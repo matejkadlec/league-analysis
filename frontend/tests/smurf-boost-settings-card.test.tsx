@@ -6,6 +6,11 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CardPreference } from "@/lib/core/schemas";
+
+type SmurfBoostApi = typeof import("@/features/smurf-boost/smurf-boost-api");
+type Toast = typeof import("sonner").toast;
+
 const {
   getCardPreferences,
   getSmurfBoostPresets,
@@ -13,15 +18,15 @@ const {
   updateCardPreference,
   toast,
 } = vi.hoisted(() => ({
-  getCardPreferences: vi.fn(),
-  getSmurfBoostPresets: vi.fn(),
-  resetCardPreference: vi.fn(),
-  updateCardPreference: vi.fn(),
+  getCardPreferences: vi.fn<SmurfBoostApi["getCardPreferences"]>(),
+  getSmurfBoostPresets: vi.fn<SmurfBoostApi["getSmurfBoostPresets"]>(),
+  resetCardPreference: vi.fn<SmurfBoostApi["resetCardPreference"]>(),
+  updateCardPreference: vi.fn<SmurfBoostApi["updateCardPreference"]>(),
   toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
+    error: vi.fn<Toast["error"]>(),
+    info: vi.fn<Toast["info"]>(),
+    success: vi.fn<Toast["success"]>(),
+    warning: vi.fn<Toast["warning"]>(),
   },
 }));
 
@@ -65,7 +70,9 @@ const SENSITIVE = {
   a3MinimumNovelGames: 5,
 };
 
-function preferences(overrides: Record<string, unknown> = {}) {
+function preferences(
+  overrides: Partial<CardPreference> = {},
+): CardPreference[] {
   return [
     // The response carries every card, and Top Champions carries a role list.
     // A numeric-only shape would reject the whole catalog.
@@ -440,7 +447,7 @@ describe("SmurfBoostSettingsCard", () => {
   it("says the comparison falls back to defaults when settings cannot load", async () => {
     getCardPreferences.mockResolvedValue({
       success: false,
-      error: { message: "boom", kind: "server", status: 500 },
+      error: { message: "boom", kind: "service", status: 500 },
     });
     await renderCard();
 
@@ -456,7 +463,7 @@ describe("SmurfBoostSettingsCard", () => {
   it("still offers the thresholds when the presets cannot load", async () => {
     getSmurfBoostPresets.mockResolvedValue({
       success: false,
-      error: { message: "boom", kind: "server", status: 500 },
+      error: { message: "boom", kind: "service", status: 500 },
     });
     await renderCard();
 

@@ -107,9 +107,9 @@ export function MatchmakingAnalysisResults({
     error,
   } = useQuery({
     queryKey: matchmakingResultsQueryKey(puuid),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       return unwrapOr404(
-        await getLatestCompletedMatchmakingAnalysis(puuid),
+        await getLatestCompletedMatchmakingAnalysis(puuid, signal),
         null,
       );
     },

@@ -213,6 +213,18 @@ export function SmurfBoostDetection({
             : (run?.error_message ??
                 "This player's newest games could not be fetched."),
         );
+        if (run?.status !== "completed") {
+          // The hook refreshes this player's caches on a completed run only,
+          // so a run that stopped early leaves the stored count below reading
+          // the number from before the click, minus whatever it did store.
+          setFetchBaseline(null);
+          if (run && puuid) {
+            void queryClient.refetchQueries({
+              queryKey: playerStatsQueryOptions(puuid).queryKey,
+              type: "active",
+            });
+          }
+        }
         if (!comparisonOwed) {
           return;
         }

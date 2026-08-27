@@ -33,40 +33,50 @@ export async function startMatchmakingAnalysis(
 export async function getMatchmakingAnalysisStatus(
   puuid: string,
   createdAt: string,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
     { created_at: createdAt },
+    signal,
   );
 }
 
 export async function getLatestMatchmakingAnalysis(
   puuid: string,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}`,
+    undefined,
+    signal,
   );
 }
 
 export async function getLatestCompletedMatchmakingAnalysis(
   puuid: string,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/latest-completed`,
+    undefined,
+    signal,
   );
 }
 
 export async function getMatchmakingAnalysisHistory(
   puuid: string,
   limit: number = 20,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<MatchmakingAnalysisHistoryResponse>> {
   return validatedGet(
     MatchmakingAnalysisHistoryResponseSchema,
     `/matchmaking-analysis/player/${puuid}/history`,
     { limit },
+    signal,
   );
 }
 

@@ -46,10 +46,15 @@ export function RiotApiSettingsCard() {
 
   const { data: setting = null, isLoading } = useQuery({
     queryKey: RIOT_API_KEY_QUERY_KEY,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // No key saved yet is an ordinary state: the panel below prompts for one.
       return unwrapOr404(
-        await validatedGet(SettingSchema, "/settings/riot_api_key"),
+        await validatedGet(
+          SettingSchema,
+          "/settings/riot_api_key",
+          undefined,
+          signal,
+        ),
         null,
       );
     },
@@ -179,8 +184,9 @@ export function RiotApiSettingsCard() {
           {!setting && keyStatus?.credential_status === "missing" && (
             <Alert className="border-red-700 bg-red-950/40 text-red-200">
               <p className="text-sm">
-                No active Riot API Key found, insert a valid key into the field
-                below to restore functionality.
+                No active Riot API Key found. Fetching new data from Riot fails
+                until a valid key is inserted below; everything already stored
+                still reads.
               </p>
             </Alert>
           )}

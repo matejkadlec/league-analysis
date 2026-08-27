@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -48,7 +48,7 @@ describe("playerQueryOptions", () => {
   it("rejects invalid API results instead of caching an envelope", async () => {
     validatedGet.mockResolvedValue({
       success: false,
-      error: { message: "Player unavailable" },
+      error: { message: "Player unavailable", kind: "service" },
     });
     const queryClient = new QueryClient();
 

@@ -77,7 +77,7 @@ export function MatchmakingAnalysisSession({
 
   const { data: statusUpdate } = useQuery({
     queryKey: [...matchmakingStatusQueryKey(puuid), watchingCreatedAt],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!watchingCreatedAt) {
         return null;
       }
@@ -85,7 +85,7 @@ export function MatchmakingAnalysisSession({
       // the stored `watchingCreatedAt` outlived it -- so it resolves to
       // "nothing to report". Every other failure throws through to the toast.
       const status = unwrapOr404(
-        await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt),
+        await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt, signal),
         null,
       );
       if (!status) {

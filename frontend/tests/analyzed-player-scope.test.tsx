@@ -3,12 +3,20 @@
 import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+type PlayerContextValue = ReturnType<
+  typeof import("@/features/players/context/player-context").usePlayerContext
+>;
+
 const { validatedGet, usePlayerContext, replace, push, pathname, search } =
   vi.hoisted(() => ({
-    validatedGet: vi.fn(),
-    usePlayerContext: vi.fn(),
-    replace: vi.fn(),
-    push: vi.fn(),
+    validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+    usePlayerContext:
+      vi.fn<
+        typeof import("@/features/players/context/player-context").usePlayerContext
+      >(),
+    replace: vi.fn<AppRouter["replace"]>(),
+    push: vi.fn<AppRouter["push"]>(),
     pathname: { current: "/matchmaking-analysis" },
     search: { current: "" },
   }));
@@ -62,6 +70,19 @@ function player(puuid: string, name: string): Player {
 const REFERENCE = player("reference-puuid", "ReferencePlayer");
 const ANALYZED = player("analyzed-puuid", "AnalyzedPlayer");
 
+// The whole context value: the mock is typed against the real hook, so a
+// partial object would only agree with today's reading of it.
+function context(
+  selectPlayer: PlayerContextValue["selectPlayer"],
+): PlayerContextValue {
+  return {
+    currentPlayer: REFERENCE,
+    isLoading: false,
+    selectPlayer,
+    selectPlayerByPuuid: () => {},
+  };
+}
+
 beforeEach(() => {
   pathname.current = "/matchmaking-analysis";
   search.current = "";
@@ -74,14 +95,19 @@ beforeEach(() => {
         ? { success: true, data: ANALYZED }
         : url === `/players/${REFERENCE.puuid}`
           ? { success: true, data: REFERENCE }
-          : { success: false, error: { status: 404, kind: "not_found" } },
+          : {
+              success: false,
+              error: {
+                status: 404,
+                kind: "not-found",
+                message: "No such player.",
+              },
+            },
     ),
   );
-  usePlayerContext.mockReturnValue({
-    currentPlayer: REFERENCE,
-    isLoading: false,
-    selectPlayer: vi.fn(),
-  });
+  usePlayerContext.mockReturnValue(
+    context(vi.fn<PlayerContextValue["selectPlayer"]>()),
+  );
 });
 
 describe("the analyzed player scope", () => {
@@ -135,12 +161,8 @@ describe("the analyzed player scope", () => {
     // player. Routing the selection through `usePlayerContext.selectPlayer`
     // would persist it to the account, which is the thing being avoided.
     search.current = `puuid=${REFERENCE.puuid}`;
-    const selectPlayer = vi.fn();
-    usePlayerContext.mockReturnValue({
-      currentPlayer: REFERENCE,
-      isLoading: false,
-      selectPlayer,
-    });
+    const selectPlayer = vi.fn<PlayerContextValue["selectPlayer"]>();
+    usePlayerContext.mockReturnValue(context(selectPlayer));
     const { result, queryClient } = renderHookWithQueryClient(() =>
       useAnalyzedPlayer(),
     );

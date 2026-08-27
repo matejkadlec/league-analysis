@@ -34,8 +34,8 @@ function Harness({
 }
 
 function renderInputs() {
-  const onClearError = vi.fn();
-  const onDigits = vi.fn();
+  const onClearError = vi.fn<() => void>();
+  const onDigits = vi.fn<(digits: string[]) => void>();
   render(<Harness onClearError={onClearError} onDigits={onDigits} />);
   const slots = screen.getAllByRole("textbox") as HTMLInputElement[];
   return { slots, onClearError, onDigits };

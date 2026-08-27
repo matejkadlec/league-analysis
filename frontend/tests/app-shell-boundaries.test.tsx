@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,7 +56,7 @@ describe("the shells shown when there is no page to show", () => {
   });
 
   it("offers a reset when the page segment throws", () => {
-    const reset = vi.fn();
+    const reset = vi.fn<ComponentProps<typeof ErrorBoundary>["reset"]>();
     render(<ErrorBoundary error={thrown} reset={reset} />);
 
     expect(screen.getByText("This page could not be loaded")).toBeTruthy();
@@ -66,7 +67,7 @@ describe("the shells shown when there is no page to show", () => {
   it("offers a reset when the layout itself throws", () => {
     // `error.tsx` sits inside the layout, so a throw from the providers, the
     // gate or the sidebar reaches only this one.
-    const reset = vi.fn();
+    const reset = vi.fn<ComponentProps<typeof GlobalError>["reset"]>();
     render(<GlobalError error={thrown} reset={reset} />);
 
     expect(screen.getByText("Something went wrong")).toBeTruthy();
