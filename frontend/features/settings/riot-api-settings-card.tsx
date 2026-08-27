@@ -179,8 +179,9 @@ export function RiotApiSettingsCard() {
           {!setting && keyStatus?.credential_status === "missing" && (
             <Alert className="border-red-700 bg-red-950/40 text-red-200">
               <p className="text-sm">
-                No active Riot API Key found, insert a valid key into the field
-                below to restore functionality.
+                No active Riot API Key found. Fetching new data from Riot fails
+                until a valid key is inserted below; everything already stored
+                still reads.
               </p>
             </Alert>
           )}

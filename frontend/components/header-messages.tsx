@@ -248,14 +248,15 @@ export function HeaderMessages() {
           tone="red"
           icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
         >
-          Riot API Key is invalid or expired! Please update it in{" "}
+          Riot API Key is invalid or expired. Fetching new data from Riot fails
+          until it is replaced in{" "}
           <Link
             href="/settings"
             className="underline hover:text-white transition-colors font-bold"
           >
             settings
-          </Link>{" "}
-          to restore functionality.
+          </Link>
+          ; everything already stored still reads.
         </HeaderBanner>
       );
     }
@@ -267,8 +268,9 @@ export function HeaderMessages() {
           tone="red"
           icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
         >
-          No active Riot API Key found! System cannot function. Please configure
-          it in settings immediately.
+          No active Riot API Key is configured. Fetching new data from Riot
+          fails until one is added in settings; everything already stored still
+          reads.
         </HeaderBanner>
       );
     }

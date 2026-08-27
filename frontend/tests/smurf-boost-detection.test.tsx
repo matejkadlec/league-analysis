@@ -1305,6 +1305,35 @@ describe("SmurfBoostDetection", () => {
     expect(screen.queryByText(/The last fetch/)).toBeNull();
   });
 
+  it("re-reads the stored count for a fetch that did not finish", async () => {
+    // A rate-limited run still stored whatever it got through first, and the
+    // hook refreshes this player's caches on a completed run only -- so the
+    // pool this card names would stay at the number from before the click.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    noActiveSync(syncRun({ status: "rate_limited" }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 84\./)).toBeTruthy(),
+    );
+    storedRankedGames = 96;
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 96\./)).toBeTruthy(),
+    );
+    // Still unsaid: a run that did not finish cannot account for what it got.
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
+  });
+
   it("marks a result as outdated once newer games exist", async () => {
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
