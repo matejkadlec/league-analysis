@@ -40,7 +40,7 @@ export function TrackPlayerButton({
       return unwrap(await trackPlayer(puuid));
     },
     onSuccess: () => {
-      invalidateTrackingQueries(queryClient, userId, puuid);
+      void invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player added for tracking",
         description: `${playerName} is now being tracked. New matches will be fetched automatically.`,
@@ -61,7 +61,7 @@ export function TrackPlayerButton({
       return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: () => {
-      invalidateTrackingQueries(queryClient, userId, puuid);
+      void invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player removed from tracking",
         description: `${playerName} is no longer being tracked.`,

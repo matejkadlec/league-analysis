@@ -27,20 +27,23 @@ export function playerContextQueryKey(userId: number | null | undefined) {
  * string, so query-key-scope-contract.test.ts can read the namespace here. */
 export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
-/** Invalidate everything that reflects whether a player is tracked. Track and
- * untrack both touch the same four caches; this names that set once. */
-export function invalidateTrackingQueries(
+/** Invalidate everything that reflects whether a player is tracked, awaiting
+ * every invalidation the way `invalidateMatchmakingRun` does. Track and
+ * untrack both touch the same three caches; this names that set once. */
+export async function invalidateTrackingQueries(
   queryClient: QueryClient,
   userId: number | null | undefined,
   puuid: string,
-): void {
-  void queryClient.invalidateQueries({
-    queryKey: trackedPlayersQueryKey(userId),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: playerContextQueryKey(userId),
-  });
-  void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: trackedPlayersQueryKey(userId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: playerContextQueryKey(userId),
+    }),
+    queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
+  ]);
 }
 
 export function playerQueryOptions(puuid: string | null) {

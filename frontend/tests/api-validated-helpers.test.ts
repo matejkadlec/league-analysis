@@ -31,12 +31,14 @@ vi.mock("@/features/auth/utils/token-manager", () => ({ refreshAccessToken }));
 
 import {
   api,
+  unwrap,
   validatedDelete,
   validatedGet,
   validatedPatch,
   validatedPost,
   validatedPut,
 } from "@/lib/core/api";
+import { ApiRequestError } from "@/lib/core/api-error";
 
 const Schema = z.object({ id: z.number() });
 
@@ -171,6 +173,27 @@ describe("the validated request helpers", () => {
       expect(result.success).toBe(false);
     },
   );
+
+  it("keeps the original exception as a non-serialized cause", async () => {
+    // The sanitized `error` is the only user-facing and serialized shape; the
+    // raw exception survives for debugging and never reaches JSON output.
+    reply = { status: 500, data: { detail: "boom" } };
+
+    const result = await validatedGet(Schema, "/players/context");
+    expect(result.success).toBe(false);
+
+    let thrown: unknown;
+    try {
+      unwrap(result);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ApiRequestError);
+    expect((thrown as ApiRequestError).cause).toBeInstanceOf(Error);
+    // Non-enumerable: serialization cannot walk circular Axios internals
+    // through it.
+    expect(JSON.stringify(result)).not.toContain("cause");
+  });
 
   it.each(HELPERS)(
     "sends %s over the matching HTTP method",

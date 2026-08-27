@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { type ApiResponse, validatedPost } from "@/lib/core/api";
+import { type ApiResponse, unwrap, validatedPost } from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,
@@ -53,7 +53,11 @@ export function useJobCardControls(
     (isRunning && job.is_force_stopping) ||
     (isTestRunning && job.is_test_force_stopping);
 
-  const refreshJobsData = () => invalidateJobsData(queryClient);
+  // Fire-and-forget on purpose: the toast already reported the outcome, and
+  // the refetch is background work.
+  const refreshJobsData = () => {
+    void invalidateJobsData(queryClient);
+  };
 
   useEffect(() => {
     if (!awaitingManualRunRef.current) {
@@ -120,14 +124,16 @@ export function useJobCardControls(
     });
   }, [job.name, recentExecutions, toast]);
 
-  // No `onError` on any mutation in this file: every mutationFn is a bare
-  // `validatedPost`, which resolves with `{ success: false }` rather than
-  // rejecting, so an `onError` cannot run.
+  // Every mutationFn unwraps, so a failed request rejects and `onError` (plus
+  // the global `MutationCache.onError` reporting) runs; an HTTP 200 that
+  // declines -- `data.success === false` -- stays in `onSuccess`.
   const triggerMutation = useMutation({
-    mutationFn: () =>
-      validatedPost(JobTriggerResponseSchema, `/jobs/${job.id}/trigger`),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
+    mutationFn: async () =>
+      unwrap(
+        await validatedPost(JobTriggerResponseSchema, `/jobs/${job.id}/trigger`),
+      ),
+    onSuccess: (response) => {
+      if (response.success) {
         awaitingManualRunRef.current = true;
         manualRunBaselineIdRef.current = lastExecutionId;
         manualRunRequestedAtRef.current = Date.now();
@@ -143,20 +149,21 @@ export function useJobCardControls(
         setTimeout(() => {
           refreshJobsData();
         }, 5000);
-      } else if (result.success) {
+      } else {
         toast({
           title: `${job.name} is already running`,
           description:
             "Wait for the current run to finish before trying again.",
           variant: "warning",
         });
-      } else {
-        toast({
-          title: `${job.name} run could not start`,
-          description: "Please try again later.",
-          variant: "error",
-        });
       }
+    },
+    onError: () => {
+      toast({
+        title: `${job.name} run could not start`,
+        description: "Please try again later.",
+        variant: "error",
+      });
     },
   });
 
@@ -164,7 +171,7 @@ export function useJobCardControls(
   // handling. The mutationFn stays at each call site because the backend's
   // test_frontend_api_paths.py reads the validatedPost URL literal there.
   function useControlMutation<TArg = void>(
-    mutationFn: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
+    request: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
     success: {
       title: string;
       description: string;
@@ -180,16 +187,19 @@ export function useJobCardControls(
         variant: "error",
       });
     return useMutation({
-      mutationFn,
-      onSuccess: (result) => {
-        if (result.success && result.data.success) {
-          toast(success);
-          onSuccessExtra?.();
-          refreshJobsData();
-        } else {
+      mutationFn: async (arg: TArg) => unwrap(await request(arg)),
+      onSuccess: (response) => {
+        if (!response.success) {
           fail();
+          return;
         }
+        toast(success);
+        onSuccessExtra?.();
+        refreshJobsData();
       },
+      // A rejected request is the same outcome for the viewer as a declined
+      // one; only the announcement path differs.
+      onError: () => fail(),
     });
   }
 
@@ -219,7 +229,9 @@ export function useJobCardControls(
     (force: boolean) =>
       validatedPost(
         JobControlActionResponseSchema,
-        `/jobs/${job.id}/stop${force ? "?force=true" : ""}`,
+        `/jobs/${job.id}/stop`,
+        undefined,
+        force ? { force: true } : undefined,
       ),
     {
       title: `${job.name} stop requested`,
@@ -230,13 +242,17 @@ export function useJobCardControls(
   );
 
   const testTriggerMutation = useMutation({
-    mutationFn: (suspendRegular: boolean) =>
-      validatedPost(
-        JobTriggerResponseSchema,
-        `/jobs/${job.id}/test${suspendRegular ? "?suspend_regular=true" : ""}`,
+    mutationFn: async (suspendRegular: boolean) =>
+      unwrap(
+        await validatedPost(
+          JobTriggerResponseSchema,
+          `/jobs/${job.id}/test`,
+          undefined,
+          suspendRegular ? { suspend_regular: true } : undefined,
+        ),
       ),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
+    onSuccess: (response) => {
+      if (response.success) {
         toast({
           title: `${job.name} test started`,
           description: "The test run is running in the background.",
@@ -244,20 +260,21 @@ export function useJobCardControls(
         });
         setOptimisticTestRunning(true);
         setTimeout(() => refreshJobsData(), 1500);
-      } else if (result.success) {
+      } else {
         toast({
           title: `${job.name} test is already running`,
           description:
             "Wait for the current test to finish before trying again.",
           variant: "warning",
         });
-      } else {
-        toast({
-          title: `${job.name} test could not start`,
-          description: "Please try again later.",
-          variant: "error",
-        });
       }
+    },
+    onError: () => {
+      toast({
+        title: `${job.name} test could not start`,
+        description: "Please try again later.",
+        variant: "error",
+      });
     },
   });
 

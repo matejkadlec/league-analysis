@@ -159,7 +159,7 @@ export function TrackedPlayersList({
       return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: (_, puuid) => {
-      invalidateTrackingQueries(queryClient, userId, puuid);
+      void invalidateTrackingQueries(queryClient, userId, puuid);
 
       const player = data?.find(
         (trackedPlayer) => trackedPlayer.puuid === puuid,

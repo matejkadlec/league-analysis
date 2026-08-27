@@ -30,7 +30,14 @@ export const api = axios.create({
 });
 
 export type ApiResponse<T> =
-  { success: true; data: T } | { success: false; error: ApiError };
+  | { success: true; data: T }
+  | {
+      success: false;
+      error: ApiError;
+      /** The original exception, non-enumerable so a serialized result shows
+       * only the sanitized `error`. */
+      readonly cause?: unknown;
+    };
 
 /**
  * Unwrap an `ApiResponse` inside a query or mutation function. The `validated*`
@@ -39,7 +46,7 @@ export type ApiResponse<T> =
  */
 export function unwrap<T>(result: ApiResponse<T>): T {
   if (!result.success) {
-    throw new ApiRequestError(result.error);
+    throw new ApiRequestError(result.error, { cause: result.cause });
   }
   return result.data;
 }
@@ -162,10 +169,24 @@ function validateResponse<T>(
 
   if (!parsed.success) {
     logValidationError(url, parsed.error);
-    return { success: false, error: normalizeApiError(parsed.error) };
+    return failureResult(normalizeApiError(parsed.error), parsed.error);
   }
 
   return { success: true, data: parsed.data };
+}
+
+/** A failure result with the original exception attached as `cause`. Defined
+ * non-enumerable: an Axios/Zod error can hold circular internals, so anything
+ * that serializes the result still sees only the sanitized `error`. */
+function failureResult(error: ApiError, cause: unknown): ApiResponse<never> {
+  const result: ApiResponse<never> = { success: false, error };
+  Object.defineProperty(result, "cause", {
+    value: cause,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return result;
 }
 
 async function validatedRequest<T>(
@@ -177,7 +198,7 @@ async function validatedRequest<T>(
     const response = await request();
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
+    return failureResult(normalizeApiError(error), error);
   }
 }
 

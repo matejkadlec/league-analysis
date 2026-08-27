@@ -23,15 +23,15 @@ export interface ApiError {
 }
 
 /**
- * A rejected request carrying the normalized error rather than only its text.
- * A plain `Error` loses `kind`/`code`/`status`, so the `QueryCache` handler
- * re-normalizes it to `kind: "unexpected"` and shows the generic fallback.
+ * A rejected request carrying the normalized error rather than only its text:
+ * a plain `Error` would be re-normalized to `kind: "unexpected"` by the cache
+ * handlers. `options.cause` keeps the original exception out of serialization.
  */
 export class ApiRequestError extends Error {
   readonly apiError: ApiError;
 
-  constructor(apiError: ApiError) {
-    super(apiError.message);
+  constructor(apiError: ApiError, options?: ErrorOptions) {
+    super(apiError.message, options);
     this.name = "ApiRequestError";
     this.apiError = apiError;
   }

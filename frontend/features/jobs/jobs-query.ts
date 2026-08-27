@@ -125,15 +125,19 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
 }
 
 /**
- * Refresh everything a job control action changes. No trailing
- * `refetchQueries`: `invalidateQueries` already refetches active queries, and
- * the old inline copy's extra call only aborted that fetch and reissued it.
+ * Refresh everything a job control action changes, awaiting every
+ * invalidation the way `invalidateMatchmakingRun` does. No trailing
+ * `refetchQueries`: `invalidateQueries` already refetches active queries.
  */
-export function invalidateJobsData(queryClient: QueryClient): void {
-  void queryClient.invalidateQueries({ queryKey: jobsQueryKey() });
-  void queryClient.invalidateQueries({ queryKey: jobStatusQueryKey() });
-  void queryClient.invalidateQueries({ queryKey: JOB_EXECUTIONS_QUERY_KEY });
-  void queryClient.invalidateQueries({
-    queryKey: jobExecutionsInfiniteQueryKey(),
-  });
+export async function invalidateJobsData(
+  queryClient: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: jobsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: jobStatusQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: JOB_EXECUTIONS_QUERY_KEY }),
+    queryClient.invalidateQueries({
+      queryKey: jobExecutionsInfiniteQueryKey(),
+    }),
+  ]);
 }

@@ -197,7 +197,10 @@ export function CookieConsentManager() {
       notifyCookieConsentUpdated(nextConsent);
 
       if (isAuthenticated && user?.id) {
-        await syncConsentForUser(user.id, nextConsent);
+        // Deliberately best-effort: the browser already holds the choice, and
+        // `lastSyncedKeyRef` stays unset, so the next sign-in reconcile
+        // retries the audit write.
+        await syncConsentForUser(user.id, nextConsent).catch(() => {});
       }
     } finally {
       setIsSaving(false);

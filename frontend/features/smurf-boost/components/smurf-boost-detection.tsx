@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
-import { apiErrorMessage } from "@/lib/core/api-error";
+import { unwrap } from "@/lib/core/api";
+import { apiErrorMessage, normalizeApiError } from "@/lib/core/api-error";
 import { UpdatedStamp } from "@/features/profile";
 import { playerStatsQueryOptions, usePlayerSyncRun } from "@/features/players";
 import { useToast } from "@/lib/core/hooks";
@@ -107,18 +108,8 @@ export function SmurfBoostDetection({
 
   const completedAt = latest?.completed_at ?? null;
   const runMutation = useMutation({
-    mutationFn: async (targetPuuid: string) => {
-      const result = await startSmurfBoostDetection(targetPuuid);
-      if (!result.success) {
-        throw new Error(
-          apiErrorMessage(
-            result.error,
-            "The comparison could not be run. Please try again.",
-          ),
-        );
-      }
-      return result.data;
-    },
+    mutationFn: async (targetPuuid: string) =>
+      unwrap(await startSmurfBoostDetection(targetPuuid)),
     onMutate: async (targetPuuid: string) => {
       setFailure(null);
       // A refetch started before this run must not resolve afterwards and
@@ -170,10 +161,15 @@ export function SmurfBoostDetection({
         });
       },
       onError: (mutationError: Error) => {
-        setFailure(mutationError.message);
-        toast.error("Comparison did not run", {
-          description: mutationError.message,
-        });
+        // Presentation lives here, not in the mutationFn: the rejection
+        // carries the structured ApiError, and the sentence is chosen only
+        // for this surface.
+        const message = apiErrorMessage(
+          normalizeApiError(mutationError),
+          "The comparison could not be run. Please try again.",
+        );
+        setFailure(message);
+        toast.error("Comparison did not run", { description: message });
       },
     });
   };
