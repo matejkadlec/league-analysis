@@ -40,37 +40,64 @@ export function projectMatchmakingProgress({
   );
 }
 
-// Below this many completed players the observed rate is too noisy to trust,
-// so the static warm-cache estimate holds until the run has shown its pace.
-const MIN_OBSERVED_PLAYERS = 10;
+export interface ThroughputSample {
+  timestamp: number;
+  progress: number;
+}
+
+// The trailing window the observed pace is measured over. Long enough to
+// smooth poll jitter, short enough that a burst of DB-cached players ages
+// out quickly instead of promising the cold tail will finish just as fast.
+const THROUGHPUT_WINDOW_MS = 60_000;
+const MIN_THROUGHPUT_SPAN_MS = 15_000;
+
+export function appendThroughputSample(
+  samples: ThroughputSample[],
+  timestamp: number,
+  progress: number,
+): ThroughputSample[] {
+  const last = samples[samples.length - 1];
+  // A progress drop means a different run took over; its history is noise.
+  const kept = last && progress < last.progress ? [] : samples;
+  return [...kept, { timestamp, progress }].filter(
+    (sample) => timestamp - sample.timestamp <= THROUGHPUT_WINDOW_MS,
+  );
+}
+
+/**
+ * Players per second over the trailing window, or null while the window is
+ * too short or shows no progress (fresh run, or a rate-limit stall).
+ */
+export function observedPlayersPerSecond(
+  samples: ThroughputSample[],
+): number | null {
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  if (!first || !last) {
+    return null;
+  }
+  const spanMs = last.timestamp - first.timestamp;
+  const completed = last.progress - first.progress;
+  if (spanMs < MIN_THROUGHPUT_SPAN_MS || completed <= 0) {
+    return null;
+  }
+  return completed / (spanMs / 1000);
+}
 
 export function estimateMatchmakingMinutesRemaining(
   projectedProgress: number,
   totalPlayers: number,
-  startedAt?: string | null,
-  nowTimestamp = Date.now(),
+  observedRate?: number | null,
 ): number | null {
   const remainingPlayers = Math.max(0, totalPlayers - projectedProgress);
   if (remainingPlayers <= 0) {
     return null;
   }
 
-  let remainingSeconds =
-    (remainingPlayers / ESTIMATED_PLAYERS_PER_WINDOW) *
-    RIOT_LONG_WINDOW_SECONDS;
-
-  // Once enough players finished, the run's own throughput is the better
-  // predictor: DB-cached players complete near-instantly and rate-limit
-  // waits slow everything down, and both show up in the observed rate.
-  const startedTimestamp = startedAt ? new Date(startedAt).getTime() : NaN;
-  const elapsedSeconds = (nowTimestamp - startedTimestamp) / 1000;
-  if (
-    Number.isFinite(elapsedSeconds) &&
-    elapsedSeconds > 0 &&
-    projectedProgress >= MIN_OBSERVED_PLAYERS
-  ) {
-    remainingSeconds = remainingPlayers / (projectedProgress / elapsedSeconds);
-  }
-
-  return Math.max(1, Math.ceil(remainingSeconds / 60));
+  // The recent-window rate is the better predictor when available: cached
+  // players finish near-instantly and rate-limit waits slow everything down,
+  // and both show up in it — without a warm-up burst haunting the whole run.
+  const playersPerSecond =
+    observedRate ?? ESTIMATED_PLAYERS_PER_WINDOW / RIOT_LONG_WINDOW_SECONDS;
+  return Math.max(1, Math.ceil(remainingPlayers / playersPerSecond / 60));
 }

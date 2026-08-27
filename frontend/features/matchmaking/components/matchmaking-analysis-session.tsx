@@ -24,8 +24,11 @@ import {
   resolveWatchingCreatedAt,
 } from "./matchmaking-analysis-state";
 import {
+  appendThroughputSample,
   estimateMatchmakingMinutesRemaining,
+  observedPlayersPerSecond,
   projectMatchmakingProgress,
+  type ThroughputSample,
 } from "./matchmaking-progress";
 import { useMatchmakingAnalysisMutations } from "./use-matchmaking-analysis-mutations";
 import {
@@ -53,6 +56,10 @@ export function MatchmakingAnalysisSession({
     initAnalysisUiState,
   );
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [throughput, setThroughput] = useState<{
+    runKey: string | null;
+    samples: ThroughputSample[];
+  }>({ runKey: null, samples: [] });
   const [matchCount, setMatchCount] = useState(10);
   const [endDate, setEndDate] = useState<string | null>(null);
 
@@ -151,16 +158,6 @@ export function MatchmakingAnalysisSession({
   // second behind a completed result nobody is watching change.
   const isProjecting = displayPhase === "running" || displayPhase === "starting";
 
-  useEffect(() => {
-    if (!isProjecting) {
-      return;
-    }
-    const intervalId = setInterval(() => {
-      setNowTimestamp(Date.now());
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [isProjecting]);
 
   const animProgress = resolveDisplayedAnimProgress(
     displayPhase,
@@ -263,6 +260,31 @@ export function MatchmakingAnalysisSession({
   const totalPlayers =
     displayData?.total_puuids || expectedPlayersForRun(displayData);
   const authoritativeProgress = displayData?.progress || 0;
+  const watchedRunCreatedAt = displayData?.created_at ?? null;
+  // Sampled once per tick so the ETA can follow the run's recent pace; a
+  // run change (or attach) resets the window through the runKey comparison.
+  const recordThroughputSample = useEffectEvent(() => {
+    setThroughput((previous) => ({
+      runKey: watchedRunCreatedAt,
+      samples: appendThroughputSample(
+        previous.runKey === watchedRunCreatedAt ? previous.samples : [],
+        Date.now(),
+        authoritativeProgress,
+      ),
+    }));
+  });
+
+  useEffect(() => {
+    if (!isProjecting) {
+      return;
+    }
+    const intervalId = setInterval(() => {
+      recordThroughputSample();
+      setNowTimestamp(Date.now());
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isProjecting]);
   const projectedPlayerProgress = projectMatchmakingProgress({
     ...state.progressProjection,
     authoritativeProgress,
@@ -278,8 +300,9 @@ export function MatchmakingAnalysisSession({
   const estimatedMinutesRemaining = estimateMatchmakingMinutesRemaining(
     projectedPlayerProgress,
     totalPlayers,
-    displayData?.started_at ?? displayData?.created_at,
-    nowTimestamp,
+    observedPlayersPerSecond(
+      throughput.runKey === watchedRunCreatedAt ? throughput.samples : [],
+    ),
   );
 
   const startCardControls = {
