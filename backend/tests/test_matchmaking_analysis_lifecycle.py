@@ -374,7 +374,7 @@ def _completion_results(
     spine_stats: list[analysis_service_module.SpineMatchStats],
     matches_analyzed: int = 0,
 ) -> analysis_service_module.MatchmakingAnalysisResultsJSON:
-    return analysis_service_module._build_completion_results(
+    return analysis_service_module.build_completion_results(
         spine_stats,
         matches_analyzed=matches_analyzed,
         matches_requested=10,
@@ -544,7 +544,7 @@ def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
     assert perf.kill_participation == pytest.approx(0.556)
     assert perf.damage_share == pytest.approx(0.19025)
 
-    side = analysis_service_module._side_performance([perf])
+    side = analysis_service_module.side_performance([perf])
     results = _completion_results(
         [
             _spine_stat(
@@ -572,7 +572,7 @@ def test_a_side_metric_skips_only_the_players_missing_it() -> None:
     without_ratios = analysis_service_module.PlayerPerformance(
         kda=2.0, kill_participation=None, damage_share=None
     )
-    side = analysis_service_module._side_performance([with_ratios, without_ratios])
+    side = analysis_service_module.side_performance([with_ratios, without_ratios])
 
     assert side.kda == pytest.approx(3.0)
     assert side.kill_participation == pytest.approx(0.5)
