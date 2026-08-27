@@ -86,8 +86,8 @@ function sideRanks(
 
 /**
  * Rank averages and tier buckets over one scope's unique players, mirroring
- * the backend's run-wide semantics (plain mean over ranked players, unranked
- * bucketed). Null when the run predates the per-match puuid lists.
+ * backend run-wide semantics. Excludes the analyzed player — the constant in
+ * every lobby. Null when the run predates the per-match puuid lists.
  */
 export function rankAggregates(
   perMatch: MatchmakingPerMatch[],
@@ -101,12 +101,13 @@ export function rankAggregates(
   if (scoped.some((m) => m.ally_puuids == null || m.enemy_puuids == null)) {
     return null;
   }
-  const allies = new Set<string>([analysisPuuid]);
+  const allies = new Set<string>();
   const enemies = new Set<string>();
   for (const m of scoped) {
     for (const puuid of m.ally_puuids ?? []) allies.add(puuid);
     for (const puuid of m.enemy_puuids ?? []) enemies.add(puuid);
   }
+  allies.delete(analysisPuuid);
   const ally = sideRanks(allies, playerRanks);
   const enemy = sideRanks(enemies, playerRanks);
   return {
@@ -146,9 +147,9 @@ export interface LobbyGap {
 }
 
 /**
- * Average rank of every unique player in one scope's lobbies (both sides,
- * analyzed player included) against the analyzed player's own rank. Null
- * when the run lacks per-match puuids, or either figure is unrankable.
+ * Average rank of every other unique player in one scope's lobbies (both
+ * sides, analyzed player excluded) against the analyzed player's own rank.
+ * Null when the run lacks per-match puuids, or either figure is unrankable.
  */
 export function lobbyGap(
   perMatch: MatchmakingPerMatch[],
@@ -169,11 +170,12 @@ export function lobbyGap(
   ) {
     return null;
   }
-  const lobby = new Set<string>([analysisPuuid]);
+  const lobby = new Set<string>();
   for (const m of scoped) {
     for (const puuid of m.ally_puuids ?? []) lobby.add(puuid);
     for (const puuid of m.enemy_puuids ?? []) lobby.add(puuid);
   }
+  lobby.delete(analysisPuuid);
   const values = [...lobby]
     .map((puuid) => playerRanks[puuid]?.value)
     .filter((v): v is number => v != null);
@@ -182,6 +184,22 @@ export function lobbyGap(
     lobbyAvg: values.reduce((sum, v) => sum + v, 0) / values.length,
     playerValue,
   };
+}
+
+/**
+ * An LP delta phrased in League's own units — "3 divisions and 94 LP",
+ * "1 division", or "94 LP" (a division spans 100 LP).
+ */
+export function formatLpGap(lp: number): string {
+  const abs = Math.round(Math.abs(lp));
+  const divisions = Math.floor(abs / 100);
+  const rest = abs % 100;
+  const parts: string[] = [];
+  if (divisions > 0) {
+    parts.push(`${divisions} division${divisions === 1 ? "" : "s"}`);
+  }
+  if (rest > 0 || divisions === 0) parts.push(`${rest} LP`);
+  return parts.join(" and ");
 }
 
 export interface SidePerformance {

@@ -82,8 +82,12 @@ appearances. Win rates are **not** recomputed per spine match.
 Average of averages of averages:
 
 1. Per player: wins / matches over their ≤10 anchored matches.
-2. Per spine match: mean of the 5 ally win rates and mean of the 5 enemy win
-   rates (the current player counts on the ally side of every spine match).
+2. Per spine match: mean of the 4 teammate win rates and mean of the 5 enemy
+   win rates. The analyzed player is **excluded from their own side** (they
+   are the constant in every lobby; including them diluted teammate quality)
+   — runs stored before this exclusion averaged them in, so cross-boundary
+   ally figures shift slightly. The same exclusion applies to Recent Form
+   and the rank averages/tier buckets.
 3. Final: **10%-trimmed mean** of the N per-match ally averages and of the N
    per-match enemy averages → `{ team_avg_winrate, enemy_avg_winrate }`. The
    trim count is floored (`int(N × 0.1)`), so runs under 10 sided matches are
@@ -144,11 +148,15 @@ puuid) and per-match `ally_puuids`/`enemy_puuids`/`win` (the analyzed
 player's own result, read from the already-stored match), so the client
 re-slices the rank averages, tier distribution, the analyzed player's W–L
 record, and the lobby-vs-own-rank gap for the SoloQ/DuoQ scopes without
-another fetch. `ally_puuids` includes the analyzed player; duo classification still
-ignores them, because they appear in every spine match. Runs stored before
-these keys existed fall back to the run-wide figures, and the card captions
-that fallback. The client still injects the analyzed PUUID into a Set, so
-legacy rows that omitted it re-slice correctly and new rows do not double-count.
+another fetch. `ally_puuids` includes the analyzed player for completeness, but every
+aggregate excludes them: they are the constant in every lobby, so counting
+them would dilute teammate quality with the one player matchmaking never
+chose. Their own result is reported separately — the W–L record and the
+lobby-gap line (their rank vs the other nine players' average), which is why
+`player_ranks` always carries their rank. Duo classification also ignores
+them, because they appear in every spine match. Runs stored before these keys
+existed fall back to the run-wide figures, and the card captions that
+fallback.
 
 ### Duo classification (heuristic)
 

@@ -45,7 +45,10 @@ export function MatchmakingExplanationCard() {
           result labels honestly. Averages over ten or more matches trim the
           most extreme tenth of matches from each end before averaging, and the
           Recent Form figures read each player&apos;s KDA, kill participation
-          and damage share over the same recent matches the win rates use.
+          and damage share over the same recent matches the win rates use. The
+          side averages cover teammates and opponents only — the analyzed
+          player is reported separately, through their own W–L record and the
+          lobby-rank gap.
         </p>
 
         <div

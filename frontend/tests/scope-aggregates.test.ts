@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   effectiveScope,
+  formatLpGap,
   lobbyGap,
   performanceAggregates,
   rankAggregates,
@@ -197,15 +198,16 @@ describe("rankAggregates", () => {
     },
   ];
 
-  it("averages unique players per side, analyzed player included", () => {
+  it("averages unique players per side, analyzed player excluded", () => {
     // "partner" and "foe1" recur across both duo matches but count once,
-    // matching the backend's global unique-player semantics.
+    // matching the backend's global unique-player semantics; "me" is the
+    // constant in every lobby and never tilts their own side.
     const duo = rankAggregates(DUO_MATCHES, RANKS, "duo", "me");
 
     expect(duo).toEqual({
-      allyAvg: (1500 + 1600 + 1800) / 3,
+      allyAvg: (1600 + 1800) / 2,
       enemyAvg: 2200,
-      allyTierCounts: { GOLD: 2, PLATINUM: 1 },
+      allyTierCounts: { GOLD: 1, PLATINUM: 1 },
       enemyTierCounts: { EMERALD: 1, UNRANKED: 1 },
     });
   });
@@ -215,7 +217,7 @@ describe("rankAggregates", () => {
 
     expect(solo?.enemyAvg).toBeNull();
     expect(solo?.enemyTierCounts).toEqual({ UNRANKED: 1 });
-    expect(solo?.allyAvg).toBe((1500 + 1800) / 2);
+    expect(solo?.allyAvg).toBe(1800);
   });
 
   it("returns null when the run predates per-match puuid lists", () => {
@@ -297,14 +299,15 @@ describe("lobbyGap", () => {
     },
   ];
 
-  it("averages every unique ranked player in the scoped lobbies", () => {
-    // Unranked foe2 is excluded from the average, not counted as 0.
+  it("averages every other unique ranked player in the scoped lobbies", () => {
+    // Unranked foe2 is excluded from the average, not counted as 0, and the
+    // analyzed player never sits in their own comparison set.
     expect(lobbyGap(MATCHES, RANKS, "duo", "me")).toEqual({
-      lobbyAvg: (1500 + 1700 + 1900) / 3,
+      lobbyAvg: (1700 + 1900) / 2,
       playerValue: 1500,
     });
     expect(lobbyGap(MATCHES, RANKS, "all", "me")?.lobbyAvg).toBe(
-      (1500 + 1700 + 1900) / 3,
+      (1700 + 1900) / 2,
     );
   });
 
@@ -317,5 +320,17 @@ describe("lobbyGap", () => {
     expect(lobbyGap(MATCHES, null, "duo", "me")).toBeNull();
     expect(lobbyGap(MATCHES, RANKS, "duo", "unranked-me")).toBeNull();
     expect(lobbyGap([], RANKS, "duo", "me")).toBeNull();
+  });
+});
+
+describe("formatLpGap", () => {
+  it("phrases a delta in divisions and LP", () => {
+    expect(formatLpGap(394)).toBe("3 divisions and 94 LP");
+    expect(formatLpGap(-394)).toBe("3 divisions and 94 LP");
+    expect(formatLpGap(100)).toBe("1 division");
+    expect(formatLpGap(58)).toBe("58 LP");
+    expect(formatLpGap(0)).toBe("0 LP");
+    // Rounds before decomposing, so 99.6 never reads as "99 LP" of a division.
+    expect(formatLpGap(99.6)).toBe("1 division");
   });
 });
