@@ -198,3 +198,18 @@ the `pitfall-check` agent.
   on 2026-08-21. When red-proving a same-length edit, `touch` the file or run
   with `PYTHONPYCACHEPREFIX` pointed somewhere fresh, and treat an
   unexpected pass as suspect before an unexpected failure.
+
+- **A strict enum on a Riot payload fails the whole response, not one field.**
+  Riot keeps adding ranked ladders, and a new one brings its own vocabulary:
+  `JADE_RANKED_SOLO_5x5` returns tier `SALT`, which is not a `Tier`. Because
+  `get_league_entries_by_puuid` built every `LeagueEntryDTO` eagerly, that one
+  sibling entry failed the list and the Solo/Duo entry beside it was never
+  read. The damage was doubled by where it surfaced: a `ValidationError` is not
+  a `RiotAPIError`, so `_api_call_with_retries` did not recognise it and the
+  matchmaking run died on the catch-all "did not finish" message with nothing
+  naming the cause. It cost two failed 100-match runs on 2026-08-27, and only
+  because a spine that long reached a lobby containing such an account.
+  `test_by_puuid_league_drops_a_ladder_with_its_own_tier_vocabulary` covers the
+  ladder known today. When a Riot DTO field is an enum, ask what happens to its
+  *siblings* in the same response when Riot adds a member, and prefer widening
+  the failure to one dropped record over one dropped response.

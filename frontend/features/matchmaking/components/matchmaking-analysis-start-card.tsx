@@ -8,14 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MAX_MATCH_COUNT, MIN_MATCH_COUNT } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { ANALYSIS_CARD_TRANSITION } from "./matchmaking-analysis-state";
 
 const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
-// Mirrors the backend request bounds (MIN_MATCH_COUNT/MAX_MATCH_COUNT).
-const MIN_MATCH_COUNT = 10;
-const MAX_MATCH_COUNT = 100;
 
 function clampMatchCount(raw: string): number {
   const value = Number(raw);

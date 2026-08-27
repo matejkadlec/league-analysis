@@ -10,6 +10,7 @@ import httpx
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
+from app.core.enums import Tier
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
@@ -161,6 +162,22 @@ async def test_by_puuid_league_contract_keeps_rank_fields_required() -> None:
         await client.get_league_entries_by_puuid("sanitized-puuid")
 
     assert error.value.errors()[0]["loc"] == ("queueType",)
+
+
+async def test_by_puuid_league_drops_a_ladder_with_its_own_tier_vocabulary() -> None:
+    """A foreign ladder must not take the Solo/Duo entry beside it down.
+
+    `JADE_RANKED_SOLO_5x5` returns tier `SALT`, which is not a `Tier`. Parsing
+    the list eagerly raised `ValidationError`, which no caller recognises as a
+    Riot error, so the matchmaking run died on its catch-all message.
+    """
+    client = RiotAPIClient(api_key="RGAPI-test-only")
+    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES["foreign_ladder"])
+
+    entries = await client.get_league_entries_by_puuid("sanitized-puuid")
+
+    assert [entry.queue_type for entry in entries] == ["RANKED_SOLO_5x5"]
+    assert entries[0].tier is Tier.EMERALD
 
 
 def test_platform_mapping_and_endpoint_parameters_fail_closed() -> None:

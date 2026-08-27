@@ -56,6 +56,28 @@
     }
   ],
   "empty": [],
+  "foreign_ladder": [
+    {
+      "queueType": "JADE_RANKED_SOLO_5x5",
+      "tier": "SALT",
+      "rank": "III",
+      "leaguePoints": 85,
+      "wins": 9,
+      "losses": 7
+    },
+    {
+      "queueType": "RANKED_SOLO_5x5",
+      "tier": "EMERALD",
+      "rank": "III",
+      "leaguePoints": 23,
+      "wins": 40,
+      "losses": 38,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": false,
+      "hotStreak": false
+    }
+  ],
   "malformed": [
     {
       "tier": "GOLD",
