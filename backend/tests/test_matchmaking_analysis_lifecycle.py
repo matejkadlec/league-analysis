@@ -18,6 +18,7 @@ from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
+from app.features.matchmaking_analysis.errors import MatchmakingAnalysisRuntimeError
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
 from app.features.matchmaking_analysis.ranks import rank_value, summarize_ranks
 from app.features.matchmaking_analysis.schemas import (
@@ -28,6 +29,14 @@ from app.features.matchmaking_analysis.service import (
     HISTORICAL_RANK_WINDOW,
     RANK_SNAPSHOT_MAX_AGE,
     MatchmakingAnalysisService,
+)
+from app.features.matchmaking_analysis.statistics import (
+    PlayerPerformance,
+    SpineMatchStats,
+    build_completion_results,
+    player_performance_from_rows,
+    side_performance,
+    trimmed_mean,
 )
 
 # The account these tests act as. Every stored run belongs to one, so a service
@@ -331,7 +340,7 @@ def _spine_stat(
     enemy_kill_participation: float | None = None,
     team_damage_share: float | None = None,
     enemy_damage_share: float | None = None,
-) -> analysis_service_module.SpineMatchStats:
+) -> SpineMatchStats:
     """One spine match whose per-side aggregates resolve to the given values.
 
     Samples sit under synthetic per-match puuids, so they never recur across
@@ -339,13 +348,13 @@ def _spine_stat(
 
     def side(
         avg: float | None, kda: float | None, kp: float | None, ds: float | None
-    ) -> tuple[dict[str, float], dict[str, analysis_service_module.PlayerPerformance]]:
+    ) -> tuple[dict[str, float], dict[str, PlayerPerformance]]:
         winrates = {} if avg is None else {f"wr-{match_id}": avg}
         performances = (
             {}
             if kda is None
             else {
-                f"perf-{match_id}": analysis_service_module.PlayerPerformance(
+                f"perf-{match_id}": PlayerPerformance(
                     kda=kda, kill_participation=kp, damage_share=ds
                 )
             }
@@ -358,7 +367,7 @@ def _spine_stat(
     enemy_winrates, enemy_performances = side(
         enemy_avg, enemy_kda, enemy_kill_participation, enemy_damage_share
     )
-    return analysis_service_module.SpineMatchStats(
+    return SpineMatchStats(
         match_id=match_id,
         ally_puuids=ally_puuids or [],
         enemy_puuids=enemy_puuids or [],
@@ -371,10 +380,10 @@ def _spine_stat(
 
 
 def _completion_results(
-    spine_stats: list[analysis_service_module.SpineMatchStats],
+    spine_stats: list[SpineMatchStats],
     matches_analyzed: int = 0,
 ) -> analysis_service_module.MatchmakingAnalysisResultsJSON:
-    return analysis_service_module.build_completion_results(
+    return build_completion_results(
         spine_stats,
         matches_analyzed=matches_analyzed,
         matches_requested=10,
@@ -396,7 +405,7 @@ def _completion_results(
     ids=["neither-side", "no-enemies", "no-team"],
 )
 def test_a_run_that_measured_nothing_is_not_a_completed_run(
-    spine_stats: list[analysis_service_module.SpineMatchStats],
+    spine_stats: list[SpineMatchStats],
 ) -> None:
     """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
 
@@ -404,7 +413,7 @@ def test_a_run_that_measured_nothing_is_not_a_completed_run(
     both averages fell back to 0.0 and the run was still stamped `completed`.
     The failure path already persists a terminal diagnostic.
     """
-    with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
+    with pytest.raises(MatchmakingAnalysisRuntimeError):
         _completion_results(spine_stats)
 
 
@@ -440,8 +449,8 @@ def _raw_stat(
     match_id: str,
     allies: list[str],
     ally_winrates: dict[str, float],
-) -> analysis_service_module.SpineMatchStats:
-    return analysis_service_module.SpineMatchStats(
+) -> SpineMatchStats:
+    return SpineMatchStats(
         match_id=match_id,
         ally_puuids=allies,
         enemy_puuids=[f"foe-{match_id}"],
@@ -509,7 +518,7 @@ TRIM_FIXTURES: list[tuple[list[float], float]] = [
 def test_trimmed_mean_matches_the_shared_fixtures(
     values: list[float], expected: float
 ) -> None:
-    assert analysis_service_module.trimmed_mean(values) == pytest.approx(expected)
+    assert trimmed_mean(values) == pytest.approx(expected)
 
 
 def test_headline_averages_trim_the_extreme_matches() -> None:
@@ -532,7 +541,7 @@ def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
     serialization at finalize -- after the run's API work is already spent."""
     from decimal import Decimal
 
-    perf = analysis_service_module.player_performance_from_rows(
+    perf = player_performance_from_rows(
         [
             (Decimal("3.50"), Decimal("0.6120"), Decimal("0.2005")),
             (Decimal("1.25"), None, None),
@@ -544,7 +553,7 @@ def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
     assert perf.kill_participation == pytest.approx(0.556)
     assert perf.damage_share == pytest.approx(0.19025)
 
-    side = analysis_service_module.side_performance([perf])
+    side = side_performance([perf])
     results = _completion_results(
         [
             _spine_stat(
@@ -566,18 +575,16 @@ def test_per_match_performance_survives_decimal_inputs_into_json() -> None:
 def test_a_side_metric_skips_only_the_players_missing_it() -> None:
     """Old stored games lack the ratio columns; that player still counts
     toward the side's KDA instead of dragging the ratios to zero."""
-    with_ratios = analysis_service_module.PlayerPerformance(
-        kda=4.0, kill_participation=0.5, damage_share=0.2
-    )
-    without_ratios = analysis_service_module.PlayerPerformance(
+    with_ratios = PlayerPerformance(kda=4.0, kill_participation=0.5, damage_share=0.2)
+    without_ratios = PlayerPerformance(
         kda=2.0, kill_participation=None, damage_share=None
     )
-    side = analysis_service_module.side_performance([with_ratios, without_ratios])
+    side = side_performance([with_ratios, without_ratios])
 
     assert side.kda == pytest.approx(3.0)
     assert side.kill_participation == pytest.approx(0.5)
     assert side.damage_share == pytest.approx(0.2)
-    assert analysis_service_module.player_performance_from_rows([]) is None
+    assert player_performance_from_rows([]) is None
 
 
 def test_recurring_teammates_flag_their_spine_matches_as_duo() -> None:

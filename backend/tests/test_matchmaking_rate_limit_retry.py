@@ -16,12 +16,10 @@ from app.core.riot_api.errors import (
     NotFoundError,
     RateLimitError,
 )
-from app.features.matchmaking_analysis import service as service_module
-from app.features.matchmaking_analysis.service import (
-    MAX_RATE_LIMIT_WAIT,
-    MatchmakingAnalysisRuntimeError,
-    MatchmakingAnalysisService,
-)
+from app.features.matchmaking_analysis import rate_limit as rate_limit_module
+from app.features.matchmaking_analysis.errors import MatchmakingAnalysisRuntimeError
+from app.features.matchmaking_analysis.rate_limit import MAX_RATE_LIMIT_WAIT
+from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
 # The account these tests act as. Every stored run belongs to one, so a service
 # cannot be built without saying which.
@@ -36,7 +34,7 @@ def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     async def fake_sleep(seconds: float) -> None:
         taken.append(seconds)
 
-    monkeypatch.setattr(service_module.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(rate_limit_module.asyncio, "sleep", fake_sleep)
     return taken
 
 
