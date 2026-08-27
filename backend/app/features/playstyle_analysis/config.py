@@ -27,6 +27,8 @@ class TagConfig(TypedDict):
             "gold_diff_check",
             "kill_greed_check",
             "objective_participation_check",
+            "occurrence_count",
+            "occurrence_percentage",
             "side_preference",
             "solo_kill_ratio_check",
             "surrender_check",
@@ -99,6 +101,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
     # Match-Based Condition Tags
     # ----------------------------------------------------
     "aggresive_laner": {
+        "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
         "percentage_matches": 20,
         "sentiment": "neutral",
@@ -106,6 +109,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Aggressive Laner",
     },
     "passive_laner": {
+        "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
         "max_percentage_matches": 20,
         "sentiment": "neutral",
@@ -155,6 +159,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Warden",
     },
     "pentakiller": {
+        "type": "occurrence_count",
         "min_largest_multi_kill": 5,
         "percentage_matches": 1,
         "sentiment": "positive",
@@ -210,6 +215,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Fogmaker",
     },
     "thief": {
+        "type": "occurrence_count",
         "min_objectives_stolen": 1,
         "percentage_matches": 1,
         "sentiment": "positive",
@@ -326,6 +332,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "A Money Well Spent",
     },
     "epic_thief": {
+        "type": "occurrence_count",
         "min_epic_monster_steals": 1,
         "percentage_matches": 5,
         "sentiment": "positive",

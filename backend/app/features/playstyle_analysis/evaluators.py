@@ -61,16 +61,6 @@ def evaluate_generic_threshold(
     config: TagConfig,
 ) -> TagResult | None:
     """Evaluate threshold based on actual average across ALL games."""
-    if tag_code in ["aggresive_laner", "passive_laner"]:
-        return evaluate_occurrence_percentage(
-            participants, matches, game_count, tag_code, config
-        )
-
-    if tag_code in ["pentakiller", "epic_thief", "thief"]:
-        return evaluate_occurrence_count(
-            participants, matches, game_count, tag_code, config
-        )
-
     aggregate_value = calculate_aggregate_value(
         participants, matches, tag_code, config, game_count
     )
@@ -84,7 +74,7 @@ def evaluate_occurrence_percentage(
     tag_code: str,
     config: TagConfig,
 ) -> TagResult | None:
-    """Evaluate tags based on occurrence percentage (for aggressive/passive laner)."""
+    """Evaluate tags based on occurrence percentage (e.g. first-blood rate)."""
     target_percentage = config.get("percentage_matches", 0.0)
     max_percentage = config.get("max_percentage_matches")
     aggregate_value = calculate_aggregate_value(
@@ -108,7 +98,7 @@ def evaluate_occurrence_count(
     tag_code: str,
     config: TagConfig,
 ) -> TagResult | None:
-    """Evaluate tags based on total occurrence count (pentakills, epic steals)."""
+    """Evaluate tags based on total occurrence count (e.g. pentakills, steals)."""
     aggregate_value = calculate_aggregate_value(
         participants, matches, tag_code, config, game_count
     )
@@ -744,6 +734,8 @@ _TYPE_EVALUATORS: dict[str, TagEvaluator] = {
     "kill_greed_check": evaluate_kill_greed,
     "solo_kill_ratio_check": evaluate_solo_kill_ratio,
     "objective_participation_check": evaluate_objective_participation,
+    "occurrence_percentage": evaluate_occurrence_percentage,
+    "occurrence_count": evaluate_occurrence_count,
 }
 
 _CODE_EVALUATORS: dict[str, TagEvaluator] = {

@@ -17,9 +17,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
+# The settings module's import loads the repository-root .env with
+# override=False, so this script needs no dotenv bootstrap of its own.
 from app.core.config import Settings, get_global_settings
 from app.features.auth.passwords import pwd_context
 from scripts.local_target import (
@@ -29,8 +30,6 @@ from scripts.local_target import (
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-
-load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 ADMIN_EMAIL = "mat.kadlec@email.cz"
 ADMIN_PASSWORD = "LocalAdminQa123!"

@@ -17,19 +17,13 @@ from app.features.playstyle_analysis.evaluators import (
     _TYPE_EVALUATORS,
 )
 
-# `evaluate_generic_threshold` routes these five by code before any aggregator
-# runs, so they never reach the by-name metric resolution.
-_OCCURRENCE_TAGS = frozenset(
-    {"aggresive_laner", "passive_laner", "pentakiller", "epic_thief", "thief"}
-)
-
 
 def _falls_through_to_the_generic_metric(tag_code: str, config: TagConfig) -> bool:
     """Whether this tag's value comes from `_generic_metric_average`."""
     tag_type = config.get("type")
     if isinstance(tag_type, str) and tag_type in _TYPE_EVALUATORS:
         return False
-    if tag_code in _CODE_EVALUATORS or tag_code in _OCCURRENCE_TAGS:
+    if tag_code in _CODE_EVALUATORS:
         return False
     return not any(predicate(tag_code, config) for predicate, _ in _AGGREGATORS)
 
