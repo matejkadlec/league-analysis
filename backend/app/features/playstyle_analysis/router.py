@@ -1,9 +1,10 @@
 """Playstyle analysis API endpoints."""
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.http_errors import log_and_raise_http
+from app.core.http_rate_limit import rate_limit
 from app.features.auth.dependencies import CurrentUserDep
 
 from .dependencies import PlaystyleAnalysisServiceDep
@@ -19,8 +20,10 @@ router = APIRouter(prefix="/playstyle-analysis", tags=["playstyle-analysis"])
 
 
 @router.post("/analyze", response_model=PlaystyleAnalysisResponse)
+@rate_limit("10/minute")
 async def analyze_playstyle(
-    request: PlaystyleAnalysisRequest,
+    request: Request,
+    payload: PlaystyleAnalysisRequest,
     service: PlaystyleAnalysisServiceDep,
     current_user: CurrentUserDep,
 ) -> PlaystyleAnalysis:
@@ -29,16 +32,16 @@ async def analyze_playstyle(
     Identifies playstyle tags and calculates summary statistics.
     """
     try:
-        logger.info("starting_playstyle_analysis", puuid=request.puuid)
+        logger.info("starting_playstyle_analysis", puuid=payload.puuid)
 
         result = await service.analyze_playstyle(
-            puuid=request.puuid,
-            force=request.force_reanalyze,
+            puuid=payload.puuid,
+            force=payload.force_reanalyze,
         )
 
         logger.info(
             "playstyle_analysis_completed",
-            puuid=request.puuid,
+            puuid=payload.puuid,
             tags_count=len(result.tags),
         )
 
@@ -49,7 +52,7 @@ async def analyze_playstyle(
             logger,
             e,
             "playstyle_analysis_failed",
-            puuid=request.puuid,
+            puuid=payload.puuid,
         )
 
 

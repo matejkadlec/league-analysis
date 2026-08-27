@@ -8,7 +8,7 @@ from typing import Annotated, NoReturn
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from app.features.auth.dependencies import get_current_admin_user
+from app.features.auth.dependencies import AdminUserDep, get_current_admin_user
 
 from .base import BaseJob
 from .control import (
@@ -214,6 +214,7 @@ async def trigger_job(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobTriggerResponse:
     """
     Manually trigger a job execution.
@@ -251,6 +252,7 @@ async def trigger_job(
         logger.info(
             "Stopped test run to allow regular trigger",
             job_id=job_id,
+            admin_user_id=current_user.id,
         )
 
     # Check if job is already running (prevent concurrent runs)
@@ -261,6 +263,7 @@ async def trigger_job(
             job_id=job_id,
             job_name=job.name,
             job_type=job.job_type.value,
+            admin_user_id=current_user.id,
         )
         return JobTriggerResponse(
             success=False,
@@ -268,7 +271,8 @@ async def trigger_job(
             execution_id=None,
         )
 
-    # Create and trigger the job instance (triggered by user)
+    # The literal "user" is a frontend contract: the jobs UI compares
+    # triggered_by === "user" to tell manual runs from scheduled ones.
     job_instance = _create_job_instance(job, triggered_by="user")
     background_tasks.add_task(job_instance.run)
 
@@ -277,6 +281,7 @@ async def trigger_job(
         job_id=job_id,
         job_name=job.name,
         job_type=job.job_type.value,
+        admin_user_id=current_user.id,
     )
 
     return JobTriggerResponse(
@@ -373,6 +378,7 @@ async def trigger_test_run(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     suspend_regular: Annotated[
         bool,
         Query(description="Whether to suspend regular scheduled runs during the test"),
@@ -426,6 +432,7 @@ async def trigger_test_run(
         job_id=job_id,
         job_name=job.name,
         suspend_regular=suspend_regular,
+        admin_user_id=current_user.id,
     )
 
     return JobTriggerResponse(
