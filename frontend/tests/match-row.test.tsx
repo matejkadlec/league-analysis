@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +12,8 @@ import type {
   EnemyLaneOpponent,
   TeamStats,
 } from "@/lib/core/schemas";
+
+type SelectPlayer = ComponentProps<typeof MatchRow>["onSelectPlayer"];
 
 const PLAYER_PUUID = "player-puuid";
 
@@ -128,7 +131,7 @@ const MATCH: MatchWithPlayerData = {
 
 function renderRow(
   overrides: Partial<MatchWithPlayerData> = {},
-  onSelectPlayer: (puuid: string) => void = vi.fn(),
+  onSelectPlayer: SelectPlayer = vi.fn<SelectPlayer>(),
 ) {
   return render(
     <MatchRow
@@ -469,7 +472,7 @@ describe("a match history row", () => {
   });
 
   it("names participants by Riot ID and switches to the one clicked", async () => {
-    const onSelectPlayer = vi.fn();
+    const onSelectPlayer = vi.fn<SelectPlayer>();
     const user = userEvent.setup();
     renderRow({}, onSelectPlayer);
 
@@ -488,7 +491,7 @@ describe("a match history row", () => {
   });
 
   it("switches to the lane opponent from the matchup portrait", async () => {
-    const onSelectPlayer = vi.fn();
+    const onSelectPlayer = vi.fn<SelectPlayer>();
     const user = userEvent.setup();
     renderRow({}, onSelectPlayer);
 
@@ -504,7 +507,7 @@ describe("a match history row", () => {
   });
 
   it("leaves the current player's own icons inert", async () => {
-    const onSelectPlayer = vi.fn();
+    const onSelectPlayer = vi.fn<SelectPlayer>();
     const user = userEvent.setup();
     renderRow({}, onSelectPlayer);
 

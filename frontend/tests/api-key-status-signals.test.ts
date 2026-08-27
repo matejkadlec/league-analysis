@@ -2,7 +2,10 @@ import type { AxiosAdapter } from "axios";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { notifyRiotCredentialHealthUpdated } = vi.hoisted(() => ({
-  notifyRiotCredentialHealthUpdated: vi.fn(),
+  notifyRiotCredentialHealthUpdated:
+    vi.fn<
+      typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+    >(),
 }));
 
 vi.mock("@/lib/core/riot-credential-health-events", () => ({

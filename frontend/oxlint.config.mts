@@ -119,8 +119,7 @@ export default defineConfig({
     "house/require-query-key-factory": "error",
     "house/require-query-signal": "error",
 
-    // New under oxlint, and a ratchet rather than a bug this change is about.
-    "vitest/require-mock-type-parameters": "off",
+    "vitest/require-mock-type-parameters": "error",
 
     "typescript/no-base-to-string": "error",
 

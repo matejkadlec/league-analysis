@@ -3,18 +3,25 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AuthContextType } from "@/features/auth/types";
+
 /**
  * Which PUUID the sidebar may carry onto a player link. `/matchmaking-analysis`
  * spells its analyzed player `?puuid=` too, but page-locally; unscoped, the
  * sidebar would hand it to `/player-overview`, which persists it.
  */
 
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
 const nav = vi.hoisted(() => ({ pathname: "/", search: "" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(nav.search),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn<Router["push"]>(),
+    replace: vi.fn<Router["replace"]>(),
+  }),
 }));
 
 vi.mock("@/features/auth", () => ({
@@ -22,7 +29,7 @@ vi.mock("@/features/auth", () => ({
     user: { display_name: "Signed In", email: "u@example.com", is_admin: false },
     isAuthenticated: true,
     isLoading: false,
-    logout: vi.fn(async () => {}),
+    logout: vi.fn<AuthContextType["logout"]>(async () => {}),
   }),
 }));
 

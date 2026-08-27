@@ -5,8 +5,12 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { renderWithQueryClient } from "./render-support";
 
+type Players = typeof import("@/features/players");
+type AnalyzedPlayer = ReturnType<Players["useAnalyzedPlayer"]>;
+type SonnerToast = typeof import("sonner").toast;
+
 const { useAnalyzedPlayer } = vi.hoisted(() => ({
-  useAnalyzedPlayer: vi.fn(),
+  useAnalyzedPlayer: vi.fn<Players["useAnalyzedPlayer"]>(),
 }));
 
 // Only the hook: `PlayerSelector` and `formatRiotId` are what this is about,
@@ -33,17 +37,29 @@ vi.mock("@/features/matchmaking", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
+  toast: {
+    error: vi.fn<SonnerToast["error"]>(),
+    info: vi.fn<SonnerToast["info"]>(),
+    success: vi.fn<SonnerToast["success"]>(),
+    warning: vi.fn<SonnerToast["warning"]>(),
+  },
 }));
 
 import MatchmakingAnalysisPage from "../app/matchmaking-analysis/page";
+import { PlayerSchema } from "@/lib/core/schemas";
 
-const player = {
+// Parsed rather than hand-built: the optional counters get their real
+// defaults instead of a fixture that drifts from `PlayerSchema`.
+const player = PlayerSchema.parse({
   puuid: "stranger-puuid",
   game_name: "Stranger",
   tag_line: "TWO",
   platform: "eun1",
-};
+  summoner_level: 300,
+  profile_icon_id: 1,
+  created_at: "2026-08-09T01:00:00.000Z",
+  updated_at: "2026-08-09T01:00:00.000Z",
+});
 
 beforeEach(() => {
   useAnalyzedPlayer.mockReset();
@@ -53,7 +69,7 @@ it("carries the chosen player's name into the search box", async () => {
   useAnalyzedPlayer.mockReturnValue({
     analyzedPlayer: null,
     isLoading: false,
-    selectAnalyzedPlayer: vi.fn(),
+    selectAnalyzedPlayer: vi.fn<AnalyzedPlayer["selectAnalyzedPlayer"]>(),
   });
 
   const { rerender } = renderWithQueryClient(<MatchmakingAnalysisPage />);
@@ -66,7 +82,7 @@ it("carries the chosen player's name into the search box", async () => {
   useAnalyzedPlayer.mockReturnValue({
     analyzedPlayer: player,
     isLoading: false,
-    selectAnalyzedPlayer: vi.fn(),
+    selectAnalyzedPlayer: vi.fn<AnalyzedPlayer["selectAnalyzedPlayer"]>(),
   });
   rerender(<MatchmakingAnalysisPage />);
 

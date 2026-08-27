@@ -6,10 +6,13 @@ import { act, cleanup, screen } from "@testing-library/react";
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type TokenManager = typeof import("../features/auth/utils/token-manager");
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
-  refreshAccessToken: vi.fn(),
-  removeAuthTokens: vi.fn(),
-  routerPush: vi.fn(),
+  refreshAccessToken: vi.fn<TokenManager["refreshAccessToken"]>(),
+  removeAuthTokens: vi.fn<TokenManager["removeAuthTokens"]>(),
+  routerPush: vi.fn<AppRouter["push"]>(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -84,7 +87,7 @@ describe("AuthProvider login timeout", () => {
       code: 20,
       name: "AbortError",
     });
-    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    const fetchMock = vi.fn<typeof fetch>((_input, init) =>
       Promise.resolve({
         ok: true,
         status: 200,
@@ -120,7 +123,7 @@ describe("AuthProvider login timeout", () => {
       code: 20,
       name: "AbortError",
     });
-    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    const fetchMock = vi.fn<typeof fetch>((_input, init) =>
       Promise.resolve({
         ok: false,
         status: 401,
@@ -153,7 +156,7 @@ describe("AuthProvider login timeout", () => {
   it("clears the timeout after the login response body has been parsed", async () => {
     vi.useFakeTimers();
     const request = { signal: null as AbortSignal | null };
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>((input, init) => {
       const url = String(input);
       if (url.includes("/auth/login")) {
         request.signal = init?.signal ?? null;
@@ -316,7 +319,7 @@ describe("AuthProvider logout", () => {
     // `sendBeacon` returns true for *queued*, even against a refused
     // connection, so counting it as answered makes the opt-in above dead
     // code. jsdom has no `sendBeacon`, so the test supplies one.
-    const sendBeacon = vi.fn(() => true);
+    const sendBeacon = vi.fn<typeof navigator.sendBeacon>(() => true);
     Object.defineProperty(navigator, "sendBeacon", {
       value: sendBeacon,
       configurable: true,

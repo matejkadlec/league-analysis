@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import { cleanup, screen } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
+
+const { validatedGet } = vi.hoisted(() => ({
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+}));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
@@ -13,11 +19,15 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
 }));
 
 vi.mock("@/lib/core/hooks", () => ({
-  useToast: () => ({ error: vi.fn(), info: vi.fn(), warning: vi.fn() }),
+  useToast: () => ({
+    error: vi.fn<AppToast["error"]>(),
+    info: vi.fn<AppToast["info"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+  }),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn<AppRouter["refresh"]>() }),
 }));
 
 vi.mock("@/lib/core/data-dragon-context", () => ({
@@ -37,6 +47,8 @@ vi.mock("@/features/matches/components/match-row", () => ({
 
 import { MatchHistory } from "@/features/matches/components/match-history";
 import { installMemoryLocalStorage } from "./test-browser-storage";
+
+type MatchHistoryProps = ComponentProps<typeof MatchHistory>;
 
 const CONSENT_COOKIE = "league_analysis_cookie_consent";
 
@@ -70,7 +82,10 @@ function stubMatchMedia(matches: boolean): void {
 
 async function renderHistory(): Promise<void> {
   renderWithQueryClient(
-    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
+    <MatchHistory
+      puuid="player-puuid"
+      onSelectPlayer={vi.fn<MatchHistoryProps["onSelectPlayer"]>()}
+    />,
   );
   await screen.findByTestId("match-list", undefined, { timeout: 4000 });
 }

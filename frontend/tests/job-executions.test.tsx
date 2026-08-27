@@ -3,7 +3,9 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
+const { validatedGet } = vi.hoisted(() => ({
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+}));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
@@ -86,7 +88,14 @@ function renderExecutions(props: {
 }) {
   validatedGet.mockResolvedValue(
     props.executions === null
-      ? { success: false, error: { kind: "server", status: 500 } }
+      ? {
+          success: false,
+          error: {
+            kind: "service",
+            status: 500,
+            message: "The service is unavailable.",
+          },
+        }
       : { success: true, data: props.executions },
   );
   const tree = (selectedExecutionId: number | null) => (
@@ -125,7 +134,7 @@ describe("the executions table on the jobs page", () => {
 
     validatedGet.mockResolvedValue({
       success: false,
-      error: { kind: "server", status: 500, message: "boom" },
+      error: { kind: "service", status: 500, message: "boom" },
     });
     await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
 

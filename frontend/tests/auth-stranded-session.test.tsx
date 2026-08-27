@@ -15,24 +15,33 @@ import {
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
 import { PUBLIC_ROUTES } from "@/features/auth/utils/public-routes";
+import type { AuthContextType } from "@/features/auth/types";
 import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
 import {
   hangingFetch,
   installDrivableAbortDeadlines,
 } from "./deadline-support";
 
-const nav = vi.hoisted(() => ({ replace: vi.fn(), pathname: "/" }));
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
+const nav = vi.hoisted(() => ({
+  replace: vi.fn<Router["replace"]>(),
+  pathname: "/",
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: nav.replace, push: vi.fn() }),
+  useRouter: () => ({
+    replace: nav.replace,
+    push: vi.fn<Router["push"]>(),
+  }),
   usePathname: () => nav.pathname,
 }));
 
 const auth = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
-  checkAuth: vi.fn(async () => {}),
-  logout: vi.fn(async () => {}),
+  checkAuth: vi.fn<AuthContextType["checkAuth"]>(async () => {}),
+  logout: vi.fn<AuthContextType["logout"]>(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({

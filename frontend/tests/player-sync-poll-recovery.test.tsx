@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQueryClient } from "./render-support";
 
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+
 const { validatedGet, validatedPost } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPost: vi.fn(),
+  validatedGet: vi.fn<Api["validatedGet"]>(),
+  validatedPost: vi.fn<Api["validatedPost"]>(),
 }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -17,14 +20,17 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
 
 vi.mock("@/lib/core/hooks", () => ({
   useToast: () => ({
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
-    success: vi.fn(),
+    error: vi.fn<AppToast["error"]>(),
+    info: vi.fn<AppToast["info"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    success: vi.fn<AppToast["success"]>(),
   }),
 }));
 
 import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
+
+type SyncRunOptions = NonNullable<Parameters<typeof usePlayerSyncRun>[1]>;
+type OnSettled = NonNullable<SyncRunOptions["onSettled"]>;
 
 const PUUID = "player-puuid";
 const RUN_TIMESTAMPS = {
@@ -110,7 +116,7 @@ describe("player sync poll recovery", () => {
       }
       return { success: true, data: run("completed") };
     });
-    const onSettled = vi.fn();
+    const onSettled = vi.fn<OnSettled>();
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, { onSettled }));
 
     await vi.advanceTimersByTimeAsync(60_000);
@@ -125,7 +131,7 @@ describe("player sync poll recovery", () => {
     // A few seconds of failed polling must not settle the run: the caller acts
     // on that callback, and acting on `null` while the run is still going means
     // acting on partial data, which a later real settle then contradicts.
-    const onSettled = vi.fn();
+    const onSettled = vi.fn<OnSettled>();
     mockPollThatFailsThenRecovers("completed");
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, { onSettled }));
 

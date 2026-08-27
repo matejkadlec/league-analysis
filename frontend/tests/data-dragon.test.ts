@@ -13,22 +13,20 @@ import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
 
 describe("Data Dragon version resolution", () => {
   it("uses Riot's latest valid manifest version", async () => {
-    const fetchManifest = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(["99.1.2", "99.1.1"]), { status: 200 }),
-    );
+    const fetchManifest = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify(["99.1.2", "99.1.1"]), { status: 200 }),
+      );
 
-    await expect(
-      resolveDDragonVersion(fetchManifest as typeof fetch),
-    ).resolves.toBe("99.1.2");
+    await expect(resolveDDragonVersion(fetchManifest)).resolves.toBe("99.1.2");
   });
 
   it("honours a well-formed DDRAGON_VERSION pin without asking Riot", async () => {
     vi.stubEnv("DDRAGON_VERSION", "12.34.5");
-    const fetchManifest = vi.fn();
+    const fetchManifest = vi.fn<typeof fetch>();
 
-    await expect(
-      resolveDDragonVersion(fetchManifest as unknown as typeof fetch),
-    ).resolves.toBe("12.34.5");
+    await expect(resolveDDragonVersion(fetchManifest)).resolves.toBe("12.34.5");
     expect(fetchManifest).not.toHaveBeenCalled();
   });
 
@@ -36,12 +34,10 @@ describe("Data Dragon version resolution", () => {
     vi.stubEnv("DDRAGON_VERSION", "latest");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const fetchManifest = vi
-      .fn()
+      .fn<typeof fetch>()
       .mockResolvedValue(new Response(JSON.stringify(["99.1.2"])));
 
-    await expect(
-      resolveDDragonVersion(fetchManifest as typeof fetch),
-    ).resolves.toBe("99.1.2");
+    await expect(resolveDDragonVersion(fetchManifest)).resolves.toBe("99.1.2");
     expect(consoleError).toHaveBeenCalledWith(
       "DDRAGON_VERSION is not a version number; ignoring it",
       { pinned: "latest" },
@@ -50,17 +46,17 @@ describe("Data Dragon version resolution", () => {
   });
 
   it("falls back safely for failed or malformed manifests", async () => {
-    const failed = vi.fn().mockRejectedValue(new Error("offline"));
+    const failed = vi.fn<typeof fetch>().mockRejectedValue(new Error("offline"));
     const malformed = vi
-      .fn()
+      .fn<typeof fetch>()
       .mockResolvedValue(new Response(JSON.stringify(["not-a-version"])));
 
-    await expect(resolveDDragonVersion(failed as typeof fetch)).resolves.toBe(
+    await expect(resolveDDragonVersion(failed)).resolves.toBe(
       DDRAGON_FALLBACK_VERSION,
     );
-    await expect(
-      resolveDDragonVersion(malformed as typeof fetch),
-    ).resolves.toBe(DDRAGON_FALLBACK_VERSION);
+    await expect(resolveDDragonVersion(malformed)).resolves.toBe(
+      DDRAGON_FALLBACK_VERSION,
+    );
   });
 });
 

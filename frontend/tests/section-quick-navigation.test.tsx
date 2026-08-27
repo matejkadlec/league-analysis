@@ -9,7 +9,7 @@ import {
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
 
-const scrollIntoView = vi.fn();
+const scrollIntoView = vi.fn<typeof Element.prototype.scrollIntoView>();
 
 // Module level, exactly as the pages declare theirs: an array literal rebuilt
 // on each render is a new dependency every time, which re-runs the effect and

@@ -1,17 +1,24 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from "react";
 import { screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type PlayerApi = typeof import("@/features/players/player-api");
+type PlayerContextValue = ReturnType<
+  typeof import("@/features/players/context/player-context").usePlayerContext
+>;
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+
 const { discoverPlayer, searchPlayerSuggestions, selectPlayer, toast } =
   vi.hoisted(() => ({
-    discoverPlayer: vi.fn(),
-    searchPlayerSuggestions: vi.fn(),
-    selectPlayer: vi.fn(),
-    toast: vi.fn(),
+    discoverPlayer: vi.fn<PlayerApi["discoverPlayer"]>(),
+    searchPlayerSuggestions: vi.fn<PlayerApi["searchPlayerSuggestions"]>(),
+    selectPlayer: vi.fn<PlayerContextValue["selectPlayer"]>(),
+    toast: vi.fn<AppToast["toast"]>(),
   }));
 
 vi.mock("next/navigation", () => ({
@@ -51,7 +58,12 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
-function renderSwitcher(manageOpen = false, onManageOpenChange = vi.fn()) {
+type SwitcherProps = ComponentProps<typeof SidebarPlayerSwitcher>;
+
+function renderSwitcher(
+  manageOpen = false,
+  onManageOpenChange = vi.fn<SwitcherProps["onManageOpenChange"]>(),
+) {
   renderWithQueryClient(
     <SidebarPlayerSwitcher
       manageOpen={manageOpen}
@@ -73,7 +85,7 @@ describe("SidebarPlayerSwitcher", () => {
 
   it("shows only the current player and opens its dialog without a link", async () => {
     const user = userEvent.setup();
-    const onManageOpenChange = vi.fn();
+    const onManageOpenChange = vi.fn<SwitcherProps["onManageOpenChange"]>();
     renderSwitcher(false, onManageOpenChange);
 
     const currentPlayerButton = screen.getByRole("button", {

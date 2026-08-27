@@ -4,14 +4,16 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ToasterProps } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+type Toast = typeof import("sonner").toast;
+
 const sonner = vi.hoisted(() => ({
-  toaster: vi.fn(),
-  toast: vi.fn(),
-  success: vi.fn(),
-  warning: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  dismiss: vi.fn(),
+  toaster: vi.fn<(props: ToasterProps) => void>(),
+  toast: vi.fn<Toast>(),
+  success: vi.fn<Toast["success"]>(),
+  warning: vi.fn<Toast["warning"]>(),
+  error: vi.fn<Toast["error"]>(),
+  info: vi.fn<Toast["info"]>(),
+  dismiss: vi.fn<Toast["dismiss"]>(),
 }));
 
 vi.mock("sonner", async (importOriginal) => {

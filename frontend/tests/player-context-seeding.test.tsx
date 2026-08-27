@@ -3,12 +3,14 @@
 import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { validatedGet, useAuth, replace, push, pathname, search } = vi.hoisted(
   () => ({
-    validatedGet: vi.fn(),
-    useAuth: vi.fn(),
-    replace: vi.fn(),
-    push: vi.fn(),
+    validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+    useAuth: vi.fn<typeof import("@/features/auth").useAuth>(),
+    replace: vi.fn<Router["replace"]>(),
+    push: vi.fn<Router["push"]>(),
     pathname: { current: "/rank-manipulation" },
     search: { current: "" },
   }),
@@ -32,6 +34,7 @@ import {
   usePlayerContext,
 } from "@/features/players/context/player-context";
 import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
+import type { AuthContextType } from "@/features/auth/types";
 import type { Player } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./render-support";
 
@@ -56,6 +59,27 @@ function player(puuid: string, name: string): Player {
   };
 }
 
+/** The whole context value, not the three fields the provider reads today. */
+const SIGNED_IN: AuthContextType = {
+  user: {
+    id: 1,
+    email: "user@example.com",
+    display_name: "User",
+    is_active: true,
+    is_admin: false,
+    email_verified: true,
+    email_verified_at: null,
+    last_login: null,
+    created_at: "2026-08-01T00:00:00Z",
+    updated_at: "2026-08-01T00:00:00Z",
+  },
+  isAuthenticated: true,
+  isLoading: false,
+  login: async () => {},
+  logout: async () => {},
+  checkAuth: async () => {},
+};
+
 const CURRENT = player("current-puuid", "CurrentPlayer");
 const SOMEBODY_ELSE = player("other-puuid", "SomebodyElse");
 
@@ -78,14 +102,17 @@ beforeEach(() => {
           ? { success: true, data: CURRENT }
           : url === `/players/${SOMEBODY_ELSE.puuid}`
             ? { success: true, data: SOMEBODY_ELSE }
-            : { success: false, error: { status: 404, kind: "not_found" } },
+            : {
+                success: false,
+                error: {
+                  status: 404,
+                  kind: "not-found",
+                  message: "Player not found",
+                },
+              },
     ),
   );
-  useAuth.mockReturnValue({
-    user: { id: 1 },
-    isAuthenticated: true,
-    isLoading: false,
-  });
+  useAuth.mockReturnValue(SIGNED_IN);
 });
 
 /** Both hooks under the real provider, the way a page mounts them. */

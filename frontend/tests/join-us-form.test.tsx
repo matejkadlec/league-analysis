@@ -9,6 +9,8 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type Toast = ReturnType<typeof import("@/lib/core/hooks").useToast>;
+
 const {
   validatedPost,
   useAuth,
@@ -17,11 +19,11 @@ const {
   turnstileReset,
   onSuccessRef,
 } = vi.hoisted(() => ({
-  validatedPost: vi.fn(),
-  useAuth: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-  turnstileReset: vi.fn(),
+  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  useAuth: vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
+  toastSuccess: vi.fn<Toast["success"]>(),
+  toastError: vi.fn<Toast["error"]>(),
+  turnstileReset: vi.fn<() => void>(),
   onSuccessRef: { current: null as ((token: string) => void) | null },
 }));
 
@@ -63,8 +65,26 @@ vi.mock("@marsidev/react-turnstile", () => ({
 
 import { JoinUsForm } from "@/features/auth/components/join-us-form";
 import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/utils/join-us-message";
+import type { AuthContextType } from "@/features/auth/types";
 
 const LONG_ENOUGH = "a".repeat(300);
+
+/**
+ * The whole context value from the two fields the form reads. A partial
+ * object would only say the mock agrees with today's reading of it.
+ */
+function session(state: {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}): AuthContextType {
+  return {
+    user: null,
+    ...state,
+    login: async () => {},
+    logout: async () => {},
+    checkAuth: async () => {},
+  };
+}
 
 function submitButton() {
   return screen.getByRole("button", {
@@ -102,7 +122,7 @@ beforeEach(() => {
   toastError.mockReset();
   turnstileReset.mockReset();
   onSuccessRef.current = null;
-  useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false });
+  useAuth.mockReturnValue(session({ isAuthenticated: false, isLoading: false }));
 });
 
 
@@ -328,7 +348,7 @@ describe("the way back out of the form", () => {
     ["signed in", { isAuthenticated: true, isLoading: false }, "/"],
     ["signed out", { isAuthenticated: false, isLoading: false }, "/sign-in"],
   ])("sends a %s visitor to %s", (_label, auth, href) => {
-    useAuth.mockReturnValue(auth);
+    useAuth.mockReturnValue(session(auth));
     render(<JoinUsForm />);
 
     expect(
@@ -340,7 +360,7 @@ describe("the way back out of the form", () => {
     // Without the hint, a signed-in visitor sees "Back to Sign In page" for as
     // long as the auth probe takes, on a page reachable from the signed-in
     // app. The hint comes from the same cookie the server already read.
-    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: true });
+    useAuth.mockReturnValue(session({ isAuthenticated: false, isLoading: true }));
     render(<JoinUsForm isAuthenticatedHint />);
 
     expect(
@@ -351,7 +371,9 @@ describe("the way back out of the form", () => {
   it("does not trust the hint once the session has actually resolved", () => {
     // The hint is a guess from a cookie that may be stale. Once `isLoading`
     // is false the real answer is in, and a stale hint must not override it.
-    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false });
+    useAuth.mockReturnValue(
+      session({ isAuthenticated: false, isLoading: false }),
+    );
     render(<JoinUsForm isAuthenticatedHint />);
 
     expect(

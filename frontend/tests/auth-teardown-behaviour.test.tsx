@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, normalizeApiError } from "@/lib/core/api";
 import { queryErrorToast } from "@/lib/core/hooks";
 import { AuthGate } from "@/components/auth-gate";
+import type { AuthContextType } from "@/features/auth/types";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
@@ -17,7 +18,12 @@ import {
 // recognise shapes of code, so these assert the effect instead: each surface
 // put where a refusal and an outage look alike, hint still there.
 
-const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
+const nav = vi.hoisted(() => ({
+  replace: vi.fn<Router["replace"]>(),
+  push: vi.fn<Router["push"]>(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: nav.replace, push: nav.push }),
@@ -27,8 +33,8 @@ vi.mock("next/navigation", () => ({
 const auth = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
-  checkAuth: vi.fn(async () => {}),
-  logout: vi.fn(async () => {}),
+  checkAuth: vi.fn<AuthContextType["checkAuth"]>(async () => {}),
+  logout: vi.fn<AuthContextType["logout"]>(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({ useAuth: () => auth }));

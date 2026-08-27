@@ -3,18 +3,25 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AuthContextType } from "@/features/auth/types";
+
 /**
  * Sign Out is one of exactly two callers allowed to pass
  * `evenIfTheServerCannotBeReached`. It arrives by React context, so no lint
  * rule sees it and only this file holds the flag on.
  */
 
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
 const nav = vi.hoisted(() => ({ pathname: "/" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn<Router["push"]>(),
+    replace: vi.fn<Router["replace"]>(),
+  }),
 }));
 
 const auth = vi.hoisted(() => ({
@@ -25,7 +32,7 @@ const auth = vi.hoisted(() => ({
   },
   isAuthenticated: true,
   isLoading: false,
-  logout: vi.fn(async () => {}),
+  logout: vi.fn<AuthContextType["logout"]>(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({ useAuth: () => auth }));

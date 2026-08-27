@@ -6,7 +6,10 @@ import { renderWithQueryClient } from "./render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getLatestCompletedMatchmakingAnalysis } = vi.hoisted(() => ({
-  getLatestCompletedMatchmakingAnalysis: vi.fn(),
+  getLatestCompletedMatchmakingAnalysis:
+    vi.fn<
+      typeof import("@/features/matchmaking/matchmaking-api").getLatestCompletedMatchmakingAnalysis
+    >(),
 }));
 
 vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
@@ -17,6 +20,8 @@ vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
 }));
 
 import { MatchmakingAnalysisResults } from "@/features/matchmaking/components/matchmaking-analysis-results";
+import type { ApiResponse } from "@/lib/core/api";
+import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
 /** A local-time date, so the formatter's local getters have a known answer. */
 const CREATED_AT = new Date(2026, 2, 4, 14, 7).toISOString();
@@ -28,13 +33,15 @@ function completed(
     matches_analyzed: number;
   },
   createdAt: string = CREATED_AT,
-) {
+): ApiResponse<MatchmakingAnalysisResponse> {
   return {
     success: true,
     data: {
-      id: 1,
       puuid: "puuid",
       status: "completed",
+      progress: 10,
+      total_puuids: 10,
+      requests_saved: 0,
       created_at: createdAt,
       params: { match_count: 10, end_date: null },
       results,
@@ -66,7 +73,11 @@ describe("the last matchmaking analysis result", () => {
     // render the same card, so only the sentence inside it tells them apart.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: false,
-      error: { status: 404, kind: "not_found" },
+      error: {
+        status: 404,
+        kind: "not-found",
+        message: "No analysis has been run for this player.",
+      },
     });
     const { queryClient } = renderResults();
 
@@ -81,7 +92,11 @@ describe("the last matchmaking analysis result", () => {
   it("says a real failure could not be loaded rather than claiming there is none", async () => {
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: false,
-      error: { status: 500, kind: "server" },
+      error: {
+        status: 500,
+        kind: "service",
+        message: "The service is unavailable.",
+      },
     });
     const { queryClient } = renderResults();
 
@@ -94,21 +109,19 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("does not show numbers from an analysis that has not finished", async () => {
-    // A row exists and carries `results`, but the run is still going, so the
-    // averages in it are partial. Rendering them looks like a verdict.
+    // A row exists but the run is still going, so it has no verdict to show.
+    // `splitRunOnLifecycle` is why the partial averages cannot even be
+    // handed to the card: only `completed` owns `results`.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: true,
       data: {
-        id: 1,
         puuid: "puuid",
-        status: "running",
+        status: "in_progress",
+        progress: 4,
+        total_puuids: 10,
+        requests_saved: 0,
         created_at: CREATED_AT,
         params: { match_count: 10, end_date: null },
-        results: {
-          team_avg_winrate: 0.9,
-          enemy_avg_winrate: 0.1,
-          matches_analyzed: 910,
-        },
       },
     });
     const { queryClient } = renderResults();
@@ -371,9 +384,11 @@ describe("the last matchmaking analysis result", () => {
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: true,
       data: {
-        id: 1,
         puuid: "puuid",
         status: "completed",
+        progress: 30,
+        total_puuids: 30,
+        requests_saved: 0,
         created_at: CREATED_AT,
         params: { match_count: 30, end_date: "2026-07-26" },
         results: {

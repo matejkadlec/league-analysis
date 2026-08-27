@@ -11,16 +11,20 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatDateTime } from "@/lib/core/format";
+import type { ApiResponse } from "@/lib/core/api";
+
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPut, validatedPost, toast } = vi.hoisted(() => ({
-  validatedGet: vi.fn(),
-  validatedPut: vi.fn(),
-  validatedPost: vi.fn(),
+  validatedGet: vi.fn<Api["validatedGet"]>(),
+  validatedPut: vi.fn<Api["validatedPut"]>(),
+  validatedPost: vi.fn<Api["validatedPost"]>(),
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
+    error: vi.fn<AppToast["error"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    info: vi.fn<AppToast["info"]>(),
   },
 }));
 
@@ -82,7 +86,7 @@ function status(overrides: Record<string, unknown> = {}) {
 
 /** Answers the card's two GETs: the stored setting, then its health status. */
 function respondWith(options: {
-  setting?: { success: boolean; data?: unknown; error?: unknown };
+  setting?: ApiResponse<unknown>;
   status?: Record<string, unknown>;
 }) {
   validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
@@ -241,7 +245,10 @@ describe("the card that swaps the Riot API key", () => {
     // `setting` is null either way. The global `queryCache.onError` separates
     // them, so letting the 404 through raises an error over a working card.
     respondWith({
-      setting: { success: false, error: { status: 404, kind: "not_found" } },
+      setting: {
+        success: false,
+        error: { message: "Not found", status: 404, kind: "not-found" },
+      },
       status: status({ credential_status: "missing", evidence: "missing" }),
     });
     const announce = vi.spyOn(appToast, "toast").mockImplementation(() => "");
@@ -271,7 +278,7 @@ describe("the card that swaps the Riot API key", () => {
     // off this event, so without it they keep showing the old key's verdict
     // -- including a red "invalid" beside a key that was just fixed.
     validatedPut.mockResolvedValue({ success: true, data: DB_SETTING });
-    const heard = vi.fn();
+    const heard = vi.fn<EventListener>();
     window.addEventListener(RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT, heard);
 
     const queryClient = renderCard();

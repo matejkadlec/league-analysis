@@ -7,7 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobExecution, JobExecutionListResponse } from "@/lib/core/schemas";
 
-const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
+const { validatedGet } = vi.hoisted(() => ({
+  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+}));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
@@ -168,7 +170,7 @@ describe("the executions list's paging", () => {
 
     validatedGet.mockResolvedValue({
       success: false,
-      error: { kind: "server", status: 500, message: "deploying" },
+      error: { kind: "service", status: 500, message: "deploying" },
     });
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });

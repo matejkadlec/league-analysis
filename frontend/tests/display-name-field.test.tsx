@@ -5,14 +5,17 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+type AuthContext = import("@/features/auth/types").AuthContextType;
+
 const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
-  validatedPatch: vi.fn(),
-  checkAuth: vi.fn(),
+  validatedPatch: vi.fn<typeof import("@/lib/core/api").validatedPatch>(),
+  checkAuth: vi.fn<AuthContext["checkAuth"]>(),
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
+    error: vi.fn<AppToast["error"]>(),
+    warning: vi.fn<AppToast["warning"]>(),
+    info: vi.fn<AppToast["info"]>(),
   },
 }));
 
@@ -191,7 +194,11 @@ describe("the display name on the settings page", () => {
   it("says so when the rename did not happen", async () => {
     validatedPatch.mockResolvedValue({
       success: false,
-      error: { status: 500, kind: "server" },
+      error: {
+        status: 500,
+        kind: "service",
+        message: "The rename could not be saved.",
+      },
     });
     const queryClient = renderField();
 

@@ -22,7 +22,7 @@ export function installDrivableAbortDeadlines(): () => void {
 
 /** A server that accepts the connection and then never answers. */
 export function hangingFetch() {
-  return vi.fn(
+  return vi.fn<typeof fetch>(
     (_input: RequestInfo | URL, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener(

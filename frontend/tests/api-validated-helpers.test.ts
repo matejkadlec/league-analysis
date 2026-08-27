@@ -12,8 +12,14 @@ import { z } from "zod";
 
 const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
   () => ({
-    notifyRiotCredentialHealthUpdated: vi.fn(),
-    refreshAccessToken: vi.fn(),
+    notifyRiotCredentialHealthUpdated:
+      vi.fn<
+        typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+      >(),
+    refreshAccessToken:
+      vi.fn<
+        typeof import("@/features/auth/utils/token-manager").refreshAccessToken
+      >(),
   }),
 );
 

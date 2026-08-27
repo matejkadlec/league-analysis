@@ -5,13 +5,15 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type Toast = ReturnType<typeof import("@/lib/core/hooks").useToast>;
+
 const { validatedPost, toast } = vi.hoisted(() => ({
-  validatedPost: vi.fn(),
+  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
+    success: vi.fn<Toast["success"]>(),
+    error: vi.fn<Toast["error"]>(),
+    warning: vi.fn<Toast["warning"]>(),
+    info: vi.fn<Toast["info"]>(),
   },
 }));
 
@@ -26,6 +28,11 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { PasswordChangeSection } from "@/features/settings/password-change-section";
+import type { ApiResponse } from "@/lib/core/api";
+import type { MessageResponse } from "@/lib/core/schemas";
+
+/** Exactly what `POST /auth/change-password` resolves to. */
+type ChangePasswordResponse = ApiResponse<MessageResponse>;
 
 const CURRENT = "Current-1";
 const STRONG = "Str0ng!Pass";
@@ -61,7 +68,7 @@ function submit(): void {
 }
 
 /** What the API hands back when it refuses with a structured code. */
-function refusal(code: string) {
+function refusal(code: string): ChangePasswordResponse {
   return {
     success: false as const,
     error: {
@@ -179,10 +186,10 @@ describe("changing an account password", () => {
     // The button's `disabled` is what holds this shut, not the handler's own
     // pending check -- a disabled button never delivers the click, so this
     // stays green with that check deleted.
-    let release: (value: unknown) => void = () => {};
+    let release: (value: ChangePasswordResponse) => void = () => {};
     validatedPost.mockImplementation(
       () =>
-        new Promise((resolve) => {
+        new Promise<ChangePasswordResponse>((resolve) => {
           release = resolve;
         }),
     );

@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQueryClient } from "./render-support";
 
+type Api = typeof import("@/lib/core/api");
+type AppToast = typeof import("@/lib/core/hooks").appToast;
+
 const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
   vi.hoisted(() => ({
-    validatedGet: vi.fn(),
-    validatedPost: vi.fn(),
-    toastError: vi.fn(),
-    toastInfo: vi.fn(),
-    toastWarning: vi.fn(),
+    validatedGet: vi.fn<Api["validatedGet"]>(),
+    validatedPost: vi.fn<Api["validatedPost"]>(),
+    toastError: vi.fn<AppToast["error"]>(),
+    toastInfo: vi.fn<AppToast["info"]>(),
+    toastWarning: vi.fn<AppToast["warning"]>(),
   }));
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
@@ -24,7 +27,7 @@ vi.mock("@/lib/core/hooks", () => ({
     error: toastError,
     info: toastInfo,
     warning: toastWarning,
-    success: vi.fn(),
+    success: vi.fn<AppToast["success"]>(),
   }),
 }));
 
@@ -59,7 +62,7 @@ describe("player sync start refusal", () => {
         message: BUSY_MESSAGE,
       },
     });
-    const onStartRefused = vi.fn();
+    const onStartRefused = vi.fn<(puuid: string) => void>();
     const { result, queryClient } = renderHookWithQueryClient(() =>
       usePlayerProfileUpdate({ onStartRefused }),
     );

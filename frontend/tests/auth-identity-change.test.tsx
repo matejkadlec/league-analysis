@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQueryClient } from "./render-support";
 
+type TokenManager = typeof import("../features/auth/utils/token-manager");
+type Router = ReturnType<typeof import("next/navigation").useRouter>;
+
 const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
-  refreshAccessToken: vi.fn(),
-  removeAuthTokens: vi.fn(),
-  routerPush: vi.fn(),
+  refreshAccessToken: vi.fn<TokenManager["refreshAccessToken"]>(),
+  removeAuthTokens: vi.fn<TokenManager["removeAuthTokens"]>(),
+  routerPush: vi.fn<Router["push"]>(),
 }));
 
 vi.mock("next/navigation", () => ({

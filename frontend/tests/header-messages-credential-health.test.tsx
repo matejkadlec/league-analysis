@@ -41,10 +41,12 @@ vi.mock("@/features/cookie-consent", async (importOriginal) => ({
 
 vi.mock("@/lib/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/core/api")>()),
-  validatedGet: vi.fn(async () => ({
-    success: true,
-    data: state.serviceStatus,
-  })),
+  validatedGet: vi
+    .fn<typeof import("@/lib/core/api").validatedGet>()
+    .mockImplementation(async () => ({
+      success: true,
+      data: state.serviceStatus,
+    })),
 }));
 
 import { HeaderMessages } from "@/components/header-messages";

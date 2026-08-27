@@ -297,7 +297,9 @@ describe("the edge and the session hint", () => {
     // Weaker than the table above and cheaper: it only sees `globalThis.fetch`
     // at call time, so an imported client walks past it. An edge that probes
     // cannot tell a refusal from an outage.
-    const fetchSpy = vi.fn(() => Promise.reject(new Error("ECONNREFUSED")));
+    const fetchSpy = vi.fn<typeof fetch>(() =>
+      Promise.reject(new Error("ECONNREFUSED")),
+    );
     vi.stubGlobal("fetch", fetchSpy);
 
     const hinted = proxy(hintedRequest("/player-overview"));
