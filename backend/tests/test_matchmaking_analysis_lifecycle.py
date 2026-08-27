@@ -367,6 +367,38 @@ def test_one_sided_spine_matches_feed_the_headline_but_not_per_match() -> None:
     assert [entry["match_id"] for entry in per_match] == ["EUN1_1"]
 
 
+async def test_the_analyzed_player_is_sampled_but_kept_out_of_side_averages() -> None:
+    """They are the constant in every lobby: progress and rank sampling still
+    run for them, but their samples must not tilt their own team's averages."""
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace()),
+        cast(RiotAPIClient, SimpleNamespace()),
+        _USER_ID,
+    )
+    service._get_match_participants = AsyncMock(
+        return_value=[("analyzed", 100), ("ally", 100), ("foe", 200)]
+    )
+    service._get_win_status = AsyncMock(return_value=True)
+    sampled: list[str] = []
+
+    async def fake_sample(
+        side: analysis_service_module._SideSamples, p_puuid: str, *_args: object
+    ) -> None:
+        sampled.append(p_puuid)
+        side.winrates.append(1.0 if p_puuid == "analyzed" else 0.5)
+
+    service._sample_participant = AsyncMock(side_effect=fake_sample)
+
+    stats = await service._process_match("analyzed", datetime.now(UTC), "EUN1_1", 0)
+
+    assert stats is not None
+    assert stats.team_avg == 0.5  # the 1.0 self-sample landed in a discard side
+    assert stats.enemy_avg == 0.5
+    assert stats.ally_puuids == ["analyzed", "ally"]  # stored for the client
+    assert service._ally_rank_puuids == {"ally"}
+    assert sampled == ["analyzed", "ally", "foe"]
+
+
 def test_the_analyzed_players_win_flag_rides_per_match() -> None:
     """The scope W-L record is client-side; the flag must survive to JSON."""
     results = _completion_results(

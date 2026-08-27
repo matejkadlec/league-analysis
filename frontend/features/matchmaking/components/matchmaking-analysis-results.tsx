@@ -33,6 +33,7 @@ import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
 import { formatRunEndDate } from "../run-type";
 import {
   effectiveScope as resolveScope,
+  formatLpGap,
   lobbyGap,
   performanceAggregates,
   rankAggregates,
@@ -277,7 +278,7 @@ export function MatchmakingAnalysisResults({
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4" />
-                  Analyzed Player&apos;s Team
+                  Teammates
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
@@ -290,7 +291,7 @@ export function MatchmakingAnalysisResults({
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   <Swords className="h-4 w-4" />
-                  Opponent Team
+                  Opponents
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
@@ -355,12 +356,12 @@ export function MatchmakingAnalysisResults({
               <TableBody>
                 <PerformanceRow
                   icon={<Shield className="h-4 w-4" />}
-                  label="Analyzed Player's Team"
+                  label="Teammates"
                   side={performance.team}
                 />
                 <PerformanceRow
                   icon={<Swords className="h-4 w-4" />}
-                  label="Opponent Team"
+                  label="Opponents"
                   side={performance.enemy}
                 />
               </TableBody>
@@ -392,13 +393,12 @@ export function MatchmakingAnalysisResults({
               Math.round(Math.abs(enemyRank - allyRank)) > 0 && (
                 <p className="text-sm text-muted-foreground">
                   {enemyRank > allyRank ? "Enemies" : "Allies"} average{" "}
-                  {Math.round(Math.abs(enemyRank - allyRank))} LP higher (a
-                  division spans 100 LP).
+                  {formatLpGap(enemyRank - allyRank)} higher.
                 </p>
               )}
             {gap && gapLp !== 0 && (
               <p className="text-sm text-muted-foreground">
-                These lobbies average{" "}
+                The other players in these lobbies average{" "}
                 <span
                   className={cn(
                     "font-medium",
@@ -407,7 +407,7 @@ export function MatchmakingAnalysisResults({
                 >
                   {rankValueToDisplay(gap.lobbyAvg).label}
                 </span>{" "}
-                — {Math.abs(gapLp)} LP {gapLp > 0 ? "above" : "below"} the
+                — {formatLpGap(gapLp)} {gapLp > 0 ? "above" : "below"} the
                 analyzed player&apos;s own rank.
               </p>
             )}

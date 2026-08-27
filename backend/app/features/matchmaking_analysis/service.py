@@ -963,8 +963,10 @@ class MatchmakingAnalysisService:
                 self._rank_tiers,
                 self._rank_values,
             ),
+            # The analyzed player's own rank stays in the map for the client's
+            # lobby-gap line, even though the side averages exclude them.
             player_ranks=player_rank_map(
-                self._ally_rank_puuids | self._enemy_rank_puuids,
+                self._ally_rank_puuids | self._enemy_rank_puuids | {puuid},
                 self._rank_tiers,
                 self._rank_values,
             ),
@@ -1040,12 +1042,20 @@ class MatchmakingAnalysisService:
         enemy_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
+            # The analyzed player is the constant in every lobby: sampled for
+            # progress and rank, but kept out of their own side's averages.
+            is_analyzed = p_puuid == analysis_puuid
             side = team if team_id == target_team else enemy
             await self._sample_participant(
-                side, p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
+                _SideSamples([], []) if is_analyzed else side,
+                p_puuid,
+                end_time_seconds,
+                analysis_puuid,
+                analysis_created_at,
             )
             if team_id == target_team:
-                self._ally_rank_puuids.add(p_puuid)
+                if not is_analyzed:
+                    self._ally_rank_puuids.add(p_puuid)
                 ally_puuids.append(p_puuid)
             else:
                 self._enemy_rank_puuids.add(p_puuid)
