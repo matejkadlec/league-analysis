@@ -95,11 +95,12 @@ def test_winrates_are_fractions_not_percentages() -> None:
 
 
 def test_request_bounds_reject_out_of_range_match_counts() -> None:
-    # 5-30 is the backend contract; the UI presets (10/20/30) are a subset.
+    # 10-100 is the backend contract; the UI presets plus the custom input.
     with pytest.raises(ValidationError):
-        MatchmakingAnalysisRequest(puuid="p-1", match_count=4)
+        MatchmakingAnalysisRequest(puuid="p-1", match_count=9)
     with pytest.raises(ValidationError):
-        MatchmakingAnalysisRequest(puuid="p-1", match_count=31)
+        MatchmakingAnalysisRequest(puuid="p-1", match_count=101)
+    assert MatchmakingAnalysisRequest(puuid="p-1", match_count=100).match_count == 100
     assert MatchmakingAnalysisRequest(puuid="p-1").match_count == 10
     assert MatchmakingAnalysisRequest(puuid="p-1").end_date is None
 

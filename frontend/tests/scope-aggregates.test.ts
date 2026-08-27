@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  duoPartnerPuuids,
   effectiveScope,
   formatLpGap,
   lobbyGap,
@@ -168,6 +169,7 @@ describe("rankAggregates", () => {
     me: { tier: "GOLD", value: 1500 },
     partner: { tier: "GOLD", value: 1600 },
     stranger: { tier: "PLATINUM", value: 1800 },
+    soloAlly: { tier: "GOLD", value: 1500 },
     foe1: { tier: "EMERALD", value: 2200 },
     foe2: { tier: "UNRANKED", value: null },
   };
@@ -177,7 +179,7 @@ describe("rankAggregates", () => {
       duo: true,
       team_avg: 0.5,
       enemy_avg: 0.5,
-      ally_puuids: ["partner"],
+      ally_puuids: ["me", "partner"],
       enemy_puuids: ["foe1", "foe2"],
     },
     {
@@ -193,21 +195,21 @@ describe("rankAggregates", () => {
       duo: false,
       team_avg: 0.5,
       enemy_avg: 0.5,
-      ally_puuids: ["stranger"],
+      ally_puuids: ["soloAlly"],
       enemy_puuids: ["foe2"],
     },
   ];
 
-  it("averages unique players per side, analyzed player excluded", () => {
-    // "partner" and "foe1" recur across both duo matches but count once,
-    // matching the backend's global unique-player semantics; "me" is the
-    // constant in every lobby and never tilts their own side.
+  it("averages unique matchmade players per side only", () => {
+    // "foe1" recurs across both duo matches but counts once. "me" (the
+    // analyzed player) and "partner" (a recurring ally = likely duo) are
+    // not matchmade and never tilt the ally side.
     const duo = rankAggregates(DUO_MATCHES, RANKS, "duo", "me");
 
     expect(duo).toEqual({
-      allyAvg: (1600 + 1800) / 2,
+      allyAvg: 1800,
       enemyAvg: 2200,
-      allyTierCounts: { GOLD: 1, PLATINUM: 1 },
+      allyTierCounts: { PLATINUM: 1 },
       enemyTierCounts: { EMERALD: 1, UNRANKED: 1 },
     });
   });
@@ -217,7 +219,8 @@ describe("rankAggregates", () => {
 
     expect(solo?.enemyAvg).toBeNull();
     expect(solo?.enemyTierCounts).toEqual({ UNRANKED: 1 });
-    expect(solo?.allyAvg).toBe(1800);
+    expect(solo?.allyAvg).toBe(1500);
+    expect(solo?.allyTierCounts).toEqual({ GOLD: 1 });
   });
 
   it("returns null when the run predates per-match puuid lists", () => {
@@ -332,5 +335,29 @@ describe("formatLpGap", () => {
     expect(formatLpGap(0)).toBe("0 LP");
     // Rounds before decomposing, so 99.6 never reads as "99 LP" of a division.
     expect(formatLpGap(99.6)).toBe("1 division");
+  });
+});
+
+describe("duoPartnerPuuids", () => {
+  it("flags allies recurring in two or more matches, never the analyzed player", () => {
+    const matches: MatchmakingPerMatch[] = [
+      {
+        match_id: "m1",
+        duo: true,
+        team_avg: 0.5,
+        enemy_avg: 0.5,
+        ally_puuids: ["me", "partner", "a"],
+      },
+      {
+        match_id: "m2",
+        duo: true,
+        team_avg: 0.5,
+        enemy_avg: 0.5,
+        ally_puuids: ["me", "partner", "b"],
+      },
+    ];
+
+    expect(duoPartnerPuuids(matches, "me")).toEqual(new Set(["partner"]));
+    expect(duoPartnerPuuids([], "me")).toEqual(new Set());
   });
 });
