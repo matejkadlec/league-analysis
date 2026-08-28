@@ -35,8 +35,12 @@ import {
 
 export function CookieConsentManager() {
   const { isAuthenticated, user } = useAuth();
-  const [isReady, setIsReady] = useState(false);
-  const [isBannerOpen, setIsBannerOpen] = useState(false);
+  // Lifecycle only. `isSaving` stays its own flag because it is orthogonal:
+  // the dialog can be closed and a PUT still in flight, and the footer link
+  // can reopen it in that window -- which is what the guard below is for.
+  const [status, setStatus] = useState<"loading" | "hidden" | "open">(
+    "loading",
+  );
   const [consent, setConsent] = useState<CookieConsentState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -76,21 +80,22 @@ export function CookieConsentManager() {
     if (!storedConsent || !isCurrentCookieConsent(storedConsent)) {
       clearOptionalBrowserStorage();
       setConsent(null);
-      setIsBannerOpen(true);
       notifyCookieConsentUpdated(null);
-      setIsReady(true);
+      setStatus("open");
       return;
     }
 
     setConsent(storedConsent);
-    setIsBannerOpen(false);
     notifyCookieConsentUpdated(storedConsent);
-    setIsReady(true);
+    setStatus("hidden");
   }, []);
   /* oxlint-enable react/set-state-in-effect */
 
   useEffect(() => {
-    const openPreferences = () => setIsBannerOpen(true);
+    // Only "hidden" may open: during "loading" the cookie has not been read
+    // yet, so opening would show the banner to someone who already answered.
+    const openPreferences = () =>
+      setStatus((current) => (current === "hidden" ? "open" : current));
     window.addEventListener(
       COOKIE_CONSENT_OPEN_PREFERENCES_EVENT,
       openPreferences,
@@ -140,8 +145,8 @@ export function CookieConsentManager() {
           clearOptionalBrowserStorage();
         }
         setConsent(adopted);
-        setIsBannerOpen(false);
         notifyCookieConsentUpdated(adopted);
+        setStatus("hidden");
         return;
       }
 
@@ -168,8 +173,8 @@ export function CookieConsentManager() {
       // permitted is cleared in the meantime.
       clearOptionalBrowserStorage();
       setConsent(null);
-      setIsBannerOpen(true);
       notifyCookieConsentUpdated(null);
+      setStatus("open");
     };
 
     void reconcile();
@@ -193,8 +198,8 @@ export function CookieConsentManager() {
       }
 
       setConsent(nextConsent);
-      setIsBannerOpen(false);
       notifyCookieConsentUpdated(nextConsent);
+      setStatus("hidden");
 
       if (isAuthenticated && user?.id) {
         // Deliberately best-effort: the browser already holds the choice, and
@@ -207,7 +212,7 @@ export function CookieConsentManager() {
     }
   };
 
-  if (!isReady) {
+  if (status === "loading") {
     return null;
   }
 
@@ -215,12 +220,12 @@ export function CookieConsentManager() {
 
   return (
     <Dialog
-      open={isBannerOpen}
+      open={status === "open"}
       onOpenChange={(open) => {
         if (!open && isBlockingConsentDecision) {
           return;
         }
-        setIsBannerOpen(open);
+        setStatus(open ? "open" : "hidden");
       }}
     >
       <DialogContent
@@ -286,7 +291,7 @@ export function CookieConsentManager() {
               type="button"
               variant="ghost"
               disabled={isSaving}
-              onClick={() => setIsBannerOpen(false)}
+              onClick={() => setStatus("hidden")}
               className="py-2 px-4"
             >
               Keep current

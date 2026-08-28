@@ -2,16 +2,91 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { type ApiResponse, unwrap, validatedPost } from "@/lib/core/api";
-import { useToast } from "@/lib/core/hooks";
+import { type ToastVariant, useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,
   type JobControlActionResponse,
   JobControlActionResponseSchema,
   JobExecution,
+  type JobStatus,
   JobTriggerResponseSchema,
 } from "@/lib/core/schemas";
 
 import { invalidateJobsData } from "../jobs-query";
+
+type ToastFn = ReturnType<typeof useToast>["toast"];
+
+/** What a finished manual run announces, by the status it finished in. */
+const MANUAL_RUN_OUTCOMES: Partial<
+  Record<JobStatus, { suffix: string; description: string; variant: ToastVariant }>
+> = {
+  SUCCESS: {
+    suffix: "run finished",
+    description: "The manually triggered job completed successfully.",
+    variant: "success",
+  },
+  RATE_LIMITED: {
+    suffix: "run was rate limited",
+    description: "Riot temporarily limited requests. Try again later.",
+    variant: "warning",
+  },
+  CANCELLED: {
+    suffix: "run stopped",
+    description: "The manually triggered job is no longer active.",
+    variant: "success",
+  },
+};
+
+function manualRunToast(jobName: string, status: JobStatus) {
+  const outcome = MANUAL_RUN_OUTCOMES[status] ?? {
+    suffix: "run failed",
+    description: "Open the execution history for details, then try again.",
+    variant: "error" as const,
+  };
+  return {
+    title: `${jobName} ${outcome.suffix}`,
+    description: outcome.description,
+    variant: outcome.variant,
+  };
+}
+
+// The six control endpoints answer the same shape and want the same toast
+// handling. The mutationFn stays at each call site because the backend's
+// test_frontend_api_paths.py reads the validatedPost URL literal there.
+function useControlMutation<TArg = void>(
+  request: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
+  success: {
+    title: string;
+    description: string;
+    variant: "success" | "info";
+  },
+  failureTitle: string,
+  toast: ToastFn,
+  onRefresh: () => void,
+  onSuccessExtra?: () => void,
+) {
+  const fail = () =>
+    toast({
+      title: failureTitle,
+      description: "Please try again later.",
+      variant: "error",
+    });
+  return useMutation({
+    mutationFn: async (arg: TArg) => unwrap(await request(arg)),
+    onSuccess: (response) => {
+      if (!response.success) {
+        fail();
+        return;
+      }
+      toast(success);
+      onSuccessExtra?.();
+      onRefresh();
+    },
+    // A rejected request is the same outcome for the viewer as a declined
+    // one; only the announcement path differs.
+    onError: () => fail(),
+  });
+}
 
 export function useJobCardControls(
   job: JobConfiguration,
@@ -89,39 +164,7 @@ export function useJobCardControls(
     }
 
     awaitingManualRunRef.current = false;
-
-    if (manualExecution.status === "SUCCESS") {
-      toast({
-        title: `${job.name} run finished`,
-        description: "The manually triggered job completed successfully.",
-        variant: "success",
-      });
-      return;
-    }
-
-    if (manualExecution.status === "RATE_LIMITED") {
-      toast({
-        title: `${job.name} run was rate limited`,
-        description: "Riot temporarily limited requests. Try again later.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    if (manualExecution.status === "CANCELLED") {
-      toast({
-        title: `${job.name} run stopped`,
-        description: "The manually triggered job is no longer active.",
-        variant: "success",
-      });
-      return;
-    }
-
-    toast({
-      title: `${job.name} run failed`,
-      description: "Open the execution history for details, then try again.",
-      variant: "error",
-    });
+    toast(manualRunToast(job.name, manualExecution.status));
   }, [job.name, recentExecutions, toast]);
 
   // Every mutationFn unwraps, so a failed request rejects and `onError` (plus
@@ -167,42 +210,6 @@ export function useJobCardControls(
     },
   });
 
-  // The six control endpoints answer the same shape and want the same toast
-  // handling. The mutationFn stays at each call site because the backend's
-  // test_frontend_api_paths.py reads the validatedPost URL literal there.
-  function useControlMutation<TArg = void>(
-    request: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
-    success: {
-      title: string;
-      description: string;
-      variant: "success" | "info";
-    },
-    failureTitle: string,
-    onSuccessExtra?: () => void,
-  ) {
-    const fail = () =>
-      toast({
-        title: failureTitle,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    return useMutation({
-      mutationFn: async (arg: TArg) => unwrap(await request(arg)),
-      onSuccess: (response) => {
-        if (!response.success) {
-          fail();
-          return;
-        }
-        toast(success);
-        onSuccessExtra?.();
-        refreshJobsData();
-      },
-      // A rejected request is the same outcome for the viewer as a declined
-      // one; only the announcement path differs.
-      onError: () => fail(),
-    });
-  }
-
   const pauseMutation = useControlMutation(
     () =>
       validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
@@ -212,6 +219,8 @@ export function useJobCardControls(
       variant: "success",
     },
     `${job.name} could not be paused`,
+    toast,
+    refreshJobsData,
   );
 
   const resumeMutation = useControlMutation(
@@ -223,6 +232,8 @@ export function useJobCardControls(
       variant: "success",
     },
     `${job.name} could not be resumed`,
+    toast,
+    refreshJobsData,
   );
 
   const stopMutation = useControlMutation(
@@ -239,6 +250,8 @@ export function useJobCardControls(
       variant: "info",
     },
     `${job.name} could not be stopped`,
+    toast,
+    refreshJobsData,
   );
 
   const testTriggerMutation = useMutation({
@@ -290,6 +303,8 @@ export function useJobCardControls(
       variant: "success",
     },
     `${job.name} test could not be stopped`,
+    toast,
+    refreshJobsData,
     () => setOptimisticTestRunning(false),
   );
 
@@ -305,6 +320,8 @@ export function useJobCardControls(
       variant: "success",
     },
     `${job.name} test could not be paused`,
+    toast,
+    refreshJobsData,
   );
 
   const testResumeMutation = useControlMutation(
@@ -319,6 +336,8 @@ export function useJobCardControls(
       variant: "success",
     },
     `${job.name} test could not be resumed`,
+    toast,
+    refreshJobsData,
   );
 
   const handleTestClick = () => {
