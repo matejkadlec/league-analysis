@@ -363,6 +363,7 @@ async def get_tracked_players(
 async def get_player_current_league(
     puuid: str,
     player_service: PlayerServiceDep,
+    _current_user: CurrentUserDep,
     queue_type: Annotated[
         LeagueQueueType, Query(description="Queue type to fetch league for")
     ] = LeagueQueueType.RANKED_SOLO_5x5,

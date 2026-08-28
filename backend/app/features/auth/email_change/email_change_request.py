@@ -14,8 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
-
-from .user_reference import user_id_column
+from app.features.auth.users.user_reference import user_id_column
 
 
 class EmailChangeRequest(Base):

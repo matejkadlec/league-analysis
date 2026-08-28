@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import Select, Table
 
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import TokenLifecycleMixin
+from app.features.auth.tokens.token_service import TokenLifecycleMixin
 
 LONG_USER_AGENT = "u" * 400
 

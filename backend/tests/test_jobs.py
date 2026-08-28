@@ -19,6 +19,7 @@ from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
 )
+from app.features.auth.users.models import User
 from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.base import BaseJob, _format_api_calls_for_storage
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
@@ -72,6 +73,11 @@ def _job_service_double(job_model: SimpleNamespace) -> JobService:
     return service
 
 
+def _admin_user() -> User:
+    """The one attribute the control routes read: whose audit entry this is."""
+    return cast(User, SimpleNamespace(id=1))
+
+
 @pytest.mark.parametrize("paused", [True, False])
 async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     monkeypatch: pytest.MonkeyPatch,
@@ -90,7 +96,7 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     job_service = _job_service_double(job_model)
 
     endpoint = jobs_router.pause_test_run if paused else jobs_router.resume_test_run
-    response = await endpoint(7, job_service)
+    response = await endpoint(7, job_service, _admin_user())
 
     assert response.success is True
     assert response.is_paused is paused
@@ -119,7 +125,7 @@ async def test_test_run_pause_without_an_active_run_is_409(
     job_service = _job_service_double(job_model)
 
     with pytest.raises(HTTPException) as caught:
-        await jobs_router.pause_test_run(7, job_service)
+        await jobs_router.pause_test_run(7, job_service, _admin_user())
 
     assert caught.value.status_code == 409
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
@@ -146,7 +152,9 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
     job_service = _job_service_double(job_model)
 
-    response = await jobs_router.stop_test_run(7, job_service, force=False)
+    response = await jobs_router.stop_test_run(
+        7, job_service, _admin_user(), force=False
+    )
 
     assert response.success is True
     assert "test run of" in response.message

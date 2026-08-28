@@ -13,9 +13,9 @@ from app.core.riot_api.constants import (
     Platform,
     get_region_by_platform,
 )
-from app.features.auth.models import User
-from app.features.auth.user_settings import UserSettings, ensure_user_settings
-from app.features.auth.user_tracked_player import UserTrackedPlayer
+from app.features.auth.users.models import User
+from app.features.auth.users.user_settings import UserSettings, ensure_user_settings
+from app.features.auth.users.user_tracked_player import UserTrackedPlayer
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant

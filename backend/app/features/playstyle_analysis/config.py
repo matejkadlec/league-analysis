@@ -22,17 +22,20 @@ class TagConfig(TypedDict):
     display_name: str
 
     # Evaluator selection. `type` picks a shared evaluator; a tag without one
-    # falls back to its per-code evaluator, then to the generic threshold.
+    # falls back to the generic threshold.
     type: NotRequired[
         Literal[
+            "champion_play_rate",
             "damage_type",
             "gold_diff_check",
             "kill_greed_check",
             "objective_participation_check",
             "occurrence_count",
             "occurrence_percentage",
+            "role_play_rate",
             "side_preference",
             "solo_kill_ratio_check",
+            "summoner_level",
             "surrender_check",
         ]
     ]
@@ -378,24 +381,28 @@ TAG_CONFIG: dict[str, TagConfig] = {
     # Global / Special Tags
     # ----------------------------------------------------
     "nolifer": {
+        "type": "summoner_level",
         "min_summoner_level": 500,
         "sentiment": "neutral",
         "hover_template": "Summoner Level {value}.",
         "display_name": "No-Lifer",
     },
     "otp": {
+        "type": "champion_play_rate",
         "min_play_rate": 80,
         "sentiment": "neutral",
         "hover_template": "Plays {champion} in {value}% of games.",
         "display_name": "{champion} OTP",
     },
     "main_champion": {
+        "type": "champion_play_rate",
         "min_play_rate": 50,
         "sentiment": "neutral",
         "hover_template": "Plays {champion} in {value}% of games.",
         "display_name": "{champion} Main",
     },
     "main_role": {
+        "type": "role_play_rate",
         "min_play_rate": 50,
         "sentiment": "neutral",
         "hover_template": "Plays {role} in {value}% of games.",

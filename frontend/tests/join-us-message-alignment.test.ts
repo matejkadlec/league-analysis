@@ -22,7 +22,7 @@ const BACKEND_ROOT = join(
 // Where the constant lives, not where the flow lives: it moved from
 // `service.py` to `join_us.py` with the Join Us extraction. The error below is
 // the only thing that says which file to look in.
-const MINIMUM_SOURCE = "app/features/auth/join_us.py";
+const MINIMUM_SOURCE = "app/features/auth/join_us/join_us.py";
 
 function backendMinimumBodyLength(): number {
   const source = readFileSync(join(BACKEND_ROOT, MINIMUM_SOURCE), "utf8");

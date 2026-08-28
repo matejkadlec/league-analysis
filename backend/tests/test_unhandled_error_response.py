@@ -5,11 +5,14 @@ The routers used to hand-roll that tail themselves; the app-level handler in
 """
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import httpx
 
 from app.core.http_errors import SERVICE_ERROR_DETAIL
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.users.models import User
 from app.features.players.dependencies import get_player_service
 from app.main import app
 
@@ -17,6 +20,11 @@ from app.main import app
 async def test_an_unmapped_route_failure_answers_the_service_error_detail() -> None:
     app.dependency_overrides[get_player_service] = lambda: SimpleNamespace(
         get_player_league=AsyncMock(side_effect=RuntimeError("boom"))
+    )
+    # The route is signed-in-only now; without this the request would be
+    # answered by the auth dependency's 401 and never reach the failure.
+    app.dependency_overrides[get_current_active_user] = lambda: cast(
+        User, SimpleNamespace(id=1, is_active=True)
     )
     # Debug is pinned off and the stack rebuilt: `ServerErrorMiddleware` is
     # handed the flag's *value* when the stack is assembled, so setting
@@ -32,6 +40,7 @@ async def test_an_unmapped_route_failure_answers_the_service_error_detail() -> N
             response = await client.get("/api/v1/players/some-puuid/league")
     finally:
         del app.dependency_overrides[get_player_service]
+        del app.dependency_overrides[get_current_active_user]
         app.debug = was_debug
         app.middleware_stack = app.build_middleware_stack()
 

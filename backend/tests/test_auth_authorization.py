@@ -13,7 +13,6 @@ from app.features.auth.dependencies import (
     get_current_active_user,
     get_current_admin_user,
 )
-from app.features.auth.models import User
 from app.features.auth.router import login, refresh_access_token
 from app.features.auth.schemas import (
     JoinUsContactRequest,
@@ -24,7 +23,8 @@ from app.features.auth.schemas import (
     validate_password_strength,
 )
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import RefreshRotation, TokenPair
+from app.features.auth.tokens.token_service import RefreshRotation, TokenPair
+from app.features.auth.users.models import User
 from route_helpers import loopback_request, undecorated
 
 

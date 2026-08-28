@@ -21,7 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
 from app.core.runs import values_in_sql
-from app.features.auth.user_reference import user_id_column
+from app.features.auth.users.user_reference import user_id_column
 from app.features.smurf_boost_detection.schemas import (
     ACTIVE_STATUSES,
     SmurfBoostStatus,

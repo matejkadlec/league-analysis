@@ -14,10 +14,10 @@ from sqlalchemy import Engine, Table, create_engine, event
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
-from app.features.auth.models import User
-from app.features.auth.refresh_token import RefreshToken
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import TokenLifecycleMixin
+from app.features.auth.tokens.refresh_token import RefreshToken
+from app.features.auth.tokens.token_service import TokenLifecycleMixin
+from app.features.auth.users.models import User
 
 
 class _SyncSessionShim:

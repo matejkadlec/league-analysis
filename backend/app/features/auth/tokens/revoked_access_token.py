@@ -9,8 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base, id_column
-
-from .user_reference import user_id_column
+from app.features.auth.users.user_reference import user_id_column
 
 
 class RevokedAccessToken(Base):

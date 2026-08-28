@@ -13,14 +13,14 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from app.features.auth.cookies import (
+from app.features.auth.dependencies import get_auth_service
+from app.features.auth.router import router
+from app.features.auth.service import AuthService
+from app.features.auth.tokens.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
-from app.features.auth.dependencies import get_auth_service
-from app.features.auth.router import router
-from app.features.auth.service import AuthService
 
 
 async def _post(client: httpx.AsyncClient, cookie: str | None = None) -> httpx.Response:

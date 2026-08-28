@@ -8,7 +8,7 @@ flight -- including the dummy-hash branch a failed login takes.
 import asyncio
 import warnings
 
-from app.features.auth.passwords import (
+from app.features.auth.users.passwords import (
     DUMMY_PASSWORD_HASH,
     hash_password,
     pwd_context,

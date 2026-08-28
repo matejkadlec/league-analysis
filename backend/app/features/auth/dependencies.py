@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.http_errors import http_error
 
-from .cookies import ACCESS_TOKEN_COOKIE_NAME
-from .models import User
 from .service import AuthService, oauth2_scheme
+from .tokens.cookies import ACCESS_TOKEN_COOKIE_NAME
+from .users.models import User
 
 logger = structlog.get_logger(__name__)
 

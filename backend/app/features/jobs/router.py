@@ -20,7 +20,7 @@ from .dependencies import JobServiceDep
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
 from .intervals import JobIntervalError
 from .maintenance import RiotWriterMaintenanceConfigurationError
-from .models import ExecutionType, JobStatus, JobType
+from .models import ExecutionType, JobStatus
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -84,14 +84,9 @@ def _create_test_job_instance(
     Returns:
         Test job instance that calls API endpoints without writing data.
     """
-    test_type_mapping: dict[
-        JobType, type[TestMatchFetcherJob] | type[TestPlayerUpdaterJob]
-    ] = {
-        JobType.MATCH_FETCHER: TestMatchFetcherJob,
-        JobType.PLAYER_UPDATER: TestPlayerUpdaterJob,
-    }
+    from .scheduler import test_job_registry
 
-    test_class = test_type_mapping.get(job.job_type)
+    test_class = test_job_registry().get(job.job_type)
     if not test_class:
         raise HTTPException(
             status_code=501,
@@ -120,6 +115,7 @@ async def update_job_configuration(
     job_id: int,
     job_update: JobConfigurationUpdate,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobConfigurationResponse:
     """Update job configuration (e.g., enable/disable, change schedule)."""
     try:
@@ -131,6 +127,11 @@ async def update_job_configuration(
         from .scheduler import sync_job_configuration
 
         await sync_job_configuration(job.id)
+        logger.info(
+            "Job configuration updated",
+            job_id=job_id,
+            admin_user_id=current_user.id,
+        )
         return job
     except RiotWriterMaintenanceConfigurationError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -287,34 +288,48 @@ def _require_control_state(
 async def pause_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Pause a running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.set_job_paused(job_id, paused=True), job_id
     )
+    logger.info("Job paused", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/resume")
 async def resume_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Resume a paused running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.set_job_paused(job_id, paused=False), job_id
     )
+    logger.info("Job resumed", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/stop")
 async def stop_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Request graceful or forced stop for a running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.request_job_stop_action(job_id, force=force), job_id
     )
+    logger.info(
+        "Job stop requested",
+        job_id=job_id,
+        force=force,
+        admin_user_id=current_user.id,
+    )
+    return state
 
 
 # === Test Run Endpoints ===
@@ -431,13 +446,21 @@ async def _run_test_job_with_cleanup(
 async def stop_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Stop a running test for a job."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.request_job_stop_action(job_id, force=force, test_run=True),
         job_id,
     )
+    logger.info(
+        "Test run stop requested",
+        job_id=job_id,
+        force=force,
+        admin_user_id=current_user.id,
+    )
+    return state
 
 
 async def _set_test_run_paused(
@@ -456,18 +479,24 @@ async def _set_test_run_paused(
 async def pause_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Pause a running test execution."""
-    return await _set_test_run_paused(job_id, job_service, paused=True)
+    state = await _set_test_run_paused(job_id, job_service, paused=True)
+    logger.info("Test run paused", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/test/resume")
 async def resume_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Resume a paused test execution."""
-    return await _set_test_run_paused(job_id, job_service, paused=False)
+    state = await _set_test_run_paused(job_id, job_service, paused=False)
+    logger.info("Test run resumed", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.get("/status/overview")

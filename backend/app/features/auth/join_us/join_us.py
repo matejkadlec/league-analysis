@@ -13,14 +13,15 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .errors import (
+from app.features.auth.errors import (
     JoinUsEmailDeliveryError,
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
 )
+from app.features.auth.mailer import send_smtp_message, smtp_configured
+from app.features.auth.schemas import JoinUsSubject
+
 from .join_us_contact_submission import JoinUsContactSubmission
-from .mailer import send_smtp_message, smtp_configured
-from .schemas import JoinUsSubject
 from .subject_counts import SubjectCounts
 
 logger = structlog.get_logger(__name__)

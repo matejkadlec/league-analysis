@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_TYPE
 from app.core.runs import active_run_filter, commit_new_run, guarded_run_update
+from app.features.auth.users.user_card_preference import UserCardPreference
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
-from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import CardId, normalize_stored_card_preference
 
 from .composite import EligibleMatch
@@ -98,7 +98,7 @@ class SmurfBoostDetectionService:
 
         Here rather than in the router: the route was declaring a second
         `Depends(get_db)` beside this service purely to run this SELECT, and
-        reaching cross-feature into `settings.models` to do it.
+        reaching cross-feature into `auth.user_card_preference` to do it.
         """
         result = await self.db.execute(
             select(UserCardPreference.settings).where(

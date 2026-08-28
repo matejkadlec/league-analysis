@@ -9,7 +9,7 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
-from app.features.auth.models import User
+from app.features.auth.users.models import User
 from app.features.jobs import player_sync as player_sync_module
 from app.features.jobs.base import BaseJob
 from app.features.jobs.models import JobStatus

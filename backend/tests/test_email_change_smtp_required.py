@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.auth import mailer as mailer_module
-from app.features.auth.email_change_service import EmailChangeMixin
+from app.features.auth.email_change.email_change_service import EmailChangeMixin
 from app.features.auth.errors import EmailChangeEmailNotConfiguredError
 from app.features.auth.service import AuthService
 

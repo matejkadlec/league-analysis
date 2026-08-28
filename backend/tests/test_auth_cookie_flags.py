@@ -8,17 +8,17 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request, Response
 
-from app.features.auth import cookies as cookies_module
-from app.features.auth.cookies import (
+from app.features.auth.router import login, refresh_access_token
+from app.features.auth.service import AuthService
+from app.features.auth.tokens import cookies as cookies_module
+from app.features.auth.tokens.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
     AUTH_STATE_COOKIE_VALUE,
     REFRESH_TOKEN_COOKIE_NAME,
     set_auth_cookies,
 )
-from app.features.auth.router import login, refresh_access_token
-from app.features.auth.service import AuthService
-from app.features.auth.token_service import RefreshRotation, TokenPair
+from app.features.auth.tokens.token_service import RefreshRotation, TokenPair
 
 
 def _set_cookie_headers() -> dict[str, str]:

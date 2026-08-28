@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException, Request, Response
 
-from app.features.auth.cookies import REFRESH_TOKEN_COOKIE_NAME
 from app.features.auth.router import refresh_access_token
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import RefreshRotation, TokenPair
+from app.features.auth.tokens.cookies import REFRESH_TOKEN_COOKIE_NAME
+from app.features.auth.tokens.token_service import RefreshRotation, TokenPair
 
 SESSION_ENDING_CODES = {"INVALID_REFRESH_TOKEN", "ACCOUNT_INACTIVE"}
 

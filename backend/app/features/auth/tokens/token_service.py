@@ -20,11 +20,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.features.auth.schemas import TokenData
+from app.features.auth.users.models import User
 
-from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
-from .schemas import TokenData
 
 logger = structlog.get_logger(__name__)
 

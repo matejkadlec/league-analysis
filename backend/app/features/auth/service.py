@@ -1,7 +1,7 @@
 """Authentication orchestration: login and logout flows, user management.
 
-Composes the token lifecycle and email-change policies from their sibling
-modules; this module keeps the flows that answer the router.
+Composes the token lifecycle and email-change policies from their domain
+packages; this module keeps the flows that answer the router.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -18,16 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
 
-from .email_change_service import (
+from .email_change.email_change_service import (
     EMAIL_CHANGE_CODE_EXPIRY_MINUTES as EMAIL_CHANGE_CODE_EXPIRY_MINUTES,
 )
-from .email_change_service import (
+from .email_change.email_change_service import (
     EMAIL_CHANGE_LOCK_MINUTES as EMAIL_CHANGE_LOCK_MINUTES,
 )
-from .email_change_service import (
+from .email_change.email_change_service import (
     EMAIL_CHANGE_MAX_FAILED_ATTEMPTS as EMAIL_CHANGE_MAX_FAILED_ATTEMPTS,
 )
-from .email_change_service import EmailChangeMixin
+from .email_change.email_change_service import EmailChangeMixin
 from .errors import (
     AccountLockedError,
     CaptchaRequiredError,
@@ -38,7 +38,7 @@ from .errors import (
     JoinUsCaptchaRequiredError,
     JoinUsCaptchaVerificationError,
 )
-from .join_us import (
+from .join_us.join_us import (
     JOIN_US_CONTACT_RECIPIENT,
     JOIN_US_MIN_BODY_LENGTH,
     enforce_regular_rate_limit,
@@ -46,16 +46,16 @@ from .join_us import (
     reserve_sequence_number,
     send_contact_email,
 )
-from .models import User
-from .passwords import DUMMY_PASSWORD_HASH, hash_password, verify_password
-from .refresh_token import RefreshToken
-from .revoked_access_token import RevokedAccessToken
 from .schemas import (
     JoinUsSubject,
     UserCreate,
     UserProfileUpdate,
 )
-from .token_service import TokenLifecycleMixin
+from .tokens.refresh_token import RefreshToken
+from .tokens.revoked_access_token import RevokedAccessToken
+from .tokens.token_service import TokenLifecycleMixin
+from .users.models import User
+from .users.passwords import DUMMY_PASSWORD_HASH, hash_password, verify_password
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(
@@ -71,7 +71,7 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
 
     Composes `TokenLifecycleMixin` and `EmailChangeMixin`, so token minting,
     rotation, revocation, and the email-change flow all run under the shared
-    policies from their sibling modules.
+    policies from their domain packages.
     """
 
     def __init__(self, db: AsyncSession):

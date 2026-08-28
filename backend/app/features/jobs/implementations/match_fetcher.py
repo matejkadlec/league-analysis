@@ -13,6 +13,7 @@ from app.core.riot_api.constants import (
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal, RateLimitSignal
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+from app.features.jobs.player_targets import PlayerTargetsMixin
 from app.features.matches.match_lp import persist_match_lp_observations
 from app.features.matches.service import MatchService
 from app.features.players.leagues import PlayerLeague
@@ -22,7 +23,7 @@ from app.features.players.service import PlayerService
 logger = structlog.get_logger(__name__)
 
 
-class MatchFetcherJob(BaseJob):
+class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
     """Job to fetch matches for tracked players and update their leagues."""
 
     recorded_errors_are_fatal = False

@@ -10,7 +10,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import TokenLifecycleMixin
+from app.features.auth.tokens.token_service import TokenLifecycleMixin
 
 NOW = datetime.now(UTC)
 

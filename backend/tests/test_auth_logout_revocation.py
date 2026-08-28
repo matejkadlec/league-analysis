@@ -14,14 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
 from app.core.schemas import MessageResponse
-from app.features.auth.cookies import (
+from app.features.auth.router import logout
+from app.features.auth.service import AuthService
+from app.features.auth.tokens.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
-from app.features.auth.router import logout
-from app.features.auth.service import AuthService
-from app.features.auth.token_service import TokenLifecycleMixin
+from app.features.auth.tokens.token_service import TokenLifecycleMixin
 
 
 def _request_with_cookies(bearer: str | None = None, **cookies: str) -> Request:

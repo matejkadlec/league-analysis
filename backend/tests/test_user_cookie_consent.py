@@ -6,10 +6,10 @@ rather than names; both fail silently at runtime when they break.
 
 from sqlalchemy import Enum
 
-from app.features.auth.user_cookie_consent import (
+from app.features.auth.users.user_cookie_consent import (
     CookieConsentLevel as StoredLevel,
 )
-from app.features.auth.user_cookie_consent import (
+from app.features.auth.users.user_cookie_consent import (
     UserCookieConsent,
 )
 from app.features.settings.schemas import CookieConsentLevel as ApiLevel

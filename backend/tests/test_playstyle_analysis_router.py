@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from app.core.http_errors import SERVICE_ERROR_DETAIL
-from app.features.auth.models import User
+from app.features.auth.users.models import User
 from app.features.playstyle_analysis.models import PlaystyleAnalysis
 from app.features.playstyle_analysis.router import (
     analyze_playstyle,

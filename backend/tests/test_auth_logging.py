@@ -25,11 +25,11 @@ from app.features.auth.errors import (
     CaptchaRequiredError,
     CaptchaVerificationError,
 )
-from app.features.auth.models import User
-from app.features.auth.passwords import DUMMY_PASSWORD_HASH, pwd_context
 from app.features.auth.router import login
 from app.features.auth.service import AuthService
-from app.features.auth.token_service import TokenPair
+from app.features.auth.tokens.token_service import TokenPair
+from app.features.auth.users.models import User
+from app.features.auth.users.passwords import DUMMY_PASSWORD_HASH, pwd_context
 from route_helpers import loopback_request, undecorated
 
 

@@ -11,14 +11,6 @@ from app.core.http_errors import http_error, log_and_raise_http
 from app.core.http_rate_limit import rate_limit
 from app.core.schemas import MessageResponse
 
-from .cookies import (
-    ACCESS_TOKEN_COOKIE_NAME,
-    AUTH_STATE_COOKIE_NAME,
-    REFRESH_TOKEN_COOKIE_NAME,
-    clear_auth_cookies,
-    max_age_seconds,
-    set_auth_cookies,
-)
 from .dependencies import AdminUserDep, CurrentUserDep, get_auth_service
 from .errors import (
     AccountLockedError,
@@ -39,7 +31,6 @@ from .errors import (
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
 )
-from .models import User
 from .schemas import (
     EmailChangeCodeResponse,
     EmailChangeRequest,
@@ -53,6 +44,15 @@ from .schemas import (
     UserResponse,
 )
 from .service import AuthService
+from .tokens.cookies import (
+    ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_STATE_COOKIE_NAME,
+    REFRESH_TOKEN_COOKIE_NAME,
+    clear_auth_cookies,
+    max_age_seconds,
+    set_auth_cookies,
+)
+from .users.models import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 

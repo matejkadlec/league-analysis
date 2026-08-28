@@ -17,12 +17,12 @@ from app.core.riot_api.credential_health import (
     synchronize_riot_credential_health,
 )
 from app.core.riot_api.errors import RiotAPIError
-from app.features.auth.user_cookie_consent import (
+from app.features.auth.users.user_card_preference import UserCardPreference
+from app.features.auth.users.user_cookie_consent import (
     CookieConsentLevel,
     UserCookieConsent,
 )
 
-from .models import UserCardPreference
 from .schemas import (
     CardId,
     CardPreferenceResponse,

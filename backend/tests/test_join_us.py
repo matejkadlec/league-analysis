@@ -14,13 +14,13 @@ from typing import cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.auth import join_us
 from app.features.auth.errors import (
     JoinUsEmailDeliveryError,
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
 )
-from app.features.auth.join_us import (
+from app.features.auth.join_us import join_us
+from app.features.auth.join_us.join_us import (
     JOIN_US_CONTACT_RECIPIENT,
     JOIN_US_MAX_REGULAR_PER_HOUR,
     build_email_subject,
@@ -28,8 +28,8 @@ from app.features.auth.join_us import (
     reserve_sequence_number,
     send_contact_email,
 )
+from app.features.auth.join_us.subject_counts import SubjectCounts
 from app.features.auth.schemas import JoinUsSubject
-from app.features.auth.subject_counts import SubjectCounts
 
 
 class _CountSession:

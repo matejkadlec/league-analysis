@@ -15,8 +15,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .email_change_request import EmailChangeRequest
-from .errors import (
+from app.features.auth.errors import (
     EmailAlreadyRegisteredError,
     EmailChangeEmailNotConfiguredError,
     EmailChangeLockedError,
@@ -25,9 +24,11 @@ from .errors import (
     EmailVerificationRequestNotFoundError,
     InvalidEmailVerificationCodeError,
 )
-from .mailer import send_smtp_message, smtp_configured
-from .models import User
-from .schemas import EMAIL_CHANGE_CODE_LENGTH
+from app.features.auth.mailer import send_smtp_message, smtp_configured
+from app.features.auth.schemas import EMAIL_CHANGE_CODE_LENGTH
+from app.features.auth.users.models import User
+
+from .email_change_request import EmailChangeRequest
 
 logger = structlog.get_logger(__name__)
 

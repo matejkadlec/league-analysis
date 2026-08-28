@@ -12,18 +12,13 @@ from app.features.playstyle_analysis.aggregates import (
     threshold_metric,
 )
 from app.features.playstyle_analysis.config import TAG_CONFIG, TagConfig
-from app.features.playstyle_analysis.evaluators import (
-    _CODE_EVALUATORS,
-    _TYPE_EVALUATORS,
-)
+from app.features.playstyle_analysis.evaluators import _TYPE_EVALUATORS
 
 
 def _falls_through_to_the_generic_metric(tag_code: str, config: TagConfig) -> bool:
     """Whether this tag's value comes from `_generic_metric_average`."""
     tag_type = config.get("type")
     if isinstance(tag_type, str) and tag_type in _TYPE_EVALUATORS:
-        return False
-    if tag_code in _CODE_EVALUATORS:
         return False
     return not any(predicate(tag_code, config) for predicate, _ in _AGGREGATORS)
 
@@ -47,10 +42,8 @@ _NON_THRESHOLD_KEYS = frozenset(
 def test_every_tag_reaches_an_evaluator() -> None:
     for tag_code, config in TAG_CONFIG.items():
         tag_type = config.get("type")
-        reachable = (
-            (tag_type is not None and tag_type in _TYPE_EVALUATORS)
-            or tag_code in _CODE_EVALUATORS
-            or bool(set(config) - _NON_THRESHOLD_KEYS)
+        reachable = (tag_type is not None and tag_type in _TYPE_EVALUATORS) or bool(
+            set(config) - _NON_THRESHOLD_KEYS
         )
         assert reachable, f"{tag_code} has no evaluator and no threshold to compare"
 

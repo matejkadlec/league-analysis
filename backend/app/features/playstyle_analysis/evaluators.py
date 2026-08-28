@@ -45,10 +45,6 @@ def evaluate_tag(
     if type_evaluator is not None:
         return type_evaluator(participants, matches, game_count, tag_code, config)
 
-    code_evaluator = _CODE_EVALUATORS.get(tag_code)
-    if code_evaluator is not None:
-        return code_evaluator(participants, matches, game_count, tag_code, config)
-
     return evaluate_generic_threshold(
         participants, matches, game_count, tag_code, config
     )
@@ -259,6 +255,19 @@ def evaluate_objective_participation(
         avg_pct = total_pct / valid_games if valid_games > 0 else 0
         return _met_criteria_result(config, avg_pct)
     return None
+
+
+def evaluate_champion_play_rate(
+    participants: list[MatchParticipant],
+    matches: MatchesById,
+    game_count: int,
+    tag_code: str,
+    config: TagConfig,
+) -> TagResult | None:
+    """Evaluate champion play rate (e.g. OTP, champion main)."""
+    return _evaluate_champion_play_rate(
+        participants, game_count, config, default_min_play_rate=50.0
+    )
 
 
 def evaluate_nolifer(
@@ -718,6 +727,7 @@ def _champion_win_rate(
 
 
 _TYPE_EVALUATORS: dict[str, TagEvaluator] = {
+    "champion_play_rate": evaluate_champion_play_rate,
     "damage_type": evaluate_damage_type,
     "side_preference": evaluate_side_preference,
     "surrender_check": evaluate_surrender,
@@ -727,11 +737,6 @@ _TYPE_EVALUATORS: dict[str, TagEvaluator] = {
     "objective_participation_check": evaluate_objective_participation,
     "occurrence_percentage": evaluate_occurrence_percentage,
     "occurrence_count": evaluate_occurrence_count,
-}
-
-_CODE_EVALUATORS: dict[str, TagEvaluator] = {
-    "nolifer": evaluate_nolifer,
-    "otp": evaluate_otp,
-    "main_champion": evaluate_main_champion,
-    "main_role": evaluate_main_role,
+    "role_play_rate": evaluate_main_role,
+    "summoner_level": evaluate_nolifer,
 }

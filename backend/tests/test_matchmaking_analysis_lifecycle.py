@@ -631,7 +631,7 @@ async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
     injected into this feature's service it took down `latest-completed`,
     `history` and `status` with it. Only the background instance talks to Riot.
     """
-    from app.features.auth.models import User
+    from app.features.auth.users.models import User
     from app.features.matchmaking_analysis.dependencies import (
         get_matchmaking_service,
     )

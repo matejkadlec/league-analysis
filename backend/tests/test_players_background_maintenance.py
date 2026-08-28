@@ -12,7 +12,7 @@ from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.models import MatchDTO
-from app.features.auth.models import User
+from app.features.auth.users.models import User
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService

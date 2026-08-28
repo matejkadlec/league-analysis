@@ -38,8 +38,6 @@ from app.core.riot_api.scoped_client import (
     TrackedRiotClientOptions,
     open_tracked_riot_client,
 )
-from app.features.players.models import Player
-from app.features.players.service import PlayerService
 
 from .control import (
     claim_runtime_control,
@@ -242,7 +240,7 @@ class BaseJob(ABC):
                 corrupted execution_type.
             target_puuids: Restrict the run to these players; None means every
                 globally tracked player. Honored by jobs that resolve their
-                players through _load_tracked_players.
+                players through `PlayerTargetsMixin`.
         """
         self.job_config_id = job_config_id
         self.triggered_by = triggered_by
@@ -918,24 +916,6 @@ class BaseJob(ABC):
                 yield client
             finally:
                 self._store_api_calls(client.get_api_calls())
-
-    async def _load_tracked_puuids(self, db: AsyncSession) -> list[str]:
-        """Load the global allowlist or the explicit target_puuids set.
-
-        Identifiers, not rows: `handle_player_error` rolls back a recoverable
-        failure, which expires every instance the session holds and turns the
-        next attribute read into a `MissingGreenlet`. A string cannot expire.
-        """
-        if self.target_puuids is None:
-            players = await PlayerService(db).get_globally_tracked_players()
-            return [player.puuid for player in players]
-
-        result = await db.execute(
-            select(Player.puuid).where(Player.puuid.in_(self.target_puuids))
-        )
-        tracked_players = list(result.scalars().all())
-        self.add_log_entry("target_puuids", sorted(self.target_puuids))
-        return tracked_players
 
     async def handle_player_error(
         self,

@@ -41,10 +41,13 @@ if os.getenv("ENVIRONMENT", "").lower() != "test":
 
 from app.core.config import get_global_settings  # noqa: E402
 from app.core.database import db_manager  # noqa: E402
-from app.features.auth.models import User  # noqa: E402
-from app.features.auth.passwords import hash_password, verify_password  # noqa: E402
 from app.features.auth.schemas import DisplayName  # noqa: E402
 from app.features.auth.service import AuthService  # noqa: E402
+from app.features.auth.users.models import User  # noqa: E402
+from app.features.auth.users.passwords import (  # noqa: E402
+    hash_password,
+    verify_password,
+)
 
 _DISPLAY_NAME_ADAPTER: TypeAdapter[DisplayName] = TypeAdapter(DisplayName)
 from scripts.local_target import (  # noqa: E402
