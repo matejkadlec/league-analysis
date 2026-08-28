@@ -75,7 +75,7 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
-export function removeAuthTokens(): void {
+export function endLocalSession(): void {
   sessionEpoch += 1;
   // Every path that gives up on a session routes through here, so this is the
   // one place that has to retract the cookie `proxy.ts` routes on. Without it
@@ -119,7 +119,7 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
           // Only if this refresh still belongs to the session on screen: a
           // rejection landing after a teardown is about the session that
           // ended, and acting on it signs out whoever signed in since.
-          removeAuthTokens();
+          endLocalSession();
           return { outcome: "refused" };
         }
         if (refused) {

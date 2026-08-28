@@ -495,8 +495,8 @@ class BaseJob(ABC):
             )
             await self.safe_commit(db, "orphaned execution cleanup")
 
-    async def handle_error(self, db: AsyncSession, error: Exception) -> str:
-        """Handle job execution error and return formatted error message."""
+    def handle_error(self, error: Exception) -> str:
+        """Format and log a job execution error, returning the message."""
         error_message = f"{type(error).__name__}: {error!s}"
 
         logger.error(
@@ -646,7 +646,7 @@ class BaseJob(ABC):
         job_error: Exception,
     ) -> None:
         """Persist a failed completion after an uncaught execution exception."""
-        error_message = await self.handle_error(db, job_error)
+        error_message = self.handle_error(job_error)
         if self.has_api_key_error():
             error_message = self._get_error_summary()
         await self.record_execution_completion(

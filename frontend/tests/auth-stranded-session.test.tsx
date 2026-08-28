@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthGate, SLOW_PROBE_NOTICE_MS } from "@/components/auth-gate";
 import {
   refreshAccessToken,
-  removeAuthTokens,
+  endLocalSession,
 } from "@/lib/session/token-manager";
 import {
   AUTH_STATE_COOKIE_NAME,
@@ -80,7 +80,7 @@ beforeEach(() => {
   auth.logout.mockReset();
   auth.logout.mockImplementation(async () => {});
   clearHint();
-  removeAuthTokens();
+  endLocalSession();
 });
 
 afterEach(() => {
@@ -306,7 +306,7 @@ describe("the can't-reach-the-server surface", () => {
     expect(getByText("protected content")).toBeTruthy();
 
     await act(async () => {
-      removeAuthTokens();
+      endLocalSession();
     });
 
     expect(queryByText("protected content")).toBeNull();
@@ -385,7 +385,7 @@ describe("giving up on a session", () => {
     setHint();
     expect(hasAuthStateCookie()).toBe(true);
 
-    removeAuthTokens();
+    endLocalSession();
 
     expect(hasAuthStateCookie()).toBe(false);
   });
@@ -520,7 +520,7 @@ describe("giving up on a session", () => {
       const hang = hangingFetch();
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
         if (String(input).includes("/auth/refresh")) {
-          removeAuthTokens(); // Torn down while this was in flight.
+          endLocalSession(); // Torn down while this was in flight.
           setHint();
           return new Response("{}", { status: 200 });
         }
@@ -633,7 +633,7 @@ describe("giving up on a session", () => {
     // it here would delete B's hint and bounce B back to the sign-in page.
     setHint();
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      removeAuthTokens(); // A signs out mid-flight.
+      endLocalSession(); // A signs out mid-flight.
       setHint();
       return refusal(401, "INVALID_REFRESH_TOKEN");
     });
@@ -660,7 +660,7 @@ describe("giving up on a session", () => {
       const url = String(input);
       calls.push({ url, init });
       if (url.includes("/auth/refresh")) {
-        removeAuthTokens();
+        endLocalSession();
         setHint();
       }
       return new Response("{}", { status: 200 });

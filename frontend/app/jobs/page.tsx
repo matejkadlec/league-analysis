@@ -62,7 +62,6 @@ function JobsPageContent() {
     null,
   );
 
-  // Handler for when an execution is clicked in a job card
   const handleExecutionClick = (executionId: number) => {
     setSelectedExecutionId(executionId);
     setActiveTab("executions");

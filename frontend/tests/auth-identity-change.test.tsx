@@ -9,9 +9,9 @@ import { renderWithQueryClient } from "./support/render-support";
 type TokenManager = typeof import("../lib/session/token-manager");
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
 
-const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
+const { refreshAccessToken, endLocalSession, routerPush } = vi.hoisted(() => ({
   refreshAccessToken: vi.fn<TokenManager["refreshAccessToken"]>(),
-  removeAuthTokens: vi.fn<TokenManager["removeAuthTokens"]>(),
+  endLocalSession: vi.fn<TokenManager["endLocalSession"]>(),
   routerPush: vi.fn<Router["push"]>(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../lib/session/token-manager", () => ({
   refreshAccessToken,
-  removeAuthTokens,
+  endLocalSession,
 }));
 
 import { AuthProvider, useAuth } from "../features/auth/context/auth-context";
@@ -100,7 +100,7 @@ async function mountAs(accounts: number[]) {
 describe("the cache when the signed-in account changes", () => {
   beforeEach(() => {
     refreshAccessToken.mockReset();
-    removeAuthTokens.mockReset();
+    endLocalSession.mockReset();
     routerPush.mockReset();
     // The provider skips the probe entirely without the session hint.
     document.cookie = "league_analysis_auth_state=1";

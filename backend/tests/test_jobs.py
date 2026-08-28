@@ -220,7 +220,7 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(
     scheduler = SchedulerDouble()
     monkeypatch.setattr(scheduler_module, "_scheduler", scheduler)
 
-    await scheduler_module.shutdown_scheduler()
+    scheduler_module.shutdown_scheduler()
 
     assert scheduler.wait_values == [False]
     assert scheduler_module.get_scheduler() is None

@@ -1,5 +1,3 @@
-// Authentication types
-
 import type { UserResponse } from "@/lib/core/schemas";
 
 /**

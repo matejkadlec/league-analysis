@@ -680,7 +680,7 @@ async def _load_and_schedule_jobs() -> None:
         # Don't raise - scheduler can still run manually triggered jobs
 
 
-async def shutdown_scheduler() -> None:
+def shutdown_scheduler() -> None:
     """Stop accepting scheduled work without draining active executions."""
     global _scheduler
 
@@ -701,9 +701,10 @@ async def shutdown_scheduler() -> None:
         logger.info("Job scheduler shut down successfully")
 
     except Exception as e:
+        # Shutdown runs during lifespan teardown; raising here would only turn
+        # a stopped scheduler into a noisy exit.
         logger.error(
             "Error during scheduler shutdown",
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise
