@@ -47,8 +47,11 @@ export function createAuthLoginError(
   payload: unknown,
   status?: number,
   code?: AuthLoginError["code"],
+  options?: ErrorOptions,
 ): AuthLoginError {
-  const error = new Error("Sign-in failed") as AuthLoginError;
+  // `options.cause` matches ApiRequestError: the thrown value survives for
+  // reporting without becoming part of the serialized error.
+  const error = new Error("Sign-in failed", options) as AuthLoginError;
   error.status = status;
   error.code = code;
 
@@ -86,14 +89,18 @@ export function getLoginRequestError(
   didTimeout: boolean,
 ): AuthLoginError {
   if (didTimeout || (error instanceof Error && error.name === "AbortError")) {
-    return createAuthLoginError(null, undefined, "REQUEST_TIMEOUT");
+    return createAuthLoginError(null, undefined, "REQUEST_TIMEOUT", {
+      cause: error,
+    });
   }
 
   if (isAuthLoginError(error)) {
     return error;
   }
 
-  return createAuthLoginError(null, undefined, "NETWORK_ERROR");
+  return createAuthLoginError(null, undefined, "NETWORK_ERROR", {
+    cause: error,
+  });
 }
 
 function formatLockoutTime(lockedUntil: string): string | null {

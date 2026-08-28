@@ -116,32 +116,40 @@ api.interceptors.response.use(
       if (refresh.outcome === "refused") {
         return Promise.reject(error);
       }
-      return Promise.reject(
-        refresh.outcome === "unavailable"
-          ? new AxiosError(
-              "The session could not be renewed.",
-              // What axios itself would pair with each status, so a consumer
-              // reading `.code` is not told a 429 came back as a 5xx.
-              refresh.status >= 500
-                ? AxiosError.ERR_BAD_RESPONSE
-                : AxiosError.ERR_BAD_REQUEST,
-              originalRequest,
-              error.request,
-              {
-                status: refresh.status,
-                statusText: "",
-                data: {},
-                headers: {},
-                config: originalRequest,
-              },
-            )
-          : new AxiosError(
-              "The session could not be renewed because the server did not answer.",
-              AxiosError.ERR_NETWORK,
-              originalRequest,
-              error.request,
-            ),
+      if (refresh.outcome === "unavailable") {
+        return Promise.reject(
+          new AxiosError(
+            "The session could not be renewed.",
+            // What axios itself would pair with each status, so a consumer
+            // reading `.code` is not told a 429 came back as a 5xx.
+            refresh.status >= 500
+              ? AxiosError.ERR_BAD_RESPONSE
+              : AxiosError.ERR_BAD_REQUEST,
+            originalRequest,
+            error.request,
+            {
+              status: refresh.status,
+              statusText: "",
+              data: {},
+              headers: {},
+              config: originalRequest,
+            },
+          ),
+        );
+      }
+
+      const unreachable = new AxiosError(
+        "The session could not be renewed because the server did not answer.",
+        AxiosError.ERR_NETWORK,
+        originalRequest,
+        error.request,
       );
+      // AxiosError has no ErrorOptions overload and types `cause` as Error,
+      // so the value refresh caught is attached afterwards rather than lost.
+      if (refresh.cause instanceof Error) {
+        unreachable.cause = refresh.cause;
+      }
+      return Promise.reject(unreachable);
     }
 
     return api(originalRequest);

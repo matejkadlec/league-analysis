@@ -22,8 +22,9 @@ export type SessionRefresh =
    *  refusal or, if they arrive after a teardown, about nothing. */
   | { outcome: "unavailable"; status: number }
   /** Nothing was learned: unreachable, the deadline passed, or the answer
-   *  turned out to be about a session that had already ended. */
-  | { outcome: "unreachable" };
+   *  turned out to be about a session that had already ended. `cause` carries
+   *  the thrown value when there was one, for reporting only. */
+  | { outcome: "unreachable"; cause?: unknown };
 
 /**
  * The codes this API uses when it means "this session is over". A status
@@ -162,8 +163,8 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
       }
 
       return { outcome: "refreshed" };
-    } catch {
-      return { outcome: "unreachable" };
+    } catch (error) {
+      return { outcome: "unreachable", cause: error };
     }
   };
 

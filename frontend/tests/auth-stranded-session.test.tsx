@@ -498,7 +498,9 @@ describe("giving up on a session", () => {
       expect(settled).toBe(false);
 
       await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual({ outcome: "unreachable" });
+      await expect(pending).resolves.toMatchObject({
+        outcome: "unreachable",
+      });
       // Nothing was learned, so nothing is torn down.
       expect(hasAuthStateCookie()).toBe(true);
     } finally {
@@ -591,11 +593,14 @@ describe("giving up on a session", () => {
 
   it("keeps the session when the refresh never reaches the server", async () => {
     setHint();
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const offline = new Error("offline");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(offline);
 
     const result = await refreshAccessToken();
 
-    expect(result).toEqual({ outcome: "unreachable" });
+    // The thrown value rides along so a report can say why the server was
+    // unreachable; the outcome itself stays the same.
+    expect(result).toEqual({ outcome: "unreachable", cause: offline });
     expect(hasAuthStateCookie()).toBe(true);
   });
 
