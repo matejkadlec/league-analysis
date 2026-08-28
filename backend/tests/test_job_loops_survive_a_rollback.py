@@ -170,7 +170,7 @@ async def test_match_fetcher_survives_a_rollback_inside_the_match_sync(
 ) -> None:
     """A skipped match rolls back mid-iteration, then reports itself.
 
-    `process_queue_sync_match` swallows a row-level IntegrityError and calls
+    `sync_queue_match` swallows a row-level IntegrityError and calls
     the job's `on_failure` after the writer has rolled the session back, so an
     `on_failure` that reads the expired `Player` turns a skip into a dead run.
     """
@@ -186,7 +186,7 @@ async def test_match_fetcher_survives_a_rollback_inside_the_match_sync(
     ) -> int:
         attempts.append(player.puuid)
         if len(attempts) == 1:
-            # What `upsert_match` does before `process_queue_sync_match`
+            # What `upsert_match` does before `sync_queue_match`
             # swallows the error and reports it.
             await session.rollback()
             cast(Any, on_failure)(

@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.core.http_errors import http_error
+from app.core.http_errors import http_error, log_and_raise_http
 from app.core.http_rate_limit import rate_limit
 from app.core.schemas import MessageResponse
 
@@ -19,7 +19,7 @@ from .cookies import (
     max_age_seconds,
     set_auth_cookies,
 )
-from .dependencies import AdminUserDep, CurrentUserDep
+from .dependencies import AdminUserDep, CurrentUserDep, get_auth_service
 from .errors import (
     AccountLockedError,
     CaptchaRequiredError,
@@ -52,12 +52,9 @@ from .schemas import (
     UserProfileUpdate,
     UserResponse,
 )
-from .service import (
-    AuthService,
-    get_auth_service,
-)
+from .service import AuthService
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["authentication"])
 
 logger = structlog.get_logger(__name__)
 
@@ -168,12 +165,7 @@ async def login(
             "This account is inactive. Contact an administrator to restore access.",
         )
 
-    (
-        access_token,
-        access_expires_at,
-        refresh_token,
-        refresh_expires_at,
-    ) = await auth_service.issue_token_pair(
+    pair = await auth_service.issue_token_pair(
         user=user,
         remote_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
@@ -189,10 +181,10 @@ async def login(
 
     return _issue_token_response(
         response,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        access_expires_at=access_expires_at,
-        refresh_expires_at=refresh_expires_at,
+        access_token=pair.access_token,
+        refresh_token=pair.refresh_token,
+        access_expires_at=pair.access_expires_at,
+        refresh_expires_at=pair.refresh_expires_at,
     )
 
 
@@ -226,9 +218,8 @@ async def refresh_access_token(
             "Refresh token is invalid, expired, or already revoked.",
         )
 
-    user, access_token, access_expires_at, refresh_token, refresh_expires_at = rotated
-    if not user.is_active:
-        await auth_service.revoke_all_refresh_tokens_for_user(user.id)
+    if not rotated.user.is_active:
+        await auth_service.revoke_all_refresh_tokens_for_user(rotated.user.id)
         raise http_error(
             status.HTTP_403_FORBIDDEN,
             "ACCOUNT_INACTIVE",
@@ -239,10 +230,10 @@ async def refresh_access_token(
 
     return _issue_token_response(
         response,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        access_expires_at=access_expires_at,
-        refresh_expires_at=refresh_expires_at,
+        access_token=rotated.pair.access_token,
+        refresh_token=rotated.pair.refresh_token,
+        access_expires_at=rotated.pair.access_expires_at,
+        refresh_expires_at=rotated.pair.refresh_expires_at,
     )
 
 
@@ -329,7 +320,14 @@ async def register_user(
 
     Passwords need 8+ characters with lower, upper, digit and special.
     """
-    return await auth_service.create_user(user_create)
+    try:
+        return await auth_service.create_user(user_create)
+    except EmailAlreadyRegisteredError as e:
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_ALREADY_REGISTERED",
+            "This email is already registered.",
+        ) from e
 
 
 @router.post("/join-us/contact")
@@ -460,10 +458,13 @@ async def request_email_change_code(
             "Email delivery is not configured.",
         ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        log_and_raise_http(
+            logger,
+            e,
+            "email_change_code_request_failed",
             detail="The verification code could not be sent. Please try again later.",
-        ) from e
+            new_email=payload.new_email,
+        )
 
 
 @router.post("/change-email/verify", response_model=UserResponse)

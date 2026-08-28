@@ -14,7 +14,10 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.models import MatchTimelineDTO
 from app.features.matches import match_sync
-from app.features.matches.match_sync import build_synthetic_match_dto
+from app.features.matches.match_sync import (
+    QueueSyncContext,
+    build_synthetic_match_dto,
+)
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import (
     build_match_timeline_rows,
@@ -121,13 +124,17 @@ async def test_a_failed_timeline_backfill_leaves_the_session_usable(
 
     with pytest.raises(SQLAlchemyError):
         await match_sync.backfill_timeline_only_match(
-            cast(AsyncSession, session),
-            cast(RiotAPIClient, object()),
-            "sanitized-puuid",
-            Region.EUROPE,
-            420,
+            QueueSyncContext(
+                session=cast(AsyncSession, session),
+                riot_client=cast(RiotAPIClient, object()),
+                puuid="sanitized-puuid",
+                region=Region.EUROPE,
+                queue_id=420,
+                on_failure=None,
+                reprocess_match=AsyncMock(),
+                on_match_stored=None,
+            ),
             "EUN1_1",
-            None,
         )
 
     assert session.rollbacks == 1

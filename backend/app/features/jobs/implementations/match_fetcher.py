@@ -11,10 +11,7 @@ from app.core.riot_api.constants import (
     RANKED_SOLO_QUEUE_ID,
 )
 from app.core.riot_api.errors import RateLimitError
-from app.features.jobs.base import BaseJob, JobStopSignal
-from app.features.jobs.error_handling import (
-    RateLimitSignal,
-)
+from app.features.jobs.base import BaseJob, JobStopSignal, RateLimitSignal
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.matches.match_lp import persist_match_lp_observations
 from app.features.matches.service import MatchService
@@ -163,7 +160,7 @@ class MatchFetcherJob(BaseJob):
         if len(self._errors_encountered) != error_count_before:
             # Same rollback, other half: everything below reads `player`
             # synchronously, and an expired read outside an await raises
-            # `MissingGreenlet`, which `is_database_job_error` calls fatal.
+            # `MissingGreenlet`, which `is_database_error` calls fatal.
             await db.refresh(player)
 
         if len(self._errors_encountered) == error_count_before:

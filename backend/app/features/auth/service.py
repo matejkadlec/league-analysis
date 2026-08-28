@@ -5,19 +5,18 @@ modules; this module keeps the flows that answer the router.
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, override
+from typing import override
 
 import httpx
 import jwt
 import structlog
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
-from app.core.database import get_db
 
 from .email_change_service import (
     EMAIL_CHANGE_CODE_EXPIRY_MINUTES as EMAIL_CHANGE_CODE_EXPIRY_MINUTES,
@@ -33,6 +32,7 @@ from .errors import (
     AccountLockedError,
     CaptchaRequiredError,
     CaptchaVerificationError,
+    EmailAlreadyRegisteredError,
     InvalidCurrentPasswordError,
     JoinUsBodyTooShortError,
     JoinUsCaptchaRequiredError,
@@ -185,7 +185,12 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
         token: str,
         remote_ip: str | None = None,
     ) -> bool:
-        """Verify a Cloudflare Turnstile token using server-side validation."""
+        """Verify a Cloudflare Turnstile token using server-side validation.
+
+        Every failure mode collapses to False -- no configured secret, a
+        transport or HTTP failure, and a rejected token alike -- so callers
+        cannot distinguish them and must treat False as "retry the challenge".
+        """
         if not self.settings.turnstile_secret_key:
             return False
 
@@ -259,9 +264,9 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
     ) -> User | None:
         """Authenticate a user with email and password.
 
-        Uses constant-time comparison to prevent timing attacks that could
-        reveal valid email addresses. Always hashes the password even when
-        the user doesn't exist.
+        Returns None for an unknown email or a wrong password; raises the
+        lockout/CAPTCHA errors when policy refuses first. Constant-time
+        either way, so timing reveals no email's existence.
         """
         user = await self.get_user_by_email_case_insensitive(email)
 
@@ -297,17 +302,15 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
         return user
 
     async def create_user(self, user_create: UserCreate) -> User:
-        """Create a new user."""
+        """Create a new user.
+
+        Raises:
+            EmailAlreadyRegisteredError: If the email already has an account.
+        """
         # Check if user already exists
         existing_user = await self.get_user_by_email_case_insensitive(user_create.email)
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "EMAIL_ALREADY_REGISTERED",
-                    "message": "This email is already registered.",
-                },
-            )
+            raise EmailAlreadyRegisteredError
 
         # Create new user
         hashed_password = await hash_password(user_create.password)
@@ -410,8 +413,3 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
             raise credentials_exception
 
         return user
-
-
-def get_auth_service(db: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
-    """Dependency to get auth service instance."""
-    return AuthService(db)

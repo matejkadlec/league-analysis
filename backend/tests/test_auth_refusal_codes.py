@@ -16,6 +16,7 @@ from fastapi import HTTPException, Request, Response
 from app.features.auth.cookies import REFRESH_TOKEN_COOKIE_NAME
 from app.features.auth.router import refresh_access_token
 from app.features.auth.service import AuthService
+from app.features.auth.token_service import RefreshRotation, TokenPair
 
 SESSION_ENDING_CODES = {"INVALID_REFRESH_TOKEN", "ACCOUNT_INACTIVE"}
 
@@ -61,7 +62,8 @@ async def test_a_deactivated_account_names_itself_and_revokes_first() -> None:
     user = MagicMock()
     user.id = 7
     user.is_active = False
-    service = _service((user, "access", None, "refresh", None))
+    now = datetime.now(UTC)
+    service = _service(RefreshRotation(user, TokenPair("access", now, "refresh", now)))
 
     with pytest.raises(HTTPException) as raised:
         await refresh_access_token(

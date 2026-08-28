@@ -428,7 +428,7 @@ class SettingsService:
 
     # ===== USER SETTINGS METHODS =====
 
-    async def get_user_cookie_consent(self, user_id: int):
+    async def get_user_cookie_consent(self, user_id: int) -> UserCookieConsent | None:
         """Get authenticated user's stored cookie-consent record."""
         stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
         result = await self.db.execute(stmt)
@@ -436,7 +436,7 @@ class SettingsService:
 
     async def upsert_user_cookie_consent(
         self, user_id: int, update: UserCookieConsentUpdate
-    ):
+    ) -> UserCookieConsent:
         """Create or update authenticated user's cookie-consent record."""
         consent_level = CookieConsentLevel(update.consent_level.value)
 

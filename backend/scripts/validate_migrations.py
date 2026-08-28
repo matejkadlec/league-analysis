@@ -19,6 +19,10 @@ from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, Connection, create_engine, inspect, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
+# Every child process talks to PostgreSQL over TCP or runs Alembic against it;
+# a hung server or network must fail the validator, not park it forever.
+VERSION_CHECK_TIMEOUT_SECONDS = 30
+SUBPROCESS_TIMEOUT_SECONDS = 600
 RECONCILE_REVISION = (
     BACKEND_ROOT
     / "alembic"
@@ -122,6 +126,7 @@ def validate_postgres_client_versions() -> None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=VERSION_CHECK_TIMEOUT_SECONDS,
         )
         match = re.search(r"\b(\d+)(?:\.\d+)*\b", result.stdout)
         if match is None or int(match.group(1)) != EXPECTED_POSTGRES_MAJOR:
@@ -162,6 +167,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
                 env=postgres_client_environment(),
                 stdout=archive_output,
                 check=True,
+                timeout=SUBPROCESS_TIMEOUT_SECONDS,
             )
             archive_output.flush()
             os.fsync(archive_output.fileno())
@@ -175,6 +181,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
             stdin=archive_input,
             stdout=subprocess.DEVNULL,
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
 
 
@@ -192,6 +199,7 @@ def restore_validation_archive(database: str, archive: Path) -> None:
             env=postgres_client_environment(),
             stdin=archive_input,
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
 
 
@@ -215,6 +223,7 @@ def deterministic_snapshot(database: str) -> str:
             capture_output=True,
             text=True,
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
     return result.stdout.strip()
 
@@ -226,6 +235,7 @@ def run_upgrade(database: str, revision: str = "head") -> None:
         cwd=BACKEND_ROOT,
         env=migration_environment(database),
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
 
 
@@ -842,6 +852,7 @@ def validate_metadata_drift(database: str, restored_database: str) -> None:
             capture_output=True,
             text=True,
             check=False,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
             raise RuntimeError(

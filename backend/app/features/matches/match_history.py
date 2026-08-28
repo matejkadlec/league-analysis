@@ -181,7 +181,7 @@ def accumulate_team_participant(
         dragon_takedowns,
         void_monster_kills,
     ) = participant_objective_counts(participant)
-    if participant.team_id == 100:
+    if participant.team_id == TeamId.BLUE:
         blue_team.append(team_champ)
         add_combat_totals(blue_stats, participant)
         if not blue_has_timeline:
@@ -232,8 +232,8 @@ def build_team_compositions_and_stats(
     """Build both team compositions and aggregated team statistics."""
     blue_team: list[TeamChampion] = []
     red_team: list[TeamChampion] = []
-    blue_timeline = timeline_by_team.get(100)
-    red_timeline = timeline_by_team.get(200)
+    blue_timeline = timeline_by_team.get(TeamId.BLUE)
+    red_timeline = timeline_by_team.get(TeamId.RED)
     blue_has_timeline = blue_timeline is not None
     red_has_timeline = red_timeline is not None
     blue_stats = empty_team_stats(blue_timeline)

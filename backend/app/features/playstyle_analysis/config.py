@@ -6,6 +6,8 @@ This module contains thresholds and parameters used to identify playstyle tags.
 
 from typing import Literal, NotRequired, TypedDict
 
+from app.core.riot_api.constants import TeamId
+
 
 class TagConfig(TypedDict):
     """One tag's criteria and how the card renders it.
@@ -39,7 +41,7 @@ class TagConfig(TypedDict):
     # Two evaluators used to share one `target` key holding either a team id
     # or a damage school, so neither consumer could be type-checked.
     target_damage_type: NotRequired[Literal["magic", "physical"]]
-    target_team: NotRequired[Literal[100, 200]]
+    target_team: NotRequired[TeamId]
 
     # Thresholds. `float` throughout: every one is compared against an
     # average, and an `int` literal satisfies it.
@@ -360,14 +362,14 @@ TAG_CONFIG: dict[str, TagConfig] = {
     },
     "prefers_blue_side": {
         "type": "side_preference",
-        "target_team": 100,
+        "target_team": TeamId.BLUE,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Blue Side ({value}%).",
         "display_name": "Prefers Blue Side",
     },
     "prefers_red_side": {
         "type": "side_preference",
-        "target_team": 200,
+        "target_team": TeamId.RED,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Red Side ({value}%).",
         "display_name": "Prefers Red Side",

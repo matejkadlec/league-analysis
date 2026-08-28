@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_chains import is_riot_api_key_error
 from app.core.riot_api.client import APICallRecord
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
@@ -20,9 +21,6 @@ from app.core.riot_api.errors import (
 )
 from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.base import BaseJob, _format_api_calls_for_storage
-from app.features.jobs.error_handling import (
-    is_riot_api_key_error,
-)
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.maintenance import (
@@ -30,8 +28,8 @@ from app.features.jobs.maintenance import (
     RIOT_WRITER_TABLES,
     RiotWriterMaintenanceActiveError,
     RiotWriterMaintenanceConfigurationError,
+    any_riot_writer_maintenance_is_active,
     ensure_riot_writer_maintenance_is_inactive,
-    is_riot_writer_maintenance_active,
     preserve_riot_writer_maintenance_mode,
     riot_writer_maintenance_is_active,
 )
@@ -398,9 +396,9 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
         config_json={RIOT_MAINTENANCE_MODE_KEY: True},
     )
 
-    assert is_riot_writer_maintenance_active(config, ExecutionType.REGULAR)
-    assert not is_riot_writer_maintenance_active(config, ExecutionType.TEST)
-    assert not is_riot_writer_maintenance_active(
+    assert riot_writer_maintenance_is_active(config, ExecutionType.REGULAR)
+    assert not riot_writer_maintenance_is_active(config, ExecutionType.TEST)
+    assert not riot_writer_maintenance_is_active(
         _job_configuration_double(
             job_type=JobType.PLAYER_UPDATER,
             config_json={RIOT_MAINTENANCE_MODE_KEY: False},
@@ -408,7 +406,7 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
         ExecutionType.REGULAR,
     )
 
-    assert riot_writer_maintenance_is_active(
+    assert any_riot_writer_maintenance_is_active(
         {
             JobType.MATCH_FETCHER: config,
             JobType.PLAYER_UPDATER: _job_configuration_double(
@@ -417,7 +415,7 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
             ),
         }
     )
-    assert not riot_writer_maintenance_is_active(
+    assert not any_riot_writer_maintenance_is_active(
         {
             JobType.MATCH_FETCHER: _job_configuration_double(
                 job_type=JobType.MATCH_FETCHER,
@@ -542,10 +540,10 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
     """The persisted guard is checked after configuration refresh and before writes."""
     job = _MaintenanceBlockedJob()
     job.fail_orphaned_execution = AsyncMock()
-    job.log_completion = AsyncMock()
+    job.record_execution_completion = AsyncMock()
     job.check_control_state = AsyncMock()
 
-    async def fake_log_start(db: AsyncSession) -> None:
+    async def fake_record_execution_start(db: AsyncSession) -> None:
         job.job_execution = _job_execution_double(id=13)
 
     async def fake_refresh(db: AsyncSession) -> None:
@@ -561,7 +559,7 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
         # run never reaches a real query.
         yield cast(AsyncSession, object())
 
-    job.log_start = fake_log_start
+    job.record_execution_start = fake_record_execution_start
     job._refresh_config = fake_refresh
     job._db_session = fake_session
 
@@ -571,7 +569,7 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
     job.check_control_state.assert_not_awaited()
     assert job.execution_log["riot_maintenance_blocked"] is True
     assert job.execution_log["stop_reason"] == "riot_maintenance"
-    completion_call = job.log_completion.await_args
+    completion_call = job.record_execution_completion.await_args
     assert completion_call is not None
     assert completion_call.kwargs["status"] == JobStatus.CANCELLED
 
@@ -592,7 +590,7 @@ class _SlowStartJob(BaseJob):
         await asyncio.sleep(0)
 
     @override
-    async def log_start(self, db: AsyncSession) -> None:
+    async def record_execution_start(self, db: AsyncSession) -> None:
         await asyncio.sleep(0)
         self.job_execution = _job_execution_double(id=13)
 
@@ -616,7 +614,7 @@ async def test_two_runs_of_one_configuration_cannot_both_start(
 
     jobs = [_SlowStartJob(), _SlowStartJob()]
     for job in jobs:
-        job.log_completion = AsyncMock()
+        job.record_execution_completion = AsyncMock()
         job.check_control_state = AsyncMock()
         job._db_session = fake_session
 
@@ -645,10 +643,10 @@ async def _run_job_with_recorded_error(
 ) -> Mapping[str, object]:
     """Run a regular writer through BaseJob's real completion decision."""
     job.fail_orphaned_execution = AsyncMock()
-    job.log_completion = AsyncMock()
+    job.record_execution_completion = AsyncMock()
     job.check_control_state = AsyncMock()
 
-    async def fake_log_start(db: AsyncSession) -> None:
+    async def fake_record_execution_start(db: AsyncSession) -> None:
         job.job_execution = _job_execution_double(id=13)
 
     async def fake_refresh(db: AsyncSession) -> None:
@@ -672,13 +670,13 @@ async def _run_job_with_recorded_error(
         # run never reaches a real query.
         yield cast(AsyncSession, object())
 
-    job.log_start = fake_log_start
+    job.record_execution_start = fake_record_execution_start
     job._refresh_config = fake_refresh
     job.execute = fake_execute
     job._db_session = fake_session
 
     await job.run()
-    completion_call = job.log_completion.await_args
+    completion_call = job.record_execution_completion.await_args
     assert completion_call is not None
     return completion_call.kwargs
 

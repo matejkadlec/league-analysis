@@ -155,15 +155,7 @@ async def get_job_executions(
     """
     Get execution history for a specific job.
 
-    Args:
-        job_id: Job configuration ID.
-        page: Page number (1-indexed).
-        size: Number of executions per page.
-        status: Optional status filter.
-        execution_type: Optional execution type filter (REGULAR or TEST).
-
-    Returns:
-        Paginated list of job executions.
+    Returns a paginated list of its executions.
     """
     executions = await job_service.list_job_executions(
         job_config_id=job_id,
@@ -188,14 +180,7 @@ async def list_all_executions(
     """
     Get execution history for all jobs.
 
-    Args:
-        page: Page number (1-indexed).
-        size: Number of executions per page.
-        status: Optional status filter.
-        execution_type: Optional execution type filter (REGULAR or TEST).
-
-    Returns:
-        Paginated list of all job executions.
+    Returns a paginated list of every execution.
     """
     executions = await job_service.list_job_executions(
         status=status,
@@ -217,22 +202,14 @@ async def trigger_job(
     current_user: AdminUserDep,
 ) -> JobTriggerResponse:
     """
-    Manually trigger a job execution.
+    Manually trigger a job execution, bypassing the normal schedule.
 
-    This creates a new job execution record and triggers the job
-    immediately, bypassing the normal schedule.
-
-    Args:
-        job_id: Job configuration ID.
-        background_tasks: FastAPI background tasks for async execution.
-
-    Returns:
-        Job trigger response with execution ID.
+    An already-running job is refused with HTTP 200 and success=False -- the
+    contract `use-job-card-controls.ts` reads as refusal, not transport error.
 
     Raises:
         404: Job configuration not found.
-        400: Job is not active or scheduler is disabled.
-        409: Job is already running.
+        400: Job is not active.
     """
     job = await job_service.get_job_configuration(job_id)
     if not job:
@@ -389,10 +366,6 @@ async def trigger_test_run(
     The test run calls all Riot API endpoints the real job uses once per
     minute.  It never writes data to the database (except the execution
     record itself).  Runs for up to 1 hour or until stopped.
-
-    Args:
-        job_id: Job configuration ID.
-        suspend_regular: If True, the scheduled job is paused for the duration.
     """
     job = await job_service.get_job_configuration(job_id)
     if not job:
@@ -413,7 +386,6 @@ async def trigger_test_run(
             execution_id=None,
         )
 
-    # Suspend scheduled runs if requested
     if suspend_regular:
         _set_scheduled_job_suspended(job.id, suspended=True)
 

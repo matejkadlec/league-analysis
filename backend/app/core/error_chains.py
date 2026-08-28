@@ -1,13 +1,12 @@
-"""Error classification shared by the job implementations.
+"""Error-chain walking and classification shared across features.
 
-`RateLimitSignal` plus a handful of predicates that answer what a caught
-exception means. Each job decides for itself what to do about the answer;
-there is no shared handler, because the three jobs disagree about what is fatal.
+`__cause__` chains are the one exception lineage the language carries, so the
+predicates here read them once for every caller: jobs classify per-player
+failures with them, and the matches sync pipeline asks the same questions.
 """
 
 from collections.abc import Iterator
 
-import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.riot_api.errors import (
@@ -15,30 +14,6 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     PuuidDecryptionError,
 )
-
-logger = structlog.get_logger(__name__)
-
-
-class RateLimitSignal(Exception):
-    """Signal that a rate limit was hit during job execution.
-
-    NOT a failure - the job should stop gracefully with a RATE_LIMITED status.
-
-    :param retry_after: Seconds to wait before retrying (from Riot API)
-    :param message: Optional message describing the rate limit
-    """
-
-    def __init__(
-        self, retry_after: float | None = None, message: str = "Rate limit hit"
-    ):
-        """Initialize rate limit signal.
-
-        :param retry_after: Seconds to wait before retrying
-        :param message: Description of rate limit condition
-        """
-        self.retry_after = retry_after
-        self.message = message
-        super().__init__(message)
 
 
 def iter_error_chain(error: Exception) -> Iterator[Exception]:
@@ -80,6 +55,6 @@ def is_riot_puuid_binding_error(error: Exception) -> bool:
     )
 
 
-def is_database_job_error(error: Exception) -> bool:
+def is_database_error(error: Exception) -> bool:
     """Return whether continuing would reuse a failed or unavailable DB session."""
     return any(isinstance(item, SQLAlchemyError) for item in iter_error_chain(error))

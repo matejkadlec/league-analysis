@@ -1,7 +1,7 @@
 """Match service for handling match data operations."""
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 import structlog
 from sqlalchemy import ColumnElement, Select, desc, exists, func, or_, select
@@ -12,11 +12,6 @@ from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
     Region,
     get_region_by_platform,
-)
-from app.core.riot_api.errors import (
-    AuthenticationError,
-    ForbiddenError,
-    RateLimitError,
 )
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
@@ -35,7 +30,11 @@ from .match_stats import (
     calculate_kda,
     page_of,
 )
-from .match_sync import must_abort_writer_sync, sync_single_queue_for_player
+from .match_sync import (
+    RIOT_FATAL_ERRORS,
+    must_abort_writer_sync,
+    sync_single_queue_for_player,
+)
 from .models import Match
 from .participants import MatchParticipant
 from .schemas import (
@@ -120,6 +119,17 @@ def build_match_history_conditions(
     return conditions
 
 
+class ParticipantTotals(NamedTuple):
+    """The per-participant sums one stats response averages over."""
+
+    kills: int
+    deaths: int
+    assists: int
+    cs: int
+    vision: int
+    wins: int
+
+
 class MatchService:
     """Service for handling match data operations."""
 
@@ -146,47 +156,40 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
+            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
 
         Returns:
             MatchListResponse with matches from database
         """
-        try:
-            db_matches, total_count, total_analyzed = await self._fetch_match_page(
-                puuid=puuid,
-                start=start,
-                count=count,
-                queue_ids=queue_ids,
-            )
+        db_matches, total_count, total_analyzed = await self._fetch_match_page(
+            puuid=puuid,
+            start=start,
+            count=count,
+            queue_ids=queue_ids,
+        )
 
-            match_responses = [
-                MatchResponse.model_validate(match) for match in db_matches
-            ]
+        match_responses = [MatchResponse.model_validate(match) for match in db_matches]
 
-            page = page_of(start, count)
-            size = count
+        page = page_of(start, count)
+        size = count
 
-            logger.debug(
-                "Retrieved matches from database",
-                puuid=puuid,
-                matches_count=len(match_responses),
-                total_count=total_count,
-                total_analyzed=total_analyzed,
-                page=page,
-                size=size,
-            )
+        logger.debug(
+            "Retrieved matches from database",
+            puuid=puuid,
+            matches_count=len(match_responses),
+            total_count=total_count,
+            total_analyzed=total_analyzed,
+            page=page,
+            size=size,
+        )
 
-            return MatchListResponse(
-                matches=match_responses,
-                total=total_count,
-                total_analyzed=total_analyzed,
-                page=page,
-                size=size,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to get player matches from database", puuid=puuid, error=str(e)
-            )
-            raise
+        return MatchListResponse(
+            matches=match_responses,
+            total=total_count,
+            total_analyzed=total_analyzed,
+            page=page,
+            size=size,
+        )
 
     async def get_player_matches_with_data(
         self,
@@ -206,68 +209,61 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
+            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
+            search: Case-insensitive champion or participant Riot ID filter
 
         Returns:
             MatchListWithPlayerDataResponse with detailed match data
         """
-        try:
-            db_matches, total_count, total_analyzed = await self._fetch_match_page(
-                puuid=puuid,
-                start=start,
-                count=count,
-                queue_ids=queue_ids,
-                search=search,
-            )
+        db_matches, total_count, total_analyzed = await self._fetch_match_page(
+            puuid=puuid,
+            start=start,
+            count=count,
+            queue_ids=queue_ids,
+            search=search,
+        )
 
-            if not db_matches:
-                page = page_of(start, count)
-                return MatchListWithPlayerDataResponse(
-                    matches=[],
-                    total=total_count,
-                    total_analyzed=total_analyzed,
-                    page=page,
-                    size=count,
-                )
-            (
-                player_participants_by_match,
-                participants_by_match,
-                timelines_by_match_team,
-            ) = await load_match_player_data_context(
-                self.db,
-                puuid,
-                [match.match_id for match in db_matches],
-            )
-            match_responses = build_match_responses(
-                db_matches,
-                player_participants_by_match,
-                participants_by_match,
-                timelines_by_match_team,
-                puuid,
-            )
+        if not db_matches:
             page = page_of(start, count)
-
-            logger.debug(
-                "Retrieved matches with player data",
-                puuid=puuid,
-                matches_count=len(match_responses),
-                total_count=total_count,
-            )
-
             return MatchListWithPlayerDataResponse(
-                matches=match_responses,
+                matches=[],
                 total=total_count,
                 total_analyzed=total_analyzed,
                 page=page,
                 size=count,
             )
-        except Exception as e:
-            logger.error(
-                "Failed to get player matches with data",
-                puuid=puuid,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+        (
+            player_participants_by_match,
+            participants_by_match,
+            timelines_by_match_team,
+        ) = await load_match_player_data_context(
+            self.db,
+            puuid,
+            [match.match_id for match in db_matches],
+        )
+        match_responses = build_match_responses(
+            db_matches,
+            player_participants_by_match,
+            participants_by_match,
+            timelines_by_match_team,
+            puuid,
+        )
+        page = page_of(start, count)
+
+        logger.debug(
+            "Retrieved matches with player data",
+            puuid=puuid,
+            matches_count=len(match_responses),
+            total_count=total_count,
+        )
+
+        return MatchListWithPlayerDataResponse(
+            matches=match_responses,
+            total=total_count,
+            total_analyzed=total_analyzed,
+            page=page,
+            size=count,
+        )
 
     @staticmethod
     def _create_empty_stats_response(puuid: str) -> MatchStatsResponse:
@@ -290,41 +286,22 @@ class MatchService:
     def _aggregate_participant_stats(
         matches: list[MatchResponse],
         participants_by_match: dict[str, MatchParticipant],
-    ) -> tuple[int, int, int, int, int, int]:
-        """
-        Aggregate statistics from match participants.
-
-        Returns:
-            Tuple of (kills, deaths, assists, cs, vision, wins)
-        """
-        totals = {
-            "kills": 0,
-            "deaths": 0,
-            "assists": 0,
-            "cs": 0,
-            "vision": 0,
-            "wins": 0,
-        }
+    ) -> ParticipantTotals:
+        """Aggregate the player's combat and vision sums plus wins."""
+        kills = deaths = assists = cs = vision = wins = 0
 
         for match in matches:
             participant = participants_by_match.get(match.match_id)
             if participant:
-                totals["kills"] += participant.kills
-                totals["deaths"] += participant.deaths
-                totals["assists"] += participant.assists
-                totals["cs"] += participant.cs
-                totals["vision"] += participant.vision_score
+                kills += participant.kills
+                deaths += participant.deaths
+                assists += participant.assists
+                cs += participant.cs
+                vision += participant.vision_score
                 if participant.win:
-                    totals["wins"] += 1
+                    wins += 1
 
-        return (
-            totals["kills"],
-            totals["deaths"],
-            totals["assists"],
-            totals["cs"],
-            totals["vision"],
-            totals["wins"],
-        )
+        return ParticipantTotals(kills, deaths, assists, cs, vision, wins)
 
     async def get_player_stats(
         self,
@@ -335,64 +312,51 @@ class MatchService:
         """
         Calculate player statistics from recent matches.
 
-        Args:
-            puuid: Player PUUID
-            limit: Number of matches to analyze. If None, analyze all matches.
-
-        Returns:
-            MatchStatsResponse with player statistics
+        A `limit` of None analyzes every stored match, not a page of them.
         """
-        try:
-            # If limit is None, get all matches (use a high count)
-            fetch_limit = limit if limit is not None else 10000
-            # Get recent matches for the player
-            matches = await self.get_player_matches(
-                puuid,
-                count=fetch_limit,
-                queue_ids=queue_ids,
-            )
+        # If limit is None, get all matches (use a high count)
+        fetch_limit = limit if limit is not None else 10000
+        matches = await self.get_player_matches(
+            puuid,
+            count=fetch_limit,
+            queue_ids=queue_ids,
+        )
 
-            if not matches.matches:
-                return self._create_empty_stats_response(puuid)
+        if not matches.matches:
+            return self._create_empty_stats_response(puuid)
 
-            # Get all participants for these matches at once (fixes N+1 query problem)
-            match_ids = [m.match_id for m in matches.matches]
-            participants_stmt = select(MatchParticipant).where(
-                MatchParticipant.match_id.in_(match_ids),
-                MatchParticipant.puuid == puuid,
-            )
-            participants_result = await self.db.execute(participants_stmt)
-            participants_by_match = {
-                p.match_id: p for p in participants_result.scalars().all()
-            }
+        # Get all participants for these matches at once (fixes N+1 query problem)
+        match_ids = [m.match_id for m in matches.matches]
+        participants_stmt = select(MatchParticipant).where(
+            MatchParticipant.match_id.in_(match_ids),
+            MatchParticipant.puuid == puuid,
+        )
+        participants_result = await self.db.execute(participants_stmt)
+        participants_by_match = {
+            p.match_id: p for p in participants_result.scalars().all()
+        }
 
-            # Aggregate statistics
-            total_kills, total_deaths, total_assists, total_cs, total_vision, wins = (
-                self._aggregate_participant_stats(
-                    matches.matches, participants_by_match
-                )
-            )
+        totals = self._aggregate_participant_stats(
+            matches.matches, participants_by_match
+        )
 
-            total_matches = len(matches.matches)
-            avg_kda = calculate_kda(total_kills, total_deaths, total_assists)
+        total_matches = len(matches.matches)
+        avg_kda = calculate_kda(totals.kills, totals.deaths, totals.assists)
 
-            # total_matches is guaranteed > 0 (checked for empty matches above)
-            return MatchStatsResponse(
-                puuid=puuid,
-                total_matches=total_matches,
-                wins=wins,
-                losses=total_matches - wins,
-                win_rate=wins / total_matches,
-                avg_kills=total_kills / total_matches,
-                avg_deaths=total_deaths / total_matches,
-                avg_assists=total_assists / total_matches,
-                avg_kda=avg_kda,
-                avg_cs=total_cs / total_matches,
-                avg_vision_score=total_vision / total_matches,
-            )
-        except Exception as e:
-            logger.error("Failed to get player stats", puuid=puuid, error=str(e))
-            raise
+        # total_matches is guaranteed > 0 (checked for empty matches above)
+        return MatchStatsResponse(
+            puuid=puuid,
+            total_matches=total_matches,
+            wins=totals.wins,
+            losses=total_matches - totals.wins,
+            win_rate=totals.wins / total_matches,
+            avg_kills=totals.kills / total_matches,
+            avg_deaths=totals.deaths / total_matches,
+            avg_assists=totals.assists / total_matches,
+            avg_kda=avg_kda,
+            avg_cs=totals.cs / total_matches,
+            avg_vision_score=totals.vision / total_matches,
+        )
 
     async def get_player_champion_stats(
         self,
@@ -402,39 +366,26 @@ class MatchService:
         """
         Get player statistics grouped by champion.
 
-        Args:
-            puuid: Player PUUID
-            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
-
-        Returns:
-            ChampionStatsResponse with every qualifying champion statistic
+        `queue_ids` restricts to a queue union (e.g., 420 for ranked solo).
         """
-        try:
-            query = restrict_participants_to_queues(
-                select(MatchParticipant).where(MatchParticipant.puuid == puuid),
-                queue_ids,
-            )
+        query = restrict_participants_to_queues(
+            select(MatchParticipant).where(MatchParticipant.puuid == puuid),
+            queue_ids,
+        )
 
-            result = await self.db.execute(query)
-            participants = result.scalars().all()
+        result = await self.db.execute(query)
+        participants = result.scalars().all()
 
-            if not participants:
-                return ChampionStatsResponse(
-                    puuid=puuid, total_champions=0, champions=[]
-                )
+        if not participants:
+            return ChampionStatsResponse(puuid=puuid, total_champions=0, champions=[])
 
-            champion_data = accumulate_champion_stats(participants)
-            champions = build_champion_stat_items(champion_data)
-            return ChampionStatsResponse(
-                puuid=puuid,
-                total_champions=len(champion_data),
-                champions=champions,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to get player champion stats", puuid=puuid, error=str(e)
-            )
-            raise
+        champion_data = accumulate_champion_stats(participants)
+        champions = build_champion_stat_items(champion_data)
+        return ChampionStatsResponse(
+            puuid=puuid,
+            total_champions=len(champion_data),
+            champions=champions,
+        )
 
     async def get_player_lane_stats(
         self,
@@ -444,39 +395,30 @@ class MatchService:
         """
         Get player statistics grouped by lane/position.
 
-        Args:
-            puuid: Player PUUID
-            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
-
-        Returns:
-            LaneStatsResponse with per-lane statistics
+        `queue_ids` restricts to a queue union (e.g., 420 for ranked solo).
         """
-        try:
-            query = restrict_participants_to_queues(
-                select(MatchParticipant).where(
-                    MatchParticipant.puuid == puuid,
-                    MatchParticipant.team_position.isnot(None),
-                    MatchParticipant.team_position != "",
-                    MatchParticipant.team_position != "UNKNOWN",
-                ),
-                queue_ids,
-            )
+        query = restrict_participants_to_queues(
+            select(MatchParticipant).where(
+                MatchParticipant.puuid == puuid,
+                MatchParticipant.team_position.isnot(None),
+                MatchParticipant.team_position != "",
+                MatchParticipant.team_position != "UNKNOWN",
+            ),
+            queue_ids,
+        )
 
-            result = await self.db.execute(query)
-            participants = result.scalars().all()
+        result = await self.db.execute(query)
+        participants = result.scalars().all()
 
-            if not participants:
-                return LaneStatsResponse(puuid=puuid, total_lanes=0, lanes=[])
+        if not participants:
+            return LaneStatsResponse(puuid=puuid, total_lanes=0, lanes=[])
 
-            lane_data = accumulate_lane_stats(participants)
-            return LaneStatsResponse(
-                puuid=puuid,
-                total_lanes=len(lane_data),
-                lanes=build_lane_stat_items(lane_data),
-            )
-        except Exception as e:
-            logger.error("Failed to get player lane stats", puuid=puuid, error=str(e))
-            raise
+        lane_data = accumulate_lane_stats(participants)
+        return LaneStatsResponse(
+            puuid=puuid,
+            total_lanes=len(lane_data),
+            lanes=build_lane_stat_items(lane_data),
+        )
 
     async def _fetch_match_page(
         self,
@@ -542,10 +484,6 @@ class MatchService:
         """
         Sync matches for a player from Riot API (Current Season).
         Fetches match IDs in batches and stores missing matches.
-
-        Args:
-            riot_client: The Riot API client
-            player: Player object with puuid and platform
         """
         puuid = player.puuid
         platform = player.platform
@@ -572,7 +510,7 @@ class MatchService:
                     on_match_stored=on_match_stored,
                 )
                 total_stored += queue_stored
-            except AuthenticationError, ForbiddenError, RateLimitError:
+            except RIOT_FATAL_ERRORS:
                 raise
             except Exception as e:
                 if must_abort_writer_sync(e):

@@ -9,7 +9,7 @@ import hashlib
 import secrets
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import NamedTuple, Protocol
 from uuid import uuid4
 
 import jwt
@@ -27,6 +27,22 @@ from .revoked_access_token import RevokedAccessToken
 from .schemas import TokenData
 
 logger = structlog.get_logger(__name__)
+
+
+class TokenPair(NamedTuple):
+    """One minted access/refresh pair with the instant each expires at."""
+
+    access_token: str
+    access_expires_at: datetime
+    refresh_token: str
+    refresh_expires_at: datetime
+
+
+class RefreshRotation(NamedTuple):
+    """The owner a rotation authenticated, plus the fresh pair it issued."""
+
+    user: User
+    pair: TokenPair
 
 
 class _TokenLifecycleHost(Protocol):
@@ -148,7 +164,7 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         user: User,
         remote_ip: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[str, datetime, str, datetime]:
+    ) -> TokenPair:
         """Issue a fresh access/refresh token pair for a user."""
         access_token, access_expires_at, _ = self.create_access_token(user)
         refresh_token, refresh_expires_at, _ = await self.create_refresh_token(
@@ -156,15 +172,20 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
             remote_ip=remote_ip,
             user_agent=user_agent,
         )
-        return access_token, access_expires_at, refresh_token, refresh_expires_at
+        return TokenPair(
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=refresh_token,
+            refresh_expires_at=refresh_expires_at,
+        )
 
     async def rotate_refresh_token(
         self,
         raw_refresh_token: str,
         remote_ip: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[User, str, datetime, str, datetime] | None:
-        """Rotate refresh token and return new access/refresh pair.
+    ) -> RefreshRotation | None:
+        """Rotate refresh token and return the owner with a new token pair.
 
         `None` means the server refused: no such token, reuse, expiry, or an
         unknown user, never "something went wrong". The router answers `None`
@@ -243,12 +264,14 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         await self.db.commit()
 
         access_token, access_expires_at, _ = self.create_access_token(user)
-        return (
-            user,
-            access_token,
-            access_expires_at,
-            new_refresh_token,
-            refresh_expires_at,
+        return RefreshRotation(
+            user=user,
+            pair=TokenPair(
+                access_token=access_token,
+                access_expires_at=access_expires_at,
+                refresh_token=new_refresh_token,
+                refresh_expires_at=refresh_expires_at,
+            ),
         )
 
     async def _get_refresh_token_by_token_id(
@@ -311,7 +334,7 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         *,
         remote_ip: str | None,
         user_agent: str | None,
-    ) -> tuple[User, str, datetime, str, datetime] | None:
+    ) -> RefreshRotation | None:
         """Decide what a request presenting an already-revoked token gets.
 
         Heal when the presented token is unexpired and its replacement was
@@ -349,12 +372,14 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
                 )
                 await self.db.commit()
                 access_token, access_expires_at, _ = self.create_access_token(user)
-                return (
-                    user,
-                    access_token,
-                    access_expires_at,
-                    new_refresh_token,
-                    refresh_expires_at,
+                return RefreshRotation(
+                    user=user,
+                    pair=TokenPair(
+                        access_token=access_token,
+                        access_expires_at=access_expires_at,
+                        refresh_token=new_refresh_token,
+                        refresh_expires_at=refresh_expires_at,
+                    ),
                 )
 
         descendants_revoked = 0

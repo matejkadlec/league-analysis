@@ -394,7 +394,7 @@ def _get_job_class(
 
 def _schedule_job(
     job_config: JobConfiguration, job_class: type[BaseJob], interval_seconds: int
-):
+) -> None:
     """Schedule a single job with the scheduler.
 
     :param job_config: Job configuration.

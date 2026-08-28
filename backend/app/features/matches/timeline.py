@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 
 import structlog
 from sqlalchemy import (
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
-from app.core.riot_api.constants import TEAM_IDS
+from app.core.riot_api.constants import TEAM_IDS, TeamId
 from app.core.riot_api.models import (
     MatchTimelineDTO,
     MatchTimelineEventDTO,
@@ -78,7 +78,34 @@ class TimelineMatch(Protocol):
     def info(self) -> TimelineMatchInfo: ...
 
 
-VALID_TEAM_IDS = {100, 200}
+class TeamTotalBucket(TypedDict):
+    """The team-level objective totals shared by every row of one team."""
+
+    team_turrets_destroyed: int
+    team_inhibitors_destroyed: int
+    team_dragons_slain: int
+    team_rift_heralds_slain: int
+    team_barons_slain: int
+    team_voidgrubs_slain: int
+    team_atakhan_slain: int
+    team_other_epic_monsters_slain: dict[str, int]
+
+
+class TimelineRow(TeamTotalBucket):
+    """The row accumulator one participant's `MatchTimeline` row is built from.
+
+    Starts as the identity columns plus zeroed team totals; the team totals are
+    overwritten from the team bucket at finalization. `MatchTimeline(**row)` is
+    the single point where this shape meets the ORM.
+    """
+
+    match_id: str
+    puuid: str
+    participant_id: int
+    team_id: int
+    objective_events: list[dict[str, Any]]
+
+
 OBJECTIVE_KINDS = {
     "turret",
     "inhibitor",
@@ -259,25 +286,25 @@ def _determine_killer_team_id(
     """Resolve killer team from event payload and participant mapping."""
     if killer_id is not None:
         killer_team = participant_team_by_id.get(killer_id)
-        if killer_team in VALID_TEAM_IDS:
+        if killer_team in TEAM_IDS:
             return killer_team
 
     explicit_team = event.killer_team_id
-    if explicit_team in VALID_TEAM_IDS:
+    if explicit_team in TEAM_IDS:
         return explicit_team
 
     if event.type == "BUILDING_KILL":
         destroyed_team = event.team_id
-        if destroyed_team == 100:
-            return 200
-        if destroyed_team == 200:
-            return 100
+        if destroyed_team == TeamId.BLUE:
+            return TeamId.RED
+        if destroyed_team == TeamId.RED:
+            return TeamId.BLUE
 
     return None
 
 
 def _append_compact_objective_event(
-    row: dict[str, Any],
+    row: TimelineRow,
     timestamp: int,
     objective: str,
     role: str,
@@ -297,12 +324,12 @@ def _append_compact_objective_event(
     row["objective_events"].append(entry)
 
 
-def _new_team_total_bucket() -> dict[str, Any]:
+def _new_team_total_bucket() -> TeamTotalBucket:
     """Create an empty team-level objective totals bucket.
 
-    The one place the team-total key set is written down. `_new_participant_row`
-    splats it and `_apply_team_totals_to_row` iterates it, so a new objective is
-    added here and nowhere else.
+    The one place the team-total defaults live: `TeamTotalBucket` declares
+    the key set, `_new_participant_row` splats this bucket, and
+    `_apply_team_totals_to_row` iterates it.
     """
     return {
         "team_turrets_destroyed": 0,
@@ -316,9 +343,9 @@ def _new_team_total_bucket() -> dict[str, Any]:
     }
 
 
-def _new_team_totals() -> dict[int, dict[str, Any]]:
+def _new_team_totals() -> dict[int, TeamTotalBucket]:
     """Create empty team totals for both sides."""
-    return {100: _new_team_total_bucket(), 200: _new_team_total_bucket()}
+    return {TeamId.BLUE: _new_team_total_bucket(), TeamId.RED: _new_team_total_bucket()}
 
 
 def _new_participant_row(
@@ -326,7 +353,7 @@ def _new_participant_row(
     puuid: str,
     participant_id: int,
     team_id: int,
-) -> dict[str, Any]:
+) -> TimelineRow:
     """Create an empty participant timeline aggregate row."""
     return {
         "match_id": match_id,
@@ -340,16 +367,16 @@ def _new_participant_row(
 
 def _collect_participant_rows(
     match_dto: TimelineMatch,
-) -> tuple[dict[int, int], dict[int, dict[str, Any]]]:
+) -> tuple[dict[int, int], dict[int, TimelineRow]]:
     """Index valid participants and their empty timeline rows."""
     participant_team_by_id: dict[int, int] = {}
-    rows_by_participant_id: dict[int, dict[str, Any]] = {}
+    rows_by_participant_id: dict[int, TimelineRow] = {}
     match_id = match_dto.metadata.match_id
 
     for participant in match_dto.info.participants:
         participant_id = participant.participant_id
         team_id = participant.team_id
-        if team_id not in VALID_TEAM_IDS:
+        if team_id not in TEAM_IDS:
             continue
         participant_team_by_id[participant_id] = team_id
         rows_by_participant_id[participant_id] = _new_participant_row(
@@ -371,10 +398,10 @@ def _event_role(killer_id: int | None, participant_id: int) -> str:
 
 def _iter_involved_rows(
     involved: list[int],
-    rows_by_participant_id: dict[int, dict[str, Any]],
-) -> list[tuple[int, dict[str, Any]]]:
+    rows_by_participant_id: dict[int, TimelineRow],
+) -> list[tuple[int, TimelineRow]]:
     """Return involved participant IDs that have an aggregate row."""
-    rows: list[tuple[int, dict[str, Any]]] = []
+    rows: list[tuple[int, TimelineRow]] = []
     for participant_id in involved:
         row = rows_by_participant_id.get(participant_id)
         if row is None:
@@ -388,7 +415,7 @@ def _resolve_building_objective(
     tower_type: str | None,
 ) -> tuple[str | None, str | None, str | None]:
     """Map a building kill to its objective, team-total field, and subtype."""
-    spec = _BUILDING_SPECS.get(building_type) if building_type is not None else None
+    spec = _BUILDING_SPECS.get(building_type or "")
     if spec is None:
         return None, None, None
     objective, team_field, use_tower_subtype = spec
@@ -409,25 +436,25 @@ def _resolve_monster_objective(
 
 
 def _increment_known_team_total(
-    team_totals: dict[int, dict[str, Any]],
+    team_totals: dict[int, TeamTotalBucket],
     killer_team_id: int | None,
     team_total_field: str | None,
 ) -> None:
     """Increment a known team objective counter when the killer team is valid."""
-    if team_total_field is None or killer_team_id not in VALID_TEAM_IDS:
+    if team_total_field is None or killer_team_id not in TEAM_IDS:
         return
     team_totals[killer_team_id][team_total_field] += 1
 
 
 def _credit_team_monster(
-    team_totals: dict[int, dict[str, Any]],
+    team_totals: dict[int, TeamTotalBucket],
     killer_team_id: int | None,
     objective: str | None,
     team_total_field: str | None,
     monster_type: str,
 ) -> None:
     """Credit a team-level epic-monster kill or retain an unknown type."""
-    if killer_team_id not in VALID_TEAM_IDS:
+    if killer_team_id not in TEAM_IDS:
         return
     if objective is not None and team_total_field is not None:
         team_totals[killer_team_id][team_total_field] += 1
@@ -439,7 +466,7 @@ def _credit_team_monster(
 
 
 def _record_monster_takedown(
-    row: dict[str, Any],
+    row: TimelineRow,
     objective: str | None,
     role: str,
     timestamp: int,
@@ -471,7 +498,7 @@ def _record_unknown_building(
     timestamp: int,
     killer_id: int | None,
     involved: list[int],
-    rows_by_participant_id: dict[int, dict[str, Any]],
+    rows_by_participant_id: dict[int, TimelineRow],
 ) -> None:
     """Log and retain an unrecognized building objective for involved players."""
     logger.warning(
@@ -500,8 +527,8 @@ def _apply_building_kill(
     killer_id: int | None,
     involved: list[int],
     killer_team_id: int | None,
-    rows_by_participant_id: dict[int, dict[str, Any]],
-    team_totals: dict[int, dict[str, Any]],
+    rows_by_participant_id: dict[int, TimelineRow],
+    team_totals: dict[int, TeamTotalBucket],
 ) -> None:
     """Apply a BUILDING_KILL event to team totals and participant rows."""
     building_type = _normalize_text(event.building_type)
@@ -545,8 +572,8 @@ def _apply_elite_monster_kill(
     killer_id: int | None,
     involved: list[int],
     killer_team_id: int | None,
-    rows_by_participant_id: dict[int, dict[str, Any]],
-    team_totals: dict[int, dict[str, Any]],
+    rows_by_participant_id: dict[int, TimelineRow],
+    team_totals: dict[int, TeamTotalBucket],
 ) -> None:
     """Apply an ELITE_MONSTER_KILL event to team totals and participant rows."""
     monster_type = _normalize_text(event.monster_type)
@@ -586,15 +613,15 @@ def _apply_elite_monster_kill(
         )
 
 
-def _process_timeline_event(
+def _dispatch_timeline_event(
     event: MatchTimelineEventDTO,
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
     valid_participant_ids: set[int],
     participant_team_by_id: dict[int, int],
-    rows_by_participant_id: dict[int, dict[str, Any]],
-    team_totals: dict[int, dict[str, Any]],
+    rows_by_participant_id: dict[int, TimelineRow],
+    team_totals: dict[int, TeamTotalBucket],
 ) -> None:
     """Dispatch one timeline event when it is an objective kill."""
     event_type = event.type
@@ -627,20 +654,20 @@ def _process_timeline_event(
     )
 
 
-def _process_timeline_frames(
+def _dispatch_timeline_frames(
     frames: Sequence[MatchTimelineFrameDTO],
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
     participant_team_by_id: dict[int, int],
-    rows_by_participant_id: dict[int, dict[str, Any]],
-    team_totals: dict[int, dict[str, Any]],
+    rows_by_participant_id: dict[int, TimelineRow],
+    team_totals: dict[int, TeamTotalBucket],
 ) -> None:
     """Walk timeline frames and apply recognized objective events."""
     valid_participant_ids = set(rows_by_participant_id.keys())
     for frame in frames:
         for event in frame.events:
-            _process_timeline_event(
+            _dispatch_timeline_event(
                 event,
                 match_id,
                 game_version,
@@ -652,9 +679,7 @@ def _process_timeline_frames(
             )
 
 
-def _apply_team_totals_to_row(
-    row: dict[str, Any], totals: dict[str, Any] | None
-) -> None:
+def _apply_team_totals_to_row(row: TimelineRow, totals: TeamTotalBucket | None) -> None:
     """Copy team totals onto a participant row when the team is known."""
     if totals is None:
         return
@@ -665,11 +690,11 @@ def _apply_team_totals_to_row(
 
 
 def _finalize_timeline_rows(
-    rows_by_participant_id: dict[int, dict[str, Any]],
-    team_totals: dict[int, dict[str, Any]],
-) -> list[dict[str, Any]]:
+    rows_by_participant_id: dict[int, TimelineRow],
+    team_totals: dict[int, TeamTotalBucket],
+) -> list[TimelineRow]:
     """Attach team totals and return rows ordered by participant ID."""
-    rows: list[dict[str, Any]] = []
+    rows: list[TimelineRow] = []
     for participant_id in sorted(rows_by_participant_id.keys()):
         row = rows_by_participant_id[participant_id]
         _apply_team_totals_to_row(row, team_totals.get(row["team_id"]))
@@ -680,7 +705,7 @@ def _finalize_timeline_rows(
 def build_match_timeline_rows(
     match_dto: TimelineMatch,
     timeline_payload: MatchTimelineDTO | None,
-) -> list[dict[str, Any]]:
+) -> list[TimelineRow]:
     """Build participant timeline aggregates for objective-focused analytics."""
     if timeline_payload is None:
         return []
@@ -694,7 +719,7 @@ def build_match_timeline_rows(
 
     team_totals = _new_team_totals()
     game_version = match_dto.info.game_version
-    _process_timeline_frames(
+    _dispatch_timeline_frames(
         frames,
         match_dto.metadata.match_id,
         game_version,

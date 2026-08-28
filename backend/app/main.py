@@ -178,7 +178,7 @@ app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 # and unhandled exceptions.
 app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(players_router, prefix="/api/v1")
 app.include_router(matches_router, prefix="/api/v1")
 app.include_router(playstyle_analysis_router, prefix="/api/v1")

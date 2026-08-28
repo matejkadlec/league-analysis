@@ -733,7 +733,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 match_id=match_id,
                 anchor=match_anchor,
             )
-            result = await self._process_match(
+            result = await self._sample_spine_match(
                 puuid, created_at, match_id, match_anchor_seconds
             )
             if result:
@@ -821,7 +821,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     # Match Processing
     # ================================================================
 
-    async def _process_match(
+    async def _sample_spine_match(
         self,
         analysis_puuid: str,
         analysis_created_at: datetime,

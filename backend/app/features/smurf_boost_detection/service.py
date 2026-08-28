@@ -393,7 +393,9 @@ class SmurfBoostDetectionService:
             puuid,
             created_at,
             status="completed",
-            results=_serialize(result),
+            # The one boundary where the validated result model becomes the
+            # JSONB document the column stores.
+            results=_serialize(result).model_dump(mode="json"),
             eligible_games=result.eligible_games,
             latest_match_id=latest_match_id,
             error_code=None,
@@ -512,14 +514,14 @@ class SmurfBoostDetectionService:
         return response.model_copy(update={"is_stale": is_stale})
 
 
-def _serialize(result: DetectionResult) -> dict[str, Any]:
-    """Convert the engine result into the stored JSON shape.
+def _serialize(result: DetectionResult) -> SmurfBoostResults:
+    """Convert the engine result into the stored and wire-validated model.
 
     The conversion goes through `SmurfBoostResults` rather than `asdict`, so the
     stored document and the HTTP response are the same validated shape and the
     internal family score is dropped in exactly one place.
     """
-    payload = SmurfBoostResults(
+    return SmurfBoostResults(
         model_version=result.model_version,
         families=[
             FamilyPayload(
@@ -548,7 +550,6 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
         eligible_games=result.eligible_games,
         notes=list(result.notes),
     )
-    return payload.model_dump(mode="json")
 
 
 def resolve_thresholds(settings: dict[str, Any] | None) -> dict[str, float]:

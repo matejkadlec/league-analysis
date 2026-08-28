@@ -4,14 +4,21 @@ from typing import Annotated
 
 import structlog
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
 from app.core.http_errors import http_error
 
 from .cookies import ACCESS_TOKEN_COOKIE_NAME
 from .models import User
-from .service import AuthService, get_auth_service, oauth2_scheme
+from .service import AuthService, oauth2_scheme
 
 logger = structlog.get_logger(__name__)
+
+
+def get_auth_service(db: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
+    """Get auth service instance."""
+    return AuthService(db)
 
 
 def get_request_access_token(
@@ -82,6 +89,7 @@ AdminUserDep = Annotated[User, Depends(get_current_admin_user)]
 __all__ = [
     "AdminUserDep",
     "CurrentUserDep",
+    "get_auth_service",
     "get_current_active_user",
     "get_current_admin_user",
     "get_current_user",

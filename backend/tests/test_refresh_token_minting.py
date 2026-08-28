@@ -156,7 +156,7 @@ async def test_rotation_uses_the_configured_lifetime() -> None:
     result = await service.rotate_refresh_token(raw_refresh_token="x")
 
     assert result is not None
-    refresh_expires_at = result[4]
+    refresh_expires_at = result.pair.refresh_expires_at
     assert added[0].expires_at == refresh_expires_at
     remaining = refresh_expires_at - datetime.now(UTC)
     assert timedelta(days=configured) - remaining < timedelta(minutes=1)

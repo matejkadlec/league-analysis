@@ -106,7 +106,7 @@ class RiotAPIClient:
         Initialize Riot API client.
 
         Args:
-            api_key: Riot API key (uses config if None)
+            api_key: Riot API key (required; build via the tracked client factory)
             region: Default region for regional endpoints
             platform: Default platform for platform endpoints
             request_callback: Optional callback for tracking API requests (metric_name, count)
@@ -118,21 +118,18 @@ class RiotAPIClient:
             )
 
         self.api_key = api_key
-        # Default to EUN region if not specified
         self.region = region or Region("europe")
         self.platform = platform or Platform("eun1")
         self.request_callback = request_callback
         self.credential_health_callback = credential_health_callback
 
-        # Initialize components
         self.rate_limiter = RateLimiter()
         self.endpoints = RiotAPIEndpoints(self.region, self.platform)
 
-        # HTTP session
         self.session = None
         self._session_lock = asyncio.Lock()
 
-        # Track individual API calls for job logging
+        # Consumed by the job layer's execution log, not by any request path.
         self._api_calls: list[APICallRecord] = []
 
     async def __aenter__(self):
@@ -175,7 +172,7 @@ class RiotAPIClient:
                         "Riot API client session started",
                         region=enum_str(self.region),
                         platform=enum_str(self.platform),
-                        api_key_prefix="[REDACTED]" if self.api_key else "None",
+                        api_key_prefix="[REDACTED]",
                     )
 
     async def close(self) -> None:

@@ -129,7 +129,7 @@ class JobExecutionApiCall(BaseModel):
 
 
 class JobExecutionDetailedLogs(BaseModel):
-    """The two keys `base.py:log_completion` writes, each only when non-empty.
+    """The two keys `base.py:record_execution_completion` writes, each only when non-empty.
 
     Empty rather than absent, on purpose: a missing key and an empty list mean
     the same thing to the dialog that reads them, and `| None` would put a

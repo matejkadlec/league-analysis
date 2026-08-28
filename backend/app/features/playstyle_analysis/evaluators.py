@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from app.core.riot_api.constants import TeamId
 from app.features.matches.lane import opposing_lane_participant
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.aggregates import calculate_aggregate_value
@@ -117,7 +118,6 @@ def evaluate_gold_diff_check(
     """Evaluate gold diff vs opponent (lead or deficit)."""
     check_deficit = config.get("check_deficit", False)
 
-    min_threshold = 1000
     if check_deficit:
         min_threshold = config.get("min_lane_gold_deficit", 1000)
     else:
@@ -130,10 +130,10 @@ def evaluate_gold_diff_check(
     avg_gold_diff = total_gold_diff / games_with_opponent
     if check_deficit:
         if avg_gold_diff <= -min_threshold:
-            return _hover_result(config, abs(avg_gold_diff))
+            return _met_criteria_result(config, abs(avg_gold_diff))
     else:
         if avg_gold_diff >= min_threshold:
-            return _hover_result(config, avg_gold_diff)
+            return _met_criteria_result(config, avg_gold_diff)
     return None
 
 
@@ -155,7 +155,7 @@ def evaluate_damage_type(
         damage_pct = _typed_damage_percentage(
             target_type, total_phys, total_magic, total_damage
         )
-        return _hover_result(config, damage_pct)
+        return _met_criteria_result(config, damage_pct)
     return None
 
 
@@ -176,7 +176,7 @@ def evaluate_side_preference(
     result_wr = _favored_side_wr(target_team, blue_wr, red_wr)
     if result_wr is None:
         return None
-    return _hover_result(config, result_wr)
+    return _met_criteria_result(config, result_wr)
 
 
 def evaluate_surrender(
@@ -193,10 +193,10 @@ def evaluate_surrender(
 
     surrender_rate = (surrender_count / total_games) * 100.0
     if check_type == "never" and surrender_rate <= 10.0:
-        return _hover_result(config, surrender_rate)
+        return _met_criteria_result(config, surrender_rate)
 
     if check_type == "often" and surrender_rate >= 30.0:
-        return _hover_result(config, surrender_rate)
+        return _met_criteria_result(config, surrender_rate)
 
     return None
 
@@ -217,7 +217,7 @@ def evaluate_kill_greed(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_ratio = total_ratio / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_ratio)
+        return _met_criteria_result(config, avg_ratio)
     return None
 
 
@@ -237,7 +237,7 @@ def evaluate_solo_kill_ratio(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_ratio = total_ratio / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_ratio)
+        return _met_criteria_result(config, avg_ratio)
     return None
 
 
@@ -257,7 +257,7 @@ def evaluate_objective_participation(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_pct = total_pct / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_pct)
+        return _met_criteria_result(config, avg_pct)
     return None
 
 
@@ -374,17 +374,8 @@ def generate_summary_stats(
     }
 
 
-def _met_criteria_result(config: TagConfig, aggregate_value: float) -> TagResult:
-    formatted_value = format_value(aggregate_value)
-    description = config["hover_template"].format(value=formatted_value)
-    return {
-        "threshold_met": True,
-        "description": description,
-        "value": float(aggregate_value),
-    }
-
-
-def _hover_result(config: TagConfig, value: float) -> TagResult:
+def _met_criteria_result(config: TagConfig, value: float) -> TagResult:
+    """A met tag carrying its value formatted into the configured hover text."""
     formatted_value = format_value(value)
     description = config["hover_template"].format(value=formatted_value)
     return {"threshold_met": True, "description": description, "value": value}
@@ -393,10 +384,10 @@ def _hover_result(config: TagConfig, value: float) -> TagResult:
 def _compare_aggregate_to_thresholds(
     config: TagConfig, aggregate_value: float
 ) -> TagResult | None:
+    # A generic tag carries exactly one `min_`/`max_` threshold key, so first
+    # match is the only match; `min_play_rate`/`max_percentage_matches` are
+    # selection keys, not thresholds.
     for key, threshold in config.items():
-        # Presentation and evaluator-selection keys share the mapping with the
-        # thresholds; none of them is a `min_`/`max_` name, so skipping the
-        # non-numeric values changes nothing except that this now type-checks.
         if not isinstance(threshold, int | float):
             continue
         if key.startswith("min_") and key != "min_play_rate":
@@ -468,11 +459,11 @@ def _side_win_stats(
     blue_stats = {"wins": 0, "games": 0}
     red_stats = {"wins": 0, "games": 0}
     for p in participants:
-        if p.team_id == 100:
+        if p.team_id == TeamId.BLUE:
             blue_stats["games"] += 1
             if p.win:
                 blue_stats["wins"] += 1
-        elif p.team_id == 200:
+        elif p.team_id == TeamId.RED:
             red_stats["games"] += 1
             if p.win:
                 red_stats["wins"] += 1
@@ -480,14 +471,14 @@ def _side_win_stats(
 
 
 def _favored_side_wr(
-    target_team: int | None, blue_wr: float, red_wr: float
+    target_team: TeamId | None, blue_wr: float, red_wr: float
 ) -> float | None:
     diff = 5.0
     is_blue_favored = (blue_wr - red_wr) >= diff
     is_red_favored = (red_wr - blue_wr) >= diff
-    if target_team == 100 and is_blue_favored:
+    if target_team == TeamId.BLUE and is_blue_favored:
         return blue_wr
-    if target_team == 200 and is_red_favored:
+    if target_team == TeamId.RED and is_red_favored:
         return red_wr
     return None
 

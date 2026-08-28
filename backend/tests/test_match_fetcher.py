@@ -15,8 +15,7 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
 from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO, MatchTimelineDTO
-from app.features.jobs.base import BaseJob
-from app.features.jobs.error_handling import RateLimitSignal
+from app.features.jobs.base import BaseJob, RateLimitSignal
 from app.features.jobs.implementations import match_fetcher as match_fetcher_module
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError

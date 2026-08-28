@@ -69,30 +69,6 @@ async def locked_riot_writer_configurations(
 
 
 def riot_writer_maintenance_is_active(
-    configurations: dict[JobType, JobConfiguration],
-) -> bool:
-    """Return whether cleanup has stopped either regular Riot writer type."""
-    return any(
-        is_riot_writer_maintenance_active(configuration, ExecutionType.REGULAR)
-        for configuration in configurations.values()
-    )
-
-
-async def riot_writer_maintenance_is_active_for_session(
-    session: AsyncSession,
-) -> bool:
-    """Read the cleanup interlock only after taking the shared writer locks."""
-    configurations = await locked_riot_writer_configurations(session)
-    return riot_writer_maintenance_is_active(configurations)
-
-
-async def ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
-    """Refuse a direct Riot-data writer while cleanup owns the data tables."""
-    if await riot_writer_maintenance_is_active_for_session(session):
-        raise RiotWriterMaintenanceActiveError()
-
-
-def is_riot_writer_maintenance_active(
     job_config: JobConfiguration,
     execution_type: ExecutionType,
 ) -> bool:
@@ -102,6 +78,30 @@ def is_riot_writer_maintenance_active(
         and job_config.job_type in RIOT_WRITER_JOB_TYPES
         and (job_config.config_json or {}).get(RIOT_MAINTENANCE_MODE_KEY) is True
     )
+
+
+def any_riot_writer_maintenance_is_active(
+    configurations: dict[JobType, JobConfiguration],
+) -> bool:
+    """Return whether cleanup has stopped either regular Riot writer type."""
+    return any(
+        riot_writer_maintenance_is_active(configuration, ExecutionType.REGULAR)
+        for configuration in configurations.values()
+    )
+
+
+async def riot_writer_maintenance_is_active_for_session(
+    session: AsyncSession,
+) -> bool:
+    """Read the cleanup interlock only after taking the shared writer locks."""
+    configurations = await locked_riot_writer_configurations(session)
+    return any_riot_writer_maintenance_is_active(configurations)
+
+
+async def ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
+    """Refuse a direct Riot-data writer while cleanup owns the data tables."""
+    if await riot_writer_maintenance_is_active_for_session(session):
+        raise RiotWriterMaintenanceActiveError()
 
 
 def preserve_riot_writer_maintenance_mode(

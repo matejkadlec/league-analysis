@@ -18,14 +18,15 @@ from app.features.auth.cookies import (
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
+from app.features.auth.dependencies import get_auth_service
 from app.features.auth.router import router
-from app.features.auth.service import AuthService, get_auth_service
+from app.features.auth.service import AuthService
 
 
 async def _post(client: httpx.AsyncClient, cookie: str | None = None) -> httpx.Response:
-    """POST /logout, optionally carrying one raw cookie header."""
+    """POST /auth/logout, optionally carrying one raw cookie header."""
     headers = {"Cookie": cookie} if cookie else None
-    return await client.post("/logout", headers=headers)
+    return await client.post("/auth/logout", headers=headers)
 
 
 @pytest.fixture

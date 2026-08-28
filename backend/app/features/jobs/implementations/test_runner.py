@@ -12,10 +12,10 @@ from typing import override
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_chains import is_riot_api_key_error
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform, Region, get_region_by_platform
 from app.features.jobs.base import BaseJob
-from app.features.jobs.error_handling import is_riot_api_key_error
 from app.features.jobs.models import ExecutionType
 from app.features.players.service import PlayerService
 

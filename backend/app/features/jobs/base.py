@@ -3,7 +3,13 @@
 import asyncio
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import Callable, Mapping, MutableMapping, Sequence
+from collections.abc import (
+    AsyncGenerator,
+    Callable,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, NotRequired, TypedDict, Unpack
@@ -20,6 +26,12 @@ from app.core.database import db_manager
 # annotations, and anything that evaluates them (inspect.signature,
 # get_type_hints) would raise NameError under PEP 649 lazy annotations.
 from app.core.db_session import rollback_quietly
+from app.core.error_chains import (
+    diagnostic_error,
+    is_database_error,
+    is_riot_api_key_error,
+    is_riot_puuid_binding_error,
+)
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError
 from app.core.riot_api.scoped_client import (
@@ -35,15 +47,8 @@ from .control import (
     runtime_control_key,
     unregister_runtime_control,
 )
-from .error_handling import (
-    RateLimitSignal,
-    diagnostic_error,
-    is_database_job_error,
-    is_riot_api_key_error,
-    is_riot_puuid_binding_error,
-)
 from .log_capture import job_log_capture
-from .maintenance import is_riot_writer_maintenance_active
+from .maintenance import riot_writer_maintenance_is_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
 
 logger = structlog.get_logger(__name__)
@@ -56,6 +61,32 @@ class JobStopSignal(Exception):
         self.force = force
         self.reason = reason
         super().__init__(f"Job stopped: {reason}")
+
+
+class JobSetupError(RuntimeError):
+    """A job could not start: its configuration or execution record is unusable."""
+
+
+class RateLimitSignal(Exception):
+    """Signal that a rate limit was hit during job execution.
+
+    NOT a failure - the job should stop gracefully with a RATE_LIMITED status.
+
+    :param retry_after: Seconds to wait before retrying (from Riot API)
+    :param message: Optional message describing the rate limit
+    """
+
+    def __init__(
+        self, retry_after: float | None = None, message: str = "Rate limit hit"
+    ):
+        """Initialize rate limit signal.
+
+        :param retry_after: Seconds to wait before retrying
+        :param message: Description of rate limit condition
+        """
+        self.retry_after = retry_after
+        self.message = message
+        super().__init__(message)
 
 
 class StoredAPICall(TypedDict):
@@ -81,7 +112,6 @@ def _format_api_calls_for_storage(
     api_calls: list[APICallRecord],
 ) -> list[StoredAPICall]:
     """Format API call records for JSONB storage, grouping similar calls."""
-    # Group calls by endpoint
     grouped: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "count": 0,
@@ -106,7 +136,6 @@ def _format_api_calls_for_storage(
             group["first_timestamp"] = call.timestamp
         group["last_timestamp"] = call.timestamp
 
-    # Convert to list format for storage
     result: list[StoredAPICall] = []
     for endpoint, data in grouped.items():
         entry: StoredAPICall = {
@@ -117,15 +146,14 @@ def _format_api_calls_for_storage(
             "last_timestamp": data["last_timestamp"],
         }
 
-        # For single calls or calls with different params, include params
         if data["count"] == 1:
             entry["params"] = data["params_list"][0]
         else:
-            # For multiple calls, store first and last param values
-            # Extract the key param (matchId, puuid, etc.)
-            param_key = (
-                next(iter(data["params_list"][0])) if data["params_list"][0] else None
-            )
+            # A group labels itself by the parameter its calls varied: every
+            # `_record_api_call` site puts that parameter first (`matchId`,
+            # `puuid`, `gameName`), so the first key of the first call is it.
+            first_params = data["params_list"][0]
+            param_key = next(iter(first_params)) if first_params else None
             if param_key:
                 first_val = data["params_list"][0].get(param_key)
                 last_val = data["params_list"][-1].get(param_key)
@@ -303,7 +331,7 @@ class BaseJob(ABC):
             db: Database session for querying configuration.
 
         Raises:
-            Exception: If configuration is missing or invalid.
+            JobSetupError: If configuration is missing or deleted.
         """
         # Expire cached state so the SELECT actually hits the DB
         if self.job_config is not None:
@@ -314,7 +342,7 @@ class BaseJob(ABC):
         job_config = result.scalar_one_or_none()
 
         if job_config is None:
-            raise Exception(
+            raise JobSetupError(
                 f"Job configuration {self.job_config_id} not found or deleted"
             )
 
@@ -328,7 +356,7 @@ class BaseJob(ABC):
             job_type=self.job_config_type_value,
         )
 
-    async def log_start(self, db: AsyncSession) -> None:
+    async def record_execution_start(self, db: AsyncSession) -> None:
         """Log job execution start and create JobExecution record."""
         try:
             self.job_execution = JobExecution(
@@ -345,7 +373,7 @@ class BaseJob(ABC):
             )
             db.add(self.job_execution)
             if not await self.safe_commit(db, "job start"):
-                raise Exception("Failed to create job execution record")
+                raise JobSetupError("Failed to create job execution record")
             await db.refresh(self.job_execution)
             self.job_execution_id = self.job_execution.id
             self.job_execution_started_at = self.job_execution.started_at
@@ -358,7 +386,7 @@ class BaseJob(ABC):
 
         except Exception as e:
             logger.error(
-                "Failed to log job start",
+                "Failed to record job execution start",
                 job_config_id=self.job_config_id,
                 error=str(e),
                 error_type=type(e).__name__,
@@ -366,7 +394,7 @@ class BaseJob(ABC):
             await rollback_quietly(db)
             raise
 
-    async def log_completion(
+    async def record_execution_completion(
         self,
         db: AsyncSession,
         success: bool = True,
@@ -381,7 +409,7 @@ class BaseJob(ABC):
         # Exit early if job execution was never started
         if self.job_execution is None:
             logger.warning(
-                "Cannot log completion, job execution not started",
+                "Cannot record completion, job execution not started",
                 job_config_id=self.job_config_id,
             )
             return
@@ -391,20 +419,17 @@ class BaseJob(ABC):
             started_at = self.job_execution_started_at or completed_at
             duration = (completed_at - started_at).total_seconds()
 
-            self._log_completion_details(success, duration)
+            self._log_completion_summary(success, duration)
 
-            # Prepare detailed logs for database storage
             detailed_logs: dict[str, Any] | None = {}
             if logs:
                 detailed_logs["logs"] = self._strip_redundant_fields(logs)
 
-            # Add API call records if available
             if self._api_call_records:
                 detailed_logs["api_calls"] = _format_api_calls_for_storage(
                     self._api_call_records
                 )
 
-            # Convert to None if empty
             if not detailed_logs:
                 detailed_logs = None
 
@@ -488,7 +513,7 @@ class BaseJob(ABC):
         return error_message
 
     @asynccontextmanager
-    async def _db_session(self):
+    async def _db_session(self) -> AsyncGenerator[AsyncSession]:
         async with db_manager.get_session() as session:
             yield session
 
@@ -538,7 +563,7 @@ class BaseJob(ABC):
 
         try:
             await self.fail_orphaned_execution(db)
-            await self.log_start(db)
+            await self.record_execution_start(db)
         except Exception as error:
             logger.error(
                 "Failed to initialize job execution",
@@ -566,7 +591,7 @@ class BaseJob(ABC):
                 job_type=job_config.job_type.value,
             )
 
-        if is_riot_writer_maintenance_active(job_config, self.execution_type):
+        if riot_writer_maintenance_is_active(job_config, self.execution_type):
             logger.warning(
                 "Regular Riot writer skipped during local maintenance",
                 job_config_id=self.job_config_id,
@@ -591,7 +616,7 @@ class BaseJob(ABC):
         self.add_log_entry("stop_mode", "force" if force else "graceful")
         if reason is not None:
             self.add_log_entry("stop_reason", reason)
-        await self.log_completion(
+        await self.record_execution_completion(
             db,
             success=True,
             logs=self._get_job_logs(),
@@ -610,7 +635,7 @@ class BaseJob(ABC):
             job_name=self.job_config_name,
             retry_after=rate_limit_signal.retry_after,
         )
-        await self.log_completion(
+        await self.record_execution_completion(
             db,
             success=True,
             logs=self._get_job_logs(),
@@ -626,7 +651,7 @@ class BaseJob(ABC):
         error_message = await self.handle_error(db, job_error)
         if self.has_api_key_error():
             error_message = self._get_error_summary()
-        await self.log_completion(
+        await self.record_execution_completion(
             db,
             success=False,
             error_message=error_message,
@@ -639,7 +664,7 @@ class BaseJob(ABC):
         if self.has_api_key_error() or (
             self.has_errors() and self.recorded_errors_are_fatal
         ):
-            await self.log_completion(
+            await self.record_execution_completion(
                 db,
                 success=False,
                 error_message=self._get_error_summary(),
@@ -650,7 +675,7 @@ class BaseJob(ABC):
             self.add_log_entry("completed_with_warnings", True)
             self.add_log_entry("warning_count", len(self._errors_encountered))
             self.add_log_entry("warning_summary", self._get_warning_summary())
-        await self.log_completion(
+        await self.record_execution_completion(
             db,
             success=True,
             logs=job_logs,
@@ -881,7 +906,7 @@ class BaseJob(ABC):
         self,
         db: AsyncSession,
         **client_options: Unpack[TrackedRiotClientOptions],
-    ):
+    ) -> AsyncGenerator[RiotAPIClient]:
         """A job's Riot client with its bookkeeping wired on, not remembered.
 
         Wires the request counter in and stores the call records on exit,
@@ -930,7 +955,7 @@ class BaseJob(ABC):
         is_api_key_err = is_riot_api_key_error(error)
         logger.error(message, puuid=puuid, error_type=type(error).__name__)
 
-        if is_database_job_error(error):
+        if is_database_error(error):
             await rollback_quietly(db)
             raise error
 
@@ -971,7 +996,7 @@ class BaseJob(ABC):
 
     # Private helper methods
 
-    def _log_completion_details(self, success: bool, duration: float) -> None:
+    def _log_completion_summary(self, success: bool, duration: float) -> None:
         """Log completion details to structured logger."""
         if self.job_config is None or self.job_execution is None:
             raise RuntimeError("Job context missing during completion logging")
@@ -1077,6 +1102,6 @@ class BaseJob(ABC):
             await rollback_quietly(db)
         except Exception as rollback_error:
             logger.error(
-                "Failed to rollback after log_completion error",
+                "Failed to rollback after record_execution_completion error",
                 error=str(rollback_error),
             )

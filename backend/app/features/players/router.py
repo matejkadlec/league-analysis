@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_riot_client
+from app.core.http_errors import http_error
 from app.core.http_rate_limit import rate_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import LeagueQueueType, Platform
@@ -38,6 +39,7 @@ from .schemas import (
 from .service import (
     PlayerNotFoundError,
     TrackingLimitReachedError,
+    UserNotFoundError,
 )
 
 logger = structlog.get_logger(__name__)
@@ -74,16 +76,8 @@ async def get_player_suggestions(
     """
     Get autocomplete suggestions for player search.
 
-    Matches "Name#TAG" as a Riot ID first, then "#TAG" or "Name" on its own.
-
-    Args:
-        q: Search string (0-100 characters)
-        platform: Platform platform (e.g., "eun1", "euw1", "na1") - required
-        limit: Maximum number of suggestions to return (default: 5, max: 10)
-
-    Returns:
-        list[PlayerResponse]: Array of up to `limit` matching players,
-                              sorted by relevance (empty array if none found)
+    Matches "Name#TAG" as a Riot ID first, then "#TAG" or "Name" on its own;
+    returns up to `limit` players sorted by relevance.
 
     Examples:
         GET /api/v1/players/suggestions?q=Danger&platform=eun1
@@ -184,10 +178,10 @@ async def get_player_by_puuid(
     current_user: CurrentUserDep,
 ) -> PlayerResponse:
     """Get player information by PUUID."""
-    player = await player_service.get_player_by_puuid(puuid, user_id=current_user.id)
-    if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
-    return player
+    try:
+        return await player_service.get_player_by_puuid(puuid, user_id=current_user.id)
+    except PlayerNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.post("/{puuid}/sync", response_model=PlayerSyncRunResponse)
@@ -280,6 +274,14 @@ async def track_player(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from e
+    except UserNotFoundError as e:
+        # The session outlived its account row; the answer is a fresh sign-in,
+        # not a tracking failure. The service owns the decision, this the code.
+        raise http_error(
+            401,
+            "AUTHENTICATION_REQUIRED",
+            "Your account was not found. Please sign in again.",
+        ) from e
     except PlayerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TrackingLimitReachedError as e:
@@ -368,14 +370,6 @@ async def get_player_current_league(
     """
     Get the current league for a player.
 
-    Args:
-        puuid: Player's PUUID
-        queue_type: Queue type (default: RANKED_SOLO_5x5)
-
-    Returns:
-        Current league data or None if no league data exists
-
-    Raises:
-        500: Database error
+    Returns None when the player has no league data for the queue.
     """
     return await player_service.get_player_league(puuid, queue_type)

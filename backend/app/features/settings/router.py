@@ -76,7 +76,6 @@ async def update_riot_api_key(
         return setting
 
     except ValueError as e:
-        # Validation failed
         logger.warning("riot_api_key_validation_failed", error=str(e))
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -101,9 +100,6 @@ async def test_riot_api_key(
     )
 
     return test_result
-
-
-# ===== USER SETTINGS ENDPOINTS =====
 
 
 # ===== CARD PREFERENCE ENDPOINTS =====
