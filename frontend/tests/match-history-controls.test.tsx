@@ -64,10 +64,10 @@ function setOptionalConsent(): void {
 
 function hasDetailedRequest(expectedParams: Record<string, unknown>): boolean {
   return validatedGet.mock.calls.some(
-    ([, path, params]) =>
+    ([, path, options]) =>
       path === "/matches/player/player-puuid/detailed" &&
       Object.entries(expectedParams).every(
-        ([key, value]) => params?.[key] === value,
+        ([key, value]) => options?.params?.[key] === value,
       ),
   );
 }
@@ -305,8 +305,9 @@ describe("Match History controls", () => {
 
     expect(
       validatedGet.mock.calls.filter(
-        ([, path, params]) =>
-          path === "/matches/player/player-puuid/detailed" && params?.search,
+        ([, path, options]) =>
+          path === "/matches/player/player-puuid/detailed" &&
+          options?.params?.search,
       ),
     ).toHaveLength(0);
 
@@ -323,11 +324,11 @@ describe("Match History controls", () => {
     expect(
       validatedGet.mock.calls
         .filter(
-          ([, path, params]) =>
+          ([, path, options]) =>
             path === "/matches/player/player-puuid/detailed" &&
-            params?.search,
+            options?.params?.search,
         )
-        .map(([, , params]) => params?.search),
+        .map(([, , options]) => options?.params?.search),
     ).toEqual(["Ahri"]);
 
     queryClient.clear();

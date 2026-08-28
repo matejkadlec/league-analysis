@@ -52,8 +52,7 @@ export function jobExecutionsInfiniteQueryOptions() {
         await validatedGet(
           JobExecutionListResponseSchema,
           "/jobs/executions/all",
-          { page: pageParam, size: EXECUTIONS_PAGE_SIZE },
-          signal,
+          { params: { page: pageParam, size: EXECUTIONS_PAGE_SIZE }, signal },
         ),
       );
     },
@@ -81,8 +80,7 @@ export function jobsQueryOptions() {
         await validatedGet(
           z.array(JobConfigurationSchema),
           "/jobs/",
-          { active_only: false },
-          signal,
+          { params: { active_only: false }, signal },
         ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
@@ -98,8 +96,7 @@ export function jobStatusQueryOptions() {
         await validatedGet(
           JobStatusResponseSchema,
           "/jobs/status/overview",
-          undefined,
-          signal,
+          { signal },
         ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
@@ -115,8 +112,7 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
         await validatedGet(
           JobExecutionListResponseSchema,
           `/jobs/${jobId}/executions`,
-          { page: 1, size: 5, execution_type: "REGULAR" },
-          signal,
+          { params: { page: 1, size: 5, execution_type: "REGULAR" }, signal },
         ),
       ),
     enabled: !!jobId,

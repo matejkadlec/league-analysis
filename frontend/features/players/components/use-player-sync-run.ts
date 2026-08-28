@@ -179,8 +179,7 @@ export function usePlayerSyncRun(
         await validatedGet(
           PlayerSyncRunSchema.nullable(),
           `/players/${puuid}/sync/active`,
-          undefined,
-          signal,
+          { signal },
         ),
       );
     },
@@ -211,8 +210,7 @@ export function usePlayerSyncRun(
         await validatedGet(
           PlayerSyncRunSchema,
           `/players/${puuid}/sync/${observedSyncId}`,
-          undefined,
-          signal,
+          { signal },
         ),
       );
     },

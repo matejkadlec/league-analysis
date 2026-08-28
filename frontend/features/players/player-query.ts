@@ -55,12 +55,7 @@ export function playerQueryOptions(puuid: string | null) {
     queryFn: puuid
       ? async ({ signal }) =>
           unwrap(
-            await validatedGet(
-              PlayerSchema,
-              `/players/${puuid}`,
-              undefined,
-              signal,
-            ),
+            await validatedGet(PlayerSchema, `/players/${puuid}`, { signal }),
           )
       : skipToken,
     // The copy `player-context.tsx` seeds from `/players/context` is only
@@ -85,13 +80,15 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
           {
-            // `queues`, not the scalar `queue`: a name this endpoint does not
-            // declare is dropped rather than refused, which would leave the
-            // card averaging every queue.
-            queues: String(RANKED_SOLO_QUEUE_ID),
-            ...(limit !== undefined && { limit }),
+            params: {
+              // `queues`, not the scalar `queue`: a name this endpoint does not
+              // declare is dropped rather than refused, which would leave the
+              // card averaging every queue.
+              queues: String(RANKED_SOLO_QUEUE_ID),
+              ...(limit !== undefined && { limit }),
+            },
+            signal,
           },
-          signal,
         ),
       ),
     retry: false,

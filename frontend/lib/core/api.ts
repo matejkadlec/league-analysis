@@ -1,5 +1,6 @@
 import axios, {
   AxiosError,
+  AxiosRequestConfig,
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from "axios";
@@ -194,19 +195,6 @@ function failureResult(error: ApiError, cause: unknown): ApiResponse<never> {
   return result;
 }
 
-async function validatedRequest<T>(
-  schema: z.ZodType<T>,
-  url: string,
-  request: () => Promise<{ data: unknown }>,
-): Promise<ApiResponse<T>> {
-  try {
-    const response = await request();
-    return validateResponse(schema, url, response.data);
-  } catch (error) {
-    return failureResult(normalizeApiError(error), error);
-  }
-}
-
 /**
  * What can go in a query string. Scalars only, never `unknown`: an undeclared
  * query name is dropped in silence and its default used, so the call succeeds
@@ -215,18 +203,38 @@ async function validatedRequest<T>(
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
 /**
- * `signal` is TanStack Query's own, and reading it off the `queryFn` context
- * is what makes React Query abort the request when the last observer goes --
+ * The trailing slot of every `validated*` helper, so no verb needs a positional
+ * `undefined` to reach the argument after it. `signal` is TanStack Query's own:
  * without it a page left mid-fetch holds its connection to completion.
  */
+export type RequestOptions = {
+  // Explicitly `| undefined`: under `exactOptionalPropertyTypes` a caller
+  // forwarding an optional `signal` may not omit the key, only pass it unset.
+  params?: QueryParams | undefined;
+  signal?: AbortSignal | undefined;
+};
+
+async function validatedRequest<T>(
+  schema: z.ZodType<T>,
+  url: string,
+  { params, signal }: RequestOptions,
+  request: (config: AxiosRequestConfig) => Promise<{ data: unknown }>,
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await request({ params, ...(signal && { signal }) });
+    return validateResponse(schema, url, response.data);
+  } catch (error) {
+    return failureResult(normalizeApiError(error), error);
+  }
+}
+
 export function validatedGet<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: QueryParams,
-  signal?: AbortSignal,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () =>
-    api.get(url, { params, ...(signal && { signal }) }),
+  return validatedRequest(schema, url, options, (config) =>
+    api.get(url, config),
   );
 }
 
@@ -234,33 +242,43 @@ export function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
-  params?: QueryParams,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () => api.post(url, data, { params }));
+  return validatedRequest(schema, url, options, (config) =>
+    api.post(url, data, config),
+  );
 }
 
 export function validatedPut<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () => api.put(url, data));
+  return validatedRequest(schema, url, options, (config) =>
+    api.put(url, data, config),
+  );
 }
 
 export function validatedDelete<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: QueryParams,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () => api.delete(url, { params }));
+  return validatedRequest(schema, url, options, (config) =>
+    api.delete(url, config),
+  );
 }
 
 export function validatedPatch<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
+  options: RequestOptions = {},
 ): Promise<ApiResponse<T>> {
-  return validatedRequest(schema, url, () => api.patch(url, data));
+  return validatedRequest(schema, url, options, (config) =>
+    api.patch(url, data, config),
+  );
 }
 
 // Feature endpoint functions live with their features (e.g.

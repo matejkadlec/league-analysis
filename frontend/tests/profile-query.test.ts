@@ -54,7 +54,7 @@ describe("the profile cards' two aggregate reads", () => {
     expect(validatedGet.mock.calls[0]?.[1]).toBe(
       "/matches/player/player-puuid/champion-stats",
     );
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({ queues: "420" });
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({ queues: "420" });
     expect(
       queryClient.getQueryData(["champion-stats", "player-puuid", 420]),
     ).toEqual(championStats);
@@ -69,7 +69,7 @@ describe("the profile cards' two aggregate reads", () => {
     expect(validatedGet.mock.calls[0]?.[1]).toBe(
       "/matches/player/player-puuid/lane-stats",
     );
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({ queues: "420" });
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({ queues: "420" });
     expect(
       queryClient.getQueryData(["lane-stats", "player-puuid", 420]),
     ).toEqual(laneStats);

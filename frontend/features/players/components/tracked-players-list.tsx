@@ -142,12 +142,9 @@ export function TrackedPlayersList({
     queryKey: trackedPlayersQueryKey(userId),
     queryFn: async ({ signal }) => {
       return unwrap(
-        await validatedGet(
-          TrackedPlayersSchema,
-          "/players/tracked/list",
-          undefined,
+        await validatedGet(TrackedPlayersSchema, "/players/tracked/list", {
           signal,
-        ),
+        }),
       );
     },
     enabled: !!userId,

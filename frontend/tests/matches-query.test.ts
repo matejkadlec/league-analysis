@@ -53,7 +53,7 @@ describe("the match history caches", () => {
     expect(validatedGet.mock.calls[0]?.[1]).toBe(
       "/matches/player/player-puuid/stats",
     );
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({ queues: "420" });
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({ queues: "420" });
     expect(
       queryClient.getQueryData(["match-history-stats", "player-puuid", "420"]),
     ).toEqual(stats);
@@ -83,7 +83,7 @@ describe("the match history caches", () => {
     expect(validatedGet.mock.calls[0]?.[1]).toBe(
       "/matches/player/player-puuid/detailed",
     );
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
       queues: "420",
       // An empty search is "no filter", not a filter for empty strings:
       // sent as "", the backend would match nothing.

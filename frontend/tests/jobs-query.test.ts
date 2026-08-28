@@ -57,7 +57,9 @@ describe("the jobs surface's four caches", () => {
 
     expect(validatedGet).toHaveBeenCalledTimes(1);
     expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/");
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({ active_only: false });
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
+      active_only: false,
+    });
     expect(queryClient.getQueryData(["jobs"])).toEqual([]);
   });
 
@@ -75,7 +77,7 @@ describe("the jobs surface's four caches", () => {
     await queryClient.fetchQuery(options);
 
     expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/status/overview");
-    expect(validatedGet.mock.calls[0]?.[2]).toBeUndefined();
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toBeUndefined();
     expect(queryClient.getQueryData(["job-status"])).toEqual(status);
   });
 
@@ -94,7 +96,7 @@ describe("the jobs surface's four caches", () => {
     await queryClient.fetchQuery(options);
 
     expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/7/executions");
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
       page: 1,
       size: 5,
       execution_type: "REGULAR",
@@ -115,7 +117,10 @@ describe("the jobs surface's four caches", () => {
     const result = await queryClient.fetchInfiniteQuery(options);
 
     expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/executions/all");
-    expect(validatedGet.mock.calls[0]?.[2]).toEqual({ page: 1, size: 20 });
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
+      page: 1,
+      size: 20,
+    });
     expect(result.pages).toHaveLength(1);
     expect(options.initialPageParam).toBe(1);
     // One more run exists than page 1 holds, so the next scroll asks for page

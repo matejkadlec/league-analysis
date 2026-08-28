@@ -172,9 +172,9 @@ function calledApiPaths(): Map<string, string[]> {
 }
 
 /**
- * The helpers whose next argument is a query-parameter object, by HTTP method.
- * `validatedPost` takes one too, in fourth position after the body; no call
- * site uses it, so it is not read here.
+ * The helpers whose next argument is an options bag, by HTTP method. The body
+ * verbs take the same bag one slot later, after the body; reaching past an
+ * arbitrary body expression is not attempted, so their query names go unread.
  */
 const QUERY_HELPERS = new Map([
   ["validatedGet", "get"],
@@ -184,7 +184,7 @@ const QUERY_HELPERS = new Map([
 ]);
 
 /** The object literal that follows a path argument, or null if there is none. */
-function paramsObjectAfter(source: string): string | null {
+function optionsObjectAfter(source: string): string | null {
   const separator = /^\s*,\s*/.exec(source);
   if (!separator) return null;
   const rest = source.slice(separator[0].length);
@@ -215,12 +215,48 @@ function hasFurtherArgument(after: string): boolean {
 }
 
 /**
- * Whether the params slot is a literal `undefined` -- what a call site writes
+ * Whether the options slot is a literal `undefined` -- what a call site writes
  * to reach a later argument, and readable as "sends nothing" rather than as an
  * argument this cannot resolve.
  */
 function passesNoParams(after: string): boolean {
   return /^\s*,\s*undefined\s*(?=[,)])/.test(after);
+}
+
+/**
+ * The query object inside an options bag. `null` object with `resolved` true
+ * means the bag carries no query names at all (`{ signal }`); `resolved` false
+ * means it carries some this cannot read, which must not pass as green.
+ */
+function paramsInsideOptions(bag: string): {
+  object: string | null;
+  resolved: boolean;
+} {
+  const interior = bag
+    .slice(1, -1)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+  const key = /(?:^|[{,])\s*params\s*:/.exec(interior);
+  if (!key) {
+    // `{ params }` shorthand names its parameters in a variable, which this
+    // cannot read; any other keyless bag genuinely sends none.
+    const shorthand = /(?:^|[{,])\s*params\s*(?=[,}]|$)/.test(interior);
+    return { object: null, resolved: !shorthand };
+  }
+
+  const rest = interior.slice(key.index + key[0].length).trimStart();
+  if (!rest.startsWith("{")) return { object: null, resolved: false };
+
+  let depth = 0;
+  for (let i = 0; i < rest.length; i += 1) {
+    if (rest[i] === "{") depth += 1;
+    else if (rest[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return { object: rest.slice(0, i + 1), resolved: true };
+    }
+  }
+  return { object: null, resolved: false };
 }
 
 /**
@@ -247,7 +283,9 @@ function calledQueryParams(): QueryCall[] {
         [...apiPath.matchAll(/[?&]([a-zA-Z_]\w*)=/g)].map((m) => m[1] as string),
       );
       const after = window.slice(literal.index + literal[0].length);
-      const body = paramsObjectAfter(after);
+      const bag = optionsObjectAfter(after);
+      const inner = bag ? paramsInsideOptions(bag) : null;
+      const body = inner?.object ?? null;
       if (body) {
         // Comments first. A `//` line inside the object leaves the first key
         // with no `{` or `,` in front of it, so neither pattern below matches
@@ -271,8 +309,9 @@ function calledQueryParams(): QueryCall[] {
         // A params argument this cannot read is not the same as no params: a
         // ternary of two object literals reads as sending nothing, which
         // passes. A trailing comma before `)` is not an argument.
-        resolved:
-          body !== null || !hasFurtherArgument(after) || passesNoParams(after),
+        resolved: inner
+          ? inner.resolved
+          : !hasFurtherArgument(after) || passesNoParams(after),
       });
     }
   }

@@ -101,7 +101,8 @@ it("asks for one player's ranked aggregate once per page, not once per card", as
     (call: unknown[]) =>
       typeof call[1] === "string" &&
       call[1].endsWith(`/${PUUID}/stats`) &&
-      (call[2] as { limit?: number } | undefined)?.limit === undefined,
+      (call[2] as { params?: { limit?: number } } | undefined)?.params
+        ?.limit === undefined,
   );
 
   expect(unlimited).toHaveLength(1);

@@ -37,8 +37,7 @@ export async function getLatestSmurfBoostDetection(
   return validatedGet(
     SmurfBoostAnalysisResponseSchema,
     `/smurf-boost-detection/player/${puuid}`,
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -48,8 +47,7 @@ export async function getSmurfBoostPresets(
   return validatedGet(
     SmurfBoostPresetsResponseSchema,
     "/smurf-boost-detection/presets",
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -62,8 +60,7 @@ export async function getCardPreferences(
   return validatedGet(
     z.array(CardPreferenceSchema),
     "/settings/card-preferences",
-    undefined,
-    signal,
+    { signal },
   );
 }
 

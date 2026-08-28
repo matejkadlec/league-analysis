@@ -51,8 +51,7 @@ export function RiotApiSettingsCard() {
         await validatedGet(
           SettingSchema,
           "/settings/riot_api_key",
-          undefined,
-          signal,
+          { signal },
         ),
         null,
       );

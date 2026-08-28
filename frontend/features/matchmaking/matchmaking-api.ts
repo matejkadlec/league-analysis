@@ -38,8 +38,7 @@ export async function getMatchmakingAnalysisStatus(
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
-    { created_at: createdAt },
-    signal,
+    { params: { created_at: createdAt }, signal },
   );
 }
 
@@ -50,8 +49,7 @@ export async function getLatestMatchmakingAnalysis(
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}`,
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -62,8 +60,7 @@ export async function getLatestCompletedMatchmakingAnalysis(
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/latest-completed`,
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -75,8 +72,7 @@ export async function getMatchmakingAnalysisHistory(
   return validatedGet(
     MatchmakingAnalysisHistoryResponseSchema,
     `/matchmaking-analysis/player/${puuid}/history`,
-    { limit },
-    signal,
+    { params: { limit }, signal },
   );
 }
 
@@ -87,7 +83,7 @@ export async function cancelMatchmakingAnalysis(
   return validatedDelete(
     MessageResponseSchema,
     `/matchmaking-analysis/player/${puuid}/cancel`,
-    { created_at: createdAt },
+    { params: { created_at: createdAt } },
   );
 }
 
@@ -98,6 +94,6 @@ export async function deleteMatchmakingAnalysisRecord(
   return validatedDelete(
     MessageResponseSchema,
     `/matchmaking-analysis/player/${puuid}/analysis`,
-    { created_at: createdAt },
+    { params: { created_at: createdAt } },
   );
 }

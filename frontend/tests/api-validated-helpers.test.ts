@@ -209,15 +209,54 @@ describe("the validated request helpers", () => {
   );
 
   it("forwards query parameters to the request", async () => {
-    // `validatedGet` is the only one of the five that takes params, and the
-    // argument is optional, so dropping it is silent. Every filtered list would
-    // then ask for the unfiltered one and render it as if it had been filtered.
+    // Params ride in the trailing options bag, and the bag is optional, so
+    // dropping it is silent. Every filtered list would then ask for the
+    // unfiltered one and render it as if it had been filtered.
     await validatedGet(Schema, "/players/suggestions", {
-      q: "faker",
-      limit: 5,
+      params: { q: "faker", limit: 5 },
     });
 
     expect(seen[0]?.params).toEqual({ q: "faker", limit: 5 });
+  });
+
+  // The verbs that take a body, so their options bag is the fourth argument.
+  const BODY_HELPERS = [
+    ["post", validatedPost],
+    ["put", validatedPut],
+    ["patch", validatedPatch],
+  ] as const;
+
+  it.each(BODY_HELPERS)(
+    "forwards an abort signal on %s",
+    async (_method, call) => {
+      // Only `validatedGet` used to reach axios with a config, so a signal
+      // passed to a mutation went nowhere. Dropping it is silent -- the request
+      // still succeeds -- and an abandoned surface holds its connection open.
+      const controller = new AbortController();
+
+      await call(
+        Schema,
+        "/players/context",
+        { note: "x" },
+        { signal: controller.signal },
+      );
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.signal).toBe(controller.signal);
+    },
+  );
+
+  it("forwards an abort signal on delete", async () => {
+    // `validatedDelete` has no body, so its bag is the third argument: the one
+    // slot that used to be params-only.
+    const controller = new AbortController();
+
+    await validatedDelete(Schema, "/players/context", {
+      signal: controller.signal,
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.signal).toBe(controller.signal);
   });
 });
 

@@ -52,7 +52,7 @@ describe("the player's current ranked-solo standing", () => {
 
     expect(validatedGet).toHaveBeenCalledTimes(1);
     expect(validatedGet.mock.calls[0]?.[1]).toBe("/players/player-puuid/league");
-    expect(validatedGet.mock.calls[0]?.[2]).toBeUndefined();
+    expect(validatedGet.mock.calls[0]?.[2]?.params).toBeUndefined();
     expect(result.current.data?.display_rank).toBe("Gold II");
     // The API serves this one win rate as a percentage; the app reads 0-1.
     expect(result.current.data?.win_rate).toBe(0.62);

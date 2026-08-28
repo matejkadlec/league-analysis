@@ -18,8 +18,7 @@ export function usePlayerLeague(puuid: string) {
         await validatedGet(
           PlayerLeagueSchema.nullable(),
           `/players/${puuid}/league`,
-          undefined,
-          signal,
+          { signal },
         ),
       ),
     retry: false,

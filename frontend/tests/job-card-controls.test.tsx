@@ -120,7 +120,7 @@ describe("the one button that does five different things", () => {
       expect(requestedPaths()).toEqual(["/jobs/7/stop"]);
       // No `force=false` either: the param is absent unless it is asked for,
       // matching the URL the request used to carry.
-      expect(validatedPost.mock.calls[0]?.[3]).toBeUndefined();
+      expect(validatedPost.mock.calls[0]?.[3]?.params).toBeUndefined();
     });
   });
 
@@ -136,7 +136,7 @@ describe("the one button that does five different things", () => {
       expect(requestedPaths()).toEqual(["/jobs/7/stop"]);
       // The flag rides in validatedPost's params argument now, so the force
       // stays observable one level up from the URL.
-      expect(validatedPost.mock.calls[0]?.[3]).toEqual({ force: true });
+      expect(validatedPost.mock.calls[0]?.[3]?.params).toEqual({ force: true });
     });
   });
 
