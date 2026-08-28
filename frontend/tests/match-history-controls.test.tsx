@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 import axios from "axios";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,7 +47,7 @@ import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
 } from "@/features/cookie-consent";
-import { installMemoryLocalStorage } from "./test-browser-storage";
+import { installMemoryLocalStorage } from "./support/test-browser-storage";
 
 type MatchHistoryProps = ComponentProps<typeof MatchHistory>;
 

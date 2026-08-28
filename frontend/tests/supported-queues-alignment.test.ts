@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   MATCH_HISTORY_QUEUE_FILTERS,
   getMatchQueueName,
-} from "../features/matches/queue-catalog";
+} from "../lib/core/queue-catalog";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CONSTANTS = join(here, "../../backend/app/core/riot_api/constants.py");

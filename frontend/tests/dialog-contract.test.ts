@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
 
 /** Every `<DialogTitle …>` element, from the opening tag to the closing one. */
 function dialogTitleElements(): { file: string; element: string }[] {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { screen, waitFor } from "@testing-library/react";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

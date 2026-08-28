@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, waitFor } from "@testing-library/react";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({

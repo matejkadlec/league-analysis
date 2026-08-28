@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
 
 /**
  * Player freshness is `*_synced_at`, the timestamp of the provider check that
@@ -24,7 +24,7 @@ const NON_FRESHNESS_UPDATED_AT = new Map<string, string>([
       [path, "declares the wire shape, does not display it"] as const,
   ),
   [
-    "features/settings/riot-api-settings-card.tsx",
+    "features/settings/components/riot-api-settings-card.tsx",
     "when a setting itself was last changed",
   ],
 ]);

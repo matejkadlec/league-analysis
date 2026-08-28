@@ -1,7 +1,5 @@
 import { formatDateTime } from "@/lib/core/format";
 
-import type { AuthLoginError } from "../types";
-
 /**
  * Said by the sign-in form and by every gated surface a deactivated session
  * still reaches, so it is written once.
@@ -17,6 +15,17 @@ export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
  * stalled connection holds every gated surface at `null`.
  */
 export const AUTH_PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * The error shape the sign-in flow throws: a plain `Error` carrying whichever
+ * of the API's login-failure fields it could establish. The normalization
+ * below is its only producer.
+ */
+export interface AuthLoginError extends Error {
+  code?: string | undefined;
+  lockedUntil?: string | undefined;
+  status?: number | undefined;
+}
 
 type LoginErrorDetail = {
   code?: unknown;

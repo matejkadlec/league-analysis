@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
 import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   ChampionStatsResponseSchema,

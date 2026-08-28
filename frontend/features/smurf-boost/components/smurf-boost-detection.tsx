@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { unwrap } from "@/lib/core/api";
 import { apiErrorMessage, normalizeApiError } from "@/lib/core/api-error";
-import { UpdatedStamp } from "@/features/profile";
+import { UpdatedStamp } from "@/components/updated-stamp";
 import { playerStatsQueryOptions, usePlayerSyncRun } from "@/features/players";
 import { useToast } from "@/lib/core/hooks";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";

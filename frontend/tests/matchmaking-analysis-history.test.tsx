@@ -44,7 +44,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 import { MatchmakingAnalysisHistory } from "@/features/matchmaking/components/matchmaking-analysis-history";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 const PUUID = "puuid-under-test";
 

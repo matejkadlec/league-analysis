@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/auth-context";
 import { useTurnstileCaptcha } from "./use-turnstile-captcha";
-import { getLoginErrorMessage, isAuthLoginError } from "../utils/login-error";
+import { getLoginErrorMessage, isAuthLoginError } from "@/lib/session/login-error";
 import { Button } from "@/components/ui/button";
 import {
   Form,

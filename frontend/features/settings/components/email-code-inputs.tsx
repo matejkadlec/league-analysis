@@ -7,7 +7,7 @@ import {
   EMAIL_CODE_LENGTH,
   EMAIL_CODE_SLOTS,
   emptyCodeDigits,
-} from "./settings-helpers";
+} from "../utils/settings-helpers";
 
 interface EmailCodeInputsProps {
   digits: string[];

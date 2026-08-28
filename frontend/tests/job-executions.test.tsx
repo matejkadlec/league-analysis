@@ -18,7 +18,7 @@ import type {
   JobExecution,
   JobExecutionListResponse,
 } from "@/lib/core/schemas";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 // The component observes a sentinel div to page in more rows. jsdom never
 // intersects anything, so a no-op keeps the constructor from throwing without

@@ -20,7 +20,7 @@ import {
 import {
   ACCOUNT_ACTION_BUTTON_CLASS,
   USER_QUERY_KEY,
-} from "./settings-helpers";
+} from "../utils/settings-helpers";
 
 export function DisplayNameField() {
   const toast = useToast();

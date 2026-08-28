@@ -16,9 +16,9 @@ const BACKEND = join(here, "../../backend/app");
 const CLIENT_ONLY_CODES = new Set(["NETWORK_ERROR", "REQUEST_TIMEOUT"]);
 
 const BRANCHING_FILES = [
-  "features/auth/utils/login-error.ts",
+  "lib/session/login-error.ts",
   "features/auth/components/sign-in-form.tsx",
-  "features/settings/use-change-email.ts",
+  "features/settings/components/use-change-email.ts",
 ];
 
 function backendCodes(): Set<string> {

@@ -6,7 +6,7 @@ import {
 
 import { unwrap, validatedGet } from "@/lib/core/api";
 import { MatchStatsResponseSchema, PlayerSchema } from "@/lib/core/schemas";
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
 
 export function playerQueryKey(puuid: string | null) {
   return ["player", puuid] as const;

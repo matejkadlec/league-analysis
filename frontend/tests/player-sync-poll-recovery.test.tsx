@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 type Api = typeof import("@/lib/core/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;

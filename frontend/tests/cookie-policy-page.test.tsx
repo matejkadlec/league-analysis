@@ -31,7 +31,7 @@ import CookiePolicyPage from "@/app/cookie-policy/page";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import { COOKIE_CONSENT_VERSION } from "@/features/cookie-consent/utils/consent-storage";
 
 const jar = new Map<string, string>();

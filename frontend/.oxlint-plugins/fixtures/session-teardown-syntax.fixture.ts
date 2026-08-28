@@ -80,13 +80,13 @@ export const clearSiteDataProperty = () => ({
 // MUST flag: the dynamic import that evades the static import allowlist.
 export const dynamicTeardownImport = async () =>
   // oxlint-disable-next-line house/session-teardown-syntax
-  import("@/features/auth/utils/token-manager");
+  import("@/lib/session/token-manager");
 
 // MUST flag: a specifier that is not a literal, which the selector above
 // cannot read at all.
 export const unreadableImport = async () =>
   // oxlint-disable-next-line house/session-teardown-syntax
-  import(`@/features/auth/utils/${dynamicName}`);
+  import(`@/lib/session/${dynamicName}`);
 
 // Accepted -- reading the jar is not a teardown.
 export const readCookie = () => document.cookie;

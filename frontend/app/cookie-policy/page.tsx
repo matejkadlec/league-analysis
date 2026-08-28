@@ -3,7 +3,7 @@ import { LegalPageShell } from "@/components/legal-page-shell";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import {
   COOKIE_CONSENT_VERSION,
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,

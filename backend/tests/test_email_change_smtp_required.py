@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.auth import mailer as mailer_module
+from app.features.auth.email_change_service import EmailChangeMixin
 from app.features.auth.errors import EmailChangeEmailNotConfiguredError
 from app.features.auth.service import AuthService
 
@@ -30,7 +31,7 @@ async def test_verification_code_is_not_sent_without_smtp(
         "get_global_settings",
         lambda: SimpleNamespace(smtp_host="", smtp_from_email=""),
     )
-    service = AuthService(cast(AsyncSession, cast(Any, object())))
+    service: EmailChangeMixin = AuthService(cast(AsyncSession, cast(Any, object())))
 
     with pytest.raises(EmailChangeEmailNotConfiguredError):
         await service._send_email_verification_code(

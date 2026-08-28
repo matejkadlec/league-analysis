@@ -3,10 +3,10 @@
 import { useEffect } from "react";
 import { act, cleanup, screen } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-type TokenManager = typeof import("../features/auth/utils/token-manager");
+type TokenManager = typeof import("../lib/session/token-manager");
 type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
 
 const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-vi.mock("../features/auth/utils/token-manager", () => ({
+vi.mock("../lib/session/token-manager", () => ({
   refreshAccessToken,
   removeAuthTokens,
 }));
@@ -28,12 +28,12 @@ import { AuthProvider, useAuth } from "../features/auth/context/auth-context";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   LOGIN_REQUEST_TIMEOUT_MS,
-} from "../features/auth/utils/login-error";
+} from "../lib/session/login-error";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
-} from "../features/auth/utils/auth-state-cookie";
+} from "../lib/session/auth-state-cookie";
 import type { AuthContextType } from "../features/auth/types";
 
 function AuthProbe({

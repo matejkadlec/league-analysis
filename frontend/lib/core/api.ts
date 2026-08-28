@@ -13,7 +13,7 @@ export {
 } from "./api-error";
 import type { ApiError } from "./api-error";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
-import { refreshAccessToken } from "@/features/auth/utils/token-manager";
+import { refreshAccessToken } from "@/lib/session/token-manager";
 
 const API_BASE_URL =
   typeof window === "undefined"

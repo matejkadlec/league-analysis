@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
 
 const GLOBAL_STYLESHEET = "app/globals.css";
 

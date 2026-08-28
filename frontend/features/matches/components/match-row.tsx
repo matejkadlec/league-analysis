@@ -31,7 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { getMatchQueueName } from "../queue-catalog";
+import { getMatchQueueName } from "@/lib/core/queue-catalog";
 import { TeamObjectiveStats } from "./objective-icons";
 
 interface MatchRowProps {

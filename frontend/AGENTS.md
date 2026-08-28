@@ -15,7 +15,8 @@ Stack: Node (pinned by `.nvmrc`) with npm (pinned by `packageManager`),
 Next.js App Router, React 19, TypeScript strict, Tailwind CSS 4, shadcn/ui
 (New York), TanStack Query v5, Zod v4, Axios, sonner, lucide-react, Vitest
 with Testing Library and jsdom. Domain UI lives under `features/<name>/`,
-shared components under `components/`, utilities under `lib/core/`.
+shared components under `components/`, shared client utilities and session
+state under `lib/` (`lib/core/`, `lib/session/`).
 
 The `typescript` package is an npm alias to the TypeScript 6 compatibility
 API while the native TypeScript 7 compiler supplies `tsc`; Next's TypeScript

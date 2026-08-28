@@ -44,7 +44,7 @@ vi.mock("next/navigation", () => ({
 import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
 import { playerQueryKey } from "@/features/players/player-query";
 import type { Player } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 function player(puuid: string, name: string): Player {
   return {

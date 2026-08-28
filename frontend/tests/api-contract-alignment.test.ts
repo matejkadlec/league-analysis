@@ -7,7 +7,7 @@ import { z } from "zod";
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
 
-import { allSourceFiles, allTestFiles } from "./source-scan-support";
+import { allSourceFiles, allTestFiles } from "./support/source-scan-support";
 
 import { MATCH_HISTORY_PAGE_SIZES } from "../features/matches/match-history-pagination";
 

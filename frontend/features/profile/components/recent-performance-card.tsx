@@ -5,7 +5,7 @@ import { playerStatsQueryOptions } from "@/features/players";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";
-import { UpdatedStamp } from "./updated-stamp";
+import { UpdatedStamp } from "@/components/updated-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";

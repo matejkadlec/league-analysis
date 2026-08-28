@@ -2,7 +2,7 @@
 
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getLatestCompletedMatchmakingAnalysis, getMatchmakingAnalysisStatus } =

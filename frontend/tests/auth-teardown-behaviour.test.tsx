@@ -12,7 +12,7 @@ import {
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
   hasAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 // The session hint survives every failure that is not a refusal. Lint rules
 // recognise shapes of code, so these assert the effect instead: each surface

@@ -19,7 +19,7 @@ import {
   MATCH_HISTORY_QUEUE_FILTERS,
   type MatchHistoryQueueFilter,
   type MatchHistoryQueueSelection,
-} from "./queue-catalog";
+} from "@/lib/core/queue-catalog";
 
 const STORED_QUEUE_FILTERS_SCHEMA = z.array(z.unknown());
 

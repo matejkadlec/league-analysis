@@ -7,20 +7,20 @@ import { AuthGate, SLOW_PROBE_NOTICE_MS } from "@/components/auth-gate";
 import {
   refreshAccessToken,
   removeAuthTokens,
-} from "@/features/auth/utils/token-manager";
+} from "@/lib/session/token-manager";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
   hasAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import { PUBLIC_ROUTES } from "@/features/auth/utils/public-routes";
 import type { AuthContextType } from "@/features/auth/types";
-import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
+import { AUTH_PROBE_TIMEOUT_MS } from "@/lib/session/login-error";
 import {
   hangingFetch,
   installDrivableAbortDeadlines,
-} from "./deadline-support";
+} from "./support/deadline-support";
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
 

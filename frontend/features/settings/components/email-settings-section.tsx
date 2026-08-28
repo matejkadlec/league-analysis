@@ -4,7 +4,7 @@ import { useAuth } from "@/features/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail } from "lucide-react";
-import { ACCOUNT_ACTION_BUTTON_CLASS } from "./settings-helpers";
+import { ACCOUNT_ACTION_BUTTON_CLASS } from "../utils/settings-helpers";
 import type { ChangeEmailState } from "./use-change-email";
 
 interface EmailSettingsSectionProps {

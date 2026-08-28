@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/features/auth";
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
 import {
   PlayerCard,
   SelectPlayerCard,

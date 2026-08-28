@@ -18,12 +18,6 @@ export interface LoginRequest extends LoginCredentials {
   captchaToken?: string | null;
 }
 
-export interface AuthLoginError extends Error {
-  code?: string | undefined;
-  lockedUntil?: string | undefined;
-  status?: number | undefined;
-}
-
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;

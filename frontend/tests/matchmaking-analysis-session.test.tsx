@@ -41,7 +41,7 @@ import {
   type MatchmakingAnalysisResponse,
   type MatchmakingAnalysisStatus,
 } from "@/lib/core/schemas";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 

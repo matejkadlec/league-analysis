@@ -200,15 +200,6 @@ export default defineConfig({
         ],
       },
     },
-    // The API client owns the one documented auth-infrastructure import
-    // (`refreshAccessToken`), which is a deep specifier. A decision about one
-    // named file, not a widening.
-    {
-      files: ["lib/core/api.ts"],
-      rules: {
-        "no-restricted-imports": restrictedImports(SESSION_TEARDOWN_IMPORTS),
-      },
-    },
     {
       files: HINT_READING_PAGES,
       rules: {
@@ -239,7 +230,7 @@ export default defineConfig({
     // cookie. Neither decides that a session is over.
     {
       files: [
-        "features/auth/utils/auth-state-cookie.ts",
+        "lib/session/auth-state-cookie.ts",
         "features/cookie-consent/utils/consent-storage.ts",
       ],
       rules: { "house/session-teardown-syntax": "off" },
@@ -247,10 +238,7 @@ export default defineConfig({
     // Owns the rejected-versus-unreachable distinction, and the explicit user
     // action, respectively.
     {
-      files: [
-        "features/auth/utils/token-manager.ts",
-        "features/auth/context/auth-context.tsx",
-      ],
+      files: ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
       rules: { "no-restricted-imports": "off" },
     },
     // Vendored shadcn primitives, which `components/CLAUDE.md` forbids

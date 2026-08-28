@@ -2,7 +2,7 @@
 
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({

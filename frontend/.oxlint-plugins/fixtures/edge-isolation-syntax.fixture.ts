@@ -7,7 +7,7 @@ import { edgeSession } from "@/lib/auth/edge-session";
 
 // Accepted -- the three specifiers the edge may import.
 import { NextResponse } from "next/server";
-import { AUTH_STATE_COOKIE_NAME } from "@/features/auth/utils/auth-state-cookie";
+import { AUTH_STATE_COOKIE_NAME } from "@/lib/session/auth-state-cookie";
 import { isPublicRoute } from "@/features/auth/utils/public-routes";
 
 declare const request: { nextUrl: { pathname: string } };

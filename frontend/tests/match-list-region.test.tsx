@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 import { cleanup, screen } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type AppToast = typeof import("@/lib/core/hooks").appToast;
@@ -46,7 +46,7 @@ vi.mock("@/features/matches/components/match-row", () => ({
 }));
 
 import { MatchHistory } from "@/features/matches/components/match-history";
-import { installMemoryLocalStorage } from "./test-browser-storage";
+import { installMemoryLocalStorage } from "./support/test-browser-storage";
 
 type MatchHistoryProps = ComponentProps<typeof MatchHistory>;
 

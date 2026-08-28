@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 export default async function JoinUsPage() {
   const cookieStore = await cookies();

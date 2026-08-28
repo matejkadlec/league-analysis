@@ -17,7 +17,7 @@ import {
   PlayerLeagueSchema,
   type PlayerLeague,
 } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 /** Parsed through the real schema so the raw percentage the API serves
  * becomes the fraction the app standardises on, exactly as the boundary does. */

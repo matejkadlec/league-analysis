@@ -5,7 +5,7 @@ import {
   getLoginErrorMessage,
   getLoginRequestError,
   isAuthLoginError,
-} from "../features/auth/utils/login-error";
+} from "../lib/session/login-error";
 
 describe("sign-in error mapping", () => {
   it("maps trusted authentication responses without rendering backend details", () => {

@@ -20,7 +20,7 @@ import {
   getMatchHistoryQueueQuery,
   MatchHistoryQueueFilter,
   selectMatchHistoryQueue,
-} from "../queue-catalog";
+} from "@/lib/core/queue-catalog";
 import {
   DEFAULT_MATCH_HISTORY_PAGE_SIZE,
   getMatchHistoryPaginationItems,

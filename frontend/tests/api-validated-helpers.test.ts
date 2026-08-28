@@ -18,7 +18,7 @@ const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
       >(),
     refreshAccessToken:
       vi.fn<
-        typeof import("@/features/auth/utils/token-manager").refreshAccessToken
+        typeof import("@/lib/session/token-manager").refreshAccessToken
       >(),
   }),
 );
@@ -27,7 +27,7 @@ vi.mock("@/lib/core/riot-credential-health-events", () => ({
   notifyRiotCredentialHealthUpdated,
 }));
 
-vi.mock("@/features/auth/utils/token-manager", () => ({ refreshAccessToken }));
+vi.mock("@/lib/session/token-manager", () => ({ refreshAccessToken }));
 
 import {
   api,

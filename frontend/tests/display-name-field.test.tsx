@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type AppToast = typeof import("@/lib/core/hooks").appToast;
@@ -37,8 +37,8 @@ vi.mock("@/features/auth", async (importOriginal) => ({
   }),
 }));
 
-import { DisplayNameField } from "@/features/settings/display-name-field";
-import { USER_QUERY_KEY } from "@/features/settings/settings-helpers";
+import { DisplayNameField } from "@/features/settings/components/display-name-field";
+import { USER_QUERY_KEY } from "@/features/settings/utils/settings-helpers";
 
 function renderField() {
   const { queryClient } = renderWithQueryClient(

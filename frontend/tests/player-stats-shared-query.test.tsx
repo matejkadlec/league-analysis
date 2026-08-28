@@ -35,7 +35,7 @@ vi.mock("next/image", () => ({
 import { PlayerCard } from "@/features/players/components/player-card";
 import { RecentPerformanceCard } from "@/features/profile/components/recent-performance-card";
 import type { Player } from "@/lib/core/schemas";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 const PUUID = "p-1";
 

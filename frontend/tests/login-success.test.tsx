@@ -2,7 +2,7 @@
 
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from "@/features/auth/context/auth-context";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import type { AuthContextType } from "@/features/auth/types";
 
 /** A complete `UserResponse`; `UserResponseSchema` rejects anything less. */

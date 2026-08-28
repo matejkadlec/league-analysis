@@ -49,7 +49,7 @@ import {
   MessageResponseSchema,
   type MatchmakingAnalysisResponse,
 } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 

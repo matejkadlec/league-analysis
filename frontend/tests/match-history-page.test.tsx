@@ -3,7 +3,7 @@
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 type Players = typeof import("@/features/players");
 type PlayerContextValue = ReturnType<Players["usePlayerContext"]>;

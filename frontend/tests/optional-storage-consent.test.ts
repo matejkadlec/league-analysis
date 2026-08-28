@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
 
 /**
  * Withdrawing consent erases `OPTIONAL_STORAGE_KEYS` and nothing else, so a

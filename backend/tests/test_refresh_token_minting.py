@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import Select, Table
 
 from app.features.auth.service import AuthService
+from app.features.auth.token_service import TokenLifecycleMixin
 
 LONG_USER_AGENT = "u" * 400
 
@@ -22,7 +23,7 @@ def _locked_table(statement: Select[Any]) -> str:
     return f"{table.schema}.{table.name}"
 
 
-def _rotating_service() -> tuple[AuthService, list[Any], MagicMock, MagicMock]:
+def _rotating_service() -> tuple[TokenLifecycleMixin, list[Any], MagicMock, MagicMock]:
     """A service whose db answers the rotation lookup with a live token row."""
     now = datetime.now(UTC)
     record = MagicMock()
@@ -57,7 +58,7 @@ def _rotating_service() -> tuple[AuthService, list[Any], MagicMock, MagicMock]:
     return service, added, db, record
 
 
-def _issuing_service() -> tuple[AuthService, list[Any], MagicMock]:
+def _issuing_service() -> tuple[TokenLifecycleMixin, list[Any], MagicMock]:
     added: list[Any] = []
     db = MagicMock()
     db.execute = AsyncMock()

@@ -16,9 +16,9 @@ export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
     // Trailing `*` because a specifier may carry an extension:
     // `.../token-manager.js` resolves to the same module.
     group: [
-      "**/auth/utils/token-manager*",
-      "../utils/token-manager*",
-      "./utils/token-manager*",
+      "**/lib/session/token-manager*",
+      "../session/token-manager*",
+      "./session/token-manager*",
       "./token-manager*",
     ],
     // An allowlist, not a banlist: a banlist is defeated by adding a
@@ -29,9 +29,9 @@ export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
   },
   {
     group: [
-      "**/auth/utils/auth-state-cookie*",
-      "../utils/auth-state-cookie*",
-      "./utils/auth-state-cookie*",
+      "**/lib/session/auth-state-cookie*",
+      "../session/auth-state-cookie*",
+      "./session/auth-state-cookie*",
       "./auth-state-cookie*",
     ],
     allowImportNames: [

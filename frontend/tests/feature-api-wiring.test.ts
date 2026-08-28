@@ -7,9 +7,9 @@ vi.mock("@/lib/core/riot-credential-health-events", () => ({
       typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
     >(),
 }));
-vi.mock("@/features/auth/utils/token-manager", () => ({
+vi.mock("@/lib/session/token-manager", () => ({
   refreshAccessToken: vi
-    .fn<typeof import("@/features/auth/utils/token-manager").refreshAccessToken>()
+    .fn<typeof import("@/lib/session/token-manager").refreshAccessToken>()
     .mockResolvedValue({ outcome: "refused" }),
 }));
 

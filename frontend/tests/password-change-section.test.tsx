@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Toast = ReturnType<typeof import("@/lib/core/hooks").useToast>;
@@ -27,7 +27,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
   useToast: () => toast,
 }));
 
-import { PasswordChangeSection } from "@/features/settings/password-change-section";
+import { PasswordChangeSection } from "@/features/settings/components/password-change-section";
 import type { ApiResponse } from "@/lib/core/api";
 import type { MessageResponse } from "@/lib/core/schemas";
 

@@ -16,16 +16,16 @@ import {
   namesTheEndOfTheSession,
   refreshAccessToken,
   removeAuthTokens,
-} from "../utils/token-manager";
+} from "@/lib/session/token-manager";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   createAuthLoginError,
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
-} from "../utils/login-error";
+} from "@/lib/session/login-error";
 import { UserResponseSchema } from "@/lib/core/schemas";
 
-import { hasAuthStateCookie } from "../utils/auth-state-cookie";
+import { hasAuthStateCookie } from "@/lib/session/auth-state-cookie";
 import type { User, LoginRequest, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

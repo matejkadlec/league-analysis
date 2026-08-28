@@ -10,6 +10,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 from app.features.auth.service import AuthService
+from app.features.auth.token_service import TokenLifecycleMixin
 
 NOW = datetime.now(UTC)
 
@@ -49,7 +50,9 @@ def _user() -> MagicMock:
     return user
 
 
-def _service(lookups: list[MagicMock]) -> tuple[AuthService, list[Any], MagicMock]:
+def _service(
+    lookups: list[MagicMock],
+) -> tuple[TokenLifecycleMixin, list[Any], MagicMock]:
     added: list[Any] = []
     db = MagicMock()
     # The owner lookup and the family lock precede every rotation query; the

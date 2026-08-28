@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "../context/auth-context";
-import { ACCOUNT_INACTIVE_MESSAGE } from "../utils/login-error";
+import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/session/login-error";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

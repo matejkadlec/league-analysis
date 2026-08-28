@@ -3,7 +3,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 type Players = typeof import("@/features/players");
 type PlayerContextValue = ReturnType<Players["usePlayerContext"]>;
@@ -72,7 +72,7 @@ vi.mock("@/features/auth", () => ({
 }));
 
 import PlayerOverviewPage from "@/app/player-overview/page";
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
 import type { ApiResponse } from "@/lib/core/api";
 import {
   ChampionStatsResponseSchema,

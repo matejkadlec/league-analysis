@@ -53,7 +53,7 @@ vi.mock("next/image", () => ({
 }));
 
 import { PlayerCard } from "@/features/players/components/player-card";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 function player(overrides: Partial<Player> = {}): Player {
   return {

@@ -17,7 +17,7 @@ import {
   USER_QUERY_KEY,
   emptyCodeDigits,
   settingsErrorDetail,
-} from "./settings-helpers";
+} from "../utils/settings-helpers";
 
 export function useChangeEmail() {
   const toast = useToast();

@@ -14,7 +14,7 @@ vi.mock("@/lib/core/use-relative-time", () => ({
   useRelativeTime,
 }));
 
-import { UpdatedStamp } from "@/features/profile/components/updated-stamp";
+import { UpdatedStamp } from "@/components/updated-stamp";
 
 describe("the updated stamp", () => {
   it("stays silent when freshness is unknown", () => {

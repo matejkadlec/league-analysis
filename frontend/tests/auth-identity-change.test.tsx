@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { act, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
-type TokenManager = typeof import("../features/auth/utils/token-manager");
+type TokenManager = typeof import("../lib/session/token-manager");
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
 
 const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-vi.mock("../features/auth/utils/token-manager", () => ({
+vi.mock("../lib/session/token-manager", () => ({
   refreshAccessToken,
   removeAuthTokens,
 }));

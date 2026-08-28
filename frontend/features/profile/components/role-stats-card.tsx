@@ -5,7 +5,7 @@ import { LaneStatsResponse } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";
-import { UpdatedStamp } from "./updated-stamp";
+import { UpdatedStamp } from "@/components/updated-stamp";
 import { Map } from "lucide-react";
 import { winRateColors } from "@/lib/core/format";
 import { cn } from "@/lib/core/utils";

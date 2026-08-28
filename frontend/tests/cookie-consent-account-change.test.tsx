@@ -4,7 +4,7 @@ import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthContextType } from "@/features/auth/types";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 /**
  * Whose decision the banner is recording. A second account signing in on the

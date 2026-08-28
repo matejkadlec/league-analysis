@@ -7,7 +7,7 @@ import {
   getMatchQueueName,
   MATCH_HISTORY_QUEUE_FILTERS,
   selectMatchHistoryQueue,
-} from "@/features/matches/queue-catalog";
+} from "@/lib/core/queue-catalog";
 
 describe("Match History queue catalog", () => {
   it("defaults to Ranked Solo/Duo", () => {

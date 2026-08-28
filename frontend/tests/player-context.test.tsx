@@ -56,7 +56,7 @@ import { playerContextQueryKey } from "@/features/players/player-query";
 import type { AuthContextType } from "@/features/auth/types";
 import type { ApiResponse } from "@/lib/core/api";
 import type { Player, PlayerContext } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 function player(puuid: string, name: string): Player {
   return {

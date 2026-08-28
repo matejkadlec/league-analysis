@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.features.auth.models import User
 from app.features.auth.refresh_token import RefreshToken
 from app.features.auth.service import AuthService
+from app.features.auth.token_service import TokenLifecycleMixin
 
 
 class _SyncSessionShim:
@@ -60,13 +61,13 @@ def session() -> Iterator[Session]:
     engine.dispose()
 
 
-def _service(session: Session) -> AuthService:
+def _service(session: Session) -> TokenLifecycleMixin:
     return AuthService(cast(Any, _SyncSessionShim(session)))
 
 
 def _store(
     session: Session,
-    service: AuthService,
+    service: TokenLifecycleMixin,
     raw: str,
     *,
     row_id: int = 1,
@@ -241,7 +242,7 @@ async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
     assert revoked == {"t1": True, "t2": True, "t4": False}
 
 
-def _executed_statements(service: AuthService) -> list[Any]:
+def _executed_statements(service: TokenLifecycleMixin) -> list[Any]:
     """Record every statement the service runs, in order."""
     shim = cast(Any, service.db)
     original_execute = shim.execute
