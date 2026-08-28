@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { Scale } from "lucide-react";
 import {
   PlayerSelector,
@@ -26,6 +26,24 @@ function MatchmakingAnalysisContent() {
     isLoading: isLoadingScope,
     selectAnalyzedPlayer,
   } = useAnalyzedPlayer();
+
+  // Kept with the player it was picked for, so switching players falls back to
+  // that player's latest run instead of asking for a stranger's timestamp.
+  const [selection, setSelection] = useState<{
+    puuid: string;
+    createdAt: string;
+  } | null>(null);
+  const selectedCreatedAt =
+    selection && selection.puuid === analyzedPlayer?.puuid
+      ? selection.createdAt
+      : null;
+  const selectAnalysis = (createdAt: string | null) => {
+    setSelection(
+      createdAt && analyzedPlayer
+        ? { puuid: analyzedPlayer.puuid, createdAt }
+        : null,
+    );
+  };
 
   const analyzedPlayerLabel = analyzedPlayer ? formatRiotId(analyzedPlayer) : "";
   const selector = (
@@ -75,11 +93,15 @@ function MatchmakingAnalysisContent() {
                 <MatchmakingAnalysisResults
                   puuid={analyzedPlayer.puuid}
                   analyzedPlayerLabel={analyzedPlayerLabel}
+                  selectedCreatedAt={selectedCreatedAt}
+                  onShowLatest={() => selectAnalysis(null)}
                 />
                 <MatchmakingExplanationCard />
                 <MatchmakingAnalysisHistory
                   puuid={analyzedPlayer.puuid}
                   analyzedPlayerLabel={analyzedPlayerLabel}
+                  selectedCreatedAt={selectedCreatedAt}
+                  onSelect={selectAnalysis}
                 />
               </>
             ) : (

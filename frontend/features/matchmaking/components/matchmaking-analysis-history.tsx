@@ -34,6 +34,8 @@ import { formatRunType } from "../run-type";
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
   analyzedPlayerLabel: string;
+  selectedCreatedAt: string | null;
+  onSelect: (createdAt: string | null) => void;
 }
 
 const HISTORY_FETCH_LIMIT = 100;
@@ -78,11 +80,46 @@ function DeleteAnalysisButton({
   return (
     <button
       type="button"
-      onClick={() => onDelete(createdAt)}
+      // Both layouts nest this inside the row that selects the run. Without
+      // stopping the bubble, deleting a record also displays it.
+      onClick={(event) => {
+        event.stopPropagation();
+        onDelete(createdAt);
+      }}
       className="icon-circle"
       title="Delete this analysis"
     >
       <X />
+    </button>
+  );
+}
+
+/**
+ * The run's timestamp as the control that shows it. The surrounding row also
+ * selects on click; this is what carries the affordance to a screen reader
+ * and gives the keyboard a stop on every row.
+ */
+function SelectAnalysisButton({
+  createdAt,
+  isSelected,
+  onSelect,
+}: {
+  createdAt: string;
+  isSelected: boolean;
+  onSelect: (createdAt: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(createdAt)}
+      aria-current={isSelected ? "true" : undefined}
+      className={cn(
+        "cursor-pointer text-left text-sm hover:underline",
+        isSelected && "font-medium text-primary",
+      )}
+      title="Show this analysis in the result card"
+    >
+      {formatDateTime(createdAt)}
     </button>
   );
 }
@@ -95,21 +132,32 @@ function DeleteAnalysisButton({
 function AnalysisBlock({
   item,
   isDeleting,
+  isSelected,
   onDelete,
+  onSelect,
 }: {
   item: MatchmakingAnalysisHistoryItem;
   isDeleting: boolean;
+  isSelected: boolean;
   onDelete: (createdAt: string) => void;
+  onSelect: (createdAt: string) => void;
 }) {
   return (
     <li
       className={cn(
-        "rounded-md border border-border/60 bg-muted/20 p-3 transition-all duration-300",
+        "rounded-md border p-3 transition-all duration-300",
+        isSelected
+          ? "border-primary/60 bg-primary/10"
+          : "border-border/60 bg-muted/20",
         isDeleting ? "opacity-0 scale-y-0" : "opacity-100 scale-y-100",
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm">{formatDateTime(item.created_at)}</span>
+        <SelectAnalysisButton
+          createdAt={item.created_at}
+          isSelected={isSelected}
+          onSelect={onSelect}
+        />
         <DeleteAnalysisButton
           createdAt={item.created_at}
           onDelete={onDelete}
@@ -137,6 +185,8 @@ function AnalysisBlock({
 export function MatchmakingAnalysisHistory({
   puuid,
   analyzedPlayerLabel,
+  selectedCreatedAt,
+  onSelect,
 }: MatchmakingAnalysisHistoryProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -159,10 +209,15 @@ export function MatchmakingAnalysisHistory({
       unwrap(await deleteMatchmakingAnalysisRecord(puuid, createdAt));
       return createdAt;
     },
-    onSuccess: () => {
+    onSuccess: (createdAt) => {
       toast.success("Matchmaking analysis removed", {
         description: "The selected history record was deleted.",
       });
+      // The result card reads the selected run by timestamp. Leaving the
+      // deleted one selected would leave it asking for a gone record.
+      if (createdAt === selectedCreatedAt) {
+        onSelect(null);
+      }
       void invalidateMatchmakingRun(queryClient, puuid);
     },
     onError: () => {
@@ -233,7 +288,9 @@ export function MatchmakingAnalysisHistory({
               key={item.created_at}
               item={item}
               isDeleting={deletingIds.has(item.created_at)}
+              isSelected={item.created_at === selectedCreatedAt}
               onDelete={handleDelete}
+              onSelect={onSelect}
             />
           ))}
         </ul>
@@ -269,21 +326,31 @@ export function MatchmakingAnalysisHistory({
             <TableBody>
               {data.items.map((item) => {
                 const isDeleting = deletingIds.has(item.created_at);
+                const isSelected = item.created_at === selectedCreatedAt;
 
                 return (
                   <TableRow
                     key={item.created_at}
+                    // Clicking anywhere but the delete button shows the run.
+                    // The date cell holds the button that says so, and the
+                    // keyboard reaches the row through it.
+                    onClick={() => onSelect(item.created_at)}
+                    data-state={isSelected ? "selected" : undefined}
                     // Height stated per branch it applies to, so the gap closes
                     // with the animation rather than after it.
                     className={cn(
-                      "border-b border-border/30 hover:bg-muted/50 transition-all duration-300",
+                      "cursor-pointer border-b border-border/30 hover:bg-muted/50 transition-all duration-300",
                       isDeleting
                         ? "h-0 opacity-0 scale-y-0"
                         : "h-11 opacity-100 scale-y-100",
                     )}
                   >
                     <TableCell className="text-left text-sm">
-                      {formatDateTime(item.created_at)}
+                      <SelectAnalysisButton
+                        createdAt={item.created_at}
+                        isSelected={isSelected}
+                        onSelect={onSelect}
+                      />
                     </TableCell>
                     <TableCell className="text-left text-sm text-muted-foreground">
                       {formatRunType(item.params)}

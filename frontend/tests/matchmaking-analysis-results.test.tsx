@@ -1,22 +1,28 @@
 // @vitest-environment jsdom
 
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getLatestCompletedMatchmakingAnalysis } = vi.hoisted(() => ({
-  getLatestCompletedMatchmakingAnalysis:
-    vi.fn<
-      typeof import("@/features/matchmaking/matchmaking-api").getLatestCompletedMatchmakingAnalysis
-    >(),
-}));
+const { getLatestCompletedMatchmakingAnalysis, getMatchmakingAnalysisStatus } =
+  vi.hoisted(() => ({
+    getLatestCompletedMatchmakingAnalysis:
+      vi.fn<
+        typeof import("@/features/matchmaking/matchmaking-api").getLatestCompletedMatchmakingAnalysis
+      >(),
+    getMatchmakingAnalysisStatus:
+      vi.fn<
+        typeof import("@/features/matchmaking/matchmaking-api").getMatchmakingAnalysisStatus
+      >(),
+  }));
 
 vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/features/matchmaking/matchmaking-api")
   >()),
   getLatestCompletedMatchmakingAnalysis,
+  getMatchmakingAnalysisStatus,
 }));
 
 import { MatchmakingAnalysisResults } from "@/features/matchmaking/components/matchmaking-analysis-results";
@@ -55,14 +61,23 @@ const EVEN = {
   matches_analyzed: 910,
 };
 
-function renderResults() {
+const showLatest = vi.fn<() => void>();
+
+function renderResults(selectedCreatedAt: string | null = null) {
   return renderWithQueryClient(
-    <MatchmakingAnalysisResults puuid="puuid" analyzedPlayerLabel="Faker" />,
+    <MatchmakingAnalysisResults
+      puuid="puuid"
+      analyzedPlayerLabel="Faker"
+      selectedCreatedAt={selectedCreatedAt}
+      onShowLatest={showLatest}
+    />,
   );
 }
 
 beforeEach(() => {
   getLatestCompletedMatchmakingAnalysis.mockReset();
+  getMatchmakingAnalysisStatus.mockReset();
+  showLatest.mockReset();
 });
 
 
@@ -429,6 +444,73 @@ describe("the last matchmaking analysis result", () => {
     const { queryClient } = renderResults();
 
     await waitFor(() => expect(screen.getByText(expected)).toBeTruthy());
+    queryClient.clear();
+  });
+
+  it("shows the run picked in the history card, not the newest one", async () => {
+    // The two panels read different endpoints. Ignore the picked timestamp and
+    // the card silently answers with the latest run instead of the chosen one.
+    const PICKED = new Date(2026, 1, 9, 10, 0).toISOString();
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({ ...EVEN, matches_analyzed: 910 }),
+    );
+    getMatchmakingAnalysisStatus.mockResolvedValue(
+      completed(
+        {
+          team_avg_winrate: 0.44,
+          enemy_avg_winrate: 0.54,
+          matches_analyzed: 455,
+        },
+        PICKED,
+      ),
+    );
+    const { queryClient } = renderResults(PICKED);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Based on 455 ranked matches/)).toBeTruthy(),
+    );
+    expect(screen.getByText("Selected Analysis Result")).toBeTruthy();
+    expect(screen.getByText("9.2.2026 10:00 AM")).toBeTruthy();
+    expect(getMatchmakingAnalysisStatus.mock.calls[0]?.slice(0, 2)).toEqual([
+      "puuid",
+      PICKED,
+    ]);
+    expect(getLatestCompletedMatchmakingAnalysis).not.toHaveBeenCalled();
+    queryClient.clear();
+  });
+
+  it("offers a way back to the latest run from a picked one", async () => {
+    // Selection is the page's state, so without this control a viewer who
+    // opened an old run has nothing on screen that returns them to the latest.
+    const PICKED = new Date(2026, 1, 9, 10, 0).toISOString();
+    getMatchmakingAnalysisStatus.mockResolvedValue(completed(EVEN, PICKED));
+    const { queryClient } = renderResults(PICKED);
+
+    await waitFor(() => expect(screen.getByText("Show latest")).toBeTruthy());
+    fireEvent.click(screen.getByText("Show latest"));
+
+    expect(showLatest).toHaveBeenCalledTimes(1);
+    queryClient.clear();
+  });
+
+  it("says a picked run is gone rather than claiming the player has none", async () => {
+    // A run deleted in another tab answers 404. Reusing the never-analyzed
+    // sentence would tell a player with a full history that they have none.
+    const PICKED = new Date(2026, 1, 9, 10, 0).toISOString();
+    getMatchmakingAnalysisStatus.mockResolvedValue({
+      success: false,
+      error: {
+        status: 404,
+        kind: "not-found",
+        message: "No analysis found for this player.",
+      },
+    });
+    const { queryClient } = renderResults(PICKED);
+
+    await waitFor(() =>
+      expect(screen.getByText(/no longer available/)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/No completed analysis is available/)).toBeNull();
     queryClient.clear();
   });
 });

@@ -329,6 +329,11 @@ completion reaches 100% and triggers result/history refresh.
   discovering it never changes global current-player context and never tracks
   it. The action, latest result, active run, and history are all keyed by that
   analyzed PUUID so changing targets cannot relabel another player's run.
+- The result card shows the latest completed run until a history row is picked,
+  after which it reads that exact `created_at` through the status endpoint and
+  says so in its heading. The pick is held with the PUUID it was made for, and
+  is released when that record is deleted, so it can never outlive its run or
+  follow the viewer to another player.
 - Matchmaking Analysis and the sidebar reuse the same one-field player selector:
   stored suggestions include their server, while a new `Name#Tag` asks for a
   server only before the non-tracking discovery request.
