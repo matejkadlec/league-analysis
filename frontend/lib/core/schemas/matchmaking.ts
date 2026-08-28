@@ -16,8 +16,6 @@ export type MatchmakingAnalysisRequest = z.infer<
   typeof MatchmakingAnalysisRequestSchema
 >;
 
-// ===== MATCHMAKING ANALYSIS SCHEMAS =====
-
 /** The parameters a run was started with; the backend echoes them on every
  * read, defaulting legacy rows to a 10-match latest-window run. */
 export const MatchmakingAnalysisParamsSchema = z.object({

@@ -1,5 +1,5 @@
 import type { Dispatch } from "react";
-import { unwrap } from "@/lib/core/api";
+import { unwrap } from "@/lib/core/http/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -86,5 +86,5 @@ export function useMatchmakingAnalysisMutations(
     },
   });
 
-  return { toast, queryClient, startMutation, cancelMutation };
+  return { startMutation, cancelMutation };
 }

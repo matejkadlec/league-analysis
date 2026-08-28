@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 
 import { untrackPlayer } from "../player-api";
 import {
@@ -13,10 +13,10 @@ import {
 import { useToast } from "@/lib/core/hooks";
 import { PlayerSchema, type Player } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
-import { usePlayerLeague } from "../use-player-league";
+import { usePlayerLeague } from "./use-player-league";
 import { getRankColors } from "../utils/rank-colors";
 import { cn } from "@/lib/core/utils";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { getPlatformDisplayName } from "@/lib/core/riot/platform-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -142,12 +142,9 @@ export function TrackedPlayersList({
     queryKey: trackedPlayersQueryKey(userId),
     queryFn: async ({ signal }) => {
       return unwrap(
-        await validatedGet(
-          TrackedPlayersSchema,
-          "/players/tracked/list",
-          undefined,
+        await validatedGet(TrackedPlayersSchema, "/players/tracked/list", {
           signal,
-        ),
+        }),
       );
     },
     enabled: !!userId,
@@ -159,7 +156,7 @@ export function TrackedPlayersList({
       return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: (_, puuid) => {
-      invalidateTrackingQueries(queryClient, userId, puuid);
+      void invalidateTrackingQueries(queryClient, userId, puuid);
 
       const player = data?.find(
         (trackedPlayer) => trackedPlayer.puuid === puuid,

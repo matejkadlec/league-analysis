@@ -15,9 +15,9 @@ const {
   pathname,
   search,
 } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
-  validatedPut: vi.fn<typeof import("@/lib/core/api").validatedPut>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
+  validatedPut: vi.fn<typeof import("@/lib/core/http/api").validatedPut>(),
   useAuth:
     vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
   replace: vi.fn<AppRouter["replace"]>(),
@@ -26,8 +26,8 @@ const {
   search: { current: "" },
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
   validatedPut,
@@ -54,9 +54,9 @@ import {
 } from "@/features/players/context/player-context";
 import { playerContextQueryKey } from "@/features/players/player-query";
 import type { AuthContextType } from "@/features/auth/types";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { Player, PlayerContext } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 function player(puuid: string, name: string): Player {
   return {

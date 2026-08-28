@@ -17,14 +17,14 @@ import {
   getMatchHistoryEmptyMessage,
   MATCH_HISTORY_QUEUE_FILTERS,
   type MatchHistoryQueueFilter,
-} from "../queue-catalog";
+} from "@/lib/core/riot/queue-catalog";
 import {
   MATCH_HISTORY_PAGE_SIZES,
   type MatchHistoryPageSize,
   type MatchHistoryPaginationItem,
   type MatchHistoryRecordRange,
 } from "../match-history-pagination";
-import { UpdatedStamp } from "@/features/profile";
+import { UpdatedStamp } from "@/components/updated-stamp";
 import { formatFractionAsPercent } from "@/lib/core/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

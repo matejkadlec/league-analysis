@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { unwrapOr404 } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/http/api";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { Medal, Shield, Swords, TrendingUp } from "lucide-react";
@@ -53,6 +53,12 @@ interface MatchmakingAnalysisResultsProps {
   /** A run picked out of the history card; null shows the latest completed. */
   selectedCreatedAt: string | null;
   onShowLatest: () => void;
+}
+
+// The one place a plain string still becomes a `MatchScope`: Radix types
+// Select's onValueChange as (value: string) => void.
+function isMatchScope(value: string): value is MatchScope {
+  return value === "all" || value === "solo" || value === "duo";
 }
 
 function RankFigure({ label, value }: { label: string; value: number }) {
@@ -290,7 +296,9 @@ export function MatchmakingAnalysisResults({
             </span>
             <Select
               value={effectiveScope}
-              onValueChange={(value) => setScope(value as MatchScope)}
+              onValueChange={(value) =>
+                setScope(isMatchScope(value) ? value : "all")
+              }
             >
               <SelectTrigger
                 className="w-[120px]"

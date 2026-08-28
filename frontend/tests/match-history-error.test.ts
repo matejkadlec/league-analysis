@@ -1,7 +1,7 @@
 import axios from "axios";
 import { describe, expect, it } from "vitest";
 
-import { normalizeApiError } from "../lib/core/api-error";
+import { normalizeApiError } from "../lib/core/http/api-error";
 import { getMatchHistoryErrorMessage } from "../features/matches/utils/match-history-error";
 
 describe("match-history error messaging", () => {

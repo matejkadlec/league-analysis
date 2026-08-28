@@ -1,5 +1,5 @@
 # APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the rule is
-# "none" project-wide in `pyproject.toml`; the `strict` header above resets it.
+# "none" project-wide in `pyproject.toml`; the "strict" header above resets it.
 # pyright: reportMissingTypeStubs=false
 """Scheduler module for managing automated background jobs."""
 
@@ -19,6 +19,7 @@ from app.core.database import db_manager
 from app.core.db_session import rollback_quietly
 
 from .base import BaseJob
+from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
 from .intervals import JobIntervalError, resolve_interval_seconds
 from .models import JobConfiguration, JobExecution, JobStatus, JobType
 
@@ -81,6 +82,9 @@ class SchedulerLike(Protocol):
 # Global scheduler instance
 _scheduler: SchedulerLike | None = None
 _job_registry: dict[JobType, type[BaseJob]] | None = None
+_test_job_registry: (
+    dict[JobType, type[TestMatchFetcherJob] | type[TestPlayerUpdaterJob]] | None
+) = None
 
 
 def job_registry() -> dict[JobType, type[BaseJob]]:
@@ -101,6 +105,25 @@ def job_registry() -> dict[JobType, type[BaseJob]]:
         }
 
     return _job_registry
+
+
+def test_job_registry() -> dict[
+    JobType, type[TestMatchFetcherJob] | type[TestPlayerUpdaterJob]
+]:
+    """The map from a job type to the test runner that exercises its endpoints.
+
+    Mirrors `job_registry` so the router asks for it rather than keeping a
+    second literal a new runner could be missing from. Imported at module
+    scope, not lazily: the runners add no import `base` lacks.
+    """
+    global _test_job_registry
+    if _test_job_registry is None:
+        _test_job_registry = {
+            JobType.MATCH_FETCHER: TestMatchFetcherJob,
+            JobType.PLAYER_UPDATER: TestPlayerUpdaterJob,
+        }
+
+    return _test_job_registry
 
 
 def get_scheduler() -> SchedulerLike | None:
@@ -394,7 +417,7 @@ def _get_job_class(
 
 def _schedule_job(
     job_config: JobConfiguration, job_class: type[BaseJob], interval_seconds: int
-):
+) -> None:
     """Schedule a single job with the scheduler.
 
     :param job_config: Job configuration.
@@ -657,7 +680,7 @@ async def _load_and_schedule_jobs() -> None:
         # Don't raise - scheduler can still run manually triggered jobs
 
 
-async def shutdown_scheduler() -> None:
+def shutdown_scheduler() -> None:
     """Stop accepting scheduled work without draining active executions."""
     global _scheduler
 
@@ -678,9 +701,10 @@ async def shutdown_scheduler() -> None:
         logger.info("Job scheduler shut down successfully")
 
     except Exception as e:
+        # Shutdown runs during lifespan teardown; raising here would only turn
+        # a stopped scheduler into a noisy exit.
         logger.error(
             "Error during scheduler shutdown",
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise

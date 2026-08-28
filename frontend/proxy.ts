@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import { isPublicRoute } from "@/features/auth/utils/public-routes";
 
 // The edge asks nobody anything: it routes on the hint cookie alone and makes

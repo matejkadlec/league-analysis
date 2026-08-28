@@ -11,7 +11,7 @@ import {
   CLIENT_ERROR_REPORT_PATH,
   ClientErrorReportSchema,
   writeClientErrorLog,
-} from "@/lib/core/client-error-report";
+} from "@/lib/core/http/client-error-report";
 
 function post(body: unknown, origin?: string): Promise<Response> {
   const headers = new Headers({ "content-type": "application/json" });

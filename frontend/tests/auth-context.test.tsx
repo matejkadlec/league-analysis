@@ -3,15 +3,15 @@
 import { useEffect } from "react";
 import { act, cleanup, screen } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-type TokenManager = typeof import("../features/auth/utils/token-manager");
+type TokenManager = typeof import("../lib/session/token-manager");
 type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
 
-const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
+const { refreshAccessToken, endLocalSession, routerPush } = vi.hoisted(() => ({
   refreshAccessToken: vi.fn<TokenManager["refreshAccessToken"]>(),
-  removeAuthTokens: vi.fn<TokenManager["removeAuthTokens"]>(),
+  endLocalSession: vi.fn<TokenManager["endLocalSession"]>(),
   routerPush: vi.fn<AppRouter["push"]>(),
 }));
 
@@ -19,21 +19,21 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-vi.mock("../features/auth/utils/token-manager", () => ({
+vi.mock("../lib/session/token-manager", () => ({
   refreshAccessToken,
-  removeAuthTokens,
+  endLocalSession,
 }));
 
 import { AuthProvider, useAuth } from "../features/auth/context/auth-context";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   LOGIN_REQUEST_TIMEOUT_MS,
-} from "../features/auth/utils/login-error";
+} from "../lib/session/login-error";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
-} from "../features/auth/utils/auth-state-cookie";
+} from "../lib/session/auth-state-cookie";
 import type { AuthContextType } from "../features/auth/types";
 
 function AuthProbe({
@@ -57,7 +57,7 @@ describe("AuthProvider login timeout", () => {
     login = undefined;
     refreshAccessToken.mockReset();
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
-    removeAuthTokens.mockReset();
+    endLocalSession.mockReset();
     routerPush.mockReset();
   });
 
@@ -276,7 +276,7 @@ describe("AuthProvider logout", () => {
       throw new Error("Auth logout callback was not initialized");
     }
 
-    removeAuthTokens.mockReset();
+    endLocalSession.mockReset();
     routerPush.mockReset();
     return logout;
   }
@@ -307,7 +307,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(account()).toBe(SIGNED_IN_USER.email);
-    expect(removeAuthTokens).not.toHaveBeenCalled();
+    expect(endLocalSession).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("/auth/logout"),
@@ -336,7 +336,7 @@ describe("AuthProvider logout", () => {
       });
 
       expect(account()).toBe(SIGNED_IN_USER.email);
-      expect(removeAuthTokens).not.toHaveBeenCalled();
+      expect(endLocalSession).not.toHaveBeenCalled();
       expect(routerPush).not.toHaveBeenCalled();
     } finally {
       delete (navigator as { sendBeacon?: unknown }).sendBeacon;
@@ -355,7 +355,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(account()).toBe("signed out");
-    expect(removeAuthTokens).toHaveBeenCalled();
+    expect(endLocalSession).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
   });
 
@@ -372,7 +372,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(account()).toBe(SIGNED_IN_USER.email);
-    expect(removeAuthTokens).not.toHaveBeenCalled();
+    expect(endLocalSession).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
   });
 
@@ -389,7 +389,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(account()).toBe("signed out");
-    expect(removeAuthTokens).toHaveBeenCalled();
+    expect(endLocalSession).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
   });
 
@@ -398,7 +398,7 @@ describe("AuthProvider logout", () => {
     // Fire-and-forget says "signed out" while a 30-day token is still
     // spendable, and settles the promise the Sign Out spinners wait on.
     vi.useFakeTimers();
-    removeAuthTokens.mockReset();
+    endLocalSession.mockReset();
     routerPush.mockReset();
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
 
@@ -421,7 +421,7 @@ describe("AuthProvider logout", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    removeAuthTokens.mockReset();
+    endLocalSession.mockReset();
     routerPush.mockReset();
 
     let settled = false;
@@ -439,7 +439,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(settled).toBe(false);
-    expect(removeAuthTokens).not.toHaveBeenCalled();
+    expect(endLocalSession).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -448,7 +448,7 @@ describe("AuthProvider logout", () => {
     });
 
     expect(settled).toBe(true);
-    expect(removeAuthTokens).toHaveBeenCalled();
+    expect(endLocalSession).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
     // The mock ignores its arguments, so without this the request could be a
     // GET -- 405, nothing revoked -- and every assertion above still holds.

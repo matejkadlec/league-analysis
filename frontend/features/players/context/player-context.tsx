@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth";
-import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPut } from "@/lib/core/http/api";
 import {
   PlayerContextSchema,
   type CurrentPlayerUpdate,
@@ -24,7 +24,7 @@ import {
   playerQueryOptions,
 } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
-import { usePlayerProfileUpdate } from "../use-player-sync-run";
+import { usePlayerProfileUpdate } from "../components/use-player-sync-run";
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
@@ -65,12 +65,7 @@ export function PlayerContextProvider({
     queryKey: playerContextQueryKey(user?.id),
     queryFn: async ({ signal }) => {
       const context = unwrap(
-        await validatedGet(
-          PlayerContextSchema,
-          "/players/context",
-          undefined,
-          signal,
-        ),
+        await validatedGet(PlayerContextSchema, "/players/context", { signal }),
       );
       // Seeding the player cache turns every route's later `/players/{puuid}`
       // into a cache hit. In the `queryFn` rather than an effect: children's

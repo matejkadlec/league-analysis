@@ -10,10 +10,10 @@ from sqlalchemy import ClauseElement, Table
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.auth.models import User
+from app.features.auth.users.models import User
+from app.features.auth.users.user_card_preference import UserCardPreference
 from app.features.settings import router
 from app.features.settings import service as settings_service_module
-from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import (
     CardId,
     CardPreferenceUpdate,

@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, HTTPException
 
 from app.features.auth.dependencies import AdminUserDep, CurrentUserDep
-from app.features.auth.user_cookie_consent import UserCookieConsent
+from app.features.auth.users.user_cookie_consent import UserCookieConsent
 
 from .dependencies import SettingsServiceDep
 from .schemas import (
@@ -29,7 +29,11 @@ async def get_service_status(
     settings_service: SettingsServiceDep,
     _current_user: CurrentUserDep,
 ) -> ServiceStatusResponse:
-    """Get user-facing maintenance status."""
+    """Get user-facing maintenance status, refreshing the credential first.
+
+    Not a pure read: the health check re-probes the stored Riot key and
+    commits, dropping the row when the key has expired.
+    """
     return await settings_service.get_service_status()
 
 
@@ -54,7 +58,7 @@ async def get_riot_api_key(
 async def update_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
-    _current_user: AdminUserDep,
+    current_user: AdminUserDep,
 ) -> SettingResponse:
     """
     Update the Riot API key.
@@ -71,13 +75,17 @@ async def update_riot_api_key(
         logger.info(
             "riot_api_key_updated",
             masked_value=setting.masked_value,
+            admin_user_id=current_user.id,
         )
 
         return setting
 
     except ValueError as e:
-        # Validation failed
-        logger.warning("riot_api_key_validation_failed", error=str(e))
+        logger.warning(
+            "riot_api_key_validation_failed",
+            error=str(e),
+            admin_user_id=current_user.id,
+        )
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -85,7 +93,7 @@ async def update_riot_api_key(
 async def test_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
-    _current_user: AdminUserDep,
+    current_user: AdminUserDep,
 ) -> SettingTestResponse:
     """
     Test a Riot API key without saving it.
@@ -98,12 +106,10 @@ async def test_riot_api_key(
         "riot_api_key_tested",
         success=test_result.success,
         message=test_result.message,
+        admin_user_id=current_user.id,
     )
 
     return test_result
-
-
-# ===== USER SETTINGS ENDPOINTS =====
 
 
 # ===== CARD PREFERENCE ENDPOINTS =====

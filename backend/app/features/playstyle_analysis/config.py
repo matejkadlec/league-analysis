@@ -6,6 +6,8 @@ This module contains thresholds and parameters used to identify playstyle tags.
 
 from typing import Literal, NotRequired, TypedDict
 
+from app.core.riot_api.constants import TeamId
+
 
 class TagConfig(TypedDict):
     """One tag's criteria and how the card renders it.
@@ -20,15 +22,20 @@ class TagConfig(TypedDict):
     display_name: str
 
     # Evaluator selection. `type` picks a shared evaluator; a tag without one
-    # falls back to its per-code evaluator, then to the generic threshold.
+    # falls back to the generic threshold.
     type: NotRequired[
         Literal[
+            "champion_play_rate",
             "damage_type",
             "gold_diff_check",
             "kill_greed_check",
             "objective_participation_check",
+            "occurrence_count",
+            "occurrence_percentage",
+            "role_play_rate",
             "side_preference",
             "solo_kill_ratio_check",
+            "summoner_level",
             "surrender_check",
         ]
     ]
@@ -37,7 +44,7 @@ class TagConfig(TypedDict):
     # Two evaluators used to share one `target` key holding either a team id
     # or a damage school, so neither consumer could be type-checked.
     target_damage_type: NotRequired[Literal["magic", "physical"]]
-    target_team: NotRequired[Literal[100, 200]]
+    target_team: NotRequired[TeamId]
 
     # Thresholds. `float` throughout: every one is compared against an
     # average, and an `int` literal satisfies it.
@@ -99,6 +106,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
     # Match-Based Condition Tags
     # ----------------------------------------------------
     "aggresive_laner": {
+        "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
         "percentage_matches": 20,
         "sentiment": "neutral",
@@ -106,6 +114,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Aggressive Laner",
     },
     "passive_laner": {
+        "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
         "max_percentage_matches": 20,
         "sentiment": "neutral",
@@ -155,6 +164,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Warden",
     },
     "pentakiller": {
+        "type": "occurrence_count",
         "min_largest_multi_kill": 5,
         "percentage_matches": 1,
         "sentiment": "positive",
@@ -210,6 +220,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "Fogmaker",
     },
     "thief": {
+        "type": "occurrence_count",
         "min_objectives_stolen": 1,
         "percentage_matches": 1,
         "sentiment": "positive",
@@ -326,6 +337,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "display_name": "A Money Well Spent",
     },
     "epic_thief": {
+        "type": "occurrence_count",
         "min_epic_monster_steals": 1,
         "percentage_matches": 5,
         "sentiment": "positive",
@@ -353,14 +365,14 @@ TAG_CONFIG: dict[str, TagConfig] = {
     },
     "prefers_blue_side": {
         "type": "side_preference",
-        "target_team": 100,
+        "target_team": TeamId.BLUE,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Blue Side ({value}%).",
         "display_name": "Prefers Blue Side",
     },
     "prefers_red_side": {
         "type": "side_preference",
-        "target_team": 200,
+        "target_team": TeamId.RED,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Red Side ({value}%).",
         "display_name": "Prefers Red Side",
@@ -369,24 +381,28 @@ TAG_CONFIG: dict[str, TagConfig] = {
     # Global / Special Tags
     # ----------------------------------------------------
     "nolifer": {
+        "type": "summoner_level",
         "min_summoner_level": 500,
         "sentiment": "neutral",
         "hover_template": "Summoner Level {value}.",
         "display_name": "No-Lifer",
     },
     "otp": {
+        "type": "champion_play_rate",
         "min_play_rate": 80,
         "sentiment": "neutral",
         "hover_template": "Plays {champion} in {value}% of games.",
         "display_name": "{champion} OTP",
     },
     "main_champion": {
+        "type": "champion_play_rate",
         "min_play_rate": 50,
         "sentiment": "neutral",
         "hover_template": "Plays {champion} in {value}% of games.",
         "display_name": "{champion} Main",
     },
     "main_role": {
+        "type": "role_play_rate",
         "min_play_rate": 50,
         "sentiment": "neutral",
         "hover_template": "Plays {role} in {value}% of games.",

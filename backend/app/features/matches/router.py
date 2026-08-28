@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.features.auth.dependencies import CurrentUserDep
+
 from .dependencies import MatchServiceDep
 from .schemas import (
     ChampionStatsResponse,
@@ -50,6 +52,7 @@ def parse_match_queue_ids(queues: str | None) -> tuple[int, ...] | None:
 async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
+    _current_user: CurrentUserDep,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),
@@ -81,6 +84,7 @@ async def get_player_matches_detailed(
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
+    _current_user: CurrentUserDep,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),
@@ -109,6 +113,7 @@ async def get_player_stats(
 async def get_player_champion_stats(
     puuid: str,
     match_service: MatchServiceDep,
+    _current_user: CurrentUserDep,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),
@@ -128,6 +133,7 @@ async def get_player_champion_stats(
 async def get_player_lane_stats(
     puuid: str,
     match_service: MatchServiceDep,
+    _current_user: CurrentUserDep,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),

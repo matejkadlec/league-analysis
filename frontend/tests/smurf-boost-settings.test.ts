@@ -215,7 +215,7 @@ describe("smurf and boost threshold catalog", () => {
       recentWindowSize: 20,
       baselineWindowSize: 60,
     });
-    expect(payload.queueId).toBeUndefined();
+    expect(Object.keys(payload)).not.toContain("queueId");
     expect(payload.recentWindowSize).toBe(20);
     expect(Object.keys(payload).length).toBe(2);
   });

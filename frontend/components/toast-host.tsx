@@ -5,7 +5,11 @@ import { CircleCheckBig, CircleX, Info, TriangleAlert } from "lucide-react";
 import { Toaster } from "sonner";
 import { z } from "zod";
 
-import { appToast, TOAST_DEFAULT_DURATION_MS } from "@/lib/core/hooks";
+import {
+  appToast,
+  TOAST_DEFAULT_DURATION_MS,
+  TOAST_VARIANTS,
+} from "@/lib/core/hooks";
 import { cn } from "@/lib/core/utils";
 
 const TOAST_ICON_CLASS = "h-[18px] w-[18px]";
@@ -15,7 +19,7 @@ const TOAST_PREVIEW_EVENT = "league-analysis:toast";
 // treatment as wire data in lib/core/schemas. `.finite()` is load-bearing:
 // z.number() alone accepts Infinity, which the old guard rejected.
 const ToastPreviewDetailSchema = z.object({
-  variant: z.enum(["success", "warning", "error", "info"]),
+  variant: z.enum(TOAST_VARIANTS),
   title: z.string(),
   description: z.string().optional(),
   duration: z.number().finite().positive().optional(),

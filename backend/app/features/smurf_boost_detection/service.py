@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_TYPE
 from app.core.runs import active_run_filter, commit_new_run, guarded_run_update
+from app.features.auth.users.user_card_preference import UserCardPreference
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
-from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import CardId, normalize_stored_card_preference
 
 from .composite import EligibleMatch
@@ -98,7 +98,7 @@ class SmurfBoostDetectionService:
 
         Here rather than in the router: the route was declaring a second
         `Depends(get_db)` beside this service purely to run this SELECT, and
-        reaching cross-feature into `settings.models` to do it.
+        reaching cross-feature into `auth.user_card_preference` to do it.
         """
         result = await self.db.execute(
             select(UserCardPreference.settings).where(
@@ -393,7 +393,9 @@ class SmurfBoostDetectionService:
             puuid,
             created_at,
             status="completed",
-            results=_serialize(result),
+            # The one boundary where the validated result model becomes the
+            # JSONB document the column stores.
+            results=_serialize(result).model_dump(mode="json"),
             eligible_games=result.eligible_games,
             latest_match_id=latest_match_id,
             error_code=None,
@@ -512,14 +514,14 @@ class SmurfBoostDetectionService:
         return response.model_copy(update={"is_stale": is_stale})
 
 
-def _serialize(result: DetectionResult) -> dict[str, Any]:
-    """Convert the engine result into the stored JSON shape.
+def _serialize(result: DetectionResult) -> SmurfBoostResults:
+    """Convert the engine result into the stored and wire-validated model.
 
     The conversion goes through `SmurfBoostResults` rather than `asdict`, so the
     stored document and the HTTP response are the same validated shape and the
     internal family score is dropped in exactly one place.
     """
-    payload = SmurfBoostResults(
+    return SmurfBoostResults(
         model_version=result.model_version,
         families=[
             FamilyPayload(
@@ -548,7 +550,6 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
         eligible_games=result.eligible_games,
         notes=list(result.notes),
     )
-    return payload.model_dump(mode="json")
 
 
 def resolve_thresholds(settings: dict[str, Any] | None) -> dict[str, float]:

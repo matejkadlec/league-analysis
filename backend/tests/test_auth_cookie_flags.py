@@ -8,16 +8,17 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request, Response
 
-from app.features.auth import cookies as cookies_module
-from app.features.auth.cookies import (
+from app.features.auth.router import login, refresh_access_token
+from app.features.auth.service import AuthService
+from app.features.auth.tokens import cookies as cookies_module
+from app.features.auth.tokens.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
     AUTH_STATE_COOKIE_VALUE,
     REFRESH_TOKEN_COOKIE_NAME,
     set_auth_cookies,
 )
-from app.features.auth.router import login, refresh_access_token
-from app.features.auth.service import AuthService
+from app.features.auth.tokens.token_service import RefreshRotation, TokenPair
 
 
 def _set_cookie_headers() -> dict[str, str]:
@@ -214,12 +215,14 @@ async def test_a_successful_refresh_installs_the_new_cookies() -> None:
     now = datetime.now(UTC)
     service = MagicMock(spec=AuthService)
     service.rotate_refresh_token = AsyncMock(
-        return_value=(
+        return_value=RefreshRotation(
             _active_user(),
-            "access",
-            now + timedelta(minutes=30),
-            "refresh",
-            now + timedelta(days=30),
+            TokenPair(
+                "access",
+                now + timedelta(minutes=30),
+                "refresh",
+                now + timedelta(days=30),
+            ),
         )
     )
     service.cleanup_expired_token_state = AsyncMock()
@@ -248,11 +251,11 @@ async def test_a_successful_login_installs_the_cookies() -> None:
     service = MagicMock(spec=AuthService)
     service.authenticate_user = AsyncMock(return_value=_active_user())
     service.issue_token_pair = AsyncMock(
-        return_value=(
-            "access",
-            now + timedelta(minutes=30),
-            "refresh",
-            now + timedelta(days=30),
+        return_value=TokenPair(
+            access_token="access",
+            access_expires_at=now + timedelta(minutes=30),
+            refresh_token="refresh",
+            refresh_expires_at=now + timedelta(days=30),
         )
     )
     service.update_last_login = AsyncMock()

@@ -6,21 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthGate, SLOW_PROBE_NOTICE_MS } from "@/components/auth-gate";
 import {
   refreshAccessToken,
-  removeAuthTokens,
-} from "@/features/auth/utils/token-manager";
+  endLocalSession,
+} from "@/lib/session/token-manager";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
   hasAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 import { PUBLIC_ROUTES } from "@/features/auth/utils/public-routes";
 import type { AuthContextType } from "@/features/auth/types";
-import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
+import { AUTH_PROBE_TIMEOUT_MS } from "@/lib/session/login-error";
 import {
   hangingFetch,
   installDrivableAbortDeadlines,
-} from "./deadline-support";
+} from "./support/deadline-support";
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
 
@@ -66,8 +66,13 @@ function clearHint() {
   document.cookie = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/`;
 }
 
+/**
+ * Flush the effects and resolved promises a render queued. No wall clock: a
+ * fixed sleep only looks like waiting for this, and gets slower or flakier as
+ * the work behind it changes.
+ */
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await act(async () => {});
 }
 
 beforeEach(() => {
@@ -80,7 +85,7 @@ beforeEach(() => {
   auth.logout.mockReset();
   auth.logout.mockImplementation(async () => {});
   clearHint();
-  removeAuthTokens();
+  endLocalSession();
 });
 
 afterEach(() => {
@@ -306,7 +311,7 @@ describe("the can't-reach-the-server surface", () => {
     expect(getByText("protected content")).toBeTruthy();
 
     await act(async () => {
-      removeAuthTokens();
+      endLocalSession();
     });
 
     expect(queryByText("protected content")).toBeNull();
@@ -385,7 +390,7 @@ describe("giving up on a session", () => {
     setHint();
     expect(hasAuthStateCookie()).toBe(true);
 
-    removeAuthTokens();
+    endLocalSession();
 
     expect(hasAuthStateCookie()).toBe(false);
   });
@@ -498,7 +503,9 @@ describe("giving up on a session", () => {
       expect(settled).toBe(false);
 
       await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual({ outcome: "unreachable" });
+      await expect(pending).resolves.toMatchObject({
+        outcome: "unreachable",
+      });
       // Nothing was learned, so nothing is torn down.
       expect(hasAuthStateCookie()).toBe(true);
     } finally {
@@ -518,7 +525,7 @@ describe("giving up on a session", () => {
       const hang = hangingFetch();
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
         if (String(input).includes("/auth/refresh")) {
-          removeAuthTokens(); // Torn down while this was in flight.
+          endLocalSession(); // Torn down while this was in flight.
           setHint();
           return new Response("{}", { status: 200 });
         }
@@ -591,11 +598,14 @@ describe("giving up on a session", () => {
 
   it("keeps the session when the refresh never reaches the server", async () => {
     setHint();
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const offline = new Error("offline");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(offline);
 
     const result = await refreshAccessToken();
 
-    expect(result).toEqual({ outcome: "unreachable" });
+    // The thrown value rides along so a report can say why the server was
+    // unreachable; the outcome itself stays the same.
+    expect(result).toEqual({ outcome: "unreachable", cause: offline });
     expect(hasAuthStateCookie()).toBe(true);
   });
 
@@ -628,7 +638,7 @@ describe("giving up on a session", () => {
     // it here would delete B's hint and bounce B back to the sign-in page.
     setHint();
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      removeAuthTokens(); // A signs out mid-flight.
+      endLocalSession(); // A signs out mid-flight.
       setHint();
       return refusal(401, "INVALID_REFRESH_TOKEN");
     });
@@ -655,7 +665,7 @@ describe("giving up on a session", () => {
       const url = String(input);
       calls.push({ url, init });
       if (url.includes("/auth/refresh")) {
-        removeAuthTokens();
+        endLocalSession();
         setHint();
       }
       return new Response("{}", { status: 200 });

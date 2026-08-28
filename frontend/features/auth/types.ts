@@ -1,5 +1,3 @@
-// Authentication types
-
 import type { UserResponse } from "@/lib/core/schemas";
 
 /**
@@ -16,12 +14,6 @@ export interface LoginCredentials {
 
 export interface LoginRequest extends LoginCredentials {
   captchaToken?: string | null;
-}
-
-export interface AuthLoginError extends Error {
-  code?: string | undefined;
-  lockedUntil?: string | undefined;
-  status?: number | undefined;
 }
 
 export interface AuthContextType {

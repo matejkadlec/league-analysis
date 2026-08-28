@@ -14,13 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
 from app.core.schemas import MessageResponse
-from app.features.auth.cookies import (
+from app.features.auth.router import logout
+from app.features.auth.service import AuthService
+from app.features.auth.tokens.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
-from app.features.auth.router import logout
-from app.features.auth.service import AuthService
+from app.features.auth.tokens.token_service import TokenLifecycleMixin
 
 
 def _request_with_cookies(bearer: str | None = None, **cookies: str) -> Request:
@@ -224,7 +225,7 @@ async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     assert await service.resolve_user_id_for_refresh_token("raw-token") == 9
 
     bound = db.statements[0].compile().params
-    assert AuthService._hash_refresh_token("raw-token") in bound.values()
+    assert TokenLifecycleMixin._hash_refresh_token("raw-token") in bound.values()
     assert "raw-token" not in bound.values()
 
 

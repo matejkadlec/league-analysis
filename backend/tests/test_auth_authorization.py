@@ -1,5 +1,6 @@
 """Authentication and route-authorization regression coverage."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
@@ -12,7 +13,6 @@ from app.features.auth.dependencies import (
     get_current_active_user,
     get_current_admin_user,
 )
-from app.features.auth.models import User
 from app.features.auth.router import login, refresh_access_token
 from app.features.auth.schemas import (
     JoinUsContactRequest,
@@ -23,6 +23,8 @@ from app.features.auth.schemas import (
     validate_password_strength,
 )
 from app.features.auth.service import AuthService
+from app.features.auth.tokens.token_service import RefreshRotation, TokenPair
+from app.features.auth.users.models import User
 from route_helpers import loopback_request, undecorated
 
 
@@ -131,9 +133,12 @@ async def test_login_returns_a_dedicated_inactive_account_code() -> None:
 
 async def test_refresh_returns_the_same_inactive_account_code() -> None:
     user = SimpleNamespace(id=7, is_active=False)
+    now = datetime.now(UTC)
     revoke_all_refresh_tokens_for_user = AsyncMock()
     auth_service = SimpleNamespace(
-        rotate_refresh_token=AsyncMock(return_value=(user, "", None, "", None)),
+        rotate_refresh_token=AsyncMock(
+            return_value=RefreshRotation(cast(User, user), TokenPair("", now, "", now))
+        ),
         revoke_all_refresh_tokens_for_user=revoke_all_refresh_tokens_for_user,
     )
 

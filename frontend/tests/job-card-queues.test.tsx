@@ -1,20 +1,20 @@
 // @vitest-environment jsdom
 
 import { screen, waitFor } from "@testing-library/react";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { toast, validatedGet, validatedPost } = vi.hoisted(() => ({
   toast: vi.fn<typeof import("@/lib/core/hooks").appToast.toast>(),
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
 }));
 
 // Spread the real module: a literal factory silently omits any export the
 // components start importing later, and the failure reads as a render timeout.
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));

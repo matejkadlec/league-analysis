@@ -21,9 +21,9 @@ import {
 } from "@/lib/core/service-status-query";
 import { z } from "zod";
 
-import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+import { parseUntrustedJson } from "@/lib/core/http/untrusted-json";
 import { cn } from "@/lib/core/utils";
-import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
+import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot/riot-credential-health-events";
 
 
 
@@ -55,6 +55,56 @@ const BANNER_TONES = {
     dismiss: "",
   },
 } as const;
+
+// The admin credential banners differ only by tone, icon and copy, so they
+// are data. A status with no entry -- "valid" -- renders nothing, which is
+// what the ladder these replaced did by falling through.
+const CREDENTIAL_BANNERS: Record<
+  string,
+  {
+    tone: keyof typeof BANNER_TONES;
+    icon: React.ReactNode;
+    body: React.ReactNode;
+  }
+> = {
+  invalid: {
+    tone: "red",
+    icon: <AlertOctagon className="h-4 w-4 shrink-0" />,
+    body: (
+      <>
+        Riot API Key is invalid or expired. Fetching new data from Riot fails
+        until it is replaced in{" "}
+        <Link
+          href="/settings"
+          className="underline hover:text-white transition-colors font-bold"
+        >
+          settings
+        </Link>
+        ; everything already stored still reads.
+      </>
+    ),
+  },
+  missing: {
+    tone: "red",
+    icon: <AlertOctagon className="h-4 w-4 shrink-0" />,
+    body: (
+      <>
+        No active Riot API Key is configured. Fetching new data from Riot fails
+        until one is added in settings; everything already stored still reads.
+      </>
+    ),
+  },
+  unknown: {
+    tone: "amber",
+    icon: <AlertTriangle className="h-4 w-4 shrink-0" />,
+    body: (
+      <>
+        Riot API Key is configured but has not yet been verified by a direct
+        Riot API response.
+      </>
+    ),
+  },
+};
 
 function HeaderBanner({
   tone,
@@ -105,7 +155,6 @@ export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  // Store closed server-revision message identifiers.
   const [closedMessages, setClosedMessages] = useState<string[]>(
     readClosedMessages,
   );
@@ -173,12 +222,10 @@ export function HeaderMessages() {
     serviceStatus?.has_recent_recovery,
   );
 
-  // Wait until auth state is known
   if (isAuthLoading) {
     return null;
   }
 
-  // Signed-out recruitment banner (hidden while Riot review is pending)
   if (
     SHOW_SIGNED_OUT_RECRUITMENT_BANNER &&
     !isAuthenticated &&
@@ -202,7 +249,6 @@ export function HeaderMessages() {
     );
   }
 
-  // 2. Non-admin maintenance message (closable)
   if (isNonAdminAuthenticated) {
     if (isUnderMaintenance && !isMaintenanceClosed) {
       return (
@@ -239,54 +285,18 @@ export function HeaderMessages() {
     return null;
   }
 
-  // 3. Admin Messages
-  if (isAdmin && serviceStatus) {
-    // RED: API Key Invalid/Expired
-    // Based only on the backend-owned state for the effective generation.
-    if (serviceStatus.credential_status === "invalid") {
-      return (
-        <HeaderBanner
-          tone="red"
-          icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
-        >
-          Riot API Key is invalid or expired. Fetching new data from Riot fails
-          until it is replaced in{" "}
-          <Link
-            href="/settings"
-            className="underline hover:text-white transition-colors font-bold"
-          >
-            settings
-          </Link>
-          ; everything already stored still reads.
-        </HeaderBanner>
-      );
-    }
+  // Admin messages, based only on the backend-owned state for the effective
+  // generation.
+  const credentialBanner = isAdmin
+    ? CREDENTIAL_BANNERS[serviceStatus?.credential_status ?? ""]
+    : undefined;
 
-    // RED: No Key configured at all
-    if (serviceStatus.credential_status === "missing") {
-      return (
-        <HeaderBanner
-          tone="red"
-          icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
-        >
-          No active Riot API Key is configured. Fetching new data from Riot
-          fails until one is added in settings; everything already stored still
-          reads.
-        </HeaderBanner>
-      );
-    }
-
-    if (serviceStatus.credential_status === "unknown") {
-      return (
-        <HeaderBanner
-          tone="amber"
-          icon={<AlertTriangle className="h-4 w-4 shrink-0" />}
-        >
-          Riot API Key is configured but has not yet been verified by a direct
-          Riot API response.
-        </HeaderBanner>
-      );
-    }
+  if (credentialBanner) {
+    return (
+      <HeaderBanner tone={credentialBanner.tone} icon={credentialBanner.icon}>
+        {credentialBanner.body}
+      </HeaderBanner>
+    );
   }
 
   return null;

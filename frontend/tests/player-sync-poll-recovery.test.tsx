@@ -2,9 +2,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPost } = vi.hoisted(() => ({
@@ -12,8 +12,8 @@ const { validatedGet, validatedPost } = vi.hoisted(() => ({
   validatedPost: vi.fn<Api["validatedPost"]>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));
@@ -27,7 +27,7 @@ vi.mock("@/lib/core/hooks", () => ({
   }),
 }));
 
-import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
+import { usePlayerSyncRun } from "@/features/players/components/use-player-sync-run";
 
 type SyncRunOptions = NonNullable<Parameters<typeof usePlayerSyncRun>[1]>;
 type OnSettled = NonNullable<SyncRunOptions["onSettled"]>;

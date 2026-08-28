@@ -6,12 +6,12 @@ import { ChampionStatsResponse } from "@/lib/core/schemas";
 import {
   getChampionIconUrl,
   getChampionDisplayName,
-} from "@/lib/core/data-dragon";
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+} from "@/lib/core/riot/data-dragon";
+import { useDDragonVersion } from "@/lib/core/riot/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";
-import { UpdatedStamp } from "./updated-stamp";
+import { UpdatedStamp } from "@/components/updated-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Swords, ChevronLeft, ChevronRight } from "lucide-react";

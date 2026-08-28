@@ -46,7 +46,6 @@ export function SidebarNav() {
     : null;
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
-  // Hide sidebar on public auth pages or when not authenticated
   if (
     pathname === "/sign-in" ||
     pathname === "/join-us" ||
@@ -65,7 +64,6 @@ export function SidebarNav() {
 
   return (
     <>
-      {/* Mobile Hamburger Button */}
       <button
         type="button"
         className="fixed left-4 top-4 z-50 rounded-md bg-[#0a1428] p-2 text-white shadow-lg transition-colors hover:bg-[#0d1a33] md:hidden"
@@ -75,7 +73,6 @@ export function SidebarNav() {
         {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
 
-      {/* Sidebar Menu */}
       <aside
         suppressHydrationWarning
         style={{ backgroundColor: "#0a1428" }}
@@ -85,7 +82,6 @@ export function SidebarNav() {
         )}
       >
         <div className="flex h-full flex-col">
-          {/* Logo Section */}
           <div className="border-b border-white/10 p-5">
             <Link
               href="/"
@@ -114,7 +110,6 @@ export function SidebarNav() {
             onNavigate={() => setMenuOpen(false)}
           />
 
-          {/* Navigation Links */}
           <nav
             className="flex min-h-0 flex-1 flex-col pt-3 pb-3"
             suppressHydrationWarning
@@ -166,7 +161,6 @@ export function SidebarNav() {
             </Button>
           </nav>
 
-          {/* User Info and Bottom Links */}
           {user && (
             <div className="border-t border-white/10">
               <div className="text-xs">
@@ -219,7 +213,6 @@ export function SidebarNav() {
             </div>
           )}
 
-          {/* Footer */}
           <div className="border-t border-white/10 p-6">
             {/* The cookie policy tells every reader they can reopen the
                 dialog "using the Cookie settings link in the page footer",

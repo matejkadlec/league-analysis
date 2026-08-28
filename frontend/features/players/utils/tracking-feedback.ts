@@ -1,8 +1,8 @@
-import type { ApiError } from "@/lib/core/api";
+import type { ApiError } from "@/lib/core/http/api";
 import {
   type Platform,
   getPlatformDisplayName,
-} from "@/lib/core/platform-utils";
+} from "@/lib/core/riot/platform-utils";
 
 import type { RiotIdParts } from "./riot-id";
 

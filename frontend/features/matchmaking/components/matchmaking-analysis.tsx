@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { unwrapOr404 } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/http/api";
 import { useQuery } from "@tanstack/react-query";
 
 import { getLatestMatchmakingAnalysis } from "../matchmaking-api";

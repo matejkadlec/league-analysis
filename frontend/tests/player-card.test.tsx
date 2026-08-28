@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
 
-type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
 type UsePlayerSyncRun =
-  typeof import("@/features/players/use-player-sync-run").usePlayerSyncRun;
+  typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
 const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
   validatedGet: vi.fn<ValidatedGet>(),
@@ -15,12 +15,12 @@ const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
   startSync: vi.fn<ReturnType<UsePlayerSyncRun>["startSync"]>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
-vi.mock("@/features/players/use-player-sync-run", () => ({
+vi.mock("@/features/players/components/use-player-sync-run", () => ({
   usePlayerSyncRun,
 }));
 
@@ -31,7 +31,7 @@ vi.mock("@/features/players/components/track-player-button", () => ({
 
 // The freshness *wiring* is under test — which timestamps feed the label —
 // not the clock arithmetic, which tests/relative-time.test.tsx owns.
-vi.mock("@/lib/core/use-relative-time", () => ({
+vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime: () => "3 hours ago",
 }));
 
@@ -53,7 +53,7 @@ vi.mock("next/image", () => ({
 }));
 
 import { PlayerCard } from "@/features/players/components/player-card";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 function player(overrides: Partial<Player> = {}): Player {
   return {
@@ -217,7 +217,7 @@ describe("what the card says about the player", () => {
       String(url).endsWith("/stats"),
     );
     expect(statsCall?.[1]).toBe("/matches/player/p-1/stats");
-    expect(statsCall?.[2]).toEqual({ queues: "420" });
+    expect(statsCall?.[2]?.params).toEqual({ queues: "420" });
   });
 });
 

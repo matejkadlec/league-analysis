@@ -2,9 +2,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
@@ -16,8 +16,8 @@ const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
     toastWarning: vi.fn<AppToast["warning"]>(),
   }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));
@@ -34,7 +34,7 @@ vi.mock("@/lib/core/hooks", () => ({
 import {
   usePlayerProfileUpdate,
   usePlayerSyncRun,
-} from "@/features/players/use-player-sync-run";
+} from "@/features/players/components/use-player-sync-run";
 
 const PUUID = "player-puuid";
 const BUSY_MESSAGE =

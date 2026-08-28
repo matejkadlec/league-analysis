@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { PageHeader } from "@/components/page-header";
-import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 import {
   SectionQuickNavigation,
   type SectionQuickNavigationItem,
@@ -11,9 +10,10 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/features/auth";
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
 import {
   PlayerCard,
+  PlayerCardSkeleton,
   SelectPlayerCard,
   playerQueryOptions,
   usePlayerContext,

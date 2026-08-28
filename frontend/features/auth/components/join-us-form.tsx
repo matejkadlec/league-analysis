@@ -8,7 +8,7 @@ import {
   normalizeApiError,
   unwrap,
   validatedPost,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   MessageResponseSchema,
   type JoinUsContactRequest,
@@ -41,6 +41,12 @@ const SUBJECT_OPTIONS: { value: JoinUsSubject; label: string }[] = [
   { value: "beta_tester", label: "Beta Tester" },
   { value: "other", label: "Other" },
 ];
+
+// The rendered <option> set is the only legitimate source of a subject; the
+// predicate keeps a stray DOM value from being cast into the union unvalidated.
+function isJoinUsSubject(value: string): value is JoinUsSubject {
+  return SUBJECT_OPTIONS.some((option) => option.value === value);
+}
 
 function resolveApiErrorMessage(error: unknown): string {
   return apiErrorMessage(
@@ -89,7 +95,9 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
       return;
     }
 
-    const selectedSubject = subject as JoinUsSubject;
+    // canSubmit's isSubjectValid alias has already narrowed the empty string
+    // out of the union here.
+    const selectedSubject = subject;
 
     setSubmitError(null);
     setIsSubmitting(true);
@@ -169,7 +177,11 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                         id="join-us-subject"
                         value={subject}
                         onChange={(event) =>
-                          setSubject(event.target.value as JoinUsSubject | "")
+                          setSubject(
+                            isJoinUsSubject(event.target.value)
+                              ? event.target.value
+                              : "",
+                          )
                         }
                         disabled={isSubmitting}
                         className="h-9 w-full appearance-none rounded-md border border-white/25 bg-slate-950 px-3 py-2 pr-10 text-sm text-white shadow-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 disabled:cursor-not-allowed disabled:opacity-60"

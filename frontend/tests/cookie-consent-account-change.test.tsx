@@ -4,7 +4,7 @@ import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthContextType } from "@/features/auth/types";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 /**
  * Whose decision the banner is recording. A second account signing in on the
@@ -13,13 +13,13 @@ import { renderWithQueryClient } from "./render-support";
  */
 
 const { validatedGet, validatedPut, useAuth } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
-  validatedPut: vi.fn<typeof import("@/lib/core/api").validatedPut>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
+  validatedPut: vi.fn<typeof import("@/lib/core/http/api").validatedPut>(),
   useAuth: vi.fn<typeof import("@/features/auth").useAuth>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPut,
 }));

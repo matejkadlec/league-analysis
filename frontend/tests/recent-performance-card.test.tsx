@@ -2,15 +2,15 @@
 
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -62,8 +62,8 @@ const IMPROVED: Stats = {
  * a `limit` is the recent window, the one without is the whole history.
  */
 function respondWith(recent: Stats | null, overall: Stats | null) {
-  validatedGet.mockImplementation(async (_schema, _path, params) => {
-    const stats = params?.limit === undefined ? overall : recent;
+  validatedGet.mockImplementation(async (_schema, _path, options) => {
+    const stats = options?.params?.limit === undefined ? overall : recent;
     return stats === null
       ? {
           success: false,
@@ -141,7 +141,7 @@ describe("the recent performance card", () => {
     const queryClient = renderCard();
 
     await waitFor(() => expect(validatedGet).toHaveBeenCalledTimes(2));
-    const params = validatedGet.mock.calls.map((call) => call[2]);
+    const params = validatedGet.mock.calls.map((call) => call[2]?.params);
     expect(params).toContainEqual({ queues: "420", limit: 10 });
     expect(params).toContainEqual({ queues: "420" });
 

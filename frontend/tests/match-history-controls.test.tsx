@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 import axios from "axios";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,11 +12,11 @@ type AppToast = typeof import("@/lib/core/hooks").appToast;
 type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
 
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -32,11 +32,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn<AppRouter["refresh"]>() }),
 }));
 
-vi.mock("@/lib/core/data-dragon-context", () => ({
+vi.mock("@/lib/core/riot/data-dragon-context", () => ({
   useDDragonVersion: () => "16.1.1",
 }));
 
-vi.mock("@/lib/core/use-relative-time", () => ({
+vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime: () => "just now",
 }));
 
@@ -47,7 +47,7 @@ import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
 } from "@/features/cookie-consent";
-import { installMemoryLocalStorage } from "./test-browser-storage";
+import { installMemoryLocalStorage } from "./support/test-browser-storage";
 
 type MatchHistoryProps = ComponentProps<typeof MatchHistory>;
 
@@ -64,10 +64,10 @@ function setOptionalConsent(): void {
 
 function hasDetailedRequest(expectedParams: Record<string, unknown>): boolean {
   return validatedGet.mock.calls.some(
-    ([, path, params]) =>
+    ([, path, options]) =>
       path === "/matches/player/player-puuid/detailed" &&
       Object.entries(expectedParams).every(
-        ([key, value]) => params?.[key] === value,
+        ([key, value]) => options?.params?.[key] === value,
       ),
   );
 }
@@ -305,8 +305,9 @@ describe("Match History controls", () => {
 
     expect(
       validatedGet.mock.calls.filter(
-        ([, path, params]) =>
-          path === "/matches/player/player-puuid/detailed" && params?.search,
+        ([, path, options]) =>
+          path === "/matches/player/player-puuid/detailed" &&
+          options?.params?.search,
       ),
     ).toHaveLength(0);
 
@@ -323,11 +324,11 @@ describe("Match History controls", () => {
     expect(
       validatedGet.mock.calls
         .filter(
-          ([, path, params]) =>
+          ([, path, options]) =>
             path === "/matches/player/player-puuid/detailed" &&
-            params?.search,
+            options?.params?.search,
         )
-        .map(([, , params]) => params?.search),
+        .map(([, , options]) => options?.params?.search),
     ).toEqual(["Ahri"]);
 
     queryClient.clear();

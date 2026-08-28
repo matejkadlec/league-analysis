@@ -1,15 +1,15 @@
 import type { AxiosAdapter, AxiosRequestConfig } from "axios";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/core/riot-credential-health-events", () => ({
+vi.mock("@/lib/core/riot/riot-credential-health-events", () => ({
   notifyRiotCredentialHealthUpdated:
     vi.fn<
-      typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+      typeof import("@/lib/core/riot/riot-credential-health-events").notifyRiotCredentialHealthUpdated
     >(),
 }));
-vi.mock("@/features/auth/utils/token-manager", () => ({
+vi.mock("@/lib/session/token-manager", () => ({
   refreshAccessToken: vi
-    .fn<typeof import("@/features/auth/utils/token-manager").refreshAccessToken>()
+    .fn<typeof import("@/lib/session/token-manager").refreshAccessToken>()
     .mockResolvedValue({ outcome: "refused" }),
 }));
 
@@ -28,7 +28,7 @@ import {
   trackPlayer,
   untrackPlayer,
 } from "@/features/players/player-api";
-import { api } from "@/lib/core/api";
+import { api } from "@/lib/core/http/api";
 
 // The wire shape per function. The backend's test_frontend_api_paths.py proves
 // every (path, method) pair; what nothing else checks is query parameter names,

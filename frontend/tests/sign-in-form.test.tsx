@@ -33,7 +33,7 @@ vi.mock("@marsidev/react-turnstile", () => ({
 }));
 
 import { SignInForm } from "../features/auth/components/sign-in-form";
-import { createAuthLoginError } from "../features/auth/utils/login-error";
+import { createAuthLoginError } from "../lib/session/login-error";
 
 describe("SignInForm", () => {
   beforeEach(() => {

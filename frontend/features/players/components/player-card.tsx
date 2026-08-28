@@ -5,15 +5,15 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, RefreshCw } from "lucide-react";
 
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+import { useDDragonVersion } from "@/lib/core/riot/data-dragon-context";
 import {
   getProfileIconFallbackUrl,
   getProfileIconUrl,
-} from "@/lib/core/data-dragon";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+} from "@/lib/core/riot/data-dragon";
+import { getPlatformDisplayName } from "@/lib/core/riot/platform-utils";
 import { oldestCompleteFreshness } from "@/lib/core/relative-time";
 import { Player } from "@/lib/core/schemas";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { useRelativeTime } from "@/lib/core/hooks/use-relative-time";
 import { playerStatsQueryOptions } from "../player-query";
 import { cn } from "@/lib/core/utils";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRankColors } from "../utils/rank-colors";
 import { TrackPlayerButton } from "../components/track-player-button";
-import { usePlayerLeague } from "../use-player-league";
-import { usePlayerSyncRun } from "../use-player-sync-run";
+import { usePlayerLeague } from "./use-player-league";
+import { usePlayerSyncRun } from "./use-player-sync-run";
 
 import { PlayerCardStats } from "./player-card-stats";
 import { PlayerCardWinRate } from "./player-card-win-rate";

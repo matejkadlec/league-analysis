@@ -5,4 +5,3 @@ export {
   championStatsQueryOptions,
   laneStatsQueryOptions,
 } from "./profile-query";
-export { UpdatedStamp } from "./components/updated-stamp";

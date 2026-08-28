@@ -89,19 +89,6 @@ async def _start_scheduler_safely() -> None:
         )
 
 
-async def _shutdown_scheduler_safely() -> None:
-    """Shutdown job scheduler with error handling."""
-    try:
-        await shutdown_scheduler()
-        logger.info("Job scheduler shut down")
-    except Exception as e:
-        logger.error(
-            "Error during scheduler shutdown",
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -109,7 +96,7 @@ async def lifespan(app: FastAPI):
     await _start_scheduler_safely()
     yield
     logger.info("Shutting down League Analysis Backend")
-    await _shutdown_scheduler_safely()
+    shutdown_scheduler()
 
 
 tags_metadata = [
@@ -178,7 +165,7 @@ app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 # and unhandled exceptions.
 app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(players_router, prefix="/api/v1")
 app.include_router(matches_router, prefix="/api/v1")
 app.include_router(playstyle_analysis_router, prefix="/api/v1")

@@ -6,11 +6,13 @@ exist" and "refused" are the one distinction the Jobs page acts on.
 """
 
 from collections.abc import Awaitable, Callable
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
 from fastapi import HTTPException
 
+from app.features.auth.users.models import User
 from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.router import (
     _set_scheduled_job_suspended,
@@ -27,6 +29,11 @@ from app.features.jobs.service import JobService
 JOB_ID = 7
 
 type ControlRoute = Callable[[JobService], Awaitable[JobControlActionResponse]]
+
+
+def _admin_user() -> User:
+    """The only attribute the routes read: whose audit log entry this is."""
+    return cast(User, SimpleNamespace(id=1))
 
 
 def _state(*, success: bool, message: str = "ok") -> JobControlActionResponse:
@@ -74,12 +81,12 @@ def _service(result: JobControlActionResponse | Exception | None) -> JobService:
 
 # Each route reduced to "given a service, call me" so one body covers all six.
 ROUTES: dict[str, ControlRoute] = {
-    "pause": lambda svc: pause_job(JOB_ID, svc),
-    "resume": lambda svc: resume_job(JOB_ID, svc),
-    "stop": lambda svc: stop_job(JOB_ID, svc, force=False),
-    "test-pause": lambda svc: pause_test_run(JOB_ID, svc),
-    "test-resume": lambda svc: resume_test_run(JOB_ID, svc),
-    "test-stop": lambda svc: stop_test_run(JOB_ID, svc, force=False),
+    "pause": lambda svc: pause_job(JOB_ID, svc, _admin_user()),
+    "resume": lambda svc: resume_job(JOB_ID, svc, _admin_user()),
+    "stop": lambda svc: stop_job(JOB_ID, svc, _admin_user(), force=False),
+    "test-pause": lambda svc: pause_test_run(JOB_ID, svc, _admin_user()),
+    "test-resume": lambda svc: resume_test_run(JOB_ID, svc, _admin_user()),
+    "test-stop": lambda svc: stop_test_run(JOB_ID, svc, _admin_user(), force=False),
 }
 
 
@@ -126,7 +133,7 @@ async def test_stop_passes_its_force_flag_through() -> None:
     """`force` is the only argument that separates stop from the other two."""
     service = _ServiceDouble(_state(success=True))
 
-    await stop_job(JOB_ID, cast(JobService, service), force=True)
+    await stop_job(JOB_ID, cast(JobService, service), _admin_user(), force=True)
 
     assert service.calls == [
         ("request_job_stop_action", {"job_id": JOB_ID, "force": True})
@@ -137,8 +144,8 @@ async def test_pause_and_resume_differ_only_by_the_paused_flag() -> None:
     paused = _ServiceDouble(_state(success=True))
     resumed = _ServiceDouble(_state(success=True))
 
-    await pause_job(JOB_ID, cast(JobService, paused))
-    await resume_job(JOB_ID, cast(JobService, resumed))
+    await pause_job(JOB_ID, cast(JobService, paused), _admin_user())
+    await resume_job(JOB_ID, cast(JobService, resumed), _admin_user())
 
     assert paused.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": True})]
     assert resumed.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": False})]

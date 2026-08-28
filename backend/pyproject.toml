@@ -201,13 +201,13 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
-# A floor, not a target. Measured 2026-08-16: 50.45% with branch coverage on
-# (10,276 statements, 2,170 branches). Statement-only coverage reads 55%; the
-# branch figure is the honest one, because a half-tested `if` is half-tested.
-# The floor sits three points under so the gate passes today and can be
-# ratcheted up as coverage grows. It is armed by the `--cov` flags in test.sh;
-# a bare `pytest` stays fast.
-fail_under = 47
+# A floor, not a target. Measured 2026-08-28: 73.5% with branch coverage on
+# (8,602 statements, 1,614 branches). The branch figure is the honest one,
+# because a half-tested `if` is half-tested. The floor sits well under the
+# measurement so ordinary fluctuations do not flip the gate; ratchet it up as
+# coverage grows. It is armed by the `--cov` flags in test.sh; a bare
+# `pytest` stays fast.
+fail_under = 70
 show_missing = true
 
 [tool.vulture]

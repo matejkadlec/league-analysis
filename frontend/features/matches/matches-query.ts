@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import {
   MatchListWithPlayerDataResponseSchema,
   MatchStatsResponseSchema,
@@ -27,8 +27,7 @@ export function matchHistoryStatsQueryOptions(
         await validatedGet(
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
-          { queues: queueQueryParam },
-          signal,
+          { params: { queues: queueQueryParam }, signal },
         ),
       ),
   });
@@ -57,12 +56,14 @@ export function matchHistoryDetailedQueryOptions(args: {
           MatchListWithPlayerDataResponseSchema,
           `/matches/player/${puuid}/detailed`,
           {
-            queues: queueQueryParam,
-            search: search || undefined,
-            start: (page - 1) * pageSize,
-            count: pageSize,
+            params: {
+              queues: queueQueryParam,
+              search: search || undefined,
+              start: (page - 1) * pageSize,
+              count: pageSize,
+            },
+            signal,
           },
-          signal,
         ),
       ),
   });

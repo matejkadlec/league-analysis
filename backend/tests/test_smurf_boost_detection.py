@@ -1180,7 +1180,7 @@ def test_the_stored_result_carries_the_disclaimer_and_no_family_score() -> None:
     result = analyze(
         _request(_window(20, wins=10), _window(60, wins=30, start_index=20))
     )
-    payload = _serialize(result)
+    payload = _serialize(result).model_dump(mode="json")
 
     assert payload["disclaimer"] == DISCLAIMER
     for family in payload["families"]:

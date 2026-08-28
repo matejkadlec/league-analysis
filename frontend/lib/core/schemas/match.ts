@@ -1,11 +1,10 @@
 import { z } from "zod";
 
-import { PLATFORMS } from "@/lib/core/platform-utils";
+import { PLATFORMS } from "@/lib/core/riot/platform-utils";
 
 import { paginationFields } from "./common";
 import { LaneDisplayNameSchema, TeamPositionSchema } from "./riot";
 
-// Match Schema
 export const MatchSchema = z.object({
   match_id: z.string(),
   platform: z.enum(PLATFORMS),
@@ -30,7 +29,6 @@ export const MatchSchema = z.object({
   updated_at: z.string(),
 });
 
-// Runes Schema for participant data
 export const ParticipantRunesSchema = z.object({
   primary_style: z.number().int().optional().nullable(),
   sub_style: z.number().int().optional().nullable(),
@@ -39,7 +37,6 @@ export const ParticipantRunesSchema = z.object({
 
 export type ParticipantRunes = z.infer<typeof ParticipantRunesSchema>;
 
-// Player Match Participant Schema (for detailed match list)
 export const PlayerMatchParticipantSchema = z.object({
   champion_id: z.number().int(),
   champion_name: z.string(),
@@ -74,7 +71,6 @@ export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
   tag_line: z.string(),
 });
 
-// Team Stats Schema
 export const TeamStatsSchema = z.object({
   kills: z.number().int().default(0),
   deaths: z.number().int().default(0),
@@ -89,13 +85,11 @@ export const TeamStatsSchema = z.object({
 
 export type TeamStats = z.infer<typeof TeamStatsSchema>;
 
-// Team Stats Composition Schema
 export const TeamStatsCompositionSchema = z.object({
   blue_team: TeamStatsSchema,
   red_team: TeamStatsSchema,
 });
 
-// Team Champion Schema (for team compositions)
 export const TeamChampionSchema = z.object({
   champion_id: z.number().int(),
   champion_name: z.string(),
@@ -105,13 +99,11 @@ export const TeamChampionSchema = z.object({
   tag_line: z.string(),
 });
 
-// Team Composition Schema
 export const TeamCompositionSchema = z.object({
   blue_team: z.array(TeamChampionSchema),
   red_team: z.array(TeamChampionSchema),
 });
 
-// Match With Player Data Schema
 export const MatchWithPlayerDataSchema = MatchSchema.extend({
   player_participant: PlayerMatchParticipantSchema.optional().nullable(),
   lane_opponent: EnemyLaneOpponentSchema.optional().nullable(),
@@ -145,7 +137,6 @@ const performanceStatsFields = {
 /** The figures `PerformanceFigures` renders, whichever grouping they describe. */
 export type PerformanceStats = z.infer<z.ZodObject<typeof performanceStatsFields>>;
 
-// Match Stats Response Schema
 export const MatchStatsResponseSchema = z.object({
   puuid: z.string(),
   total_matches: z.number().int(),
@@ -154,7 +145,6 @@ export const MatchStatsResponseSchema = z.object({
   avg_vision_score: z.number(),
 });
 
-// Champion Stats Item Schema
 export const ChampionStatsItemSchema = z.object({
   champion_name: z.string(),
   champion_id: z.number().int(),
@@ -164,7 +154,6 @@ export const ChampionStatsItemSchema = z.object({
 
 export type ChampionStatsItem = z.infer<typeof ChampionStatsItemSchema>;
 
-// Champion Stats Response Schema
 export const ChampionStatsResponseSchema = z.object({
   puuid: z.string(),
   total_champions: z.number().int(),
@@ -173,7 +162,6 @@ export const ChampionStatsResponseSchema = z.object({
 
 export type ChampionStatsResponse = z.infer<typeof ChampionStatsResponseSchema>;
 
-// Lane Stats Item Schema
 export const LaneStatsItemSchema = z.object({
   lane: LaneDisplayNameSchema,
   games_played: z.number().int(),
@@ -182,7 +170,6 @@ export const LaneStatsItemSchema = z.object({
 
 export type LaneStatsItem = z.infer<typeof LaneStatsItemSchema>;
 
-// Lane Stats Response Schema
 export const LaneStatsResponseSchema = z.object({
   puuid: z.string(),
   total_lanes: z.number().int(),
@@ -191,7 +178,6 @@ export const LaneStatsResponseSchema = z.object({
 
 export type LaneStatsResponse = z.infer<typeof LaneStatsResponseSchema>;
 
-// Infer TypeScript types from schemas
 export type Match = z.infer<typeof MatchSchema>;
 export type MatchStatsResponse = z.infer<typeof MatchStatsResponseSchema>;
 export type PlayerMatchParticipant = z.infer<

@@ -8,7 +8,7 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";
 import { ToastHost } from "@/components/toast-host";
-import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
+import { resolveDDragonVersion } from "@/lib/core/riot/data-dragon-version";
 import { SHOULD_ALLOW_INDEXING, SITE_URL } from "@/lib/core/site-url";
 import { cn } from "@/lib/core/utils";
 

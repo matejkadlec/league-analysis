@@ -14,29 +14,31 @@ const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
   () => ({
     notifyRiotCredentialHealthUpdated:
       vi.fn<
-        typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+        typeof import("@/lib/core/riot/riot-credential-health-events").notifyRiotCredentialHealthUpdated
       >(),
     refreshAccessToken:
       vi.fn<
-        typeof import("@/features/auth/utils/token-manager").refreshAccessToken
+        typeof import("@/lib/session/token-manager").refreshAccessToken
       >(),
   }),
 );
 
-vi.mock("@/lib/core/riot-credential-health-events", () => ({
+vi.mock("@/lib/core/riot/riot-credential-health-events", () => ({
   notifyRiotCredentialHealthUpdated,
 }));
 
-vi.mock("@/features/auth/utils/token-manager", () => ({ refreshAccessToken }));
+vi.mock("@/lib/session/token-manager", () => ({ refreshAccessToken }));
 
 import {
   api,
+  unwrap,
   validatedDelete,
   validatedGet,
   validatedPatch,
   validatedPost,
   validatedPut,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
+import { ApiRequestError } from "@/lib/core/http/api-error";
 
 const Schema = z.object({ id: z.number() });
 
@@ -172,6 +174,27 @@ describe("the validated request helpers", () => {
     },
   );
 
+  it("keeps the original exception as a non-serialized cause", async () => {
+    // The sanitized `error` is the only user-facing and serialized shape; the
+    // raw exception survives for debugging and never reaches JSON output.
+    reply = { status: 500, data: { detail: "boom" } };
+
+    const result = await validatedGet(Schema, "/players/context");
+    expect(result.success).toBe(false);
+
+    let thrown: unknown;
+    try {
+      unwrap(result);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ApiRequestError);
+    expect((thrown as ApiRequestError).cause).toBeInstanceOf(Error);
+    // Non-enumerable: serialization cannot walk circular Axios internals
+    // through it.
+    expect(JSON.stringify(result)).not.toContain("cause");
+  });
+
   it.each(HELPERS)(
     "sends %s over the matching HTTP method",
     async (method, call) => {
@@ -186,15 +209,54 @@ describe("the validated request helpers", () => {
   );
 
   it("forwards query parameters to the request", async () => {
-    // `validatedGet` is the only one of the five that takes params, and the
-    // argument is optional, so dropping it is silent. Every filtered list would
-    // then ask for the unfiltered one and render it as if it had been filtered.
+    // Params ride in the trailing options bag, and the bag is optional, so
+    // dropping it is silent. Every filtered list would then ask for the
+    // unfiltered one and render it as if it had been filtered.
     await validatedGet(Schema, "/players/suggestions", {
-      q: "faker",
-      limit: 5,
+      params: { q: "faker", limit: 5 },
     });
 
     expect(seen[0]?.params).toEqual({ q: "faker", limit: 5 });
+  });
+
+  // The verbs that take a body, so their options bag is the fourth argument.
+  const BODY_HELPERS = [
+    ["post", validatedPost],
+    ["put", validatedPut],
+    ["patch", validatedPatch],
+  ] as const;
+
+  it.each(BODY_HELPERS)(
+    "forwards an abort signal on %s",
+    async (_method, call) => {
+      // Only `validatedGet` used to reach axios with a config, so a signal
+      // passed to a mutation went nowhere. Dropping it is silent -- the request
+      // still succeeds -- and an abandoned surface holds its connection open.
+      const controller = new AbortController();
+
+      await call(
+        Schema,
+        "/players/context",
+        { note: "x" },
+        { signal: controller.signal },
+      );
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.signal).toBe(controller.signal);
+    },
+  );
+
+  it("forwards an abort signal on delete", async () => {
+    // `validatedDelete` has no body, so its bag is the third argument: the one
+    // slot that used to be params-only.
+    const controller = new AbortController();
+
+    await validatedDelete(Schema, "/players/context", {
+      signal: controller.signal,
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.signal).toBe(controller.signal);
   });
 });
 

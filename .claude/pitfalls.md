@@ -97,7 +97,7 @@ the `pitfall-check` agent.
   `ServerErrorMiddleware` handler, which sits *outside* every middleware the
   app adds -- so the JSON 500 it emits never passes through `CORSMiddleware`.
   A cross-origin browser client sees an opaque network failure instead of the
-  500. Unreachable today: `lib/core/api.ts` resolves `API_BASE_URL` to `""` in
+  500. Unreachable today: `lib/core/http/api.ts` resolves `API_BASE_URL` to `""` in
   the browser, so every request the frontend makes is same-origin through the
   Next.js `rewrites()` proxy, and `CORS_ORIGINS` is configured for a client
   that does not exist yet. If one ever does, the fix is a middleware added
@@ -213,3 +213,30 @@ the `pitfall-check` agent.
   ladder known today. When a Riot DTO field is an enum, ask what happens to its
   *siblings* in the same response when Riot adds a member, and prefer widening
   the failure to one dropped record over one dropped response.
+
+- **A backend test reads frontend source, so refactoring a URL literal breaks
+  the gate from the other language.** `backend/tests/test_frontend_api_paths.py`
+  walks `frontend/` and regex-matches `validated(Get|Post|Put|Delete|Patch)(`
+  call sites, then asserts every URL it finds is a route `app` actually answers.
+  The two halves deploy separately and agree on nothing but strings, and every
+  frontend test that touches an API module mocks it, so a mistyped path stays
+  green until it 404s in a browser — hence the scan. The consequence for
+  refactoring: hoisting a path behind a constant, threading it through a
+  helper, or building it by interpolation makes the literal invisible to the
+  regex, and the check silently stops covering that call. A frontend-only
+  cleanup can therefore fail `./test.sh -b`, which is the last place anyone
+  looks. Keep `validatedPost("/jobs/…")` URL arguments inline as literals at
+  the call site, and when a decomposition step wants to move one, move the
+  whole call.
+
+## Root-level TS tooling needs the repo-root `tsconfig.json`
+
+`frontend/tsconfig.json` defines `@/*`, so anything that scans from the repo
+root instead of from `frontend/` cannot resolve an aliased import and treats
+every aliased module as having zero importers. That produced 46 false
+"orphaned file" findings, including `components/ui/button.tsx` — which has 21
+importers. The root `tsconfig.json` exists only to give those tools the
+mapping; every frontend step in `test.sh` cds into `frontend/` first, so it is
+never the build config. It must stay strict JSON — a `//` comment in it makes
+desloppify's parser fall back to no mapping, silently restoring the false
+positives.

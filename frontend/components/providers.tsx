@@ -9,9 +9,9 @@ import {
 import { Suspense, useState } from "react";
 import { AuthProvider } from "@/features/auth";
 import { PlayerContextProvider } from "@/features/players";
-import { normalizeApiError } from "@/lib/core/api-error";
-import { reportApiError } from "@/lib/core/api-error-logging";
-import { DDragonVersionProvider } from "@/lib/core/data-dragon-context";
+import { normalizeApiError } from "@/lib/core/http/api-error";
+import { reportApiError } from "@/lib/core/http/api-error-logging";
+import { DDragonVersionProvider } from "@/lib/core/riot/data-dragon-context";
 import { appToast, queryErrorToast } from "@/lib/core/hooks";
 import { AppSkeleton } from "./app-skeleton";
 import { AuthGate } from "./auth-gate";

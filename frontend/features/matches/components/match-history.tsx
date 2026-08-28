@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { normalizeApiError } from "@/lib/core/api";
+import { normalizeApiError } from "@/lib/core/http/api";
 import {
   isMatchHistoryQuery,
   matchHistoryDetailedQueryOptions,
   matchHistoryStatsQueryOptions,
 } from "../matches-query";
-import { useDebouncedValue } from "@/lib/core/use-debounced-value";
-import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/use-media-query";
+import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
+import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/hooks/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +20,7 @@ import {
   getMatchHistoryQueueQuery,
   MatchHistoryQueueFilter,
   selectMatchHistoryQueue,
-} from "../queue-catalog";
+} from "@/lib/core/riot/queue-catalog";
 import {
   DEFAULT_MATCH_HISTORY_PAGE_SIZE,
   getMatchHistoryPaginationItems,

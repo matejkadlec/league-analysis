@@ -4,19 +4,16 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { EmailCodeInputs } from "@/features/settings/email-code-inputs";
-import { emptyCodeDigits } from "@/features/settings/settings-helpers";
+import { EmailCodeInputs } from "@/features/settings/components/email-code-inputs";
+import { emptyCodeDigits } from "@/features/settings/utils/settings-helpers";
 
 /**
  * The component is controlled, so the test owns the digits the way the dialog
- * does. `onClearError` is spied because clearing a stale "wrong code" the
- * moment someone starts retyping is part of what these handlers do.
+ * does; `onDigits` records every change the handlers emit.
  */
 function Harness({
-  onClearError,
   onDigits,
 }: {
-  onClearError: () => void;
   onDigits: (digits: string[]) => void;
 }) {
   const [digits, setDigits] = useState<string[]>(emptyCodeDigits());
@@ -27,18 +24,16 @@ function Harness({
         onDigits(next);
         setDigits(next);
       }}
-      onClearError={onClearError}
       disabled={false}
     />
   );
 }
 
 function renderInputs() {
-  const onClearError = vi.fn<() => void>();
   const onDigits = vi.fn<(digits: string[]) => void>();
-  render(<Harness onClearError={onClearError} onDigits={onDigits} />);
+  render(<Harness onDigits={onDigits} />);
   const slots = screen.getAllByRole("textbox") as HTMLInputElement[];
-  return { slots, onClearError, onDigits };
+  return { slots, onDigits };
 }
 
 function values(slots: HTMLInputElement[]): string {
@@ -82,14 +77,14 @@ describe("the six-slot email verification code", () => {
   });
 
   it("ignores a paste with no digits in it at all", () => {
-    const { slots, onClearError } = renderInputs();
+    const { slots, onDigits } = renderInputs();
 
     fireEvent.paste(slots[0]!, {
       clipboardData: { getData: () => "no digits here" },
     });
 
     expect(values(slots)).toBe("______");
-    expect(onClearError).not.toHaveBeenCalled();
+    expect(onDigits).not.toHaveBeenCalled();
   });
 
   it("moves to the next slot as each digit is typed", () => {

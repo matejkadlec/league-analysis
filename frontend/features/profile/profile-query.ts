@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import {
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,
@@ -20,8 +20,7 @@ export function championStatsQueryOptions(puuid: string) {
         await validatedGet(
           ChampionStatsResponseSchema,
           `/matches/player/${puuid}/champion-stats`,
-          { queues: String(RANKED_SOLO_QUEUE_ID) },
-          signal,
+          { params: { queues: String(RANKED_SOLO_QUEUE_ID) }, signal },
         ),
       ),
   });
@@ -35,8 +34,7 @@ export function laneStatsQueryOptions(puuid: string) {
         await validatedGet(
           LaneStatsResponseSchema,
           `/matches/player/${puuid}/lane-stats`,
-          { queues: String(RANKED_SOLO_QUEUE_ID) },
-          signal,
+          { params: { queues: String(RANKED_SOLO_QUEUE_ID) }, signal },
         ),
       ),
   });

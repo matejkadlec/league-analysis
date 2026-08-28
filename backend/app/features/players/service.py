@@ -8,16 +8,14 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ServiceException
-from app.core.http_errors import http_error
 from app.core.riot_api.constants import (
     RANKED_SOLO_QUEUE_TYPE,
     Platform,
     get_region_by_platform,
 )
-from app.features.auth.models import User
-from app.features.auth.user_settings import ensure_user_settings
-from app.features.auth.user_tracked_player import UserTrackedPlayer
+from app.features.auth.users.models import User
+from app.features.auth.users.user_settings import UserSettings, ensure_user_settings
+from app.features.auth.users.user_tracked_player import UserTrackedPlayer
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
@@ -30,7 +28,7 @@ from .leagues import (
     solo_duo_league_entry,
 )
 from .models import Player
-from .schemas import PlayerResponse
+from .schemas import PlayerContextResponse, PlayerResponse
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -51,6 +49,10 @@ class PlayerNotFoundError(ValueError):
 
 class TrackingLimitReachedError(ValueError):
     """The user already tracks `MAX_TRACKED_PLAYERS_PER_USER` players."""
+
+
+class UserNotFoundError(Exception):
+    """The authenticated session's account row no longer exists."""
 
 
 class PlayerService:
@@ -117,17 +119,18 @@ class PlayerService:
         return is_globally_tracked
 
     async def get_player_by_puuid(self, puuid: str, user_id: int) -> PlayerResponse:
-        """Get player by PUUID from database only. Never calls Riot API."""
+        """Get player by PUUID from database only. Never calls Riot API.
+
+        Raises:
+            PlayerNotFoundError: If no stored player carries the PUUID.
+        """
         # Query database only
         result = await self.db.execute(select(Player).where(Player.puuid == puuid))
         player = result.scalar_one_or_none()
 
         if not player:
-            raise ServiceException(
-                message=f"Player not found in database: {puuid}. "
-                f"Please track this player first.",
-                service="PlayerService",
-                operation="get_player_by_puuid",
+            raise PlayerNotFoundError(
+                "Player not found. Discover or track this player first."
             )
 
         response = await self._one_player(player, user_id)
@@ -311,7 +314,9 @@ class PlayerService:
             Updated player data.
 
         Raises:
-            ValueError: If player not found.
+            PlayerNotFoundError: If player not found.
+            UserNotFoundError: If the tracking user's account row is gone.
+            TrackingLimitReachedError: If the user's tracking list is full.
         """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         player = await self._require_player(puuid)
@@ -326,11 +331,7 @@ class PlayerService:
         if user is None:
             # Not a tracking failure: the session outlived its account row, so
             # the answer is "sign in again", not "that player does not exist".
-            raise http_error(
-                401,
-                "AUTHENTICATION_REQUIRED",
-                "Your account was not found. Please sign in again.",
-            )
+            raise UserNotFoundError
 
         tracked_count = await self.db.scalar(
             select(func.count())
@@ -431,24 +432,33 @@ class PlayerService:
 
         return [self._to_response(player, is_tracked=True) for player in players]
 
-    async def get_player_context(self, user_id: int):
-        """Return the authenticated user's current player."""
-        from .schemas import PlayerContextResponse
+    async def get_player_context(self, user_id: int) -> PlayerContextResponse:
+        """Return the authenticated user's current player.
 
+        A current-player pointer whose player row no longer exists is cleared
+        on the read, so a deleted player cannot pin itself as the default.
+        """
         settings = await ensure_user_settings(self.db, user_id)
 
         current_player: PlayerResponse | None = None
         if settings.current_player_puuid:
             current_model = await self.db.get(Player, settings.current_player_puuid)
             if current_model is None:
-                settings.current_player_puuid = None
+                self._clear_stale_current_player(settings)
             else:
                 current_player = await self._one_player(current_model, user_id)
 
         await self.db.commit()
         return PlayerContextResponse(current_player=current_player)
 
-    async def set_current_player(self, user_id: int, puuid: str | None):
+    @staticmethod
+    def _clear_stale_current_player(settings: UserSettings) -> None:
+        """Drop a current-player pointer whose player row no longer exists."""
+        settings.current_player_puuid = None
+
+    async def set_current_player(
+        self, user_id: int, puuid: str | None
+    ) -> PlayerContextResponse:
         """Persist one user's default player and update tracked recency."""
         settings = await ensure_user_settings(self.db, user_id)
 

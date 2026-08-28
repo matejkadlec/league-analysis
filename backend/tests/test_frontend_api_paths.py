@@ -17,14 +17,17 @@ from app.main import app
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = REPO_ROOT / "frontend"
 
-# The client prepends this to every path it is given (`lib/core/api.ts`).
+# The client prepends this to every path it is given (`lib/core/http/api.ts`).
 API_PREFIX = "/api/v1"
 
 # Directories with no request in them, plus the two that would drown the walk.
 SKIPPED_DIRS = {"node_modules", ".next", "coverage", "tests", "e2e"}
 
 # The wrappers' own definitions, which name every helper without calling one.
-API_MODULE = FRONTEND / "lib" / "core" / "api.ts"
+API_MODULE = FRONTEND / "lib" / "core" / "http" / "api.ts"
+# A Path that points at nothing compares unequal in silence, so a move would
+# leave the exclusion below inert rather than failing.
+assert API_MODULE.is_file(), f"the validated client is not at {API_MODULE}"
 
 CALL = re.compile(r"validated(Get|Post|Put|Delete|Patch)\s*\(")
 

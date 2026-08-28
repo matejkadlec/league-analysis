@@ -166,7 +166,7 @@ paradigm next to Radix/shadcn; `react >=16.12` peer range covers React 19.
    reducer switch out of 731 lines; the anchor/reanchor progress-projection math and
    phase-to-display derivation are domain numerics no FSM library touches. The lighter
    sibling `@xstate/fsm` is deprecated.
-7. **`frontend/lib/core/api.ts` + `token-manager.ts`** (axios-auth-refresh,
+7. **`frontend/lib/core/http/api.ts` + `token-manager.ts`** (axios-auth-refresh,
    axios-auth-refresh-queue) — cover only the generic "queue concurrent 401s, retry once
    refreshed" mechanic; the `sessionEpoch` teardown ordering and the `SESSION_ENDING_CODES`
    allowlist that separates a real 401 from a Cloudflare WAF challenge (both bought with

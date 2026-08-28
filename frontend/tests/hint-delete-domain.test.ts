@@ -7,7 +7,7 @@ import {
   AUTH_STATE_COOKIE_NAME,
   clearAuthStateCookie,
   hasAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 /**
  * The hint has to die under whatever domain it was born with. Domain is part

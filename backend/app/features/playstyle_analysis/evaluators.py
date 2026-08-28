@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from app.core.riot_api.constants import TeamId
 from app.features.matches.lane import opposing_lane_participant
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.aggregates import calculate_aggregate_value
@@ -44,10 +45,6 @@ def evaluate_tag(
     if type_evaluator is not None:
         return type_evaluator(participants, matches, game_count, tag_code, config)
 
-    code_evaluator = _CODE_EVALUATORS.get(tag_code)
-    if code_evaluator is not None:
-        return code_evaluator(participants, matches, game_count, tag_code, config)
-
     return evaluate_generic_threshold(
         participants, matches, game_count, tag_code, config
     )
@@ -61,16 +58,6 @@ def evaluate_generic_threshold(
     config: TagConfig,
 ) -> TagResult | None:
     """Evaluate threshold based on actual average across ALL games."""
-    if tag_code in ["aggresive_laner", "passive_laner"]:
-        return evaluate_occurrence_percentage(
-            participants, matches, game_count, tag_code, config
-        )
-
-    if tag_code in ["pentakiller", "epic_thief", "thief"]:
-        return evaluate_occurrence_count(
-            participants, matches, game_count, tag_code, config
-        )
-
     aggregate_value = calculate_aggregate_value(
         participants, matches, tag_code, config, game_count
     )
@@ -84,7 +71,7 @@ def evaluate_occurrence_percentage(
     tag_code: str,
     config: TagConfig,
 ) -> TagResult | None:
-    """Evaluate tags based on occurrence percentage (for aggressive/passive laner)."""
+    """Evaluate tags based on occurrence percentage (e.g. first-blood rate)."""
     target_percentage = config.get("percentage_matches", 0.0)
     max_percentage = config.get("max_percentage_matches")
     aggregate_value = calculate_aggregate_value(
@@ -108,7 +95,7 @@ def evaluate_occurrence_count(
     tag_code: str,
     config: TagConfig,
 ) -> TagResult | None:
-    """Evaluate tags based on total occurrence count (pentakills, epic steals)."""
+    """Evaluate tags based on total occurrence count (e.g. pentakills, steals)."""
     aggregate_value = calculate_aggregate_value(
         participants, matches, tag_code, config, game_count
     )
@@ -127,7 +114,6 @@ def evaluate_gold_diff_check(
     """Evaluate gold diff vs opponent (lead or deficit)."""
     check_deficit = config.get("check_deficit", False)
 
-    min_threshold = 1000
     if check_deficit:
         min_threshold = config.get("min_lane_gold_deficit", 1000)
     else:
@@ -140,10 +126,10 @@ def evaluate_gold_diff_check(
     avg_gold_diff = total_gold_diff / games_with_opponent
     if check_deficit:
         if avg_gold_diff <= -min_threshold:
-            return _hover_result(config, abs(avg_gold_diff))
+            return _met_criteria_result(config, abs(avg_gold_diff))
     else:
         if avg_gold_diff >= min_threshold:
-            return _hover_result(config, avg_gold_diff)
+            return _met_criteria_result(config, avg_gold_diff)
     return None
 
 
@@ -165,7 +151,7 @@ def evaluate_damage_type(
         damage_pct = _typed_damage_percentage(
             target_type, total_phys, total_magic, total_damage
         )
-        return _hover_result(config, damage_pct)
+        return _met_criteria_result(config, damage_pct)
     return None
 
 
@@ -186,7 +172,7 @@ def evaluate_side_preference(
     result_wr = _favored_side_wr(target_team, blue_wr, red_wr)
     if result_wr is None:
         return None
-    return _hover_result(config, result_wr)
+    return _met_criteria_result(config, result_wr)
 
 
 def evaluate_surrender(
@@ -203,10 +189,10 @@ def evaluate_surrender(
 
     surrender_rate = (surrender_count / total_games) * 100.0
     if check_type == "never" and surrender_rate <= 10.0:
-        return _hover_result(config, surrender_rate)
+        return _met_criteria_result(config, surrender_rate)
 
     if check_type == "often" and surrender_rate >= 30.0:
-        return _hover_result(config, surrender_rate)
+        return _met_criteria_result(config, surrender_rate)
 
     return None
 
@@ -227,7 +213,7 @@ def evaluate_kill_greed(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_ratio = total_ratio / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_ratio)
+        return _met_criteria_result(config, avg_ratio)
     return None
 
 
@@ -247,7 +233,7 @@ def evaluate_solo_kill_ratio(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_ratio = total_ratio / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_ratio)
+        return _met_criteria_result(config, avg_ratio)
     return None
 
 
@@ -267,8 +253,21 @@ def evaluate_objective_participation(
     pct_matches = (matching_games / game_count) * 100.0 if game_count > 0 else 0
     if pct_matches >= target_percentage:
         avg_pct = total_pct / valid_games if valid_games > 0 else 0
-        return _hover_result(config, avg_pct)
+        return _met_criteria_result(config, avg_pct)
     return None
+
+
+def evaluate_champion_play_rate(
+    participants: list[MatchParticipant],
+    matches: MatchesById,
+    game_count: int,
+    tag_code: str,
+    config: TagConfig,
+) -> TagResult | None:
+    """Evaluate champion play rate (e.g. OTP, champion main)."""
+    return _evaluate_champion_play_rate(
+        participants, game_count, config, default_min_play_rate=50.0
+    )
 
 
 def evaluate_nolifer(
@@ -384,17 +383,8 @@ def generate_summary_stats(
     }
 
 
-def _met_criteria_result(config: TagConfig, aggregate_value: float) -> TagResult:
-    formatted_value = format_value(aggregate_value)
-    description = config["hover_template"].format(value=formatted_value)
-    return {
-        "threshold_met": True,
-        "description": description,
-        "value": float(aggregate_value),
-    }
-
-
-def _hover_result(config: TagConfig, value: float) -> TagResult:
+def _met_criteria_result(config: TagConfig, value: float) -> TagResult:
+    """A met tag carrying its value formatted into the configured hover text."""
     formatted_value = format_value(value)
     description = config["hover_template"].format(value=formatted_value)
     return {"threshold_met": True, "description": description, "value": value}
@@ -403,10 +393,10 @@ def _hover_result(config: TagConfig, value: float) -> TagResult:
 def _compare_aggregate_to_thresholds(
     config: TagConfig, aggregate_value: float
 ) -> TagResult | None:
+    # A generic tag carries exactly one `min_`/`max_` threshold key, so first
+    # match is the only match; `min_play_rate`/`max_percentage_matches` are
+    # selection keys, not thresholds.
     for key, threshold in config.items():
-        # Presentation and evaluator-selection keys share the mapping with the
-        # thresholds; none of them is a `min_`/`max_` name, so skipping the
-        # non-numeric values changes nothing except that this now type-checks.
         if not isinstance(threshold, int | float):
             continue
         if key.startswith("min_") and key != "min_play_rate":
@@ -478,11 +468,11 @@ def _side_win_stats(
     blue_stats = {"wins": 0, "games": 0}
     red_stats = {"wins": 0, "games": 0}
     for p in participants:
-        if p.team_id == 100:
+        if p.team_id == TeamId.BLUE:
             blue_stats["games"] += 1
             if p.win:
                 blue_stats["wins"] += 1
-        elif p.team_id == 200:
+        elif p.team_id == TeamId.RED:
             red_stats["games"] += 1
             if p.win:
                 red_stats["wins"] += 1
@@ -490,14 +480,14 @@ def _side_win_stats(
 
 
 def _favored_side_wr(
-    target_team: int | None, blue_wr: float, red_wr: float
+    target_team: TeamId | None, blue_wr: float, red_wr: float
 ) -> float | None:
     diff = 5.0
     is_blue_favored = (blue_wr - red_wr) >= diff
     is_red_favored = (red_wr - blue_wr) >= diff
-    if target_team == 100 and is_blue_favored:
+    if target_team == TeamId.BLUE and is_blue_favored:
         return blue_wr
-    if target_team == 200 and is_red_favored:
+    if target_team == TeamId.RED and is_red_favored:
         return red_wr
     return None
 
@@ -737,6 +727,7 @@ def _champion_win_rate(
 
 
 _TYPE_EVALUATORS: dict[str, TagEvaluator] = {
+    "champion_play_rate": evaluate_champion_play_rate,
     "damage_type": evaluate_damage_type,
     "side_preference": evaluate_side_preference,
     "surrender_check": evaluate_surrender,
@@ -744,11 +735,8 @@ _TYPE_EVALUATORS: dict[str, TagEvaluator] = {
     "kill_greed_check": evaluate_kill_greed,
     "solo_kill_ratio_check": evaluate_solo_kill_ratio,
     "objective_participation_check": evaluate_objective_participation,
-}
-
-_CODE_EVALUATORS: dict[str, TagEvaluator] = {
-    "nolifer": evaluate_nolifer,
-    "otp": evaluate_otp,
-    "main_champion": evaluate_main_champion,
-    "main_role": evaluate_main_role,
+    "occurrence_percentage": evaluate_occurrence_percentage,
+    "occurrence_count": evaluate_occurrence_count,
+    "role_play_rate": evaluate_main_role,
+    "summoner_level": evaluate_nolifer,
 }

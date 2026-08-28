@@ -6,7 +6,7 @@ import {
   validatedPost,
   validatedPut,
   type ApiResponse,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   CardPreference,
   CardPreferenceSchema,
@@ -18,6 +18,7 @@ import {
   SmurfBoostPresetsResponseSchema,
 } from "@/lib/core/schemas";
 import type { CardId } from "@/lib/core/schemas";
+import type { ThresholdSettings } from "./smurf-boost-settings";
 
 export async function startSmurfBoostDetection(
   puuid: string,
@@ -36,8 +37,7 @@ export async function getLatestSmurfBoostDetection(
   return validatedGet(
     SmurfBoostAnalysisResponseSchema,
     `/smurf-boost-detection/player/${puuid}`,
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -47,8 +47,7 @@ export async function getSmurfBoostPresets(
   return validatedGet(
     SmurfBoostPresetsResponseSchema,
     "/smurf-boost-detection/presets",
-    undefined,
-    signal,
+    { signal },
   );
 }
 
@@ -61,14 +60,13 @@ export async function getCardPreferences(
   return validatedGet(
     z.array(CardPreferenceSchema),
     "/settings/card-preferences",
-    undefined,
-    signal,
+    { signal },
   );
 }
 
 export async function updateCardPreference(
   cardId: CardId,
-  settings: Record<string, number>,
+  settings: ThresholdSettings,
 ): Promise<ApiResponse<CardPreference>> {
   return validatedPut(
     CardPreferenceSchema,

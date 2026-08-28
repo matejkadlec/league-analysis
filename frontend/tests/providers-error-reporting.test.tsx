@@ -9,7 +9,7 @@ type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
 
 const { reportApiError, sonnerToast } = vi.hoisted(() => ({
   reportApiError:
-    vi.fn<typeof import("@/lib/core/api-error-logging").reportApiError>(),
+    vi.fn<typeof import("@/lib/core/http/api-error-logging").reportApiError>(),
   sonnerToast: {
     success: vi.fn<Toast["success"]>(),
     error: vi.fn<Toast["error"]>(),
@@ -28,7 +28,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-vi.mock("@/lib/core/api-error-logging", () => ({ reportApiError }));
+vi.mock("@/lib/core/http/api-error-logging", () => ({ reportApiError }));
 
 vi.mock("sonner", () => ({ toast: sonnerToast }));
 

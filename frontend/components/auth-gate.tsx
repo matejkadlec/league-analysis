@@ -3,12 +3,11 @@
 import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
-// oxlint-disable-next-line no-restricted-imports -- shell infra bound to the hint's own module; tests/auth-stranded-session.test.tsx asserts this behaviour
 import {
   hasAuthStateCookie,
   subscribeToAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
-// oxlint-disable-next-line no-restricted-imports -- see above
+} from "@/lib/session/auth-state-cookie";
+// oxlint-disable-next-line no-restricted-imports -- shell infra bound to the public-route list; tests/auth-stranded-session.test.tsx asserts this behaviour
 import { isPublicRoute as pathnameIsPublic } from "@/features/auth/utils/public-routes";
 
 /**

@@ -11,9 +11,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatDateTime } from "@/lib/core/format";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPut, validatedPost, toast } = vi.hoisted(() => ({
@@ -28,8 +28,8 @@ const { validatedGet, validatedPut, validatedPost, toast } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPut,
   validatedPost,
@@ -40,11 +40,11 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
   useToast: () => toast,
 }));
 
-import { RiotApiSettingsCard } from "@/features/settings/riot-api-settings-card";
+import { RiotApiSettingsCard } from "@/features/settings/components/riot-api-settings-card";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
-import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
-import { renderWithQueryClient } from "./render-support";
+import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot/riot-credential-health-events";
+import { renderWithQueryClient } from "./support/render-support";
 
 /**
  * A key of the right shape, assembled rather than written out: the gitleaks

@@ -24,6 +24,13 @@ from typing import NoReturn
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
+# Local SQL round trips and remote one-shot commands fail fast; the snapshot
+# and archive transfers legitimately run long but must still be bounded.
+LOCAL_SQL_TIMEOUT_SECONDS = 60
+REMOTE_COMMAND_TIMEOUT_SECONDS = 60
+SNAPSHOT_TIMEOUT_SECONDS = 300
+REMOTE_DUMP_TIMEOUT_SECONDS = 3600
+LOCAL_RESTORE_TIMEOUT_SECONDS = 1800
 REMOTE_SCRIPT_CANDIDATES = (
     "$HOME/.local/share/league-analysis/current/backup/pi-postgres-operations.sh",
     "$HOME/.local/share/league-analysis/operations/pi-postgres-operations",
@@ -255,6 +262,7 @@ def psql_query(config: LocalDatabaseConfig, database: str, sql: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        timeout=LOCAL_SQL_TIMEOUT_SECONDS,
     )
     return result.stdout.strip()
 
@@ -281,6 +289,7 @@ def psql_snapshot(
         check=True,
         capture_output=True,
         text=True,
+        timeout=SNAPSHOT_TIMEOUT_SECONDS,
     )
     return result.stdout.strip()
 
@@ -356,6 +365,7 @@ def remote_identity(host: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        timeout=REMOTE_COMMAND_TIMEOUT_SECONDS,
     )
     return result.stdout.strip()
 
@@ -399,6 +409,7 @@ def remote_snapshot(host: str, database: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        timeout=SNAPSHOT_TIMEOUT_SECONDS,
     )
     return result.stdout.strip()
 
@@ -425,6 +436,7 @@ def download_remote_archive(host: str, database: str, archive: Path) -> str:
                 ],
                 stdout=archive_output,
                 check=True,
+                timeout=REMOTE_DUMP_TIMEOUT_SECONDS,
             )
             archive_output.flush()
             os.fsync(archive_output.fileno())
@@ -439,6 +451,7 @@ def download_remote_archive(host: str, database: str, archive: Path) -> str:
         ["pg_restore", "--list", str(archive)],
         check=True,
         stdout=subprocess.DEVNULL,
+        timeout=LOCAL_SQL_TIMEOUT_SECONDS,
     )
     digest = hashlib.sha256()
     with archive.open("rb") as archive_input:
@@ -481,6 +494,7 @@ def create_database(config: LocalDatabaseConfig, database: str) -> None:
         ],
         env=child_environment(config),
         check=True,
+        timeout=LOCAL_SQL_TIMEOUT_SECONDS,
     )
 
 
@@ -499,6 +513,7 @@ def drop_database(config: LocalDatabaseConfig, database: str) -> None:
         ],
         env=child_environment(config),
         check=True,
+        timeout=LOCAL_SQL_TIMEOUT_SECONDS,
     )
 
 
@@ -518,6 +533,7 @@ def restore_archive(config: LocalDatabaseConfig, database: str, archive: Path) -
         ],
         env=child_environment(config),
         check=True,
+        timeout=LOCAL_RESTORE_TIMEOUT_SECONDS,
     )
 
 

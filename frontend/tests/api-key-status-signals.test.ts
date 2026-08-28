@@ -4,15 +4,15 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 const { notifyRiotCredentialHealthUpdated } = vi.hoisted(() => ({
   notifyRiotCredentialHealthUpdated:
     vi.fn<
-      typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+      typeof import("@/lib/core/riot/riot-credential-health-events").notifyRiotCredentialHealthUpdated
     >(),
 }));
 
-vi.mock("@/lib/core/riot-credential-health-events", () => ({
+vi.mock("@/lib/core/riot/riot-credential-health-events", () => ({
   notifyRiotCredentialHealthUpdated,
 }));
 
-import { api } from "../lib/core/api";
+import { api } from "../lib/core/http/api";
 
 const originalAdapter = api.defaults.adapter;
 let responseData: unknown;

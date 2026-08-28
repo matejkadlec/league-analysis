@@ -12,11 +12,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
+from app.core.error_chains import is_database_error, iter_error_chain
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 from app.core.riot_api.models import MatchDTO, MatchListDTO, MatchTimelineDTO
-from app.features.jobs.error_handling import is_database_job_error, iter_error_chain
 from app.features.jobs.maintenance import (
     RiotWriterMaintenanceActiveError,
     ensure_riot_writer_maintenance_is_inactive,
@@ -63,42 +63,64 @@ class ReprocessMatch(Protocol):
 def must_abort_writer_sync(error: Exception) -> bool:
     """Return whether a lower-level sync error must reach the owning job.
 
-    `is_database_job_error` asks whether continuing would reuse a failed or
+    `is_database_error` asks whether continuing would reuse a failed or
     unavailable session. An `IntegrityError` is the exception: it is about the
     one row, both writers roll back before re-raising, and the caller moves on.
     """
     if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
         return False
-    return is_database_job_error(error) or isinstance(
+    return is_database_error(error) or isinstance(
         error, RiotWriterMaintenanceActiveError
     )
 
 
+# The Riot errors that must reach the owning job without per-match recovery:
+# an expired key or an exhausted rate budget ends the run, and the job layer
+# owns both signals. Every `except` on this seam spells only this tuple.
+RIOT_FATAL_ERRORS: tuple[type[Exception], ...] = (
+    AuthenticationError,
+    ForbiddenError,
+    RateLimitError,
+)
+
+
+@dataclass(frozen=True)
+class QueueSyncContext:
+    """The inputs every layer of one queue's sync shares, unchanged per call.
+
+    Match ids, page offsets, and the per-fetch timeline policy vary between
+    calls, so those stay individual parameters of the layers that read them.
+    """
+
+    session: AsyncSession
+    riot_client: RiotAPIClient
+    puuid: str
+    region: Region
+    queue_id: int
+    on_failure: OnFailure
+    reprocess_match: ReprocessMatch
+    on_match_stored: OnMatchStored
+
+
 async def fetch_queue_match_list(
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
-    start: int,
-    count: int,
+    context: QueueSyncContext, start: int, count: int
 ) -> MatchListDTO:
     """Fetch one page of match IDs for a supported queue."""
     try:
-        match_list_dto = await riot_client.get_match_list_by_puuid(
-            puuid=puuid,
-            region=region,
+        return await context.riot_client.get_match_list_by_puuid(
+            puuid=context.puuid,
+            region=context.region,
             start=start,
             count=count,
-            queue=queue_id,
+            queue=context.queue_id,
         )
-        return match_list_dto
-    except AuthenticationError, ForbiddenError, RateLimitError:
+    except RIOT_FATAL_ERRORS:
         raise
     except Exception as error:
         logger.error(
             "Failed to fetch match IDs",
-            puuid=puuid,
-            queue_id=queue_id,
+            puuid=context.puuid,
+            queue_id=context.queue_id,
             error=str(error),
         )
         raise
@@ -197,12 +219,8 @@ def build_synthetic_match_dto(
 
 
 async def fetch_sync_timeline(
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
+    context: QueueSyncContext,
     match_id: str,
-    on_failure: OnFailure,
     *,
     operation: str,
     log_message: str,
@@ -211,86 +229,74 @@ async def fetch_sync_timeline(
     """Fetch a timeline during queue sync. The bool is True when the match should be skipped."""
     timeline_payload: MatchTimelineDTO | None = None
     try:
-        timeline_payload = await riot_client.get_match_timeline(
+        timeline_payload = await context.riot_client.get_match_timeline(
             match_id,
-            region=region,
+            region=context.region,
         )
-    except AuthenticationError, ForbiddenError, RateLimitError:
+    except RIOT_FATAL_ERRORS:
         raise
     except Exception as timeline_error:
         if must_abort_writer_sync(timeline_error):
             raise
         logger.warning(
             log_message,
-            puuid=puuid,
-            queue_id=queue_id,
+            puuid=context.puuid,
+            queue_id=context.queue_id,
             match_id=match_id,
             error=str(timeline_error),
         )
-        if on_failure:
-            on_failure(
+        if context.on_failure:
+            context.on_failure(
                 operation,
                 timeline_error,
-                {"queue_id": queue_id, "match_id": match_id},
+                {"queue_id": context.queue_id, "match_id": match_id},
             )
         return None, skip_match_on_error
     return timeline_payload, False
 
 
-async def backfill_timeline_only_match(
-    session: AsyncSession,
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
-    match_id: str,
-    on_failure: OnFailure,
-) -> int:
+async def backfill_timeline_only_match(context: QueueSyncContext, match_id: str) -> int:
     """Store missing timeline aggregates for an already-analyzed match."""
     timeline_payload, should_skip = await fetch_sync_timeline(
-        riot_client,
-        puuid,
-        region,
-        queue_id,
+        context,
         match_id,
-        on_failure,
         operation="timeline-only backfill",
         log_message="Timeline-only fetch failed",
         skip_match_on_error=True,
     )
     if should_skip or not timeline_payload:
         return 0
-    participants_result = await session.execute(
+    participants_result = await context.session.execute(
         select(MatchParticipant).where(MatchParticipant.match_id == match_id)
     )
     participants = list(participants_result.scalars().all())
     if len(participants) < 10:
         logger.warning(
             "Skipping timeline-only backfill due to missing participants",
-            puuid=puuid,
-            queue_id=queue_id,
+            puuid=context.puuid,
+            queue_id=context.queue_id,
             match_id=match_id,
             participants_found=len(participants),
         )
         return 0
-    version_result = await session.execute(
+    version_result = await context.session.execute(
         select(Match.game_version).where(Match.match_id == match_id)
     )
     game_version = version_result.scalar_one_or_none() or ""
-    await ensure_riot_writer_maintenance_is_inactive(session)
+    await ensure_riot_writer_maintenance_is_inactive(context.session)
     timeline_rows = 0
     try:
         # Inside the try because `replace_match_timeline_rows` flushes, so it
         # is a second place this path can leave the session holding a failed
         # transaction -- the exact thing the handler below exists to prevent.
         timeline_rows = await replace_match_timeline_rows(
-            session,
+            context.session,
             build_synthetic_match_dto(match_id, participants, game_version),
             timeline_payload,
         )
         if timeline_rows == 0:
             return 0
-        await session.commit()
+        await context.session.commit()
     except Exception as error:
         # Without this the session is left holding a failed transaction and
         # every later match in the run fails on it, so the run's first error
@@ -303,128 +309,73 @@ async def backfill_timeline_only_match(
             timeline_rows=timeline_rows,
             error=str(error),
         )
-        await rollback_quietly(session)
+        await rollback_quietly(context.session)
         raise
     return 1
 
 
 async def sync_full_queue_match(
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
-    match_id: str,
-    on_failure: OnFailure,
-    reprocess_match: ReprocessMatch,
-    on_match_stored: OnMatchStored,
+    context: QueueSyncContext, match_id: str
 ) -> tuple[int, bool]:
     """Fetch and store one current-season match. The bool is True when the queue is done."""
-    match_dto = await riot_client.get_match(match_id, region=region)
-    if not match_dto:
-        return 0, False
+    match_dto = await context.riot_client.get_match(match_id, region=context.region)
     if not is_current_game_version(match_dto.info.game_version):
         return 0, True
     timeline_payload, _should_skip = await fetch_sync_timeline(
-        riot_client,
-        puuid,
-        region,
-        queue_id,
+        context,
         match_id,
-        on_failure,
         operation="match timeline fetch",
         log_message="Timeline fetch failed, storing match without timeline",
         skip_match_on_error=False,
     )
-    await reprocess_match(match_dto, timeline_payload=timeline_payload)
-    if on_match_stored:
-        on_match_stored(queue_id, match_id)
+    await context.reprocess_match(match_dto, timeline_payload=timeline_payload)
+    if context.on_match_stored:
+        context.on_match_stored(context.queue_id, match_id)
     return 1, False
 
 
-async def process_queue_sync_match(
-    session: AsyncSession,
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
+async def sync_queue_match(
+    context: QueueSyncContext,
     match_id: str,
     timeline_only_ids: set[str],
-    on_failure: OnFailure,
-    reprocess_match: ReprocessMatch,
-    on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
     """Process one queue-sync match, including recoverable per-match failures."""
     try:
         if match_id in timeline_only_ids:
-            stored = await backfill_timeline_only_match(
-                session,
-                riot_client,
-                puuid,
-                region,
-                queue_id,
-                match_id,
-                on_failure,
-            )
+            stored = await backfill_timeline_only_match(context, match_id)
             return stored, False
-        return await sync_full_queue_match(
-            riot_client,
-            puuid,
-            region,
-            queue_id,
-            match_id,
-            on_failure,
-            reprocess_match,
-            on_match_stored,
-        )
-    except AuthenticationError, ForbiddenError, RateLimitError:
+        return await sync_full_queue_match(context, match_id)
+    except RIOT_FATAL_ERRORS:
         raise
     except Exception as error:
         if must_abort_writer_sync(error):
             raise
         logger.warning(
             "Error syncing match",
-            puuid=puuid,
-            queue_id=queue_id,
+            puuid=context.puuid,
+            queue_id=context.queue_id,
             match_id=match_id,
             error=str(error),
         )
-        if on_failure:
-            on_failure(
+        if context.on_failure:
+            context.on_failure(
                 "match synchronization",
                 error,
-                {"queue_id": queue_id, "match_id": match_id},
+                {"queue_id": context.queue_id, "match_id": match_id},
             )
         return 0, False
 
 
-async def process_queue_sync_batch(
-    session: AsyncSession,
-    riot_client: RiotAPIClient,
-    puuid: str,
-    region: Region,
-    queue_id: int,
+async def sync_queue_batch(
+    context: QueueSyncContext,
     ids_to_process: list[str],
     timeline_only_ids: set[str],
-    on_failure: OnFailure,
-    reprocess_match: ReprocessMatch,
-    on_match_stored: OnMatchStored,
     keep_fetching: bool,
 ) -> tuple[int, bool]:
     """Process one page of queue-sync match IDs."""
     stored = 0
     for match_id in ids_to_process:
-        delta, stop_queue = await process_queue_sync_match(
-            session,
-            riot_client,
-            puuid,
-            region,
-            queue_id,
-            match_id,
-            timeline_only_ids,
-            on_failure,
-            reprocess_match,
-            on_match_stored,
-        )
+        delta, stop_queue = await sync_queue_match(context, match_id, timeline_only_ids)
         stored += delta
         if stop_queue:
             return stored, False
@@ -442,21 +393,24 @@ async def sync_single_queue_for_player(
     on_match_stored: OnMatchStored = None,
 ) -> int:
     """Sync one queue for a single player."""
+    context = QueueSyncContext(
+        session=session,
+        riot_client=riot_client,
+        puuid=puuid,
+        region=region,
+        queue_id=queue_id,
+        on_failure=on_failure,
+        reprocess_match=reprocess_match,
+        on_match_stored=on_match_stored,
+    )
     start = 0
     count = 100
     queue_stored = 0
     keep_fetching = True
     logger.info("Starting queue sync", puuid=puuid, queue_id=queue_id)
     while keep_fetching:
-        match_list_dto = await fetch_queue_match_list(
-            riot_client,
-            puuid,
-            region,
-            queue_id,
-            start,
-            count,
-        )
-        if not match_list_dto or not match_list_dto.match_ids:
+        match_list_dto = await fetch_queue_match_list(context, start, count)
+        if not match_list_dto.match_ids:
             break
         ids_list = match_list_dto.match_ids
         analyzed_ids, timeline_complete_ids = await load_queue_sync_completion_ids(
@@ -468,17 +422,10 @@ async def sync_single_queue_for_player(
             analyzed_ids,
             timeline_complete_ids,
         )
-        stored, keep_fetching = await process_queue_sync_batch(
-            session,
-            riot_client,
-            puuid,
-            region,
-            queue_id,
+        stored, keep_fetching = await sync_queue_batch(
+            context,
             ids_to_process,
             timeline_only_ids,
-            on_failure,
-            reprocess_match,
-            on_match_stored,
             keep_fetching,
         )
         queue_stored += stored

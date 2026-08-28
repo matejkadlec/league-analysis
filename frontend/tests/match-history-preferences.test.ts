@@ -14,7 +14,7 @@ import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
 } from "@/features/cookie-consent";
-import { installMemoryLocalStorage } from "./test-browser-storage";
+import { installMemoryLocalStorage } from "./support/test-browser-storage";
 
 const CONSENT_COOKIE = "league_analysis_cookie_consent";
 

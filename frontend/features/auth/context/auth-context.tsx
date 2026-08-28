@@ -15,17 +15,17 @@ import { useRouter } from "next/navigation";
 import {
   namesTheEndOfTheSession,
   refreshAccessToken,
-  removeAuthTokens,
-} from "../utils/token-manager";
+  endLocalSession,
+} from "@/lib/session/token-manager";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   createAuthLoginError,
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
-} from "../utils/login-error";
+} from "@/lib/session/login-error";
 import { UserResponseSchema } from "@/lib/core/schemas";
 
-import { hasAuthStateCookie } from "../utils/auth-state-cookie";
+import { hasAuthStateCookie } from "@/lib/session/auth-state-cookie";
 import type { User, LoginRequest, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // logout or a rejected refresh. Asking anyway costs two requests and logs
     // a 401 that reads like a fault to anyone with devtools open.
     if (!hasAuthStateCookie()) {
-      removeAuthTokens();
+      endLocalSession();
       setUser(null);
       setIsLoading(false);
       return;
@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (response.status === 401) {
         const refresh = await refreshAccessToken();
         if (refresh.outcome !== "refreshed") {
-          // No `removeAuthTokens()` here: only the refresh call can tell a
+          // No `endLocalSession()` here: only the refresh call can tell a
           // rejected session from one it never reached, and it already tears
           // down in the first case. Clearing here strands a valid cookie.
           setUser(null);
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             (response.status === 401 || response.status === 403) &&
             (await namesTheEndOfTheSession(response))
           ) {
-            removeAuthTokens();
+            endLocalSession();
           }
           setUser(null);
           queryClient.clear();
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // authorized for this", and a challenge in front of the API means
         // nothing about the session at all.
         if (await namesTheEndOfTheSession(response)) {
-          removeAuthTokens();
+          endLocalSession();
         }
         setUser(null);
         queryClient.clear();
@@ -162,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient, adoptUser]);
 
-  // Initialize auth state on mount
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- Authentication initializes from browser token state after hydration.
     void checkAuth();
@@ -222,10 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         queryClient.clear();
 
-        // Fetch user data
         await checkAuth();
 
-        // Redirect to home page
         router.push("/");
       } catch (error) {
         setIsLoading(false);
@@ -270,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      removeAuthTokens();
+      endLocalSession();
       queryClient.clear();
       setUser(null);
       router.push("/sign-in");

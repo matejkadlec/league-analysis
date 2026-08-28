@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import {
   JobConfigurationSchema,
   JobExecutionListResponseSchema,
@@ -52,8 +52,7 @@ export function jobExecutionsInfiniteQueryOptions() {
         await validatedGet(
           JobExecutionListResponseSchema,
           "/jobs/executions/all",
-          { page: pageParam, size: EXECUTIONS_PAGE_SIZE },
-          signal,
+          { params: { page: pageParam, size: EXECUTIONS_PAGE_SIZE }, signal },
         ),
       );
     },
@@ -81,8 +80,7 @@ export function jobsQueryOptions() {
         await validatedGet(
           z.array(JobConfigurationSchema),
           "/jobs/",
-          { active_only: false },
-          signal,
+          { params: { active_only: false }, signal },
         ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
@@ -98,8 +96,7 @@ export function jobStatusQueryOptions() {
         await validatedGet(
           JobStatusResponseSchema,
           "/jobs/status/overview",
-          undefined,
-          signal,
+          { signal },
         ),
       ),
     refetchInterval: JOBS_REFRESH_INTERVAL_MS,
@@ -115,8 +112,7 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
         await validatedGet(
           JobExecutionListResponseSchema,
           `/jobs/${jobId}/executions`,
-          { page: 1, size: 5, execution_type: "REGULAR" },
-          signal,
+          { params: { page: 1, size: 5, execution_type: "REGULAR" }, signal },
         ),
       ),
     enabled: !!jobId,
@@ -125,15 +121,19 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
 }
 
 /**
- * Refresh everything a job control action changes. No trailing
- * `refetchQueries`: `invalidateQueries` already refetches active queries, and
- * the old inline copy's extra call only aborted that fetch and reissued it.
+ * Refresh everything a job control action changes, awaiting every
+ * invalidation the way `invalidateMatchmakingRun` does. No trailing
+ * `refetchQueries`: `invalidateQueries` already refetches active queries.
  */
-export function invalidateJobsData(queryClient: QueryClient): void {
-  void queryClient.invalidateQueries({ queryKey: jobsQueryKey() });
-  void queryClient.invalidateQueries({ queryKey: jobStatusQueryKey() });
-  void queryClient.invalidateQueries({ queryKey: JOB_EXECUTIONS_QUERY_KEY });
-  void queryClient.invalidateQueries({
-    queryKey: jobExecutionsInfiniteQueryKey(),
-  });
+export async function invalidateJobsData(
+  queryClient: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: jobsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: jobStatusQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: JOB_EXECUTIONS_QUERY_KEY }),
+    queryClient.invalidateQueries({
+      queryKey: jobExecutionsInfiniteQueryKey(),
+    }),
+  ]);
 }

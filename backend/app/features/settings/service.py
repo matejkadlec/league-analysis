@@ -17,12 +17,12 @@ from app.core.riot_api.credential_health import (
     synchronize_riot_credential_health,
 )
 from app.core.riot_api.errors import RiotAPIError
-from app.features.auth.user_cookie_consent import (
+from app.features.auth.users.user_card_preference import UserCardPreference
+from app.features.auth.users.user_cookie_consent import (
     CookieConsentLevel,
     UserCookieConsent,
 )
 
-from .models import UserCardPreference
 from .schemas import (
     CardId,
     CardPreferenceResponse,
@@ -428,7 +428,7 @@ class SettingsService:
 
     # ===== USER SETTINGS METHODS =====
 
-    async def get_user_cookie_consent(self, user_id: int):
+    async def get_user_cookie_consent(self, user_id: int) -> UserCookieConsent | None:
         """Get authenticated user's stored cookie-consent record."""
         stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
         result = await self.db.execute(stmt)
@@ -436,7 +436,7 @@ class SettingsService:
 
     async def upsert_user_cookie_consent(
         self, user_id: int, update: UserCookieConsentUpdate
-    ):
+    ) -> UserCookieConsent:
         """Create or update authenticated user's cookie-consent record."""
         consent_level = CookieConsentLevel(update.consent_level.value)
 

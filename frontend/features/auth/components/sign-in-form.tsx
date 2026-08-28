@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type ReactNode, useRef, useState } from "react";
+import { type Control, useForm } from "react-hook-form";
 import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/auth-context";
 import { useTurnstileCaptcha } from "./use-turnstile-captcha";
-import { getLoginErrorMessage, isAuthLoginError } from "../utils/login-error";
+import { getLoginErrorMessage, isAuthLoginError } from "@/lib/session/login-error";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -21,11 +21,106 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PublicPageFooter } from "@/components/public-page-footer";
 import type { LoginCredentials } from "../types";
 
+// Both blocks below stay module-level in this file rather than becoming
+// siblings: each has exactly one consumer, and settings' PasswordInput cannot
+// serve here -- it wraps a plain Input, this needs react-hook-form's FormField.
+function PasswordField({
+  control,
+  isSubmitting,
+}: {
+  control: Control<LoginCredentials>;
+  isSubmitting: boolean;
+}) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  return (
+    <FormField
+      control={control}
+      name="password"
+      rules={{
+        required: "Password is required",
+      }}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel className="text-gray-700">Password</FormLabel>
+          <div className="relative">
+            <FormControl>
+              <Input
+                {...field}
+                type={isPasswordVisible ? "text" : "password"}
+                placeholder="••••••••"
+                disabled={isSubmitting}
+                className="pr-12 text-gray-900 border-gray-300 placeholder:text-gray-500 focus-visible:ring-gray-400"
+                style={{ backgroundColor: "#e5e7eb" }}
+                autoComplete="current-password"
+              />
+            </FormControl>
+            <button
+              type="button"
+              aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+              aria-pressed={isPasswordVisible}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setIsPasswordVisible((visible) => !visible)}
+              className="password-visibility-toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900"
+            >
+              {isPasswordVisible ? (
+                <EyeOff aria-hidden="true" className="h-4 w-4" />
+              ) : (
+                <Eye aria-hidden="true" className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+function CaptchaSection({
+  isConfigured,
+  widget,
+}: {
+  isConfigured: boolean;
+  widget: ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      {/* A heading over the widget, not a form field: there is
+          no control to label, and a FormLabel would point
+          `htmlFor` at an id nothing renders. */}
+      <p
+        id="sign-in-captcha-heading"
+        className="text-sm font-medium leading-none text-gray-700"
+      >
+        Security Check
+      </p>
+      {isConfigured ? (
+        <div
+          role="group"
+          aria-labelledby="sign-in-captcha-heading"
+          className="rounded-md border border-gray-200 p-3 bg-gray-50"
+        >
+          {widget}
+          <p className="text-xs text-gray-500 mt-2">
+            Only shown after repeated failed sign-in attempts.
+          </p>
+        </div>
+      ) : (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Security check is unavailable. Please try again later.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
 export function SignInForm() {
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [captchaRequired, setCaptchaRequired] = useState(false);
   const submissionInFlight = useRef(false);
   const captcha = useTurnstileCaptcha({
@@ -67,26 +162,22 @@ export function SignInForm() {
       });
     } catch (err) {
       const authError = isAuthLoginError(err) ? err : null;
-
-      if (
+      const isCaptchaError =
         authError?.code === "CAPTCHA_REQUIRED" ||
-        authError?.code === "CAPTCHA_INVALID"
-      ) {
+        authError?.code === "CAPTCHA_INVALID";
+
+      if (isCaptchaError) {
         setCaptchaRequired(true);
         captcha.reset();
       }
 
-      if (authError?.code === "ACCOUNT_LOCKED" && authError.lockedUntil) {
-        setError(getLoginErrorMessage(authError));
-      } else if (
-        (authError?.code === "CAPTCHA_REQUIRED" ||
-          authError?.code === "CAPTCHA_INVALID") &&
-        !captcha.isConfigured
-      ) {
-        setError("Sign-in is temporarily unavailable. Please try again later.");
-      } else {
-        setError(getLoginErrorMessage(err));
-      }
+      // Only the unconfigured-captcha case needs its own text: every other
+      // code, ACCOUNT_LOCKED included, already has an answer in the table.
+      setError(
+        isCaptchaError && !captcha.isConfigured
+          ? "Sign-in is temporarily unavailable. Please try again later."
+          : getLoginErrorMessage(err),
+      );
     } finally {
       submissionInFlight.current = false;
       setIsSubmitting(false);
@@ -102,7 +193,6 @@ export function SignInForm() {
         }}
       >
         <div className="flex w-full max-w-5xl items-center gap-12">
-          {/* Logo Section */}
           <div className="hidden lg:block flex-shrink-0">
             <div className="relative w-[400px] h-[400px]">
               <Image
@@ -116,7 +206,6 @@ export function SignInForm() {
             </div>
           </div>
 
-          {/* Form Section */}
           <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-lg">
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Sign In</h1>
@@ -160,83 +249,16 @@ export function SignInForm() {
                   )}
                 />
 
-                <FormField
+                <PasswordField
                   control={form.control}
-                  name="password"
-                  rules={{
-                    required: "Password is required",
-                  }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-gray-700">Password</FormLabel>
-                      <div className="relative">
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type={isPasswordVisible ? "text" : "password"}
-                            placeholder="••••••••"
-                            disabled={isSubmitting}
-                            className="pr-12 text-gray-900 border-gray-300 placeholder:text-gray-500 focus-visible:ring-gray-400"
-                            style={{ backgroundColor: "#e5e7eb" }}
-                            autoComplete="current-password"
-                          />
-                        </FormControl>
-                        <button
-                          type="button"
-                          aria-label={
-                            isPasswordVisible
-                              ? "Hide password"
-                              : "Show password"
-                          }
-                          aria-pressed={isPasswordVisible}
-                          onPointerDown={(event) => event.preventDefault()}
-                          onClick={() =>
-                            setIsPasswordVisible((visible) => !visible)
-                          }
-                          className="password-visibility-toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900"
-                        >
-                          {isPasswordVisible ? (
-                            <EyeOff aria-hidden="true" className="h-4 w-4" />
-                          ) : (
-                            <Eye aria-hidden="true" className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  isSubmitting={isSubmitting}
                 />
 
                 {captchaRequired && (
-                  <div className="space-y-2">
-                    {/* A heading over the widget, not a form field: there is
-                        no control to label, and a FormLabel would point
-                        `htmlFor` at an id nothing renders. */}
-                    <p
-                      id="sign-in-captcha-heading"
-                      className="text-sm font-medium leading-none text-gray-700"
-                    >
-                      Security Check
-                    </p>
-                    {captcha.isConfigured ? (
-                      <div
-                        role="group"
-                        aria-labelledby="sign-in-captcha-heading"
-                        className="rounded-md border border-gray-200 p-3 bg-gray-50"
-                      >
-                        {captcha.widget}
-                        <p className="text-xs text-gray-500 mt-2">
-                          Only shown after repeated failed sign-in attempts.
-                        </p>
-                      </div>
-                    ) : (
-                      <Alert variant="destructive">
-                        <AlertDescription>
-                          Security check is unavailable. Please try again later.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
+                  <CaptchaSection
+                    isConfigured={captcha.isConfigured}
+                    widget={captcha.widget}
+                  />
                 )}
 
                 {error && (

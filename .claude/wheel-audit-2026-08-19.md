@@ -321,7 +321,7 @@ Root cause is in the shared helper — `validatedDelete` never got the third `pa
 `validatedGet` has. Fix it there, not at the call sites.
 
 ```ts
-// lib/core/api.ts
+// lib/core/http/api.ts
 export async function validatedDelete<T>(
   schema: z.ZodType<T>,
   url: string,
@@ -357,7 +357,7 @@ value; no test asserts on the built URL.
 exists because `validatedPost` lacks a params option. axios's third config arg already does this.
 
 ```ts
-// lib/core/api.ts
+// lib/core/http/api.ts
 export async function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
@@ -483,7 +483,7 @@ already solves — derive submit-enablement from `watch()`, never `formState.isV
 on mount, so the button starts wrongly enabled); and keep external widget tokens (Turnstile) and
 server-error banners in `useState`, RHF has no slot for them.
 
-**Fix the shared `lib/core/api.ts` helper, not the caller.**
+**Fix the shared `lib/core/http/api.ts` helper, not the caller.**
 axios 1.19.0 accepts `config.params` on *every* method. Two call sites hand-build query strings only
 because `validatedDelete` and `validatedPost` never got the third `params` argument `validatedGet` has.
 Adding it is optional and additive — no existing caller changes.

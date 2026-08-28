@@ -13,10 +13,10 @@ import {
 // dev-gated auth warns. Everything else goes through the toast adapter.
 const CONSOLE_OWNERS = [
   "features/auth/context/auth-context.tsx",
-  "lib/core/api-error-logging.ts",
-  "lib/core/api.ts",
-  "lib/core/client-error-report.ts",
-  "lib/core/data-dragon-version.ts",
+  "lib/core/http/api-error-logging.ts",
+  "lib/core/http/api.ts",
+  "lib/core/http/client-error-report.ts",
+  "lib/core/riot/data-dragon-version.ts",
   "instrumentation.ts",
   "app/client-error-report/route.ts",
 ];
@@ -200,15 +200,6 @@ export default defineConfig({
         ],
       },
     },
-    // The API client owns the one documented auth-infrastructure import
-    // (`refreshAccessToken`), which is a deep specifier. A decision about one
-    // named file, not a widening.
-    {
-      files: ["lib/core/api.ts"],
-      rules: {
-        "no-restricted-imports": restrictedImports(SESSION_TEARDOWN_IMPORTS),
-      },
-    },
     {
       files: HINT_READING_PAGES,
       rules: {
@@ -239,7 +230,7 @@ export default defineConfig({
     // cookie. Neither decides that a session is over.
     {
       files: [
-        "features/auth/utils/auth-state-cookie.ts",
+        "lib/session/auth-state-cookie.ts",
         "features/cookie-consent/utils/consent-storage.ts",
       ],
       rules: { "house/session-teardown-syntax": "off" },
@@ -247,10 +238,7 @@ export default defineConfig({
     // Owns the rejected-versus-unreachable distinction, and the explicit user
     // action, respectively.
     {
-      files: [
-        "features/auth/utils/token-manager.ts",
-        "features/auth/context/auth-context.tsx",
-      ],
+      files: ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
       rules: { "no-restricted-imports": "off" },
     },
     // Vendored shadcn primitives, which `components/CLAUDE.md` forbids
@@ -303,7 +291,7 @@ export default defineConfig({
     // The one module that owns the call, and the reason the rule can be
     // absolute everywhere else.
     {
-      files: ["lib/core/untrusted-json.ts"],
+      files: ["lib/core/http/untrusted-json.ts"],
       rules: { "house/no-raw-json-parse": "off" },
     },
   ],

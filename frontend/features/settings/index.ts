@@ -1,2 +1,2 @@
-export { AccountSettingsCard } from "./account-settings-card";
-export { RiotApiSettingsCard } from "./riot-api-settings-card";
+export { AccountSettingsCard } from "./components/account-settings-card";
+export { RiotApiSettingsCard } from "./components/riot-api-settings-card";

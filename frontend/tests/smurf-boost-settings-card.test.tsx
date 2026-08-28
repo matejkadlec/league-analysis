@@ -2,7 +2,7 @@
 
 import { screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -231,7 +231,7 @@ describe("SmurfBoostSettingsCard", () => {
     }
     const [cardId, sent] = firstCall;
     expect(cardId).toBe("profile.smurf-boost-detection");
-    expect(sent.queueId).toBeUndefined();
+    expect(Object.keys(sent)).not.toContain("queueId");
     expect(Object.keys(sent).length).toBe(THRESHOLD_FIELDS.length);
     expect(sent.recentWindowSize).toBe(15);
 

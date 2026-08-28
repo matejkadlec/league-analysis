@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { reportClientError } from "@/lib/core/client-error-report";
+import { reportClientError } from "@/lib/core/http/client-error-report";
 
 /**
  * Rendered for signed-out visitors too: gating it on authentication made a

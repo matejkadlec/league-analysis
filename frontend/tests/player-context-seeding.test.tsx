@@ -7,7 +7,7 @@ type Router = ReturnType<typeof import("next/navigation").useRouter>;
 
 const { validatedGet, useAuth, replace, push, pathname, search } = vi.hoisted(
   () => ({
-    validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+    validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
     useAuth: vi.fn<typeof import("@/features/auth").useAuth>(),
     replace: vi.fn<Router["replace"]>(),
     push: vi.fn<Router["push"]>(),
@@ -16,8 +16,8 @@ const { validatedGet, useAuth, replace, push, pathname, search } = vi.hoisted(
   }),
 );
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -33,10 +33,10 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
-import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
+import { useAnalyzedPlayer } from "@/features/players/components/use-analyzed-player";
 import type { AuthContextType } from "@/features/auth/types";
 import type { Player } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 function player(puuid: string, name: string): Player {
   return {

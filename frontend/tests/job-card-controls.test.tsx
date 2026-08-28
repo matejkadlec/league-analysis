@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 
 import { act, waitFor } from "@testing-library/react";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
   toast: vi.fn<typeof import("@/lib/core/hooks").appToast.toast>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPost,
 }));
 
@@ -20,7 +20,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { useJobCardControls } from "@/features/jobs/components/use-job-card-controls";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { JobConfiguration, JobExecution } from "@/lib/core/schemas";
 
 const JOB: JobConfiguration = {
@@ -116,7 +116,12 @@ describe("the one button that does five different things", () => {
 
     act(() => result.current.handleMainAction());
 
-    await waitFor(() => expect(requestedPaths()).toEqual(["/jobs/7/stop"]));
+    await waitFor(() => {
+      expect(requestedPaths()).toEqual(["/jobs/7/stop"]);
+      // No `force=false` either: the param is absent unless it is asked for,
+      // matching the URL the request used to carry.
+      expect(validatedPost.mock.calls[0]?.[3]?.params).toBeUndefined();
+    });
   });
 
   it("forces the stop only once a graceful stop is already in flight", async () => {
@@ -127,9 +132,12 @@ describe("the one button that does five different things", () => {
 
     act(() => result.current.handleMainAction());
 
-    await waitFor(() =>
-      expect(requestedPaths()).toEqual(["/jobs/7/stop?force=true"]),
-    );
+    await waitFor(() => {
+      expect(requestedPaths()).toEqual(["/jobs/7/stop"]);
+      // The flag rides in validatedPost's params argument now, so the force
+      // stays observable one level up from the URL.
+      expect(validatedPost.mock.calls[0]?.[3]?.params).toEqual({ force: true });
+    });
   });
 
   it("stops the test run rather than the scheduled job when a test is running", async () => {

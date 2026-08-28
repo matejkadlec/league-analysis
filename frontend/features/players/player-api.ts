@@ -5,9 +5,9 @@ import {
   validatedGet,
   validatedPost,
   type ApiResponse,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
-import type { Platform } from "@/lib/core/platform-utils";
+import type { Platform } from "@/lib/core/riot/platform-utils";
 
 const PlayerArraySchema = z.array(PlayerSchema);
 
@@ -34,16 +34,14 @@ export async function searchPlayerSuggestions(
   params: SearchSuggestionsParams,
   signal?: AbortSignal,
 ): Promise<ApiResponse<Player[]>> {
-  return validatedGet(
-    PlayerArraySchema,
-    "/players/suggestions",
-    {
+  return validatedGet(PlayerArraySchema, "/players/suggestions", {
+    params: {
       q: params.q,
       ...(params.platform !== undefined && { platform: params.platform }),
       ...(params.limit !== undefined && { limit: params.limit }),
     },
     signal,
-  );
+  });
 }
 
 export type DiscoverPlayerParams = Record<"game_name" | "tag_line", string> & {
@@ -54,5 +52,7 @@ export async function discoverPlayer(
   params: DiscoverPlayerParams,
 ): Promise<ApiResponse<Player>> {
   // The endpoint reads its arguments from the query string, not a body.
-  return validatedPost(PlayerSchema, "/players/discover", undefined, params);
+  return validatedPost(PlayerSchema, "/players/discover", undefined, {
+    params,
+  });
 }

@@ -3,21 +3,21 @@
 import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
 type UsePlayerSyncRun =
-  typeof import("@/features/players/use-player-sync-run").usePlayerSyncRun;
+  typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
 const { validatedGet, usePlayerSyncRun } = vi.hoisted(() => ({
   validatedGet: vi.fn<ValidatedGet>(),
   usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
-vi.mock("@/features/players/use-player-sync-run", () => ({
+vi.mock("@/features/players/components/use-player-sync-run", () => ({
   usePlayerSyncRun,
 }));
 
@@ -35,7 +35,7 @@ vi.mock("next/image", () => ({
 import { PlayerCard } from "@/features/players/components/player-card";
 import { RecentPerformanceCard } from "@/features/profile/components/recent-performance-card";
 import type { Player } from "@/lib/core/schemas";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 
 const PUUID = "p-1";
 
@@ -101,7 +101,8 @@ it("asks for one player's ranked aggregate once per page, not once per card", as
     (call: unknown[]) =>
       typeof call[1] === "string" &&
       call[1].endsWith(`/${PUUID}/stats`) &&
-      (call[2] as { limit?: number } | undefined)?.limit === undefined,
+      (call[2] as { params?: { limit?: number } } | undefined)?.params
+        ?.limit === undefined,
   );
 
   expect(unlimited).toHaveLength(1);

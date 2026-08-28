@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, normalizeApiError } from "@/lib/core/api";
+import { api, normalizeApiError } from "@/lib/core/http/api";
 import { queryErrorToast } from "@/lib/core/hooks";
 import { AuthGate } from "@/components/auth-gate";
 import type { AuthContextType } from "@/features/auth/types";
@@ -12,7 +12,7 @@ import {
   AUTH_STATE_COOKIE_VALUE,
   clearAuthStateCookie,
   hasAuthStateCookie,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 // The session hint survives every failure that is not a refusal. Lint rules
 // recognise shapes of code, so these assert the effect instead: each surface

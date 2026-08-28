@@ -10,7 +10,7 @@ type PlayerContextValue = ReturnType<
 
 const { validatedGet, usePlayerContext, replace, push, pathname, search } =
   vi.hoisted(() => ({
-    validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+    validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
     usePlayerContext:
       vi.fn<
         typeof import("@/features/players/context/player-context").usePlayerContext
@@ -21,8 +21,8 @@ const { validatedGet, usePlayerContext, replace, push, pathname, search } =
     search: { current: "" },
   }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -41,10 +41,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push }),
 }));
 
-import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
+import { useAnalyzedPlayer } from "@/features/players/components/use-analyzed-player";
 import { playerQueryKey } from "@/features/players/player-query";
 import type { Player } from "@/lib/core/schemas";
-import { renderHookWithQueryClient } from "./render-support";
+import { renderHookWithQueryClient } from "./support/render-support";
 
 function player(puuid: string, name: string): Player {
   return {

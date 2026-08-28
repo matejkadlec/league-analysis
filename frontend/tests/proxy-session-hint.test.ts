@@ -11,7 +11,7 @@ import { proxy } from "@/proxy";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 // The edge may route on the hint and may never retract it: only a request to
 // the API tells a refusal from an outage, and the edge cannot make one. So it

@@ -8,7 +8,7 @@ from sqlalchemy import ClauseElement
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.auth.user_settings import ensure_user_settings
+from app.features.auth.users.user_settings import ensure_user_settings
 from app.features.settings.schemas import (
     CookieConsentLevel,
     UserCookieConsentUpdate,

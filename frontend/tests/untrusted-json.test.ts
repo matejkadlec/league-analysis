@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+import { parseUntrustedJson } from "@/lib/core/http/untrusted-json";
 
 const Schema = z.object({ level: z.string() });
 

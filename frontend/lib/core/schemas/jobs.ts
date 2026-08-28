@@ -2,12 +2,9 @@ import { z } from "zod";
 
 import { paginationFields } from "./common";
 
-// ===== JOB SCHEMAS =====
-
-// Job Type Enum (must match backend enum values)
+// The three enums must match backend enum values.
 export const JobTypeSchema = z.enum(["MATCH_FETCHER", "PLAYER_UPDATER"]);
 
-// Job Status Enum (must match backend enum values)
 export const JobStatusSchema = z.enum([
   "PENDING",
   "RUNNING",
@@ -18,10 +15,8 @@ export const JobStatusSchema = z.enum([
   "RATE_LIMITED",
 ]);
 
-// Execution Type Enum (must match backend enum values)
 export const ExecutionTypeSchema = z.enum(["REGULAR", "TEST"]);
 
-// Job Configuration Schema
 export const JobConfigurationSchema = z.object({
   id: z.number().int(),
   job_type: JobTypeSchema,
@@ -46,7 +41,6 @@ export const JobConfigurationSchema = z.object({
   updated_at: z.string(),
 });
 
-// Job Execution Schema
 // The other half of backend/app/features/jobs/base.py:StoredAPICall. A single
 // call keeps its whole params dict; a group keeps only the key that varied.
 export const JobExecutionApiCallSchema = z.object({
@@ -88,7 +82,6 @@ export const JobExecutionSchema = z.object({
   execution_type: ExecutionTypeSchema.default("REGULAR"),
 });
 
-// Job Status Response Schema
 export const JobStatusResponseSchema = z.object({
   scheduler_running: z.boolean(),
   active_jobs: z.number().int(),
@@ -97,7 +90,6 @@ export const JobStatusResponseSchema = z.object({
   next_run_time: z.string().nullable().optional(),
 });
 
-// Job Trigger Response Schema
 export const JobTriggerResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
@@ -113,13 +105,11 @@ export const JobControlActionResponseSchema = z.object({
   is_force_stopping: z.boolean(),
 });
 
-// Job Execution List Response Schema
 export const JobExecutionListResponseSchema = z.object({
   executions: z.array(JobExecutionSchema),
   ...paginationFields,
 });
 
-// Infer TypeScript types for Jobs
 export type JobStatus = z.infer<typeof JobStatusSchema>;
 export type JobConfiguration = z.infer<typeof JobConfigurationSchema>;
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
@@ -131,6 +121,3 @@ export type JobControlActionResponse = z.infer<
 export type JobExecutionListResponse = z.infer<
   typeof JobExecutionListResponseSchema
 >;
-
-// ===== PLAYER LEAGUE SCHEMA =====
-// Simplified immutable league snapshot (ordered by created_at DESC for current)

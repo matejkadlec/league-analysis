@@ -7,7 +7,7 @@ import {
   formatRelativeTime,
   oldestCompleteFreshness,
 } from "@/lib/core/relative-time";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { useRelativeTime } from "@/lib/core/hooks/use-relative-time";
 
 describe("authoritative freshness presentation", () => {
   afterEach(() => {

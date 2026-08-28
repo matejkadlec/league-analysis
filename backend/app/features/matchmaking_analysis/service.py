@@ -6,12 +6,10 @@ anchors its participants' samples; the DB is read before the Riot API.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
-from statistics import fmean, median
-from typing import Any
+from typing import Any, override
 
 import structlog
 from sqlalchemy import (
@@ -35,7 +33,6 @@ from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
-    RateLimitError,
     RiotAPIError,
 )
 from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
@@ -59,21 +56,18 @@ from app.features.players.leagues import (
 )
 from app.features.players.models import Player
 
-from .models import (
-    MatchmakingAnalysis,
-    MatchmakingAnalysisResultsJSON,
-    MatchmakingPerMatchJSON,
-)
+from .errors import MatchmakingAnalysisRuntimeError
+from .models import MatchmakingAnalysis
+from .models import MatchmakingAnalysisResultsJSON as MatchmakingAnalysisResultsJSON
 from .ranks import (
     UNRANKED,
-    PlayerRankJSON,
-    RankSummary,
-    classify_duo_matches,
     duo_partner_puuids,
     player_rank_map,
     rank_value,
     summarize_ranks,
 )
+from .rate_limit import MAX_RATE_LIMIT_WAIT as MAX_RATE_LIMIT_WAIT
+from .rate_limit import RateLimitRetryMixin
 from .schemas import (
     ACTIVE_ANALYSIS_STATUSES,
     MatchmakingAnalysisHistoryItem,
@@ -82,10 +76,17 @@ from .schemas import (
     MatchmakingAnalysisResponse,
     MatchmakingErrorCode,
 )
+from .statistics import (
+    PlayerPerformance,
+    SideSamples,
+    SpineMatchStats,
+    build_completion_results,
+    player_performance_from_rows,
+)
+from .statistics import side_performance as side_performance
+from .statistics import trimmed_mean as trimmed_mean
 
 logger = structlog.get_logger(__name__)
-
-MAX_RATE_LIMIT_WAIT = 120
 
 MATCHES_FOR_WINRATE = 10
 # Absolute floor, deliberately below the smallest selectable spine size: a
@@ -116,27 +117,6 @@ def theoretical_max_requests(spine_size: int) -> int:
     )
 
 
-# The retry policy `_api_call_with_retries` runs under, as plain rules --
-# none of it reads run state, like the completion math above it.
-
-
-def _rate_limit_retry_after(error: RateLimitError) -> int:
-    return int(error.retry_after or 120)
-
-
-def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
-    return isinstance(error, (AuthenticationError, ForbiddenError)) or required
-
-
-def _raise_if_retries_exhausted(*, required: bool) -> None:
-    if required:
-        raise MatchmakingAnalysisRuntimeError(
-            "rate_limit_wait_exhausted",
-            "The analysis could not resume within the allowed Riot rate-limit "
-            "wait. Please try again later.",
-        )
-
-
 @dataclass(frozen=True)
 class RunningAnalysis:
     """Process-local handle for one persisted analysis run."""
@@ -151,23 +131,6 @@ class RunningAnalysis:
 _running_analyses: dict[tuple[int, str], RunningAnalysis] = {}
 
 
-class MatchmakingAnalysisRuntimeError(Exception):
-    """Internal failure carrying only reviewed client-safe diagnostics."""
-
-    code: MatchmakingErrorCode
-    client_message: str
-
-    def __init__(self, code: MatchmakingErrorCode, message: str) -> None:
-        super().__init__(code)
-        self.code = code
-        self.client_message = message
-
-
-# The pure completion model. Everything below is arithmetic over already
-# fetched winrates -- no session, no client, no service state -- so it can be
-# read and tested without constructing a `MatchmakingAnalysisService`.
-
-
 def _team_id_for_player(
     participants: list[tuple[str, int]], analysis_puuid: str
 ) -> int | None:
@@ -175,215 +138,6 @@ def _team_id_for_player(
         if p_puuid == analysis_puuid:
             return team_id
     return None
-
-
-def trimmed_mean(values: Sequence[float]) -> float:
-    """Mean with 10% trimmed from each end -- a floor'd count, so below ten
-    values nothing is trimmed and this is the plain mean.
-
-    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the
-    fixtures duplicated across both test suites must stay identical.
-    """
-    k = int(len(values) * 0.1)
-    kept = sorted(values)[k : len(values) - k]
-    return fmean(kept)
-
-
-@dataclass(frozen=True)
-class PlayerPerformance:
-    """One participant's form over their trailing ranked matches.
-
-    KDA is the median of their per-game KDAs -- single stomps or zero-death
-    games skew a mean badly at this sample size. The two team-normalized
-    ratios are means over the games that carry them.
-    """
-
-    kda: float
-    kill_participation: float | None
-    damage_share: float | None
-
-
-@dataclass
-class _SideSamples:
-    """One side's per-player winrate and form samples for a spine match."""
-
-    winrates: dict[str, float]
-    performances: dict[str, PlayerPerformance]
-
-
-@dataclass(frozen=True)
-class SidePerformance:
-    """One side's per-metric means over the players who carry each metric."""
-
-    kda: float | None
-    kill_participation: float | None
-    damage_share: float | None
-
-
-def player_performance_from_rows(
-    rows: Sequence[tuple[Decimal, Decimal | None, Decimal | None]],
-) -> PlayerPerformance | None:
-    """Fold one player's trailing (kda, kill_participation, damage_share) rows.
-
-    Casts to float at this boundary: the columns are NUMERIC, and a Decimal in
-    the results payload fails JSON serialization at finalize. The None-skip
-    serves pre-column rows; modern writes store absent keys as 0, accepted.
-    """
-    if not rows:
-        return None
-    kdas = [float(kda) for kda, _, _ in rows]
-    kps = [float(kp) for _, kp, _ in rows if kp is not None]
-    shares = [float(share) for _, _, share in rows if share is not None]
-    return PlayerPerformance(
-        kda=median(kdas),
-        kill_participation=fmean(kps) if kps else None,
-        damage_share=fmean(shares) if shares else None,
-    )
-
-
-def _side_performance(players: list[PlayerPerformance]) -> SidePerformance:
-    """Average each metric over the players that have it, independently:
-    a player whose stored games predate the ratio columns still counts
-    toward the side's KDA."""
-
-    def _mean_of(values: list[float]) -> float | None:
-        return fmean(values) if values else None
-
-    return SidePerformance(
-        kda=_mean_of([p.kda for p in players]),
-        kill_participation=_mean_of(
-            [p.kill_participation for p in players if p.kill_participation is not None]
-        ),
-        damage_share=_mean_of(
-            [p.damage_share for p in players if p.damage_share is not None]
-        ),
-    )
-
-
-@dataclass(frozen=True)
-class SpineMatchStats:
-    """One spine match's per-player samples, keyed by puuid per side.
-
-    Aggregation happens at completion time, once the whole spine is known:
-    the duo partners can only be identified globally, and they are excluded
-    from ally averages just like the analyzed player.
-    """
-
-    match_id: str
-    ally_puuids: list[str]
-    enemy_puuids: list[str]
-    win: bool | None
-    ally_winrates: dict[str, float]
-    enemy_winrates: dict[str, float]
-    ally_performances: dict[str, PlayerPerformance]
-    enemy_performances: dict[str, PlayerPerformance]
-
-
-@dataclass(frozen=True)
-class _MatchAggregates:
-    """One spine match's side averages after the ally-side exclusions."""
-
-    team_avg: float | None
-    enemy_avg: float | None
-    team: SidePerformance
-    enemy: SidePerformance
-
-
-def _aggregate_match(s: SpineMatchStats, excluded: set[str]) -> _MatchAggregates:
-    """Side averages excluding the players matchmaking never chose: the
-    analyzed player and their inferred duo partners, ally side only."""
-    team_wrs = [wr for p, wr in s.ally_winrates.items() if p not in excluded]
-    enemy_wrs = list(s.enemy_winrates.values())
-    return _MatchAggregates(
-        team_avg=fmean(team_wrs) if team_wrs else None,
-        enemy_avg=fmean(enemy_wrs) if enemy_wrs else None,
-        team=_side_performance(
-            [perf for p, perf in s.ally_performances.items() if p not in excluded]
-        ),
-        enemy=_side_performance(list(s.enemy_performances.values())),
-    )
-
-
-def _per_match_payload(
-    aggregated: list[tuple[SpineMatchStats, _MatchAggregates]],
-    duo_by_match: dict[str, bool],
-) -> list[MatchmakingPerMatchJSON]:
-    """Both-sided spine matches with their duo flag, for the scope split."""
-
-    def _rounded(value: float | None, digits: int) -> float | None:
-        return None if value is None else round(value, digits)
-
-    return [
-        {
-            "match_id": s.match_id,
-            "duo": duo_by_match[s.match_id],
-            "win": s.win,
-            "ally_puuids": s.ally_puuids,
-            "enemy_puuids": s.enemy_puuids,
-            "team_avg": round(a.team_avg, 4),
-            "enemy_avg": round(a.enemy_avg, 4),
-            "team_kda": _rounded(a.team.kda, 2),
-            "enemy_kda": _rounded(a.enemy.kda, 2),
-            "team_kill_participation": _rounded(a.team.kill_participation, 4),
-            "enemy_kill_participation": _rounded(a.enemy.kill_participation, 4),
-            "team_damage_share": _rounded(a.team.damage_share, 4),
-            "enemy_damage_share": _rounded(a.enemy.damage_share, 4),
-        }
-        for s, a in aggregated
-        if a.team_avg is not None and a.enemy_avg is not None
-    ]
-
-
-def _build_completion_results(
-    spine_stats: list[SpineMatchStats],
-    *,
-    matches_analyzed: int,
-    matches_requested: int,
-    rank_summary: RankSummary,
-    player_ranks: dict[str, PlayerRankJSON],
-    rank_period_accurate: int,
-    rank_current_day: int,
-    analyzed_puuid: str,
-) -> MatchmakingAnalysisResultsJSON:
-    """Summarise a finished run, or refuse to call an empty one finished.
-
-    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict. The
-    headline averages keep their full per-side lists, while `per_match` keeps
-    only both-sided matches -- the SoloQ/DuoQ scope split needs comparable pairs.
-    """
-    spine_allies = [(s.match_id, s.ally_puuids) for s in spine_stats]
-    excluded = duo_partner_puuids(spine_allies, analyzed_puuid=analyzed_puuid) | {
-        analyzed_puuid
-    }
-    aggregated = [(s, _aggregate_match(s, excluded)) for s in spine_stats]
-    team_avgs = [a.team_avg for _, a in aggregated if a.team_avg is not None]
-    enemy_avgs = [a.enemy_avg for _, a in aggregated if a.enemy_avg is not None]
-    if not team_avgs or not enemy_avgs:
-        raise MatchmakingAnalysisRuntimeError(
-            "no_matches_analyzed",
-            "No ranked match history could be read for this lobby. "
-            "Please try again later.",
-        )
-    return {
-        "team_avg_winrate": round(trimmed_mean(team_avgs), 4),
-        "enemy_avg_winrate": round(trimmed_mean(enemy_avgs), 4),
-        "matches_analyzed": matches_analyzed,
-        "matches_requested": matches_requested,
-        "spine_matches_found": len(spine_stats),
-        "ally_avg_rank_value": rank_summary.ally_avg_rank_value,
-        "enemy_avg_rank_value": rank_summary.enemy_avg_rank_value,
-        "ally_tier_counts": rank_summary.ally_tier_counts,
-        "enemy_tier_counts": rank_summary.enemy_tier_counts,
-        "per_match": _per_match_payload(
-            aggregated,
-            classify_duo_matches(spine_allies, analyzed_puuid=analyzed_puuid),
-        ),
-        "player_ranks": player_ranks,
-        "rank_freshness": {
-            "period_accurate": rank_period_accurate,
-            "current_day": rank_current_day,
-        },
-    }
 
 
 def _untracked_snapshot_insert(p_puuid: str, solo_entry: LeagueEntryDTO) -> Insert:
@@ -408,9 +162,14 @@ def _untracked_snapshot_insert(p_puuid: str, solo_entry: LeagueEntryDTO) -> Inse
     )
 
 
-class MatchmakingAnalysisService:
-    """Service for analyzing matchmaking fairness."""
+class MatchmakingAnalysisService(RateLimitRetryMixin):
+    """Service for analyzing matchmaking fairness.
 
+    Composes `RateLimitRetryMixin`, so every Riot call this service makes runs
+    under the shared rate-limit wait/retry policy from `rate_limit.py`.
+    """
+
+    @override
     def _active_run_where(
         self, puuid: str, created_at: datetime
     ) -> ColumnElement[bool]:
@@ -451,8 +210,6 @@ class MatchmakingAnalysisService:
             MatchmakingAnalysis.status == "completed",
             MatchmakingAnalysis.results.isnot(None),
         )
-
-    MAX_RATE_LIMIT_ATTEMPTS = 10
 
     def __init__(
         self, db: AsyncSession, riot_client: RiotAPIClient | None, user_id: int
@@ -846,6 +603,7 @@ class MatchmakingAnalysisService:
             return datetime.now(UTC)
         return datetime.combine(self.end_date, time.max, tzinfo=UTC)
 
+    @override
     async def _write_active_run(
         self, puuid: str, created_at: datetime, **values: Any
     ) -> None:
@@ -975,7 +733,7 @@ class MatchmakingAnalysisService:
                 match_id=match_id,
                 anchor=match_anchor,
             )
-            result = await self._process_match(
+            result = await self._sample_spine_match(
                 puuid, created_at, match_id, match_anchor_seconds
             )
             if result:
@@ -998,7 +756,7 @@ class MatchmakingAnalysisService:
             [(s.match_id, s.ally_puuids) for s in spine_stats],
             analyzed_puuid=puuid,
         ) | {puuid}
-        results = _build_completion_results(
+        results = build_completion_results(
             spine_stats,
             matches_analyzed=self.matches_analyzed,
             matches_requested=self.match_count,
@@ -1063,7 +821,7 @@ class MatchmakingAnalysisService:
     # Match Processing
     # ================================================================
 
-    async def _process_match(
+    async def _sample_spine_match(
         self,
         analysis_puuid: str,
         analysis_created_at: datetime,
@@ -1080,7 +838,7 @@ class MatchmakingAnalysisService:
             logger.warning("Current player not in match", match_id=match_id)
             return None
 
-        team, enemy = _SideSamples({}, {}), _SideSamples({}, {})
+        team, enemy = SideSamples({}, {}), SideSamples({}, {})
         ally_puuids: list[str] = []
         enemy_puuids: list[str] = []
 
@@ -1113,7 +871,7 @@ class MatchmakingAnalysisService:
 
     async def _sample_participant(
         self,
-        side: _SideSamples,
+        side: SideSamples,
         p_puuid: str,
         end_time_seconds: int,
         analysis_puuid: str,
@@ -1459,55 +1217,6 @@ class MatchmakingAnalysisService:
     # Rate-Limited API Calls
     # ================================================================
 
-    async def _api_call_with_retries[T](
-        self,
-        fetch: Callable[[], Awaitable[T]],
-        *,
-        required: bool,
-        operation: str,
-        **log_fields: object,
-    ) -> T | None:
-        """Run one Riot call under the shared rate-limit retry policy.
-
-        Returns None when capacity is unavailable, the error is recoverable,
-        or retries are exhausted; `required=True` raises instead. These attempts
-        stack on the Riot client's own tenacity retry of 429/5xx.
-        """
-        for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
-            try:
-                result = await fetch()
-                await self._record_successful_api_call()
-                return result
-
-            except RateLimitError as e:
-                retry_after = _rate_limit_retry_after(e)
-                logger.info(
-                    "Rate limit during Riot call",
-                    operation=operation,
-                    retry_after=retry_after,
-                    attempt=attempt + 1,
-                    **log_fields,
-                )
-                if attempt + 1 == self.MAX_RATE_LIMIT_ATTEMPTS:
-                    break
-                await self._wait_for_rate_limit(retry_after)
-
-            except RiotAPIError as e:
-                logger.warning(
-                    "Riot call failed",
-                    operation=operation,
-                    error_type=type(e).__name__,
-                    **log_fields,
-                )
-                if _should_reraise_riot_error(e, required=required):
-                    raise
-                return None
-
-        logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
-        await self._clear_rate_limit_wait_if_active()
-        _raise_if_retries_exhausted(required=required)
-        return None
-
     @property
     def _riot(self) -> RiotAPIClient:
         """The Riot client, which only the background instance carries."""
@@ -1552,98 +1261,6 @@ class MatchmakingAnalysisService:
             operation="match fetch",
             match_id=match_id,
         )
-
-    async def _record_successful_api_call(self) -> None:
-        self.api_calls_made += 1
-        await self._clear_rate_limit_wait_if_active()
-
-    # ================================================================
-    # Rate Limit Waiting
-    # ================================================================
-
-    async def _wait_for_rate_limit(self, retry_after: int) -> None:
-        """Wait for rate limit reset while persisting lifecycle timing."""
-        wait_time = min(retry_after, MAX_RATE_LIMIT_WAIT)
-        reset_at = datetime.now(UTC) + timedelta(seconds=wait_time)
-
-        logger.info("Waiting for rate limit", wait_seconds=wait_time, reset_at=reset_at)
-        self._is_waiting_for_rate_limit = True
-        await self._set_rate_limit_reset(reset_at)
-        await asyncio.sleep(wait_time)
-
-    async def _clear_rate_limit_wait_if_active(self) -> None:
-        """Clear persisted rate-limit timing once requests can proceed again."""
-        if not self._is_waiting_for_rate_limit:
-            return
-        self._is_waiting_for_rate_limit = False
-        await self._set_rate_limit_reset(None, force_clear=True)
-
-    async def _set_rate_limit_reset(
-        self,
-        reset_at: datetime | None,
-        force_clear: bool = False,
-    ) -> None:
-        """Update the persisted rate-limit lifecycle timing."""
-        if not self._has_current_analysis():
-            return
-        try:
-            result = await self.db.execute(
-                select(MatchmakingAnalysis.rate_limit_reset_at).where(
-                    self._active_run_where(*self._current_run_identity())
-                )
-            )
-            current_reset = result.scalar_one_or_none()
-            now = datetime.now(UTC)
-            next_reset = self._next_rate_limit_reset(
-                reset_at, current_reset, now, force_clear
-            )
-
-            await self._write_active_run(
-                *self._current_run_identity(),
-                status=self._status_for_rate_limit(next_reset),
-                rate_limit_reset_at=next_reset,
-                requests_saved=self.requests_saved,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to set rate_limit_reset_at",
-                error_type=type(e).__name__,
-            )
-            await rollback_quietly(self.db)
-
-    def _has_current_analysis(self) -> bool:
-        return bool(self._current_analysis_puuid and self._current_analysis_created_at)
-
-    def _current_run_identity(self) -> tuple[str, datetime]:
-        """The identity of the run this worker owns; guarded by `_has_current_analysis`."""
-        assert self._current_analysis_puuid is not None
-        assert self._current_analysis_created_at is not None
-        return self._current_analysis_puuid, self._current_analysis_created_at
-
-    @staticmethod
-    def _next_rate_limit_reset(
-        reset_at: datetime | None,
-        current_reset: datetime | None,
-        now: datetime,
-        force_clear: bool,
-    ) -> datetime | None:
-        if reset_at is None and not force_clear:
-            if current_reset is not None and current_reset > now:
-                return current_reset
-            return reset_at
-        if (
-            reset_at is not None
-            and current_reset is not None
-            and current_reset > reset_at
-        ):
-            return current_reset
-        return reset_at
-
-    @staticmethod
-    def _status_for_rate_limit(next_reset: datetime | None) -> str:
-        if next_reset is not None:
-            return "waiting_rate_limit"
-        return "in_progress"
 
     # ================================================================
     # Analysis Record Helpers

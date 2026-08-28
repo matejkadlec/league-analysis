@@ -16,9 +16,10 @@ const BACKEND = join(here, "../../backend/app");
 const CLIENT_ONLY_CODES = new Set(["NETWORK_ERROR", "REQUEST_TIMEOUT"]);
 
 const BRANCHING_FILES = [
-  "features/auth/utils/login-error.ts",
+  "lib/session/login-error.ts",
   "features/auth/components/sign-in-form.tsx",
-  "features/settings/use-change-email.ts",
+  "features/settings/components/use-change-email.ts",
+  "features/settings/utils/settings-helpers.ts",
 ];
 
 function backendCodes(): Set<string> {
@@ -47,11 +48,13 @@ function branchedCodes(): { code: string; where: string }[] {
   return BRANCHING_FILES.flatMap((file) => {
     const source = readFileSync(join(here, "..", file), "utf8");
     const found: { code: string; where: string }[] = [];
-    // Only the two shapes that decide behaviour: a switch arm and a
-    // comparison against `.code`.
+    // Only the shapes that decide behaviour: a switch arm, a comparison
+    // against `.code`, and a key in a code-to-message table (an entry for a
+    // code the API stopped sending is just as dead as a stale branch).
     for (const pattern of [
       /case\s+"([A-Z_]+)"/g,
       /\.code\s*===\s*"([A-Z_]+)"/g,
+      /^\s+([A-Z][A-Z_]{3,}):/gm,
     ]) {
       for (const match of source.matchAll(pattern)) {
         found.push({ code: match[1] ?? "", where: file });

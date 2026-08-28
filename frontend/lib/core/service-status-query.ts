@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import { ServiceStatusSchema } from "@/lib/core/schemas";
 
 /** The cache both observers share; every write to the key spells it from here. */
@@ -19,8 +19,7 @@ export function serviceStatusQueryOptions(options?: { enabled?: boolean }) {
         await validatedGet(
           ServiceStatusSchema,
           "/settings/service-status",
-          undefined,
-          signal,
+          { signal },
         ),
       ),
     enabled: options?.enabled ?? true,

@@ -2,17 +2,17 @@
 
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet, useAuth } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
   useAuth:
     vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -53,7 +53,7 @@ vi.mock("@/features/jobs", async (importOriginal) => ({
 }));
 
 import JobsPage from "@/app/jobs/page";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { AuthContextType } from "@/features/auth/types";
 
 const JOB = { id: 1, name: "Match Fetcher" };

@@ -8,7 +8,7 @@ from typing import Annotated, NoReturn
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from app.features.auth.dependencies import get_current_admin_user
+from app.features.auth.dependencies import AdminUserDep, get_current_admin_user
 
 from .base import BaseJob
 from .control import (
@@ -20,7 +20,7 @@ from .dependencies import JobServiceDep
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
 from .intervals import JobIntervalError
 from .maintenance import RiotWriterMaintenanceConfigurationError
-from .models import ExecutionType, JobStatus, JobType
+from .models import ExecutionType, JobStatus
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -84,14 +84,9 @@ def _create_test_job_instance(
     Returns:
         Test job instance that calls API endpoints without writing data.
     """
-    test_type_mapping: dict[
-        JobType, type[TestMatchFetcherJob] | type[TestPlayerUpdaterJob]
-    ] = {
-        JobType.MATCH_FETCHER: TestMatchFetcherJob,
-        JobType.PLAYER_UPDATER: TestPlayerUpdaterJob,
-    }
+    from .scheduler import test_job_registry
 
-    test_class = test_type_mapping.get(job.job_type)
+    test_class = test_job_registry().get(job.job_type)
     if not test_class:
         raise HTTPException(
             status_code=501,
@@ -120,6 +115,7 @@ async def update_job_configuration(
     job_id: int,
     job_update: JobConfigurationUpdate,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobConfigurationResponse:
     """Update job configuration (e.g., enable/disable, change schedule)."""
     try:
@@ -131,6 +127,11 @@ async def update_job_configuration(
         from .scheduler import sync_job_configuration
 
         await sync_job_configuration(job.id)
+        logger.info(
+            "Job configuration updated",
+            job_id=job_id,
+            admin_user_id=current_user.id,
+        )
         return job
     except RiotWriterMaintenanceConfigurationError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -155,15 +156,7 @@ async def get_job_executions(
     """
     Get execution history for a specific job.
 
-    Args:
-        job_id: Job configuration ID.
-        page: Page number (1-indexed).
-        size: Number of executions per page.
-        status: Optional status filter.
-        execution_type: Optional execution type filter (REGULAR or TEST).
-
-    Returns:
-        Paginated list of job executions.
+    Returns a paginated list of its executions.
     """
     executions = await job_service.list_job_executions(
         job_config_id=job_id,
@@ -188,14 +181,7 @@ async def list_all_executions(
     """
     Get execution history for all jobs.
 
-    Args:
-        page: Page number (1-indexed).
-        size: Number of executions per page.
-        status: Optional status filter.
-        execution_type: Optional execution type filter (REGULAR or TEST).
-
-    Returns:
-        Paginated list of all job executions.
+    Returns a paginated list of every execution.
     """
     executions = await job_service.list_job_executions(
         status=status,
@@ -214,24 +200,17 @@ async def trigger_job(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobTriggerResponse:
     """
-    Manually trigger a job execution.
+    Manually trigger a job execution, bypassing the normal schedule.
 
-    This creates a new job execution record and triggers the job
-    immediately, bypassing the normal schedule.
-
-    Args:
-        job_id: Job configuration ID.
-        background_tasks: FastAPI background tasks for async execution.
-
-    Returns:
-        Job trigger response with execution ID.
+    An already-running job is refused with HTTP 200 and success=False -- the
+    contract `use-job-card-controls.ts` reads as refusal, not transport error.
 
     Raises:
         404: Job configuration not found.
-        400: Job is not active or scheduler is disabled.
-        409: Job is already running.
+        400: Job is not active.
     """
     job = await job_service.get_job_configuration(job_id)
     if not job:
@@ -251,6 +230,7 @@ async def trigger_job(
         logger.info(
             "Stopped test run to allow regular trigger",
             job_id=job_id,
+            admin_user_id=current_user.id,
         )
 
     # Check if job is already running (prevent concurrent runs)
@@ -261,6 +241,7 @@ async def trigger_job(
             job_id=job_id,
             job_name=job.name,
             job_type=job.job_type.value,
+            admin_user_id=current_user.id,
         )
         return JobTriggerResponse(
             success=False,
@@ -268,7 +249,8 @@ async def trigger_job(
             execution_id=None,
         )
 
-    # Create and trigger the job instance (triggered by user)
+    # The literal "user" is a frontend contract: the jobs UI compares
+    # triggered_by === "user" to tell manual runs from scheduled ones.
     job_instance = _create_job_instance(job, triggered_by="user")
     background_tasks.add_task(job_instance.run)
 
@@ -277,6 +259,7 @@ async def trigger_job(
         job_id=job_id,
         job_name=job.name,
         job_type=job.job_type.value,
+        admin_user_id=current_user.id,
     )
 
     return JobTriggerResponse(
@@ -305,34 +288,48 @@ def _require_control_state(
 async def pause_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Pause a running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.set_job_paused(job_id, paused=True), job_id
     )
+    logger.info("Job paused", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/resume")
 async def resume_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Resume a paused running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.set_job_paused(job_id, paused=False), job_id
     )
+    logger.info("Job resumed", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/stop")
 async def stop_job(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Request graceful or forced stop for a running job execution."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.request_job_stop_action(job_id, force=force), job_id
     )
+    logger.info(
+        "Job stop requested",
+        job_id=job_id,
+        force=force,
+        admin_user_id=current_user.id,
+    )
+    return state
 
 
 # === Test Run Endpoints ===
@@ -373,6 +370,7 @@ async def trigger_test_run(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     suspend_regular: Annotated[
         bool,
         Query(description="Whether to suspend regular scheduled runs during the test"),
@@ -383,10 +381,6 @@ async def trigger_test_run(
     The test run calls all Riot API endpoints the real job uses once per
     minute.  It never writes data to the database (except the execution
     record itself).  Runs for up to 1 hour or until stopped.
-
-    Args:
-        job_id: Job configuration ID.
-        suspend_regular: If True, the scheduled job is paused for the duration.
     """
     job = await job_service.get_job_configuration(job_id)
     if not job:
@@ -407,7 +401,6 @@ async def trigger_test_run(
             execution_id=None,
         )
 
-    # Suspend scheduled runs if requested
     if suspend_regular:
         _set_scheduled_job_suspended(job.id, suspended=True)
 
@@ -426,6 +419,7 @@ async def trigger_test_run(
         job_id=job_id,
         job_name=job.name,
         suspend_regular=suspend_regular,
+        admin_user_id=current_user.id,
     )
 
     return JobTriggerResponse(
@@ -452,13 +446,21 @@ async def _run_test_job_with_cleanup(
 async def stop_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
     force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Stop a running test for a job."""
-    return _require_control_state(
+    state = _require_control_state(
         await job_service.request_job_stop_action(job_id, force=force, test_run=True),
         job_id,
     )
+    logger.info(
+        "Test run stop requested",
+        job_id=job_id,
+        force=force,
+        admin_user_id=current_user.id,
+    )
+    return state
 
 
 async def _set_test_run_paused(
@@ -477,18 +479,24 @@ async def _set_test_run_paused(
 async def pause_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Pause a running test execution."""
-    return await _set_test_run_paused(job_id, job_service, paused=True)
+    state = await _set_test_run_paused(job_id, job_service, paused=True)
+    logger.info("Test run paused", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.post("/{job_id}/test/resume")
 async def resume_test_run(
     job_id: int,
     job_service: JobServiceDep,
+    current_user: AdminUserDep,
 ) -> JobControlActionResponse:
     """Resume a paused test execution."""
-    return await _set_test_run_paused(job_id, job_service, paused=False)
+    state = await _set_test_run_paused(job_id, job_service, paused=False)
+    logger.info("Test run resumed", job_id=job_id, admin_user_id=current_user.id)
+    return state
 
 
 @router.get("/status/overview")

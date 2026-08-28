@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { THRESHOLD_FIELDS } from "../smurf-boost-settings";
+import { THRESHOLD_FIELDS, type ThresholdName } from "../smurf-boost-settings";
 import { FAMILY_TITLES } from "../smurf-boost-vocabulary";
 import { cn } from "@/lib/core/utils";
 
@@ -40,11 +40,11 @@ const GROUPS = [
 ];
 
 interface SmurfBoostSettingsThresholdsProps {
-  values: Record<string, string>;
-  errors: Record<string, string>;
+  values: Partial<Record<ThresholdName, string>>;
+  errors: Partial<Record<ThresholdName, string>>;
   crossError: string | null;
   busy: boolean;
-  onChange: (name: string, value: string) => void;
+  onChange: (name: ThresholdName, value: string) => void;
 }
 
 export function SmurfBoostSettingsThresholds({

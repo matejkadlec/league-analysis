@@ -3,7 +3,7 @@ import { relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles, allTestFiles } from "./source-scan-support";
+import { allSourceFiles, allTestFiles } from "./support/source-scan-support";
 
 /**
  * Every export of `lib/core/schemas/` is reached by something -- which knip

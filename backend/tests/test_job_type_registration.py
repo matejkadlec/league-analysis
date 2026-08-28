@@ -53,7 +53,7 @@ def test_the_router_can_construct_every_job_type(
     """Both router factories can build every declared type.
 
     The run factory reads `job_registry`, so the check above covers which types
-    it knows. The test-runner map is a separate literal -- a type missing from
+    it knows. The test factory reads `test_job_registry` -- a type missing from
     it schedules fine and then answers the request to run it with a 501.
     """
     try:

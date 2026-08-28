@@ -160,8 +160,8 @@ class ParticipantDTO(RiotDTO):
     runes: dict[str, Any] = Field(default_factory=dict, alias="perks")
     advanced_stats: dict[str, Any] = Field(default_factory=dict, alias="challenges")
 
-    # Legacy / Unused in new schema but kept for completeness or other uses
-    role: str | None = None
+    # Riot leaves `team_position` empty on some queues; the transformer falls
+    # back to this one, so it is load-bearing rather than legacy.
     individual_position: str | None = Field(default=None)
 
 
@@ -183,7 +183,7 @@ class MatchInfoDTO(RiotDTO):
     game_result: str | None = Field(default=None, alias="endOfGameResult")
     # `min_length=1`: a participant-less match would otherwise be stored as fact
     # and marked `fully_analyzed`. The refusal is per-match and recoverable --
-    # `process_queue_sync_match` logs it and the run continues.
+    # `sync_queue_match` logs it and the run continues.
     participants: list[ParticipantDTO] = Field(..., min_length=1)
     # `min_length=1`, so an empty `platformId` is refused rather than standing
     # in for a real one: a substituted platform pins the player row to the wrong

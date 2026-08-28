@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,13 +9,13 @@ import { AuthProvider, useAuth } from "@/features/auth/context/auth-context";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
-import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
+} from "@/lib/session/auth-state-cookie";
+import { AUTH_PROBE_TIMEOUT_MS } from "@/lib/session/login-error";
 import type { AuthContextType } from "@/features/auth/types";
 import {
   hangingFetch,
   installDrivableAbortDeadlines,
-} from "./deadline-support";
+} from "./support/deadline-support";
 
 /** A complete `UserResponse`; `UserResponseSchema` rejects anything less. */
 function userBody(overrides: Record<string, unknown> = {}) {

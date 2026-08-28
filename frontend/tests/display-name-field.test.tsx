@@ -2,14 +2,14 @@
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 type AuthContext = import("@/features/auth/types").AuthContextType;
 
 const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
-  validatedPatch: vi.fn<typeof import("@/lib/core/api").validatedPatch>(),
+  validatedPatch: vi.fn<typeof import("@/lib/core/http/api").validatedPatch>(),
   checkAuth: vi.fn<AuthContext["checkAuth"]>(),
   toast: {
     success: vi.fn<AppToast["success"]>(),
@@ -19,8 +19,8 @@ const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPatch,
 }));
 
@@ -37,8 +37,8 @@ vi.mock("@/features/auth", async (importOriginal) => ({
   }),
 }));
 
-import { DisplayNameField } from "@/features/settings/display-name-field";
-import { USER_QUERY_KEY } from "@/features/settings/settings-helpers";
+import { DisplayNameField } from "@/features/settings/components/display-name-field";
+import { USER_QUERY_KEY } from "@/features/settings/utils/settings-helpers";
 
 function renderField() {
   const { queryClient } = renderWithQueryClient(

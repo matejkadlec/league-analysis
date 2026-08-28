@@ -4,7 +4,7 @@ import { LegalPageShell } from "@/components/legal-page-shell";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 export default async function PrivacyPolicyPage() {
   const cookieStore = await cookies();

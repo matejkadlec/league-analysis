@@ -9,8 +9,6 @@ export type SmurfBoostAnalysisRequest = z.infer<
 
 import { splitRunOnLifecycle } from "./run-lifecycle";
 
-// ===== SMURF AND BOOST DETECTION SCHEMAS =====
-
 export const SmurfBoostBandSchema = z.enum([
   "not_enough_data",
   "no_unusual_pattern",
@@ -33,7 +31,6 @@ export const SmurfBoostStatusSchema = z.enum([
   "failed",
 ]);
 
-// Smurf Boost Signal Schema
 export const SmurfBoostSignalSchema = z.object({
   id: z.string(),
   family: SmurfBoostFamilyIdSchema,
@@ -52,7 +49,6 @@ export const SmurfBoostSignalSchema = z.object({
 
 export type SmurfBoostSignal = z.infer<typeof SmurfBoostSignalSchema>;
 
-// Smurf Boost Family Schema
 export const SmurfBoostFamilySchema = z.object({
   family: SmurfBoostFamilyIdSchema,
   band: SmurfBoostBandSchema,
@@ -62,7 +58,6 @@ export const SmurfBoostFamilySchema = z.object({
 
 export type SmurfBoostFamily = z.infer<typeof SmurfBoostFamilySchema>;
 
-// Smurf Boost Results Schema
 export const SmurfBoostResultsSchema = z.object({
   model_version: z.string(),
   families: z.array(SmurfBoostFamilySchema),

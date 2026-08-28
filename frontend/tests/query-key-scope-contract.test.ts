@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
+import { PLAYER_DERIVED_SYNC_ROOTS } from "@/features/players/components/use-player-sync-run";
 
 /**
  * Query keys that are genuinely global: the same for every player. Anything
@@ -24,6 +25,12 @@ const PLAYER_INDEPENDENT_KEYS = new Set([
   // scan below learned to read key factories.
   "user",
 ]);
+
+/**
+ * The update's own poll, deliberately not refetched by its own completion:
+ * doing so re-delivers the terminal run and repeats the outcome toast.
+ */
+const SYNC_LIFECYCLE_KEYS = new Set(["player-sync", "player-sync-active"]);
 
 interface QueryKeyUse {
   file: string;
@@ -85,6 +92,26 @@ describe("query key scope contract", () => {
       .map((use) => `${use.file}:${use.line} ["${use.namespace}"]`);
 
     expect(unscoped).toEqual([]);
+  });
+
+  it("refetches every player-derived cache when an update finishes", () => {
+    // A new player-derived cache that nobody adds to the refetch list would
+    // just stay stale after an update, with nothing to say so.
+    const refetched = new Set<string>(PLAYER_DERIVED_SYNC_ROOTS);
+    const missing = [
+      ...new Set(
+        queryKeyUses()
+          .filter(
+            (use) =>
+              !PLAYER_INDEPENDENT_KEYS.has(use.namespace) &&
+              !SYNC_LIFECYCLE_KEYS.has(use.namespace) &&
+              !refetched.has(use.namespace),
+          )
+          .map((use) => use.namespace),
+      ),
+    ];
+
+    expect(missing).toEqual([]);
   });
 
   it("keeps the player-independent list free of dead entries", () => {

@@ -25,10 +25,11 @@ from app.features.auth.errors import (
     CaptchaRequiredError,
     CaptchaVerificationError,
 )
-from app.features.auth.models import User
-from app.features.auth.passwords import DUMMY_PASSWORD_HASH, pwd_context
 from app.features.auth.router import login
 from app.features.auth.service import AuthService
+from app.features.auth.tokens.token_service import TokenPair
+from app.features.auth.users.models import User
+from app.features.auth.users.passwords import DUMMY_PASSWORD_HASH, pwd_context
 from route_helpers import loopback_request, undecorated
 
 
@@ -235,7 +236,12 @@ async def test_successful_login_is_logged() -> None:
             )
         ),
         issue_token_pair=AsyncMock(
-            return_value=("access-token", now, "refresh-token", now)
+            return_value=TokenPair(
+                access_token="access-token",
+                access_expires_at=now,
+                refresh_token="refresh-token",
+                refresh_expires_at=now,
+            )
         ),
         update_last_login=AsyncMock(),
         cleanup_expired_token_state=AsyncMock(),

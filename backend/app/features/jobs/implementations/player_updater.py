@@ -8,18 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import RateLimitError
-from app.features.jobs.base import BaseJob, JobStopSignal
-from app.features.jobs.error_handling import (
-    RateLimitSignal,
-)
+from app.features.jobs.base import BaseJob, JobStopSignal, RateLimitSignal
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+from app.features.jobs.player_targets import PlayerTargetsMixin
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
 
 
-class PlayerUpdaterJob(BaseJob):
+class PlayerUpdaterJob(PlayerTargetsMixin, BaseJob):
     """Job to update player profiles (game_name, tag_line, profile_icon_id, summoner_level).
 
     Calls summoner-v4 by-puuid (profile_icon_id, summoner_level) and

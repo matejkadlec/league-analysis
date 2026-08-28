@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   namesTheEndOfTheSession,
   refreshAccessToken,
-} from "@/features/auth/utils/token-manager";
+} from "@/lib/session/token-manager";
 
 /**
  * The two ways a session can end that nothing was watching -- both found by

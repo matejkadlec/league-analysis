@@ -2,11 +2,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { refreshAccessToken } from "@/features/auth/utils/token-manager";
+import { refreshAccessToken } from "@/lib/session/token-manager";
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
+} from "@/lib/session/auth-state-cookie";
 
 /**
  * One refresh per tab, however many 401s arrive at once. Without the shared

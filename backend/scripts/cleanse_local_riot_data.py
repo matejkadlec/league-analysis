@@ -17,11 +17,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
+# The settings module's import loads the repository-root .env with
+# override=False, so this script needs no dotenv bootstrap of its own.
 from app.core.config import Settings, get_global_settings
-from app.features.auth.passwords import pwd_context
+from app.features.auth.users.passwords import pwd_context
 from scripts.local_target import (
     is_loopback_address,
     is_loopback_listener_configuration,
@@ -29,8 +30,10 @@ from scripts.local_target import (
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-
-load_dotenv(PROJECT_ROOT / ".env", override=False)
+# The backup clients talk to the local server over TCP; a hung server must
+# fail the cleanup, not park it forever.
+BACKUP_DUMP_TIMEOUT_SECONDS = 600
+BACKUP_VERIFY_TIMEOUT_SECONDS = 60
 
 ADMIN_EMAIL = "mat.kadlec@email.cz"
 ADMIN_PASSWORD = "LocalAdminQa123!"
@@ -307,6 +310,7 @@ def create_verified_backup(
                 stdout=backup_output,
                 stderr=subprocess.PIPE,
                 env=environment,
+                timeout=BACKUP_DUMP_TIMEOUT_SECONDS,
             )
             backup_output.flush()
             os.fsync(backup_output.fileno())
@@ -316,8 +320,14 @@ def create_verified_backup(
             capture_output=True,
             text=True,
             env=environment,
+            timeout=BACKUP_VERIFY_TIMEOUT_SECONDS,
         )
-    except (FileNotFoundError, subprocess.CalledProcessError, OSError) as error:
+    except (
+        FileNotFoundError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        OSError,
+    ) as error:
         backup_path.unlink(missing_ok=True)
         raise LocalCleanupRefusal("backup creation or verification failed") from error
 

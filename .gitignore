@@ -63,6 +63,7 @@ frontend/build/
 
 # Local agent tooling state
 .zcode/
+.desloppify/
 
 # Untracked
 docs/examples/

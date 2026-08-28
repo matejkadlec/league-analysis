@@ -15,8 +15,7 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
 from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO, MatchTimelineDTO
-from app.features.jobs.base import BaseJob
-from app.features.jobs.error_handling import RateLimitSignal
+from app.features.jobs.base import BaseJob, RateLimitSignal
 from app.features.jobs.implementations import match_fetcher as match_fetcher_module
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
@@ -267,7 +266,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     job = MatchFetcherJob(job_config_id=7)
     job.job_config = cast(JobConfiguration, SimpleNamespace(config_json={}))
     job.check_control_state = AsyncMock()
-    # Player resolution lives on BaseJob._load_tracked_puuids now; this test
+    # Player resolution lives on PlayerTargetsMixin._load_tracked_puuids now; this test
     # is about rate-limit propagation, not about resolution.
     monkeypatch.setattr(
         MatchFetcherJob,

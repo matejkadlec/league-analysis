@@ -37,7 +37,7 @@ public API via `index.ts`.
   `playerQueryOptions()`. Never cache an API-result envelope or attach a query
   function with a different return shape to that key.
 - Match History queue labels, filter order, query IDs, and fixed label widths
-  live in `matches/queue-catalog.ts`. Keep All Queues unrestricted and
+  live in `lib/core/riot/queue-catalog.ts`. Keep All Queues unrestricted and
   exclusive, use a normal selection for one queue and Shift selection for a
   non-empty queue union, reset numbered pagination on any queue/search/page-size
   change, and preserve unknown IDs as `Queue N` instead of mapping them to a

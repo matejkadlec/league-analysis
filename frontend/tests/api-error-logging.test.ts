@@ -4,8 +4,8 @@ import axios, { type AxiosError } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { normalizeApiError, type ApiError } from "../lib/core/api-error";
-import { reportApiError } from "../lib/core/api-error-logging";
+import { normalizeApiError, type ApiError } from "../lib/core/http/api-error";
+import { reportApiError } from "../lib/core/http/api-error-logging";
 
 function axiosError(
   status: number | undefined,

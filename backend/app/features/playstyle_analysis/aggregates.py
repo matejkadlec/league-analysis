@@ -36,8 +36,8 @@ def calculate_aggregate_value(
     return _generic_metric_average(participants, config, resolved_game_count)
 
 
-def _is_first_blood_rate_tag(tag_code: str, config: TagConfig) -> bool:
-    return tag_code == "aggresive_laner" or tag_code == "passive_laner"
+def _has_first_blood_participation(tag_code: str, config: TagConfig) -> bool:
+    return "min_first_blood_participation" in config
 
 
 def _has_min_dead_time_ratio(tag_code: str, config: TagConfig) -> bool:
@@ -283,7 +283,7 @@ def _generic_metric_average(
 
 
 _AGGREGATORS: list[tuple[AggregatorPredicate, Aggregator]] = [
-    (_is_first_blood_rate_tag, _first_blood_rate),
+    (_has_first_blood_participation, _first_blood_rate),
     (_has_min_dead_time_ratio, _dead_time_ratio),
     (_has_cs_per_minute, _cs_per_minute),
     (_has_min_total_minions, _total_minions_per_game),

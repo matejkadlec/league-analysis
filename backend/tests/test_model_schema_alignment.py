@@ -16,8 +16,8 @@ from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import DeclarativeBase
 
-from app.features.auth.models import User
 from app.features.auth.schemas import UserResponse
+from app.features.auth.users.models import User
 from app.features.jobs.models import JobConfiguration, JobExecution, PlayerSyncRun
 from app.features.jobs.schemas import JobConfigurationResponse, JobExecutionResponse
 from app.features.matches.models import Match

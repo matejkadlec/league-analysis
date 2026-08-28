@@ -1,12 +1,12 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles } from "./support/source-scan-support";
 
 const SONNER_IMPORT_ALLOWLIST = new Set([
   "components/toast-host.tsx",
-  "lib/core/hooks.ts",
+  "lib/core/hooks/index.ts",
 ]);
 const GLOBAL_CSS = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 
@@ -59,13 +59,12 @@ describe("toast source contract", () => {
   });
 
   it("uses warnings for local guidance and success for completed operations", () => {
-    const settingsDir = join(process.cwd(), "features/settings");
-    const settings = readdirSync(settingsDir)
-      .filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
-      .map((name) => readFileSync(join(settingsDir, name), "utf8"))
+    const settings = allSourceFiles()
+      .filter((path) => path.includes(join("features", "settings")))
+      .map((path) => readFileSync(path, "utf8"))
       .join("\n");
     const playerSyncRun = readFileSync(
-      join(process.cwd(), "features/players/use-player-sync-run.ts"),
+      join(process.cwd(), "features/players/components/use-player-sync-run.ts"),
       "utf8",
     );
 

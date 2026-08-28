@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import type { ComponentProps } from "react";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -186,14 +186,23 @@ describe("PlayerSelector", () => {
     // would populate only renders while the box is focused -- so an ungated
     // query spends a request per mount on results nothing can show.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
-    renderSelector(vi.fn(), "Previous#ONE");
-    const user = userEvent.setup();
 
-    // Past the 250ms search debounce: before it elapses an ungated query has
-    // not fired either, so an immediate assertion would pass either way.
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    // Past the 250ms search debounce on a driven clock: before it elapses an
+    // ungated query has not fired either, so an immediate assertion would
+    // pass either way.
+    vi.useFakeTimers();
+    try {
+      renderSelector(vi.fn(), "Previous#ONE");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
     expect(searchPlayerSuggestions).not.toHaveBeenCalled();
     expect(screen.queryByRole("option")).toBeNull();
+
+    const user = userEvent.setup();
 
     await user.click(screen.getByLabelText("Choose test player"));
     await waitFor(() => expect(searchPlayerSuggestions).toHaveBeenCalled());

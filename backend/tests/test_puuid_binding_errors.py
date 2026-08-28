@@ -9,13 +9,13 @@ import pytest
 from sqlalchemy import Table, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_chains import is_riot_puuid_binding_error
 from app.core.models import Base
 from app.core.riot_api.client import JSONValue, RiotAPIClient
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
 from app.features.jobs import player_sync as player_sync_module
 from app.features.jobs.base import BaseJob
-from app.features.jobs.error_handling import is_riot_puuid_binding_error
 from app.features.jobs.models import (
     ExecutionType,
     JobConfiguration,
@@ -240,7 +240,7 @@ def test_a_skipped_writer_reports_a_busy_writer() -> None:
 
 
 def test_a_failed_start_is_not_reported_as_a_busy_writer() -> None:
-    """`run()` swallows a `log_start` failure and returns with no execution id.
+    """`run()` swallows a `record_execution_start` failure and returns with no execution id.
 
     Classifying that database failure as a competing update would tell the user
     to wait for a run that never exists.
@@ -284,7 +284,7 @@ async def test_completion_flag_requires_a_successful_write() -> None:
     job.job_config_type_value = "match_fetcher"
     db = _FailingSession()
 
-    await job.log_completion(cast(AsyncSession, db), success=True)
+    await job.record_execution_completion(cast(AsyncSession, db), success=True)
 
     assert job._completion_logged is False
     # A status the database never accepted must not reach the classifier.
@@ -301,7 +301,7 @@ async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
     job.job_config_type_value = "match_fetcher"
     db = _FailingSession()
 
-    await job.log_completion(
+    await job.record_execution_completion(
         cast(AsyncSession, db),
         success=True,
         status=JobStatus.CANCELLED,

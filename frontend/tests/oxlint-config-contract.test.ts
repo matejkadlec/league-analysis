@@ -27,13 +27,13 @@ import {
 
 /** Every group the shared import rule must ban, spelled out here on purpose. */
 const EXPECTED_IMPORT_GROUPS = [
-  "**/auth/utils/token-manager*",
-  "../utils/token-manager*",
-  "./utils/token-manager*",
+  "**/lib/session/token-manager*",
+  "../session/token-manager*",
+  "./session/token-manager*",
   "./token-manager*",
-  "**/auth/utils/auth-state-cookie*",
-  "../utils/auth-state-cookie*",
-  "./utils/auth-state-cookie*",
+  "**/lib/session/auth-state-cookie*",
+  "../session/auth-state-cookie*",
+  "./session/auth-state-cookie*",
   "./auth-state-cookie*",
 ];
 
@@ -60,10 +60,10 @@ const EXPECTED_EDGE_SELECTOR_COUNT = 4;
 
 /**
  * Blocks that set `no-restricted-imports` without the barrel list, each a
- * named decision: the API client's one documented deep import, the five
- * hint-reading pages, and the edge's own allowlist. A fourth must be argued.
+ * named decision: the five hint-reading pages and the edge's own allowlist.
+ * A third must be argued.
  */
-const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 3;
+const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 2;
 
 /**
  * Every opt-out, spelled out: the two directories that build the scenarios
@@ -74,15 +74,12 @@ const EXPECTED_EXEMPTIONS: Record<string, string[][]> = {
   "house/session-teardown-syntax": [
     ["tests/**", "e2e/**"],
     [
-      "features/auth/utils/auth-state-cookie.ts",
+      "lib/session/auth-state-cookie.ts",
       "features/cookie-consent/utils/consent-storage.ts",
     ],
   ],
   "no-restricted-imports": [
-    [
-      "features/auth/utils/token-manager.ts",
-      "features/auth/context/auth-context.tsx",
-    ],
+    ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
     [".oxlint-plugins/**"],
   ],
 };

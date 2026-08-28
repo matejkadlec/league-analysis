@@ -4,9 +4,9 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import { MatchStatsResponseSchema, PlayerSchema } from "@/lib/core/schemas";
-import { RANKED_SOLO_QUEUE_ID } from "@/features/matches";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
 
 export function playerQueryKey(puuid: string | null) {
   return ["player", puuid] as const;
@@ -27,20 +27,23 @@ export function playerContextQueryKey(userId: number | null | undefined) {
  * string, so query-key-scope-contract.test.ts can read the namespace here. */
 export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
-/** Invalidate everything that reflects whether a player is tracked. Track and
- * untrack both touch the same four caches; this names that set once. */
-export function invalidateTrackingQueries(
+/** Invalidate everything that reflects whether a player is tracked, awaiting
+ * every invalidation the way `invalidateMatchmakingRun` does. Track and
+ * untrack both touch the same three caches; this names that set once. */
+export async function invalidateTrackingQueries(
   queryClient: QueryClient,
   userId: number | null | undefined,
   puuid: string,
-): void {
-  void queryClient.invalidateQueries({
-    queryKey: trackedPlayersQueryKey(userId),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: playerContextQueryKey(userId),
-  });
-  void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: trackedPlayersQueryKey(userId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: playerContextQueryKey(userId),
+    }),
+    queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
+  ]);
 }
 
 export function playerQueryOptions(puuid: string | null) {
@@ -52,12 +55,7 @@ export function playerQueryOptions(puuid: string | null) {
     queryFn: puuid
       ? async ({ signal }) =>
           unwrap(
-            await validatedGet(
-              PlayerSchema,
-              `/players/${puuid}`,
-              undefined,
-              signal,
-            ),
+            await validatedGet(PlayerSchema, `/players/${puuid}`, { signal }),
           )
       : skipToken,
     // The copy `player-context.tsx` seeds from `/players/context` is only
@@ -82,13 +80,15 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
           {
-            // `queues`, not the scalar `queue`: a name this endpoint does not
-            // declare is dropped rather than refused, which would leave the
-            // card averaging every queue.
-            queues: String(RANKED_SOLO_QUEUE_ID),
-            ...(limit !== undefined && { limit }),
+            params: {
+              // `queues`, not the scalar `queue`: a name this endpoint does not
+              // declare is dropped rather than refused, which would leave the
+              // card averaging every queue.
+              queues: String(RANKED_SOLO_QUEUE_ID),
+              ...(limit !== undefined && { limit }),
+            },
+            signal,
           },
-          signal,
         ),
       ),
     retry: false,

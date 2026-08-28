@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./render-support";
+import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,7 @@ import {
   type SmurfBoostAnalysisResponse,
 } from "@/lib/core/schemas";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type SmurfBoostApi = typeof import("@/features/smurf-boost/smurf-boost-api");
 type Toast = typeof import("sonner").toast;
 
@@ -46,8 +46,8 @@ vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
 
 // The run button fetches this player's games before comparing them, so the
 // player-sync transport is part of this card's behaviour now.
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));
@@ -953,10 +953,10 @@ describe("SmurfBoostDetection", () => {
       ).toBe(true),
     );
     await waitFor(() => expect(runButton()).toBeTruthy());
-    // The comparison would fire from behind four awaits in the hook's
-    // completion handling, all of them after the render that re-enables the
-    // button -- so the button alone is too early an anchor for a negative.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The comparison fires from behind four awaits in the hook's completion
+    // handling, all after the render that re-enables the button -- so draining
+    // the queue, not the button, is the anchor this negative needs.
+    await act(async () => {});
     expect(validatedPost).not.toHaveBeenCalled();
     expect(startSmurfBoostDetection).not.toHaveBeenCalled();
   });

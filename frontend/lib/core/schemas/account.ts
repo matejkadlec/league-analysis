@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// ===== USER PROFILE SCHEMAS =====
 export const UserResponseSchema = z.object({
   id: z.number().int(),
   email: z.email(),

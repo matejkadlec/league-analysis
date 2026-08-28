@@ -23,6 +23,7 @@ DECLARED_LIMITS: dict[str, str] = {
     "app.features.players.router.discover_player": "30 per 1 minute",
     "app.features.players.router.start_player_sync": "10 per 1 minute",
     "app.features.players.router.track_player": "10 per 1 minute",
+    "app.features.playstyle_analysis.router.analyze_playstyle": "10 per 1 minute",
     "app.features.smurf_boost_detection.router.analyze_player": "20 per 1 minute",
 }
 
