@@ -7,7 +7,15 @@ issue, newest last:
 
 ## Open
 
-_Empty._
+- 2026-08-28 frontend/tests/api-contract-alignment.test.ts: the query names a
+  `validatedPost`/`validatedPut`/`validatedPatch` call site sends are never
+  checked against OpenAPI. The bag sits one slot past an arbitrary body
+  expression, which the parser does not try to reach. Two live sites pass one
+  (`/players/discover`, `/jobs/{id}/stop`).
+- 2026-08-28 frontend/features: there is no rule for where a feature's pure
+  helpers live -- the feature root, `utils/`, or `components/` are all in use,
+  and `features/matches` uses all three. This is the half of the desloppify
+  `package_organization` finding that the lib/core regrouping did not address.
 
 ## Findings that did not survive measurement
 
