@@ -121,6 +121,43 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     )
 
 
+async def test_status_poll_resumes_a_run_whose_worker_did_not_survive() -> None:
+    """A deploy mid-run cancels the task but keeps the row active; the poll
+    is the only caller left that can re-arm it."""
+    active = _analysis("in_progress")
+    database = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: active)
+        )
+    )
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+    service._ensure_background_task = MagicMock()
+
+    response = await service.get_analysis_status(_PUUID, active.created_at)
+
+    assert response is not None
+    assert response.status == "in_progress"
+    service._ensure_background_task.assert_called_once_with(_PUUID, active.created_at)
+
+
+async def test_status_poll_leaves_a_finished_run_alone() -> None:
+    """Polling a terminal run must never spawn a worker for it."""
+    done = _analysis("completed")
+    database = SimpleNamespace(
+        execute=AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: done))
+    )
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+    service._ensure_background_task = MagicMock()
+
+    await service.get_analysis_status(_PUUID, done.created_at)
+
+    service._ensure_background_task.assert_not_called()
+
+
 async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     """A completed worker's brief cleanup window cannot strand the next run."""
     old_created_at = datetime.now(UTC) - timedelta(minutes=1)

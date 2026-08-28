@@ -616,7 +616,7 @@ class MatchmakingAnalysisService:
     async def get_analysis_status(
         self, puuid: str, created_at: datetime
     ) -> MatchmakingAnalysisResponse | None:
-        """Get status of a specific analysis."""
+        """Get status of a specific analysis, re-arming one left without a worker."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(self._one_run_where(puuid, created_at))
         )
@@ -624,7 +624,13 @@ class MatchmakingAnalysisService:
         if not analysis:
             return None
 
-        return MatchmakingAnalysisResponse.model_validate(analysis)
+        response = MatchmakingAnalysisResponse.model_validate(analysis)
+        if response.status in ACTIVE_ANALYSIS_STATUSES:
+            # Shutdown leaves the row active on the contract that a restart
+            # resumes it, and this poll is the only caller left to honour it:
+            # the UI hides Start, and startup recovery skips this table.
+            self._ensure_background_task(puuid, created_at)
+        return response
 
     async def get_analysis_history(
         self, puuid: str, limit: int = 20
