@@ -228,3 +228,15 @@ the `pitfall-check` agent.
   looks. Keep `validatedPost("/jobs/…")` URL arguments inline as literals at
   the call site, and when a decomposition step wants to move one, move the
   whole call.
+
+## Root-level TS tooling needs the repo-root `tsconfig.json`
+
+`frontend/tsconfig.json` defines `@/*`, so anything that scans from the repo
+root instead of from `frontend/` cannot resolve an aliased import and treats
+every aliased module as having zero importers. That produced 46 false
+"orphaned file" findings, including `components/ui/button.tsx` — which has 21
+importers. The root `tsconfig.json` exists only to give those tools the
+mapping; every frontend step in `test.sh` cds into `frontend/` first, so it is
+never the build config. It must stay strict JSON — a `//` comment in it makes
+desloppify's parser fall back to no mapping, silently restoring the false
+positives.
