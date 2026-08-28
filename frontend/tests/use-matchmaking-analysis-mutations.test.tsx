@@ -43,7 +43,7 @@ import {
   matchmakingResultsQueryKey,
   matchmakingStatusQueryKey,
 } from "@/features/matchmaking/matchmaking-query";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import {
   MatchmakingAnalysisResponseSchema,
   MessageResponseSchema,

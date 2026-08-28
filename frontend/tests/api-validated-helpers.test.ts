@@ -14,7 +14,7 @@ const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
   () => ({
     notifyRiotCredentialHealthUpdated:
       vi.fn<
-        typeof import("@/lib/core/riot-credential-health-events").notifyRiotCredentialHealthUpdated
+        typeof import("@/lib/core/riot/riot-credential-health-events").notifyRiotCredentialHealthUpdated
       >(),
     refreshAccessToken:
       vi.fn<
@@ -23,7 +23,7 @@ const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
   }),
 );
 
-vi.mock("@/lib/core/riot-credential-health-events", () => ({
+vi.mock("@/lib/core/riot/riot-credential-health-events", () => ({
   notifyRiotCredentialHealthUpdated,
 }));
 
@@ -37,8 +37,8 @@ import {
   validatedPatch,
   validatedPost,
   validatedPut,
-} from "@/lib/core/api";
-import { ApiRequestError } from "@/lib/core/api-error";
+} from "@/lib/core/http/api";
+import { ApiRequestError } from "@/lib/core/http/api-error";
 
 const Schema = z.object({ id: z.number() });
 

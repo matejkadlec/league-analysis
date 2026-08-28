@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, normalizeApiError } from "@/lib/core/api";
+import { api, normalizeApiError } from "@/lib/core/http/api";
 import { queryErrorToast } from "@/lib/core/hooks";
 import { AuthGate } from "@/components/auth-gate";
 import type { AuthContextType } from "@/features/auth/types";

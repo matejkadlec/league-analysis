@@ -5,12 +5,12 @@ import { renderHookWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
   toast: vi.fn<typeof import("@/lib/core/hooks").appToast.toast>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPost,
 }));
 
@@ -20,7 +20,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { useJobCardControls } from "@/features/jobs/components/use-job-card-controls";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { JobConfiguration, JobExecution } from "@/lib/core/schemas";
 
 const JOB: JobConfiguration = {

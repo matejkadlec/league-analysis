@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { type ApiResponse, unwrap, validatedPost } from "@/lib/core/api";
+import { type ApiResponse, unwrap, validatedPost } from "@/lib/core/http/api";
 import { useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,

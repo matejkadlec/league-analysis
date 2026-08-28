@@ -13,7 +13,7 @@ export {
   type StructuredErrorDetail,
 } from "./api-error";
 import type { ApiError } from "./api-error";
-import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
+import { notifyRiotCredentialHealthUpdated } from "../riot/riot-credential-health-events";
 import { refreshAccessToken } from "@/lib/session/token-manager";
 
 const API_BASE_URL =

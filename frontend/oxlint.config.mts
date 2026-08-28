@@ -13,10 +13,10 @@ import {
 // dev-gated auth warns. Everything else goes through the toast adapter.
 const CONSOLE_OWNERS = [
   "features/auth/context/auth-context.tsx",
-  "lib/core/api-error-logging.ts",
-  "lib/core/api.ts",
-  "lib/core/client-error-report.ts",
-  "lib/core/data-dragon-version.ts",
+  "lib/core/http/api-error-logging.ts",
+  "lib/core/http/api.ts",
+  "lib/core/http/client-error-report.ts",
+  "lib/core/riot/data-dragon-version.ts",
   "instrumentation.ts",
   "app/client-error-report/route.ts",
 ];
@@ -291,7 +291,7 @@ export default defineConfig({
     // The one module that owns the call, and the reason the rule can be
     // absolute everywhere else.
     {
-      files: ["lib/core/untrusted-json.ts"],
+      files: ["lib/core/http/untrusted-json.ts"],
       rules: { "house/no-raw-json-parse": "off" },
     },
   ],

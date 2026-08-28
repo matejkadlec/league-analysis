@@ -7,14 +7,14 @@ import { renderWithQueryClient } from "./support/render-support";
 
 type Players = typeof import("@/features/players");
 type PlayerContextValue = ReturnType<Players["usePlayerContext"]>;
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 
 const { validatedGet, usePlayerContext } = vi.hoisted(() => ({
   validatedGet: vi.fn<Api["validatedGet"]>(),
   usePlayerContext: vi.fn<Players["usePlayerContext"]>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
   ...(await importOriginal<Api>()),
   validatedGet,
 }));
@@ -72,8 +72,8 @@ vi.mock("@/features/auth", () => ({
 }));
 
 import PlayerOverviewPage from "@/app/player-overview/page";
-import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
-import type { ApiResponse } from "@/lib/core/api";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
+import type { ApiResponse } from "@/lib/core/http/api";
 import {
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,

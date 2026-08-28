@@ -81,13 +81,13 @@ These are product design decisions, not suggestions:
   before a 15px title aligned to the icon. Toast padding is 12px and the
   icon-to-content gap is 6px. Default duration is 4000ms; use `duration: 1000`
   only for quick inline confirmations.
-- Normalize API failures through `lib/core/api-error.ts`. UI may present safe
+- Normalize API failures through `lib/core/http/api-error.ts`. UI may present safe
   typed validation and business messages, but must replace unexpected,
   provider, transport, and infrastructure details with a contextual product
   message. Never render raw response bodies or unclassified exception text.
 - Unexpected API failures (`service`, `network`, `timeout`, `unexpected`
   kinds) are recorded to the developer console by
-  `lib/core/api-error-logging.ts` through the shared `QueryCache` and
+  `lib/core/http/api-error-logging.ts` through the shared `QueryCache` and
   `MutationCache` handlers in `components/providers.tsx`; do not add
   per-caller console calls. The same reporter also posts a scrubbed record
   to `/client-error-report`, which is what makes those failures visible in

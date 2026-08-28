@@ -1,5 +1,5 @@
 import { queryOptions, skipToken } from "@tanstack/react-query";
-import { unwrapOr404 } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/http/api";
 
 import { getLatestSmurfBoostDetection } from "./smurf-boost-api";
 

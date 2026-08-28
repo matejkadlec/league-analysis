@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "@/lib/core/api";
+import { unwrap } from "@/lib/core/http/api";
 import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";

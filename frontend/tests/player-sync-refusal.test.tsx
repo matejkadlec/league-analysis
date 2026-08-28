@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHookWithQueryClient } from "./support/render-support";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
 const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
@@ -16,8 +16,8 @@ const { validatedGet, validatedPost, toastError, toastInfo, toastWarning } =
     toastWarning: vi.fn<AppToast["warning"]>(),
   }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));

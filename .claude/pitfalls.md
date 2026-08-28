@@ -97,7 +97,7 @@ the `pitfall-check` agent.
   `ServerErrorMiddleware` handler, which sits *outside* every middleware the
   app adds -- so the JSON 500 it emits never passes through `CORSMiddleware`.
   A cross-origin browser client sees an opaque network failure instead of the
-  500. Unreachable today: `lib/core/api.ts` resolves `API_BASE_URL` to `""` in
+  500. Unreachable today: `lib/core/http/api.ts` resolves `API_BASE_URL` to `""` in
   the browser, so every request the frontend makes is same-origin through the
   Next.js `rewrites()` proxy, and `CORS_ORIGINS` is configured for a client
   that does not exist yet. If one ever does, the fix is a middleware added

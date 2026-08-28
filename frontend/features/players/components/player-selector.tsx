@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { normalizeApiError, unwrap } from "@/lib/core/api";
+import { normalizeApiError, unwrap } from "@/lib/core/http/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
@@ -30,9 +30,9 @@ import {
   type Platform,
   getPlatformDisplayName,
   isPlatform,
-} from "@/lib/core/platform-utils";
+} from "@/lib/core/riot/platform-utils";
 import type { Player } from "@/lib/core/schemas";
-import { useDebouncedValue } from "@/lib/core/use-debounced-value";
+import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
 import { cn } from "@/lib/core/utils";
 
 import {

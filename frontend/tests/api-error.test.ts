@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   apiErrorMessage,
   normalizeApiError,
-} from "../lib/core/api-error";
+} from "../lib/core/http/api-error";
 import { playerTrackingFailureKind } from "../features/players/utils/tracking-feedback";
 
 function axiosError(

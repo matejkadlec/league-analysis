@@ -8,8 +8,8 @@ import {
   getRuneStyleIconUrl,
   getSummonerSpellIconUrlById,
   getSummonerSpellName,
-} from "@/lib/core/data-dragon";
-import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
+} from "@/lib/core/riot/data-dragon";
+import { resolveDDragonVersion } from "@/lib/core/riot/data-dragon-version";
 
 describe("Data Dragon version resolution", () => {
   it("uses Riot's latest valid manifest version", async () => {

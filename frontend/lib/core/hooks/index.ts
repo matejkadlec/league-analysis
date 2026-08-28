@@ -2,7 +2,7 @@ import type { QueryMeta } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast as sonnerToast } from "sonner";
 
-import { apiErrorMessage, normalizeApiError } from "./api-error";
+import { apiErrorMessage, normalizeApiError } from "../http/api-error";
 
 // One source of truth for the variant names. Sonner exposes a method per
 // name and the toast-preview schema parses against this same tuple, so a

@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import {
   ClientErrorReportSchema,
   writeClientErrorLog,
-} from "@/lib/core/client-error-report";
-import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+} from "@/lib/core/http/client-error-report";
+import { parseUntrustedJson } from "@/lib/core/http/untrusted-json";
 
 const MAX_BODY_BYTES = 1024;
 const WINDOW_MS = 10_000;

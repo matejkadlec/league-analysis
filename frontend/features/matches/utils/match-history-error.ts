@@ -1,4 +1,4 @@
-import { apiErrorMessage, type ApiError } from "@/lib/core/api";
+import { apiErrorMessage, type ApiError } from "@/lib/core/http/api";
 
 const DEFAULT_MATCH_HISTORY_ERROR =
   "Match history could not be loaded. Please try again later.";

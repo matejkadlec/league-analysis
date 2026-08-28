@@ -4,9 +4,9 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import { MatchStatsResponseSchema, PlayerSchema } from "@/lib/core/schemas";
-import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
+import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
 
 export function playerQueryKey(puuid: string | null) {
   return ["player", puuid] as const;

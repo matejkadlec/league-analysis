@@ -6,8 +6,8 @@ import { ChampionStatsResponse } from "@/lib/core/schemas";
 import {
   getChampionIconUrl,
   getChampionDisplayName,
-} from "@/lib/core/data-dragon";
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+} from "@/lib/core/riot/data-dragon";
+import { useDDragonVersion } from "@/lib/core/riot/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";

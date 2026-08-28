@@ -9,7 +9,7 @@ type AppToast = typeof import("@/lib/core/hooks").appToast;
 type AuthContext = import("@/features/auth/types").AuthContextType;
 
 const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
-  validatedPatch: vi.fn<typeof import("@/lib/core/api").validatedPatch>(),
+  validatedPatch: vi.fn<typeof import("@/lib/core/http/api").validatedPatch>(),
   checkAuth: vi.fn<AuthContext["checkAuth"]>(),
   toast: {
     success: vi.fn<AppToast["success"]>(),
@@ -19,8 +19,8 @@ const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPatch,
 }));
 

@@ -60,7 +60,7 @@ export const FEATURE_BARREL_IMPORTS: readonly ImportRestriction[] = [
 // client imported here is a request it must never make.
 export const EDGE_CLIENT_IMPORTS: readonly ImportRestriction[] = [
   {
-    group: ["axios", "**/lib/core/api", "@/lib/core/api"],
+    group: ["axios", "**/lib/core/http/api", "@/lib/core/http/api"],
     message:
       "The edge cannot tell a refusal from an outage, and cannot retry with a refresh. Asking the API here ends with a session torn down over a redeploy.",
   },

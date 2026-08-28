@@ -6,7 +6,7 @@ import {
   validatedPost,
   validatedPut,
   type ApiResponse,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   CardPreference,
   CardPreferenceSchema,

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQueryClient } from "./support/render-support";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 type AppRouter = ReturnType<typeof import("next/navigation").useRouter>;
 
@@ -15,8 +15,8 @@ const { validatedGet, validatedPost } = vi.hoisted(() => ({
   validatedPost: vi.fn<Api["validatedPost"]>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));
@@ -34,11 +34,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn<AppRouter["refresh"]>() }),
 }));
 
-vi.mock("@/lib/core/data-dragon-context", () => ({
+vi.mock("@/lib/core/riot/data-dragon-context", () => ({
   useDDragonVersion: () => "16.1.1",
 }));
 
-vi.mock("@/lib/core/use-relative-time", () => ({
+vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime: () => "just now",
 }));
 

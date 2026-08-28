@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 import { ServiceStatusSchema } from "@/lib/core/schemas";
 
 /** The cache both observers share; every write to the key spells it from here. */

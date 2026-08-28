@@ -7,10 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 // wiring is under test -- which timestamp the stamp asks about, and what it
 // does with the answer -- so the hook is pinned to a fixed reading.
 const { useRelativeTime } = vi.hoisted(() => ({
-  useRelativeTime: vi.fn<typeof import("@/lib/core/use-relative-time").useRelativeTime>(),
+  useRelativeTime: vi.fn<typeof import("@/lib/core/hooks/use-relative-time").useRelativeTime>(),
 }));
 
-vi.mock("@/lib/core/use-relative-time", () => ({
+vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime,
 }));
 

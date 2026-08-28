@@ -19,7 +19,7 @@ const {
   turnstileReset,
   onSuccessRef,
 } = vi.hoisted(() => ({
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
   useAuth: vi.fn<typeof import("@/features/auth/context/auth-context").useAuth>(),
   toastSuccess: vi.fn<Toast["success"]>(),
   toastError: vi.fn<Toast["error"]>(),
@@ -30,8 +30,8 @@ const {
 // `validatedPost`, not `api.post`: the helper closes over the module's own
 // axios instance, so replacing the exported `api` object leaves the real
 // request in place.
-vi.mock("@/lib/core/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/core/api")>();
+vi.mock("@/lib/core/http/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/core/http/api")>();
   return { ...actual, validatedPost };
 });
 

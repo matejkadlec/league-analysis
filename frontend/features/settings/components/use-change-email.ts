@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { unwrap, validatedPost } from "@/lib/core/api";
+import { unwrap, validatedPost } from "@/lib/core/http/api";
 import {
   EmailChangeCodeResponseSchema,
   UserResponseSchema,

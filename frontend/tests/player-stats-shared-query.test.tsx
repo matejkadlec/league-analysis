@@ -3,7 +3,7 @@
 import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
 type UsePlayerSyncRun =
   typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
@@ -12,8 +12,8 @@ const { validatedGet, usePlayerSyncRun } = vi.hoisted(() => ({
   usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 

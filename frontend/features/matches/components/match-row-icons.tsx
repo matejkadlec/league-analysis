@@ -13,7 +13,7 @@ import {
   getRuneStyleIconUrl,
   getRuneStyleName,
   getSummonerSpellName,
-} from "@/lib/core/data-dragon";
+} from "@/lib/core/riot/data-dragon";
 import { formatRiotId } from "@/features/players";
 import { cn } from "@/lib/core/utils";
 import {

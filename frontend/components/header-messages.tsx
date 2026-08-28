@@ -21,9 +21,9 @@ import {
 } from "@/lib/core/service-status-query";
 import { z } from "zod";
 
-import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+import { parseUntrustedJson } from "@/lib/core/http/untrusted-json";
 import { cn } from "@/lib/core/utils";
-import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
+import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot/riot-credential-health-events";
 
 
 

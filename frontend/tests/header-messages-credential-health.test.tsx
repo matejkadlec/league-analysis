@@ -39,10 +39,10 @@ vi.mock("@/features/cookie-consent", async (importOriginal) => ({
   canUseOptionalStorage: () => false,
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet: vi
-    .fn<typeof import("@/lib/core/api").validatedGet>()
+    .fn<typeof import("@/lib/core/http/api").validatedGet>()
     .mockImplementation(async () => ({
       success: true,
       data: state.serviceStatus,

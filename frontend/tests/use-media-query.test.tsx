@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 
-import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/use-media-query";
+import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/hooks/use-media-query";
 
 /**
  * `match-list-region.test.tsx` runs this hook with a stubbed `matchMedia` but

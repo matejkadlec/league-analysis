@@ -26,7 +26,7 @@ vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
 }));
 
 import { MatchmakingAnalysisResults } from "@/features/matchmaking/components/matchmaking-analysis-results";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
 /** A local-time date, so the formatter's local getters have a known answer. */

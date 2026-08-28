@@ -131,7 +131,7 @@ repos:
         entry: '(?i)ddragon\.leagueoflegends\.com'
         language: pygrep
         files: '^frontend/(?!node_modules/).*\.(?:ts|tsx)$'
-        exclude: '^frontend/(?:lib/core/data-dragon(?:-version)?\.ts$|next\.config\.ts$|tests/)'
+        exclude: '^frontend/(?:lib/core/riot/data-dragon(?:-version)?\.ts$|next\.config\.ts$|tests/)'
 
       # Objective icons are Riot's own art. An icon-library approximation is
       # visually close enough to pass review and wrong for the product.

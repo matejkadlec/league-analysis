@@ -5,9 +5,9 @@ import {
   validatedGet,
   validatedPost,
   type ApiResponse,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
-import type { Platform } from "@/lib/core/platform-utils";
+import type { Platform } from "@/lib/core/riot/platform-utils";
 
 const PlayerArraySchema = z.array(PlayerSchema);
 

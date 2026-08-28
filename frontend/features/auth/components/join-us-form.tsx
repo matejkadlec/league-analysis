@@ -8,7 +8,7 @@ import {
   normalizeApiError,
   unwrap,
   validatedPost,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   MessageResponseSchema,
   type JoinUsContactRequest,

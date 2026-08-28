@@ -48,7 +48,7 @@ import {
   projectMatchmakingProgress,
   type ThroughputSample,
 } from "../features/matchmaking/components/matchmaking-progress";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import {
   MatchmakingAnalysisResponseSchema,
   type MatchmakingAnalysisResponse,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { unwrap, unwrapOr404 } from "@/lib/core/api";
+import { unwrap, unwrapOr404 } from "@/lib/core/http/api";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";

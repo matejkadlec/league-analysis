@@ -1,4 +1,4 @@
-import { reportClientError } from "@/lib/core/client-error-report";
+import { reportClientError } from "@/lib/core/http/client-error-report";
 
 /**
  * Runs in the browser before application code. Next.js does not forward

@@ -8,15 +8,15 @@ type AuthContext = import("@/features/auth/types").AuthContextType;
 
 const { validatedPost, checkAuth, toastError, toastSuccess } = vi.hoisted(
   () => ({
-    validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+    validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
     checkAuth: vi.fn<AuthContext["checkAuth"]>(),
     toastError: vi.fn<AppToast["error"]>(),
     toastSuccess: vi.fn<AppToast["success"]>(),
   }),
 );
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPost,
 }));
 
@@ -33,7 +33,7 @@ vi.mock("@/lib/core/hooks", () => ({
   }),
 }));
 
-import type { ApiError } from "@/lib/core/api";
+import type { ApiError } from "@/lib/core/http/api";
 import { useChangeEmail } from "@/features/settings/components/use-change-email";
 import { renderHookWithQueryClient } from "./support/render-support";
 

@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
 
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { useRelativeTime } from "@/lib/core/hooks/use-relative-time";
 import { cn } from "@/lib/core/utils";
 
 /**

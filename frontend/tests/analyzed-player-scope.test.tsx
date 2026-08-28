@@ -10,7 +10,7 @@ type PlayerContextValue = ReturnType<
 
 const { validatedGet, usePlayerContext, replace, push, pathname, search } =
   vi.hoisted(() => ({
-    validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+    validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
     usePlayerContext:
       vi.fn<
         typeof import("@/features/players/context/player-context").usePlayerContext
@@ -21,8 +21,8 @@ const { validatedGet, usePlayerContext, replace, push, pathname, search } =
     search: { current: "" },
   }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 

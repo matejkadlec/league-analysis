@@ -21,11 +21,11 @@ vi.mock("next/font/local", () => ({
 const { resolveDDragonVersion } = vi.hoisted(() => ({
   resolveDDragonVersion:
     vi.fn<
-      typeof import("@/lib/core/data-dragon-version").resolveDDragonVersion
+      typeof import("@/lib/core/riot/data-dragon-version").resolveDDragonVersion
     >(),
 }));
 
-vi.mock("@/lib/core/data-dragon-version", () => ({
+vi.mock("@/lib/core/riot/data-dragon-version", () => ({
   resolveDDragonVersion,
 }));
 

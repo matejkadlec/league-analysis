@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type Toast = ReturnType<typeof import("@/lib/core/hooks").useToast>;
 
 const { validatedPost, toast } = vi.hoisted(() => ({
-  validatedPost: vi.fn<typeof import("@/lib/core/api").validatedPost>(),
+  validatedPost: vi.fn<typeof import("@/lib/core/http/api").validatedPost>(),
   toast: {
     success: vi.fn<Toast["success"]>(),
     error: vi.fn<Toast["error"]>(),
@@ -17,8 +17,8 @@ const { validatedPost, toast } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedPost,
 }));
 
@@ -28,7 +28,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { PasswordChangeSection } from "@/features/settings/components/password-change-section";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import type { MessageResponse } from "@/lib/core/schemas";
 
 /** Exactly what `POST /auth/change-password` resolves to. */

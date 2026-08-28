@@ -2,7 +2,7 @@
 // viewer's storage, a beacon body -- and `JSON.parse` answers `any`. Every
 // other foreign payload here crosses through a zod schema; these do too.
 
-// Flagged: any `JSON.parse` call in application code. `lib/core/untrusted-json.ts`
+// Flagged: any `JSON.parse` call in application code. `lib/core/http/untrusted-json.ts`
 // owns the one call, and `oxlint.config.mts` exempts it and the test tree.
 
 type Node = {
@@ -27,7 +27,7 @@ export const noRawJsonParseRule = {
     schema: [],
     messages: {
       rawParse:
-        "Use `parseUntrustedJson(schema, raw)` from `lib/core/untrusted-json.ts`. `JSON.parse` hands back `any` and throws on malformed text, so each reader grows its own try/catch and its own shape check -- and a hand-rolled check drifts from the type it is standing in for without the compiler noticing.",
+        "Use `parseUntrustedJson(schema, raw)` from `lib/core/http/untrusted-json.ts`. `JSON.parse` hands back `any` and throws on malformed text, so each reader grows its own try/catch and its own shape check -- and a hand-rolled check drifts from the type it is standing in for without the compiler noticing.",
     },
   },
   createOnce(context: {

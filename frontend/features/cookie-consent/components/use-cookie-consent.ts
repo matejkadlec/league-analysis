@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth";
-import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPut } from "@/lib/core/http/api";
 import {
   UserCookieConsentResponseSchema,
   type UserCookieConsentUpdate,

@@ -15,7 +15,7 @@ declare const request: { nextUrl: { pathname: string } };
 // MUST flag: a module loaded dynamically evades the import allowlist.
 export const dynamicHelper = async () =>
   // oxlint-disable-next-line house/edge-isolation-syntax
-  import("@/lib/core/api");
+  import("@/lib/core/http/api");
 
 // MUST flag: a re-export loads a module the allowlist never sees.
 // oxlint-disable-next-line house/edge-isolation-syntax

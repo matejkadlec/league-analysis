@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/http/api";
 
 import { untrackPlayer } from "../player-api";
 import {
@@ -16,7 +16,7 @@ import { useAuth } from "@/features/auth";
 import { usePlayerLeague } from "./use-player-league";
 import { getRankColors } from "../utils/rank-colors";
 import { cn } from "@/lib/core/utils";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { getPlatformDisplayName } from "@/lib/core/riot/platform-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 

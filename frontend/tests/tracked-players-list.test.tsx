@@ -6,7 +6,7 @@ import { renderWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/api").validatedGet>(),
+  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
 }));
 
 const trackedPlayers = Array.from({ length: 6 }, (_, index) => ({
@@ -25,9 +25,9 @@ vi.mock("@/features/auth", () => ({
 // Spread the real module rather than listing exports: a literal factory omits
 // anything the component starts importing later -- `unwrap` was already such a
 // straggler, and its absence surfaced as a render timeout rather than an error.
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
-  api: { delete: vi.fn<typeof import("@/lib/core/api").api.delete>() },
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
+  api: { delete: vi.fn<typeof import("@/lib/core/http/api").api.delete>() },
   validatedGet,
 }));
 

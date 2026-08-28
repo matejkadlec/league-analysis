@@ -1,4 +1,4 @@
-import { normalizeApiError, type StructuredErrorDetail } from "@/lib/core/api";
+import { normalizeApiError, type StructuredErrorDetail } from "@/lib/core/http/api";
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const EMAIL_CODE_SLOTS = [

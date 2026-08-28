@@ -6,7 +6,7 @@ import { allSourceFiles } from "./support/source-scan-support";
 
 const SONNER_IMPORT_ALLOWLIST = new Set([
   "components/toast-host.tsx",
-  "lib/core/hooks.ts",
+  "lib/core/hooks/index.ts",
 ]);
 const GLOBAL_CSS = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 

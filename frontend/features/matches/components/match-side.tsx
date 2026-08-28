@@ -1,7 +1,7 @@
 "use client";
 
 import type { MatchWithPlayerData } from "@/lib/core/schemas";
-import { getChampionDisplayName } from "@/lib/core/data-dragon";
+import { getChampionDisplayName } from "@/lib/core/riot/data-dragon";
 import { cn } from "@/lib/core/utils";
 import {
   Tooltip,

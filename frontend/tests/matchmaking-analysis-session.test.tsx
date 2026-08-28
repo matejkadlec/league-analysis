@@ -35,7 +35,7 @@ vi.mock("@/features/matchmaking/matchmaking-api", () => ({
 vi.mock("sonner", () => ({ toast }));
 
 import { MatchmakingAnalysisSession } from "@/features/matchmaking/components/matchmaking-analysis-session";
-import type { ApiResponse } from "@/lib/core/api";
+import type { ApiResponse } from "@/lib/core/http/api";
 import {
   MatchmakingAnalysisResponseSchema,
   type MatchmakingAnalysisResponse,

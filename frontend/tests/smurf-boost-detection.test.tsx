@@ -15,7 +15,7 @@ import {
   type SmurfBoostAnalysisResponse,
 } from "@/lib/core/schemas";
 
-type Api = typeof import("@/lib/core/api");
+type Api = typeof import("@/lib/core/http/api");
 type SmurfBoostApi = typeof import("@/features/smurf-boost/smurf-boost-api");
 type Toast = typeof import("sonner").toast;
 
@@ -46,8 +46,8 @@ vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
 
 // The run button fetches this player's games before comparing them, so the
 // player-sync transport is part of this card's behaviour now.
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
   validatedPost,
 }));

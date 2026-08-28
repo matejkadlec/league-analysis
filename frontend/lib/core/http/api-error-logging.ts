@@ -9,7 +9,7 @@ export interface ApiErrorReportContext {
 
 // Only kinds a developer must act on. The rest are expected product flows the
 // UI already handles -- except `invalid-response`, which `logValidationError`
-// in `lib/core/api.ts` already records at the point of detection.
+// in `lib/core/http/api.ts` already records at the point of detection.
 const REPORTED_ERROR_KINDS: ReadonlySet<ApiErrorKind> = new Set([
   "unexpected",
   "service",

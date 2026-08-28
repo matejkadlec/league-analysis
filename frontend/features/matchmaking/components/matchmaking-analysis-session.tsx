@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useReducer, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { unwrapOr404 } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/http/api";
 import { useToast } from "@/lib/core/hooks";
 
 import { getMatchmakingAnalysisStatus } from "../matchmaking-api";

@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
-import { useDebouncedValue } from "@/lib/core/use-debounced-value";
+import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
 
 /**
  * The hook runs unmocked inside `match-list-region.test.tsx`, but nothing

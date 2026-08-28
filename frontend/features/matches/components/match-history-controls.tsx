@@ -17,7 +17,7 @@ import {
   getMatchHistoryEmptyMessage,
   MATCH_HISTORY_QUEUE_FILTERS,
   type MatchHistoryQueueFilter,
-} from "@/lib/core/queue-catalog";
+} from "@/lib/core/riot/queue-catalog";
 import {
   MATCH_HISTORY_PAGE_SIZES,
   type MatchHistoryPageSize,

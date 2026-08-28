@@ -28,8 +28,8 @@ import {
   resetCardPreference,
   updateCardPreference,
 } from "../smurf-boost-api";
-import { unwrap } from "@/lib/core/api";
-import { apiErrorMessage } from "@/lib/core/api-error";
+import { unwrap } from "@/lib/core/http/api";
+import { apiErrorMessage } from "@/lib/core/http/api-error";
 import { useToast } from "@/lib/core/hooks";
 import type { CardPreference, SmurfBoostPreset } from "@/lib/core/schemas";
 

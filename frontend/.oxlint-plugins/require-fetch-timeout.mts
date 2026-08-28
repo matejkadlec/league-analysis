@@ -8,7 +8,7 @@
 
 // The boundary: this reads the call site only. A `Request` built elsewhere and
 // passed by name is treated as a plain input; the axios client in
-// `lib/core/api.ts` has its own 30s `timeout` and is not visible here.
+// `lib/core/http/api.ts` has its own 30s `timeout` and is not visible here.
 
 type Node = {
   type: string;

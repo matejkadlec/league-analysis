@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { unwrap, validatedPatch } from "@/lib/core/api";
+import { unwrap, validatedPatch } from "@/lib/core/http/api";
 import {
   UserResponseSchema,
   type UserProfileUpdate,

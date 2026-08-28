@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { parseUntrustedJson } from "@/lib/core/untrusted-json";
+import { parseUntrustedJson } from "@/lib/core/http/untrusted-json";
 
 import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
@@ -19,7 +19,7 @@ import {
   MATCH_HISTORY_QUEUE_FILTERS,
   type MatchHistoryQueueFilter,
   type MatchHistoryQueueSelection,
-} from "@/lib/core/queue-catalog";
+} from "@/lib/core/riot/queue-catalog";
 
 const STORED_QUEUE_FILTERS_SCHEMA = z.array(z.unknown());
 

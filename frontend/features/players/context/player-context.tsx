@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth";
-import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPut } from "@/lib/core/http/api";
 import {
   PlayerContextSchema,
   type CurrentPlayerUpdate,

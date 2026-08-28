@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { PLATFORMS } from "@/lib/core/platform-utils";
+import { PLATFORMS } from "@/lib/core/riot/platform-utils";
 
 import { DivisionSchema, LeagueQueueTypeSchema, TierSchema } from "./riot";
 

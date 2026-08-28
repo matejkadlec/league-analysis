@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { unwrapOr404 } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/http/api";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { Medal, Shield, Swords, TrendingUp } from "lucide-react";

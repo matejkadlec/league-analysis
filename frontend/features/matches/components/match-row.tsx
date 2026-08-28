@@ -4,10 +4,10 @@ import { Swords } from "lucide-react";
 
 import { MatchWithPlayerData } from "@/lib/core/schemas";
 import { formatDateTime } from "@/lib/core/format";
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+import { useDDragonVersion } from "@/lib/core/riot/data-dragon-context";
 import { cn } from "@/lib/core/utils";
 import { Separator } from "@/components/ui/separator";
-import { getMatchQueueName } from "@/lib/core/queue-catalog";
+import { getMatchQueueName } from "@/lib/core/riot/queue-catalog";
 import { TeamObjectiveStats } from "./objective-icons";
 import {
   formatDuration,

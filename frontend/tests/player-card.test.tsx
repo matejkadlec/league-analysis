@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
 
-type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
+type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
 type UsePlayerSyncRun =
   typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
@@ -15,8 +15,8 @@ const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
   startSync: vi.fn<ReturnType<UsePlayerSyncRun>["startSync"]>(),
 }));
 
-vi.mock("@/lib/core/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+vi.mock("@/lib/core/http/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
   validatedGet,
 }));
 
@@ -31,7 +31,7 @@ vi.mock("@/features/players/components/track-player-button", () => ({
 
 // The freshness *wiring* is under test — which timestamps feed the label —
 // not the clock arithmetic, which tests/relative-time.test.tsx owns.
-vi.mock("@/lib/core/use-relative-time", () => ({
+vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime: () => "3 hours ago",
 }));
 

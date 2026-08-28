@@ -10,7 +10,7 @@ import {
   validatedGet,
   validatedPost,
   validatedPut,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   SettingSchema,
   SettingTestResponseSchema,
@@ -28,7 +28,7 @@ import { Alert } from "@/components/ui/alert";
 import { formatDateTime } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
 import { cn } from "@/lib/core/utils";
-import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
+import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
 import { RIOT_API_KEY_QUERY_KEY } from "../utils/settings-helpers";

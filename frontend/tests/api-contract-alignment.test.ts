@@ -4,7 +4,7 @@ import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/platform-utils";
+import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/riot/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
 
 import { allSourceFiles, allTestFiles } from "./support/source-scan-support";

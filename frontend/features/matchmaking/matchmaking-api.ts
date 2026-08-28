@@ -3,7 +3,7 @@ import {
   validatedGet,
   validatedPost,
   type ApiResponse,
-} from "@/lib/core/api";
+} from "@/lib/core/http/api";
 import {
   MatchmakingAnalysisHistoryResponse,
   MatchmakingAnalysisHistoryResponseSchema,
