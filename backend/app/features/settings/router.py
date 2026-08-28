@@ -29,7 +29,11 @@ async def get_service_status(
     settings_service: SettingsServiceDep,
     _current_user: CurrentUserDep,
 ) -> ServiceStatusResponse:
-    """Get user-facing maintenance status."""
+    """Get user-facing maintenance status, refreshing the credential first.
+
+    Not a pure read: the health check re-probes the stored Riot key and
+    commits, dropping the row when the key has expired.
+    """
     return await settings_service.get_service_status()
 
 

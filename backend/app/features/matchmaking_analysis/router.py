@@ -89,7 +89,11 @@ async def get_analysis_status_by_puuid(
     created_at: datetime,
     service: MatchmakingServiceDep,
 ) -> MatchmakingAnalysisResponse:
-    """Get authoritative status for one exact analysis run."""
+    """Get authoritative status for one exact analysis run, re-arming it.
+
+    Not a pure read: a deploy leaves an interrupted run active with no
+    worker, and this poll is what starts one for it again.
+    """
     result = await service.get_analysis_status(puuid, created_at)
 
     if not result:

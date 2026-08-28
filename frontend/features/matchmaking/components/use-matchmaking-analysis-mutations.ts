@@ -86,5 +86,5 @@ export function useMatchmakingAnalysisMutations(
     },
   });
 
-  return { toast, queryClient, startMutation, cancelMutation };
+  return { startMutation, cancelMutation };
 }

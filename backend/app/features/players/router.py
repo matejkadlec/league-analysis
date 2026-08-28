@@ -100,7 +100,12 @@ async def get_player_context(
     player_service: PlayerServiceDep,
     current_user: CurrentUserDep,
 ) -> PlayerContextResponse:
-    """Get the authenticated user's current and recent tracked players."""
+    """Get the authenticated user's current and recent tracked players.
+
+    Not a pure read: it creates the settings row a new account has yet to
+    get, clears a current-player pointer that no longer resolves, and
+    commits either.
+    """
     return await player_service.get_player_context(current_user.id)
 
 
