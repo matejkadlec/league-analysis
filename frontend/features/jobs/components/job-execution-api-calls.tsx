@@ -55,7 +55,8 @@ export function JobExecutionApiCalls({
             const callKey = call.endpoint;
             const countText = call.count === 1 ? "once" : `${call.count} times`;
             const isExpanded = expandedApiCalls.has(callKey);
-            const hasMultipleParams = call.count > 1 && call.param_key;
+            const hasMultipleParams =
+              call.count > 1 && Boolean(call.param_key);
 
             return (
               <div key={callKey} className="space-y-1">

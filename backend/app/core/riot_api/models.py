@@ -160,8 +160,8 @@ class ParticipantDTO(RiotDTO):
     runes: dict[str, Any] = Field(default_factory=dict, alias="perks")
     advanced_stats: dict[str, Any] = Field(default_factory=dict, alias="challenges")
 
-    # Legacy / Unused in new schema but kept for completeness or other uses
-    role: str | None = None
+    # Riot leaves `team_position` empty on some queues; the transformer falls
+    # back to this one, so it is load-bearing rather than legacy.
     individual_position: str | None = Field(default=None)
 
 

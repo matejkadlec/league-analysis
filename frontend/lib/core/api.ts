@@ -63,7 +63,6 @@ export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
   return unwrap(result);
 }
 
-// Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
 
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
@@ -88,8 +87,6 @@ api.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
-    // Check ALL responses for API key errors (503 with specific code)
-    // This ensures any endpoint that internally uses Riot API will trigger the header
     if (isApiKeyError(error.response)) {
       notifyRiotCredentialHealthUpdated();
     }

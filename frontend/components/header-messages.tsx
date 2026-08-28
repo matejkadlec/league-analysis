@@ -226,7 +226,6 @@ export function HeaderMessages() {
     return null;
   }
 
-  // Signed-out recruitment banner (hidden while Riot review is pending)
   if (
     SHOW_SIGNED_OUT_RECRUITMENT_BANNER &&
     !isAuthenticated &&
@@ -250,7 +249,6 @@ export function HeaderMessages() {
     );
   }
 
-  // Non-admin maintenance message (closable)
   if (isNonAdminAuthenticated) {
     if (isUnderMaintenance && !isMaintenanceClosed) {
       return (

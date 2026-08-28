@@ -19,7 +19,7 @@ export interface ThresholdField {
   integer: boolean;
 }
 
-export const THRESHOLD_FIELDS: ThresholdField[] = [
+export const THRESHOLD_FIELDS = [
   {
     name: "recentWindowSize",
     label: "Recent games compared",
@@ -153,7 +153,10 @@ export const THRESHOLD_FIELDS: ThresholdField[] = [
     max: 0.45,
     integer: false,
   },
-];
+] as const satisfies readonly ThresholdField[];
+
+/** The names the write contract accepts, derived so a new field cannot be missed. */
+export type ThresholdName = (typeof THRESHOLD_FIELDS)[number]["name"];
 
 /**
  * The one cross-field rule the backend enforces, restated here so the form can

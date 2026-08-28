@@ -35,7 +35,7 @@ router = APIRouter(
 
 
 @router.get("/presets")
-async def get_presets() -> PresetsResponse:
+def get_presets() -> PresetsResponse:
     """List the named threshold presets and the shipped default.
 
     Each preset is emitted in the card settings write contract's own field

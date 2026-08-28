@@ -33,7 +33,8 @@ export function SystemStatus({ status }: SystemStatusProps) {
     );
   }
 
-  const isHealthy = status.scheduler_running && status.running_executions === 0;
+  const isSchedulerIdle =
+    status.scheduler_running && status.running_executions === 0;
   const hasRunningJobs = status.running_executions > 0;
   const lastExecutionFailed = status.last_execution?.status === "FAILED";
 
@@ -151,7 +152,7 @@ export function SystemStatus({ status }: SystemStatusProps) {
                 System Health
               </p>
               <p className="mt-1 text-xl font-bold">
-                {isHealthy
+                {isSchedulerIdle
                   ? "All Systems Operational"
                   : hasRunningJobs
                     ? "Jobs in Progress"

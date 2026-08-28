@@ -4,7 +4,12 @@ import { toast as sonnerToast } from "sonner";
 
 import { apiErrorMessage, normalizeApiError } from "./api-error";
 
-export type ToastVariant = "success" | "error" | "warning" | "info";
+// One source of truth for the variant names. Sonner exposes a method per
+// name and the toast-preview schema parses against this same tuple, so a
+// name added here cannot drift out of either.
+export const TOAST_VARIANTS = ["success", "error", "warning", "info"] as const;
+
+export type ToastVariant = (typeof TOAST_VARIANTS)[number];
 
 export const TOAST_DEFAULT_DURATION_MS = 4_000;
 

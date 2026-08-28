@@ -33,6 +33,75 @@ import {
   writeCookieConsent,
 } from "../utils/consent-storage";
 
+type ConsentReconciliation =
+  | { outcome: "adopt"; consent: CookieConsentState }
+  | { outcome: "ask" }
+  | { outcome: "keep" };
+
+/**
+ * Decide what the signed-in account's record means for the cookie already in
+ * the browser. The jar is shared, so a second account inherits the first's
+ * choice, which must not be recorded as `consent_source: "banner"`.
+ */
+async function reconcileConsentForAccount(
+  userId: number,
+  getChooser: () => { userId: number | null } | null,
+  syncConsentForUser: (
+    userId: number,
+    value: CookieConsentState,
+  ) => Promise<void>,
+  isCancelled: () => boolean,
+): Promise<ConsentReconciliation> {
+  const result = await validatedGet(
+    UserCookieConsentResponseSchema.nullable(),
+    "/settings/user/cookie-consent",
+  );
+  if (isCancelled()) {
+    return { outcome: "keep" };
+  }
+  // A failed read is not evidence of anything. Leaving the browser state
+  // alone beats both alternatives: re-asking someone who already decided,
+  // and silently keeping a choice that may not be theirs.
+  if (!result.success) {
+    return { outcome: "keep" };
+  }
+
+  const stored = result.data;
+  if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
+    // This account has decided before, so its record is the answer whatever
+    // the browser is carrying. `writeCookieConsent` restamps the cookie's
+    // timestamp; the true `consented_at` lives on the record.
+    const adopted = writeCookieConsent(stored.consent_level);
+    if (stored.consent_level !== "all") {
+      clearOptionalBrowserStorage();
+    }
+    return { outcome: "adopt", consent: adopted };
+  }
+
+  // Nothing on record for this account -- either it has never answered, or
+  // the policy version moved and its answer no longer covers it.
+  const browserConsent = readCookieConsentFromBrowser();
+  const chooser = getChooser();
+  const theyChoseItThemselves =
+    chooser !== null && (chooser.userId === null || chooser.userId === userId);
+  if (
+    theyChoseItThemselves &&
+    browserConsent &&
+    isCurrentCookieConsent(browserConsent)
+  ) {
+    await syncConsentForUser(userId, browserConsent).catch(() => {
+      // Best-effort persistence for authenticated user audit trail.
+    });
+    return { outcome: "keep" };
+  }
+
+  // Ask, rather than inherit. Nothing is written to this account's audit
+  // trail until it answers, and the optional storage the previous consent
+  // permitted is cleared in the meantime.
+  clearOptionalBrowserStorage();
+  return { outcome: "ask" };
+}
+
 export function CookieConsentManager() {
   const { isAuthenticated, user } = useAuth();
   // Lifecycle only. `isSaving` stays its own flag because it is orthogonal:
@@ -109,9 +178,6 @@ export function CookieConsentManager() {
     };
   }, []);
 
-  // Reconcile the browser cookie against the account actually signed in. The
-  // jar is shared, so a second account inherits the first's choice, which must
-  // not be recorded as `consent_source: "banner"`.
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       return;
@@ -120,64 +186,25 @@ export function CookieConsentManager() {
     const userId = user.id;
     let cancelled = false;
 
-    const reconcile = async () => {
-      const result = await validatedGet(
-        UserCookieConsentResponseSchema.nullable(),
-        "/settings/user/cookie-consent",
+    const applyReconciliation = async () => {
+      const reconciliation = await reconcileConsentForAccount(
+        userId,
+        () => choiceOwnerRef.current,
+        syncConsentForUser,
+        () => cancelled,
       );
-      if (cancelled) {
-        return;
-      }
-      // A failed read is not evidence of anything. Leaving the browser state
-      // alone beats both alternatives: re-asking someone who already decided,
-      // and silently keeping a choice that may not be theirs.
-      if (!result.success) {
+      if (cancelled || reconciliation.outcome === "keep") {
         return;
       }
 
-      const stored = result.data;
-      if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
-        // This account has decided before, so its record is the answer
-        // whatever the browser is carrying. `writeCookieConsent` restamps the
-        // cookie's timestamp; the true `consented_at` lives on the record.
-        const adopted = writeCookieConsent(stored.consent_level);
-        if (stored.consent_level !== "all") {
-          clearOptionalBrowserStorage();
-        }
-        setConsent(adopted);
-        notifyCookieConsentUpdated(adopted);
-        setStatus("hidden");
-        return;
-      }
-
-      // Nothing on record for this account -- either it has never answered,
-      // or the policy version moved and its answer no longer covers it.
-      const browserConsent = readCookieConsentFromBrowser();
-      const chooser = choiceOwnerRef.current;
-      const theyChoseItThemselves =
-        chooser !== null &&
-        (chooser.userId === null || chooser.userId === userId);
-      if (
-        theyChoseItThemselves &&
-        browserConsent &&
-        isCurrentCookieConsent(browserConsent)
-      ) {
-        await syncConsentForUser(userId, browserConsent).catch(() => {
-          // Best-effort persistence for authenticated user audit trail.
-        });
-        return;
-      }
-
-      // Ask, rather than inherit. Nothing is written to this account's audit
-      // trail until it answers, and the optional storage the previous consent
-      // permitted is cleared in the meantime.
-      clearOptionalBrowserStorage();
-      setConsent(null);
-      notifyCookieConsentUpdated(null);
-      setStatus("open");
+      const next =
+        reconciliation.outcome === "adopt" ? reconciliation.consent : null;
+      setConsent(next);
+      notifyCookieConsentUpdated(next);
+      setStatus(next ? "hidden" : "open");
     };
 
-    void reconcile();
+    void applyReconciliation();
 
     return () => {
       cancelled = true;

@@ -300,7 +300,7 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(
+def get_current_user_info(
     current_user: CurrentUserDep,
 ) -> User:
     """Get current authenticated user information."""
