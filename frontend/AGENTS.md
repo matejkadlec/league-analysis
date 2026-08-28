@@ -55,7 +55,9 @@ These are product design decisions, not suggestions:
   (dialog visibility), `.vertical-gradient`.
 - **Dialogs** use shadcn `Dialog` + `DialogContent` with
   `dialog-white-border`, keep default close interactions (top-right `X`,
-  outside click, explicit cancel), and keep the global vertical position from
+  outside click, explicit cancel — except that a dialog holding an unsaved
+  draft may block outside click and Escape to protect it, keeping the `X`
+  and an explicit discard as the ways out), and keep the global vertical position from
   `globals.css` (remaining viewport space in a 1:2 top-to-bottom ratio — do
   not center or override an individual dialog's `top`/translation). Every
   dialog title includes a relevant lucide icon with `h-5 w-5 text-[#cfa93a]`.

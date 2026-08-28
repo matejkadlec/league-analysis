@@ -63,7 +63,10 @@
     --color-destructive: oklch(59.993% 0.2355 29.756);
     --color-destructive-foreground: oklch(98% 0 0);
     --color-border: oklch(28% 0.045 265.99);
-    --color-input: oklch(17.5% 0.035 265.99);
+    /* Form-control borders follow the shared border tone: the two were
+       identical before the border was lifted for card contrast, and an input
+       outlined darker than every border around it reads as disabled. */
+    --color-input: oklch(28% 0.045 265.99);
     --color-ring: oklch(48% 0.188 275.75);
   }
 

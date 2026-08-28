@@ -101,13 +101,13 @@ public API via `index.ts`.
   guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
   card's fixed settings before a write, and leave a server rejection to the
   shared error normalization rather than parsing its raw body.
-- Rank Manipulation renders every measurement twice: stacked blocks below
-  the `sm` breakpoint and the table from `sm` up. Both must render from the same
-  `SignalOutcome`, `formatValue`, and `noteLabel`, so the two can never disagree
-  about what a value means. The stacked list carries `role="list"`, because the
-  Tailwind reset drops the marker and WebKit drops the list role with it. Query
-  either layout by `data-testid="smurf-boost-measurements-stacked-<family>"`
-  rather than by breakpoint class.
+- Rank Manipulation renders every measurement as one list at every width —
+  there is no separate mobile layout to keep in step. The list carries
+  `role="list"`, because the Tailwind reset drops the marker and WebKit drops
+  the list role with it. Query it by
+  `data-testid="smurf-boost-measurements-<family>"` rather than by breakpoint
+  class, and remember each family's list sits behind its own tab: the inactive
+  panel stays mounted but hidden.
 - `main` in `app/layout.tsx` carries `min-w-0`. A flex item defaults to
   `min-width: auto` and then refuses to shrink below its content, which makes
   every `overflow-x-auto` beneath it inert and lets one wide child stretch the

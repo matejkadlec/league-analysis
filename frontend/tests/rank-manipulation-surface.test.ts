@@ -18,7 +18,7 @@ const SURFACE_FILES = [
   "features/smurf-boost/components/smurf-boost-detection.tsx",
   "features/smurf-boost/components/smurf-boost-explanation-card.tsx",
   "features/smurf-boost/components/smurf-boost-result-card.tsx",
-  "features/smurf-boost/components/smurf-boost-settings-card.tsx",
+  "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
   "features/smurf-boost/components/smurf-boost-settings-presets.tsx",
   "features/smurf-boost/components/smurf-boost-settings-thresholds.tsx",
 ];
@@ -45,13 +45,22 @@ describe("the Rank Manipulation surface", () => {
     // `CardTitle` renders an `h3`, so a subsection inside a card is an `h4`.
     // axe's `heading-order` is best-practice and not in the tag set the e2e scan
     // runs, so nothing else catches an outline that reads h1, h3, h2.
+
+    // The settings components render inside a dialog whose `DialogTitle` is an
+    // `h2`, so their headings floor at `h3`; an `h4` would skip a level.
+    const DIALOG_FILES = new Set([
+      "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
+      "features/smurf-boost/components/smurf-boost-settings-presets.tsx",
+      "features/smurf-boost/components/smurf-boost-settings-thresholds.tsx",
+    ]);
     const offenders: string[] = [];
 
     for (const path of SURFACE_FILES) {
+      const floor = DIALOG_FILES.has(path) ? 3 : 4;
       for (const [, level] of readFileSync(path, "utf8").matchAll(
         /<h([1-6])[\s>]/g,
       )) {
-        if (Number(level) < 4) {
+        if (Number(level) < floor) {
           offenders.push(`${path}: h${level}`);
         }
       }
@@ -87,7 +96,7 @@ describe("the Rank Manipulation surface", () => {
         "What This Page Does",
       ],
       [
-        "features/smurf-boost/components/smurf-boost-settings-card.tsx",
+        "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
         "Detection Settings",
       ],
       [

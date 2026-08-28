@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { acceptCookieBanner } from "./support/auth";
 import {
@@ -19,6 +19,20 @@ const FORBIDDEN = [
   "confirmed",
   "probability",
 ];
+
+/**
+ * `innerText` reads only laid-out text, so a hidden panel or closed dialog
+ * escapes it; callers run this once per visible state. `textContent` would see
+ * them but also script payloads, where "clean" matches "cleanup".
+ */
+async function expectNoForbiddenWording(page: Page, stage: string) {
+  const text = (await page.locator("body").innerText()).toLowerCase();
+  for (const word of FORBIDDEN) {
+    expect(text, `${stage}: page must not contain "${word}"`).not.toContain(
+      word,
+    );
+  }
+}
 
 test("runs a comparison and reports both families without accusing anyone", async ({
   page,
@@ -61,6 +75,7 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
   await expect(page.getByText("Allowed: 10 to 50.")).toBeVisible();
+  await expectNoForbiddenWording(page, "settings dialog, Games Compared tab");
 
   // A value the backend would reject never reaches it. The field lives in
   // the Playing Pattern Change tab, so reaching it means opening that tab.
@@ -73,6 +88,15 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     page.getByRole("button", { name: "Save thresholds" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Discard changes" }).click();
+  await expectNoForbiddenWording(
+    page,
+    "settings dialog, Playing Pattern Change tab",
+  );
+  await page.getByRole("tab", { name: "Rapid Improvement Pattern" }).click();
+  await expectNoForbiddenWording(
+    page,
+    "settings dialog, Rapid Improvement Pattern tab",
+  );
 
   // Applying a preset sends only the fields the write contract accepts.
   await page.getByTestId("smurf-boost-preset-sensitive").click();
@@ -185,6 +209,7 @@ test("runs a comparison and reports both families without accusing anyone", asyn
 
   // The other family's measurements sit behind its tab, not lost.
   await expect(measurements.last().getByText("B1")).toBeHidden();
+  await expectNoForbiddenWording(page, "result, Rapid Improvement tab");
   await result
     .getByRole("tab", { name: "Playing Pattern Change No unusual pattern" })
     .click();
@@ -194,10 +219,7 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     result.getByText("Do not use it to accuse anyone.", { exact: false }),
   ).toBeVisible();
 
-  const pageText = (await page.locator("body").innerText()).toLowerCase();
-  for (const word of FORBIDDEN) {
-    expect(pageText, `page must not contain "${word}"`).not.toContain(word);
-  }
+  await expectNoForbiddenWording(page, "result, Playing Pattern Change tab");
 
   // A family reading is a word, never a number. A win rate inside a signal row
   // may still be a percentage, so the digit check is scoped to the band.
@@ -477,6 +499,12 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
     .click();
   await expect(page.locator("#smurf-boost-settings")).toBeVisible();
   await scan("with the settings dialog open");
+  // An inactive threshold group is visibility-hidden and axe skips it, so
+  // each group's fields are only ever scanned with their own tab active.
+  for (const tab of ["Rapid Improvement Pattern", "Playing Pattern Change"]) {
+    await page.getByRole("tab", { name: tab }).click();
+    await scan(`with the settings dialog open: ${tab}`);
+  }
   await page.keyboard.press("Escape");
   await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
@@ -489,4 +517,16 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   await expect(page.locator("[data-sonner-toast]")).toHaveCSS("opacity", "1");
 
   await scan("with a result on screen");
+
+  // The second family's measurements only exist for axe once their tab is
+  // active. Scanned after the toast has left, so a mid-fade toast cannot
+  // record a contrast reading at partial opacity.
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  await page
+    .locator("#smurf-boost-result")
+    .getByRole("tab", { name: /Playing Pattern Change/ })
+    .click();
+  await scan("with the second family's measurements open");
 });

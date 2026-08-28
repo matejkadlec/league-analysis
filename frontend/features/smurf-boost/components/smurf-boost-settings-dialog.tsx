@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Save,
   SlidersHorizontal,
+  StopCircle,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -57,11 +58,14 @@ const PRESETS_KEY = ["smurf-boost-presets"] as const;
 export function SmurfBoostSettingsDialog() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Record<ThresholdName, string> | null>(
     null,
   );
   const [failure, setFailure] = useState<string | null>(null);
 
+  // `enabled: open` — the page must not spend two requests on a dialog most
+  // visits never open; the dialog reports its own loading state instead.
   const presetsQuery = useQuery({
     queryKey: PRESETS_KEY,
     queryFn: async ({ signal }) => {
@@ -69,6 +73,7 @@ export function SmurfBoostSettingsDialog() {
     },
     staleTime: 3600000,
     retry: false,
+    enabled: open,
   });
 
   const preferenceQuery = useQuery({
@@ -77,6 +82,7 @@ export function SmurfBoostSettingsDialog() {
       return unwrap(await getCardPreferences(signal));
     },
     retry: false,
+    enabled: open,
   });
 
   const preference: CardPreference | null =
@@ -146,7 +152,9 @@ export function SmurfBoostSettingsDialog() {
   });
 
   let body: ReactNode;
-  if (preferenceQuery.isLoading) {
+  // `isPending`, not `isLoading`: the query sits disabled until the dialog
+  // opens, and that idle gap must read as loading, not as a failure.
+  if (preferenceQuery.isPending) {
     body = (
       <div className="space-y-4">
         <Skeleton className="h-10 w-full" />
@@ -215,42 +223,51 @@ export function SmurfBoostSettingsDialog() {
           onChange={(name, value) => setDraft({ ...values, [name]: value })}
         />
 
-        <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={() => saveMutation.mutate(parsed)}
-            disabled={busy || invalid || !changed}
-          >
-            {saveMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
+        {/* The dialog footer contract: cancel on the left in red-gradient
+            with StopCircle, the CTA on the right. Discard is this form's
+            cancel and only exists while there is a draft to throw away. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            {dirty && (
+              <Button
+                className="red-gradient h-10"
+                onClick={() => {
+                  setDraft(null);
+                  setFailure(null);
+                }}
+                disabled={busy}
+              >
+                <StopCircle className="mr-2 h-4 w-4" />
+                Discard changes
+              </Button>
             )}
-            Save thresholds
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => resetMutation.mutate()}
-            disabled={busy || (preference.isDefault && !dirty)}
-          >
-            {resetMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RotateCcw className="mr-2 h-4 w-4" />
-            )}
-            Reset to defaults
-          </Button>
-          {dirty && (
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="ghost"
-              onClick={() => {
-                setDraft(null);
-                setFailure(null);
-              }}
-              disabled={busy}
+              variant="outline"
+              onClick={() => resetMutation.mutate()}
+              disabled={busy || (preference.isDefault && !dirty)}
             >
-              Discard changes
+              {resetMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="mr-2 h-4 w-4" />
+              )}
+              Reset to defaults
             </Button>
-          )}
+            <Button
+              className="gold-gradient"
+              onClick={() => saveMutation.mutate(parsed)}
+              disabled={busy || invalid || !changed}
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save thresholds
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -258,10 +275,12 @@ export function SmurfBoostSettingsDialog() {
 
   return (
     <Dialog
-      onOpenChange={(open) => {
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
         // A draft abandoned by closing the dialog must not greet the next
         // open as if it were the stored settings.
-        if (!open) {
+        if (!next) {
           setDraft(null);
           setFailure(null);
         }
@@ -280,6 +299,19 @@ export function SmurfBoostSettingsDialog() {
       <DialogContent
         id="smurf-boost-settings"
         className="max-h-[92vh] max-w-6xl overflow-y-auto p-5"
+        // A stray click on the dimmed page or a reflexive Escape must not
+        // throw away an edited draft: fifteen fields are a lot to retype.
+        // The X and the Discard button remain the deliberate ways out.
+        onInteractOutside={(event) => {
+          if (draft !== null) {
+            event.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          if (draft !== null) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">

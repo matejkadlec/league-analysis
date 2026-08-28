@@ -15,6 +15,7 @@ import { gameShortfall } from "../smurf-boost-settings";
 import { cn } from "@/lib/core/utils";
 import {
   BAND_LABELS,
+  BAND_STYLES,
   bandMeaning,
   CONFIDENCE_LABELS,
   familyDescription,
@@ -29,28 +30,6 @@ interface SmurfBoostResultCardProps {
   /** The exact threshold set the run was computed with. */
   thresholds: Record<string, number>;
 }
-
-/**
- * One colour ladder, read two ways: the band word takes the text colour and
- * the family's card takes the same step as a left edge. Colour never encodes
- * a number and never carries the reading alone; the band word is beside it.
- */
-const BAND_STYLES: Record<
-  SmurfBoostFamily["band"],
-  { text: string; accent: string }
-> = {
-  strong_indicators: { text: "text-rose-500", accent: "border-l-rose-500" },
-  notable_indicators: { text: "text-amber-500", accent: "border-l-amber-500" },
-  weak_indicators: { text: "text-yellow-500", accent: "border-l-yellow-500" },
-  no_unusual_pattern: {
-    text: "text-emerald-500",
-    accent: "border-l-emerald-500",
-  },
-  not_enough_data: {
-    text: "text-muted-foreground",
-    accent: "border-l-muted-foreground",
-  },
-};
 
 const UNREADABLE_BAND_STYLE = BAND_STYLES.not_enough_data;
 
@@ -91,7 +70,7 @@ function signalOutcome(signal: SmurfBoostSignal): string {
   return met ? "Other conditions not met" : "Below threshold";
 }
 
-/** The outcome pill, identical in both the table and the stacked layout. */
+/** The outcome pill beside each measurement. */
 function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
   if (!signal.available) {
     return <Badge variant="outline">Not available</Badge>;
@@ -100,8 +79,8 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
     return <Badge variant="secondary">Above threshold</Badge>;
   }
   return (
-    // Each family sizes its own table, so this column can end up narrower in
-    // one than the other and split a two-word outcome across lines.
+    // The flex row tightens around a long reason, and a two-word outcome
+    // split across lines reads as two outcomes.
     <span className="whitespace-nowrap text-sm text-muted-foreground">
       {signalOutcome(signal)}
     </span>
@@ -194,7 +173,17 @@ function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
       {signal.available && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <SignalMeter signal={signal} />
-          <span className="whitespace-nowrap font-mono text-sm">
+          {/* The visible figures lean on the meter and the footnote for
+              their meaning; a screen reader gets the words instead of two
+              bare numbers. */}
+          <span className="sr-only">
+            Measured {formatValue(signal.raw_value)} against threshold{" "}
+            {formatValue(signal.threshold)}.
+          </span>
+          <span
+            aria-hidden="true"
+            className="whitespace-nowrap font-mono text-sm"
+          >
             {formatValue(signal.raw_value)}
             <span className="text-muted-foreground">
               {" / "}

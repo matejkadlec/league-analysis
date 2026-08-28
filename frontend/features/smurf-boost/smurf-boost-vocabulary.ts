@@ -5,8 +5,8 @@ import type {
 
 /**
  * The wording the model fixes -- band vocabulary, family titles, confidence
- * labels, note readings, disclaimer -- in its only frontend copy, so nothing
- * drifts from the specification or reaches for a forbidden word.
+ * labels, note readings, disclaimer -- and the colour each band wears, in
+ * their only frontend copy, so nothing drifts from the specification.
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
@@ -59,6 +59,42 @@ export const BAND_MEANINGS: Record<SmurfBoostBand, string> = {
 export function bandMeaning(band: SmurfBoostBand): string {
   return BAND_MEANINGS[band];
 }
+
+/**
+ * One colour ladder for the result card's band word, its family edge and the
+ * explanation card's dot, so the two cards cannot drift. Colour never carries
+ * a reading alone; classes are whole literals because Tailwind scans strings.
+ */
+export const BAND_STYLES: Record<
+  SmurfBoostBand,
+  { text: string; accent: string; dot: string }
+> = {
+  strong_indicators: {
+    text: "text-rose-500",
+    accent: "border-l-rose-500",
+    dot: "bg-rose-500",
+  },
+  notable_indicators: {
+    text: "text-amber-500",
+    accent: "border-l-amber-500",
+    dot: "bg-amber-500",
+  },
+  weak_indicators: {
+    text: "text-yellow-500",
+    accent: "border-l-yellow-500",
+    dot: "bg-yellow-500",
+  },
+  no_unusual_pattern: {
+    text: "text-emerald-500",
+    accent: "border-l-emerald-500",
+    dot: "bg-emerald-500",
+  },
+  not_enough_data: {
+    text: "text-muted-foreground",
+    accent: "border-l-muted-foreground",
+    dot: "bg-muted-foreground",
+  },
+};
 
 export const CONFIDENCE_LABELS: Record<SmurfBoostConfidenceBand, string> = {
   low: "Low confidence",

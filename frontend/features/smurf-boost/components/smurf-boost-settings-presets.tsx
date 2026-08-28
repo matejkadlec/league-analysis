@@ -32,7 +32,9 @@ export function SmurfBoostSettingsPresets({
 
   return (
     <div className="space-y-3">
-      <h4 className="text-base font-semibold">Presets</h4>
+      {/* `h3`: these sections sit directly under the `DialogTitle`'s `h2`,
+          not under a CardTitle's `h3`. */}
+      <h3 className="text-base font-semibold">Presets</h3>
       {isError ? (
         <p className="text-sm text-muted-foreground">
           The presets could not be loaded. You can still edit each threshold
