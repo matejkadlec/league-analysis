@@ -64,7 +64,7 @@ describe("toast source contract", () => {
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
     const playerSyncRun = readFileSync(
-      join(process.cwd(), "features/players/use-player-sync-run.ts"),
+      join(process.cwd(), "features/players/components/use-player-sync-run.ts"),
       "utf8",
     );
 

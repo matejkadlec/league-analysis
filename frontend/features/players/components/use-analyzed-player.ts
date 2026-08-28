@@ -6,8 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { Player } from "@/lib/core/schemas";
 
-import { usePlayerContext } from "./context/player-context";
-import { playerQueryKey, playerQueryOptions } from "./player-query";
+import { usePlayerContext } from "../context/player-context";
+import { playerQueryKey, playerQueryOptions } from "../player-query";
 
 /**
  * A tab-local player scope for pages that analyze a player of their own

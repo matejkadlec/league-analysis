@@ -13,7 +13,7 @@ import {
 import { useToast } from "@/lib/core/hooks";
 import { PlayerSchema, type Player } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
-import { usePlayerLeague } from "../use-player-league";
+import { usePlayerLeague } from "./use-player-league";
 import { getRankColors } from "../utils/rank-colors";
 import { cn } from "@/lib/core/utils";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";

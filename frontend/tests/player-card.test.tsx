@@ -7,7 +7,7 @@ import type { Player } from "@/lib/core/schemas";
 
 type ValidatedGet = typeof import("@/lib/core/api").validatedGet;
 type UsePlayerSyncRun =
-  typeof import("@/features/players/use-player-sync-run").usePlayerSyncRun;
+  typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
 const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
   validatedGet: vi.fn<ValidatedGet>(),
@@ -20,7 +20,7 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
   validatedGet,
 }));
 
-vi.mock("@/features/players/use-player-sync-run", () => ({
+vi.mock("@/features/players/components/use-player-sync-run", () => ({
   usePlayerSyncRun,
 }));
 

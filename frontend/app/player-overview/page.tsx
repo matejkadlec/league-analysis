@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { PageHeader } from "@/components/page-header";
-import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 import {
   SectionQuickNavigation,
   type SectionQuickNavigationItem,
@@ -14,6 +13,7 @@ import { ProtectedRoute } from "@/features/auth";
 import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/queue-catalog";
 import {
   PlayerCard,
+  PlayerCardSkeleton,
   SelectPlayerCard,
   playerQueryOptions,
   usePlayerContext,

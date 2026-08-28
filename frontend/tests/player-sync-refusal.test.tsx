@@ -34,7 +34,7 @@ vi.mock("@/lib/core/hooks", () => ({
 import {
   usePlayerProfileUpdate,
   usePlayerSyncRun,
-} from "@/features/players/use-player-sync-run";
+} from "@/features/players/components/use-player-sync-run";
 
 const PUUID = "player-puuid";
 const BUSY_MESSAGE =

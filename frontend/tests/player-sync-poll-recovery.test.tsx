@@ -27,7 +27,7 @@ vi.mock("@/lib/core/hooks", () => ({
   }),
 }));
 
-import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
+import { usePlayerSyncRun } from "@/features/players/components/use-player-sync-run";
 
 type SyncRunOptions = NonNullable<Parameters<typeof usePlayerSyncRun>[1]>;
 type OnSettled = NonNullable<SyncRunOptions["onSettled"]>;

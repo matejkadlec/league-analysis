@@ -33,7 +33,7 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
-import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
+import { useAnalyzedPlayer } from "@/features/players/components/use-analyzed-player";
 import type { AuthContextType } from "@/features/auth/types";
 import type { Player } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./support/render-support";

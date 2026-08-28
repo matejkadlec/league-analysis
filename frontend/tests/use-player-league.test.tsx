@@ -12,7 +12,7 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
   validatedGet,
 }));
 
-import { usePlayerLeague } from "@/features/players/use-player-league";
+import { usePlayerLeague } from "@/features/players/components/use-player-league";
 import {
   PlayerLeagueSchema,
   type PlayerLeague,

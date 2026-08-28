@@ -41,7 +41,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push }),
 }));
 
-import { useAnalyzedPlayer } from "@/features/players/use-analyzed-player";
+import { useAnalyzedPlayer } from "@/features/players/components/use-analyzed-player";
 import { playerQueryKey } from "@/features/players/player-query";
 import type { Player } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./support/render-support";

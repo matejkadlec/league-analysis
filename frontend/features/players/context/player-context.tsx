@@ -24,7 +24,7 @@ import {
   playerQueryOptions,
 } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
-import { usePlayerProfileUpdate } from "../use-player-sync-run";
+import { usePlayerProfileUpdate } from "../components/use-player-sync-run";
 
 interface PlayerContextValue {
   currentPlayer: Player | null;

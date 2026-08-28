@@ -3,7 +3,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { PlayerCardSkeleton } from "@/components/loading-skeleton";
+import { PlayerCardSkeleton } from "@/features/players/components/player-card-skeleton";
 
 /** The skeleton blocks are the `Skeleton` divs: everything with the shared base. */
 function skeletonBlocks(container: HTMLElement) {
