@@ -213,3 +213,18 @@ the `pitfall-check` agent.
   ladder known today. When a Riot DTO field is an enum, ask what happens to its
   *siblings* in the same response when Riot adds a member, and prefer widening
   the failure to one dropped record over one dropped response.
+
+- **A backend test reads frontend source, so refactoring a URL literal breaks
+  the gate from the other language.** `backend/tests/test_frontend_api_paths.py`
+  walks `frontend/` and regex-matches `validated(Get|Post|Put|Delete|Patch)(`
+  call sites, then asserts every URL it finds is a route `app` actually answers.
+  The two halves deploy separately and agree on nothing but strings, and every
+  frontend test that touches an API module mocks it, so a mistyped path stays
+  green until it 404s in a browser — hence the scan. The consequence for
+  refactoring: hoisting a path behind a constant, threading it through a
+  helper, or building it by interpolation makes the literal invisible to the
+  regex, and the check silently stops covering that call. A frontend-only
+  cleanup can therefore fail `./test.sh -b`, which is the last place anyone
+  looks. Keep `validatedPost("/jobs/…")` URL arguments inline as literals at
+  the call site, and when a decomposition step wants to move one, move the
+  whole call.

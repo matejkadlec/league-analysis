@@ -14,8 +14,11 @@ import { useToast } from "@/lib/core/hooks";
 import {
   EMAIL_CODE_LENGTH,
   EMAIL_REGEX,
+  EMAIL_REQUEST_ERRORS,
+  EMAIL_VERIFY_ERRORS,
   USER_QUERY_KEY,
   emptyCodeDigits,
+  isEmailLockCode,
   settingsErrorDetail,
 } from "../utils/settings-helpers";
 
@@ -104,24 +107,17 @@ export function useChangeEmail() {
     },
     onError: (error: Error) => {
       const detail = settingsErrorDetail(error);
+      const fieldError = detail?.code
+        ? EMAIL_REQUEST_ERRORS[detail.code]
+        : undefined;
 
-      if (detail?.code === "EMAIL_UNCHANGED") {
-        setNewEmailError(
-          "New email must be different from your current email address.",
-        );
+      if (fieldError) {
+        setNewEmailError(fieldError);
         return;
       }
 
-      if (detail?.code === "EMAIL_ALREADY_REGISTERED") {
-        setNewEmailError("This email address is already registered.");
-        return;
-      }
-
-      if (
-        detail?.code === "EMAIL_CHANGE_LOCKED" ||
-        detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
-      ) {
-        applyEmailLock(detail.locked_until);
+      if (isEmailLockCode(detail?.code)) {
+        applyEmailLock(detail?.locked_until);
         return;
       }
 
@@ -148,29 +144,17 @@ export function useChangeEmail() {
     },
     onError: (error: Error) => {
       const detail = settingsErrorDetail(error);
+      const codeError = detail?.code
+        ? EMAIL_VERIFY_ERRORS[detail.code]
+        : undefined;
 
-      if (detail?.code === "EMAIL_CHANGE_INVALID_CODE") {
-        setEmailCodeError("This code is incorrect.");
+      if (codeError) {
+        setEmailCodeError(codeError);
         return;
       }
 
-      if (detail?.code === "EMAIL_CHANGE_CODE_EXPIRED") {
-        setEmailCodeError(
-          "This code has expired. Use 'Resend the code.' to get a new one.",
-        );
-        return;
-      }
-
-      if (detail?.code === "EMAIL_CHANGE_REQUEST_NOT_FOUND") {
-        setEmailCodeError("No active code found. Please resend the code.");
-        return;
-      }
-
-      if (
-        detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS" ||
-        detail?.code === "EMAIL_CHANGE_LOCKED"
-      ) {
-        applyEmailLock(detail.locked_until);
+      if (isEmailLockCode(detail?.code)) {
+        applyEmailLock(detail?.locked_until);
         return;
       }
 

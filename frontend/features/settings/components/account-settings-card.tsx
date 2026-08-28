@@ -59,23 +59,7 @@ export function AccountSettingsCard({
         </TooltipProvider>
       </Card>
 
-      <ChangeEmailDialog
-        open={emailChange.emailDialogOpen}
-        step={emailChange.emailDialogStep}
-        newEmail={emailChange.newEmail}
-        newEmailError={emailChange.newEmailError}
-        emailCodeDigits={emailChange.emailCodeDigits}
-        emailCodeError={emailChange.emailCodeError}
-        isSubmitting={emailChange.isEmailDialogSubmitting}
-        isRequestingCode={emailChange.isRequestingCode}
-        onOpenChange={emailChange.handleEmailDialogOpenChange}
-        onNewEmailChange={emailChange.setNewEmail}
-        onDigitsChange={emailChange.setEmailCodeDigits}
-        onClearEmailError={() => emailChange.setNewEmailError(null)}
-        onClearCodeError={() => emailChange.setEmailCodeError(null)}
-        onSubmit={emailChange.handleEmailDialogSubmit}
-        onResendCode={emailChange.handleResendCode}
-      />
+      <ChangeEmailDialog emailChange={emailChange} />
     </>
   );
 }

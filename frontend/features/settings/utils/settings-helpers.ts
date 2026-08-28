@@ -46,3 +46,25 @@ export function settingsErrorDetail(
 export function emptyCodeDigits(): string[] {
   return EMAIL_CODE_SLOTS.map(() => "");
 }
+
+/** Inline message under the new-email field, keyed by the backend's code. */
+export const EMAIL_REQUEST_ERRORS: Record<string, string> = {
+  EMAIL_UNCHANGED:
+    "New email must be different from your current email address.",
+  EMAIL_ALREADY_REGISTERED: "This email address is already registered.",
+};
+
+/** Inline message under the verification code, keyed by the backend's code. */
+export const EMAIL_VERIFY_ERRORS: Record<string, string> = {
+  EMAIL_CHANGE_INVALID_CODE: "This code is incorrect.",
+  EMAIL_CHANGE_CODE_EXPIRED:
+    "This code has expired. Use 'Resend the code.' to get a new one.",
+  EMAIL_CHANGE_REQUEST_NOT_FOUND: "No active code found. Please resend the code.",
+};
+
+/** Both email-change steps lock out on either of the same two codes. */
+export function isEmailLockCode(code: string | undefined): boolean {
+  return (
+    code === "EMAIL_CHANGE_LOCKED" || code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
+  );
+}

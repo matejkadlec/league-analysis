@@ -13,42 +13,31 @@ import {
 import { cn } from "@/lib/core/utils";
 import { Loader2, Mail, RefreshCcw, Send, StopCircle } from "lucide-react";
 import { EmailCodeInputs } from "./email-code-inputs";
+import type { ChangeEmailState } from "./use-change-email";
 
 interface ChangeEmailDialogProps {
-  open: boolean;
-  step: "email" | "code";
-  newEmail: string;
-  newEmailError: string | null;
-  emailCodeDigits: string[];
-  emailCodeError: string | null;
-  isSubmitting: boolean;
-  isRequestingCode: boolean;
-  onOpenChange: (open: boolean) => void;
-  onNewEmailChange: (value: string) => void;
-  onDigitsChange: (digits: string[]) => void;
-  onClearEmailError: () => void;
-  onClearCodeError: () => void;
-  onSubmit: () => void;
-  onResendCode: () => void;
+  emailChange: ChangeEmailState;
 }
 
-export function ChangeEmailDialog({
-  open,
-  step,
-  newEmail,
-  newEmailError,
-  emailCodeDigits,
-  emailCodeError,
-  isSubmitting,
-  isRequestingCode,
-  onOpenChange,
-  onNewEmailChange,
-  onDigitsChange,
-  onClearEmailError,
-  onClearCodeError,
-  onSubmit,
-  onResendCode,
-}: ChangeEmailDialogProps) {
+export function ChangeEmailDialog({ emailChange }: ChangeEmailDialogProps) {
+  const {
+    emailDialogOpen: open,
+    emailDialogStep: step,
+    newEmail,
+    newEmailError,
+    emailCodeDigits,
+    emailCodeError,
+    isEmailDialogSubmitting: isSubmitting,
+    isRequestingCode,
+    handleEmailDialogOpenChange: onOpenChange,
+    setNewEmail: onNewEmailChange,
+    setEmailCodeDigits: onDigitsChange,
+    setNewEmailError,
+    setEmailCodeError,
+    handleEmailDialogSubmit: onSubmit,
+    handleResendCode: onResendCode,
+  } = emailChange;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[540px]">
@@ -75,7 +64,7 @@ export function ChangeEmailDialog({
                   value={newEmail}
                   onChange={(event) => {
                     onNewEmailChange(event.target.value);
-                    onClearEmailError();
+                    setNewEmailError(null);
                   }}
                   disabled={isSubmitting}
                   className="w-full"
@@ -93,7 +82,7 @@ export function ChangeEmailDialog({
               <EmailCodeInputs
                 digits={emailCodeDigits}
                 onDigitsChange={onDigitsChange}
-                onClearError={onClearCodeError}
+                onClearError={() => setEmailCodeError(null)}
                 disabled={isSubmitting}
               />
 
