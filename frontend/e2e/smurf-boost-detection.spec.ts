@@ -21,12 +21,9 @@ const FORBIDDEN = [
 ];
 
 /**
- * `innerText` reads only laid-out text: a hidden tab panel, an invisible
- * threshold group and a closed dialog all escape it. Callers therefore run
- * this once per visible state -- each tab, dialog open -- rather than
- * trusting one pass over the default state. (`textContent` would see hidden
- * panels, but it also reads script payloads, where "clean" matches
- * "cleanup".)
+ * `innerText` reads only laid-out text, so a hidden panel or closed dialog
+ * escapes it; callers run this once per visible state. `textContent` would see
+ * them but also script payloads, where "clean" matches "cleanup".
  */
 async function expectNoForbiddenWording(page: Page, stage: string) {
   const text = (await page.locator("body").innerText()).toLowerCase();

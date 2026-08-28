@@ -110,10 +110,9 @@ async function renderCard() {
 }
 
 /**
- * The thresholds are grouped into tabs, so typing into a field first opens
- * the tab that holds it, via the component's own `thresholdGroupTitle` map.
- * Every group stays mounted while inactive, so the querySelector below finds
- * the input either way; only the interaction needs the tab visible.
+ * Typing into a field first opens the tab holding it, via the component's own
+ * `thresholdGroupTitle` map. Every group stays mounted while inactive, so only
+ * the interaction needs the tab visible; the querySelector finds it either way.
  */
 async function typeValue(
   user: ReturnType<typeof userEvent.setup>,
