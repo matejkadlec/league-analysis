@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { Scale } from "lucide-react";
 import {
   PlayerSelector,
@@ -19,6 +19,44 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// The run card leads, full width: starting an analysis is what people come
+// here for. Below it the tall result sits beside the reference and the
+// history, which otherwise wait out its full height in a second grid row.
+function AnalysisLayout({
+  start,
+  results,
+  explanation,
+  history,
+}: {
+  start: ReactNode;
+  results: ReactNode;
+  explanation: ReactNode;
+  history: ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      {start}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {results}
+        <div className="space-y-6">
+          {explanation}
+          {history}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingCard() {
+  return (
+    <Card className="p-6 space-y-4">
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-20 w-full" />
+      <Skeleton className="h-10 w-full" />
+    </Card>
+  );
+}
 
 function MatchmakingAnalysisContent() {
   const {
@@ -72,40 +110,45 @@ function MatchmakingAnalysisContent() {
 
       {/* Content - shows skeletons during initial load */}
       <div className="container mx-auto px-4 pb-8">
-        <div className="mb-6 space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {isLoadingScope ? (
-              [...Array(4)].map((_, index) => (
-                <Card key={index} className="p-6 space-y-4">
-                  <Skeleton className="h-6 w-48" />
-                  <Skeleton className="h-20 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </Card>
-              ))
-            ) : analyzedPlayer ? (
-              <>
+        <div className="mb-6">
+          {isLoadingScope ? (
+            <AnalysisLayout
+              start={<LoadingCard />}
+              results={<LoadingCard />}
+              explanation={<LoadingCard />}
+              history={<LoadingCard />}
+            />
+          ) : analyzedPlayer ? (
+            <AnalysisLayout
+              start={
                 <MatchmakingAnalysis
                   key={analyzedPlayer.puuid}
                   puuid={analyzedPlayer.puuid}
                   analyzedPlayerLabel={analyzedPlayerLabel}
                   playerSelector={selector}
                 />
+              }
+              results={
                 <MatchmakingAnalysisResults
                   puuid={analyzedPlayer.puuid}
                   analyzedPlayerLabel={analyzedPlayerLabel}
                   selectedCreatedAt={selectedCreatedAt}
                   onShowLatest={() => selectAnalysis(null)}
                 />
-                <MatchmakingExplanationCard />
+              }
+              explanation={<MatchmakingExplanationCard />}
+              history={
                 <MatchmakingAnalysisHistory
                   puuid={analyzedPlayer.puuid}
                   analyzedPlayerLabel={analyzedPlayerLabel}
                   selectedCreatedAt={selectedCreatedAt}
                   onSelect={selectAnalysis}
                 />
-              </>
-            ) : (
-              <>
+              }
+            />
+          ) : (
+            <AnalysisLayout
+              start={
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -126,6 +169,8 @@ function MatchmakingAnalysisContent() {
                     </div>
                   </CardContent>
                 </Card>
+              }
+              results={
                 <Card>
                   <CardHeader>
                     <CardTitle>Last Analysis Result</CardTitle>
@@ -134,7 +179,9 @@ function MatchmakingAnalysisContent() {
                     Select a player to load their latest completed result.
                   </CardContent>
                 </Card>
-                <MatchmakingExplanationCard />
+              }
+              explanation={<MatchmakingExplanationCard />}
+              history={
                 <Card>
                   <CardHeader>
                     <CardTitle>Analysis History</CardTitle>
@@ -143,9 +190,9 @@ function MatchmakingAnalysisContent() {
                     Select a player to load their analysis history.
                   </CardContent>
                 </Card>
-              </>
-            )}
-          </div>
+              }
+            />
+          )}
         </div>
       </div>
     </>
@@ -159,14 +206,14 @@ export default function MatchmakingAnalysisPage() {
         fallback={
           <div className="container mx-auto px-4 pt-8">
             <Skeleton className="h-32 w-full rounded-lg mb-6" />
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="space-y-6">
+            <div className="space-y-6">
+              <Skeleton className="h-48 w-full rounded-lg" />
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <Skeleton className="h-48 w-full rounded-lg" />
-                <Skeleton className="h-48 w-full rounded-lg" />
-              </div>
-              <div className="space-y-6">
-                <Skeleton className="h-48 w-full rounded-lg" />
-                <Skeleton className="h-48 w-full rounded-lg" />
+                <div className="space-y-6">
+                  <Skeleton className="h-48 w-full rounded-lg" />
+                  <Skeleton className="h-48 w-full rounded-lg" />
+                </div>
               </div>
             </div>
           </div>
