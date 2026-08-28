@@ -231,7 +231,7 @@ describe("SmurfBoostSettingsCard", () => {
     }
     const [cardId, sent] = firstCall;
     expect(cardId).toBe("profile.smurf-boost-detection");
-    expect(sent.queueId).toBeUndefined();
+    expect(Object.keys(sent)).not.toContain("queueId");
     expect(Object.keys(sent).length).toBe(THRESHOLD_FIELDS.length);
     expect(sent.recentWindowSize).toBe(15);
 

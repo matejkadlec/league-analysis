@@ -7,6 +7,7 @@ import {
   presetDescription,
   presetLabel,
   writableSettings,
+  type ThresholdSettings,
 } from "../smurf-boost-settings";
 import { cn } from "@/lib/core/utils";
 
@@ -15,7 +16,7 @@ interface SmurfBoostSettingsPresetsProps {
   isError: boolean;
   busy: boolean;
   effective: Record<string, number>;
-  onSelect: (settings: Record<string, number>) => void;
+  onSelect: (settings: ThresholdSettings) => void;
 }
 
 export function SmurfBoostSettingsPresets({

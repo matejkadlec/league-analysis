@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./support/render-support";
 import userEvent from "@testing-library/user-event";
@@ -953,10 +953,10 @@ describe("SmurfBoostDetection", () => {
       ).toBe(true),
     );
     await waitFor(() => expect(runButton()).toBeTruthy());
-    // The comparison would fire from behind four awaits in the hook's
-    // completion handling, all of them after the render that re-enables the
-    // button -- so the button alone is too early an anchor for a negative.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The comparison fires from behind four awaits in the hook's completion
+    // handling, all after the render that re-enables the button -- so draining
+    // the queue, not the button, is the anchor this negative needs.
+    await act(async () => {});
     expect(validatedPost).not.toHaveBeenCalled();
     expect(startSmurfBoostDetection).not.toHaveBeenCalled();
   });

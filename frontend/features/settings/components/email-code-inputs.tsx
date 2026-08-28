@@ -11,15 +11,14 @@ import {
 
 interface EmailCodeInputsProps {
   digits: string[];
+  /** Every change retires the error the previous attempt left on screen. */
   onDigitsChange: (digits: string[]) => void;
-  onClearError: () => void;
   disabled: boolean;
 }
 
 export function EmailCodeInputs({
   digits,
   onDigitsChange,
-  onClearError,
   disabled,
 }: EmailCodeInputsProps) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -50,7 +49,6 @@ export function EmailCodeInputs({
     });
 
     onDigitsChange(nextCode);
-    onClearError();
 
     const focusIndex = Math.min(pastedText.length, EMAIL_CODE_LENGTH) - 1;
     inputRefs.current[Math.max(focusIndex, 0)]?.focus();
@@ -65,8 +63,6 @@ export function EmailCodeInputs({
       onDigitsChange(nextCode);
       return;
     }
-
-    onClearError();
 
     if (digitsOnly.length > 1) {
       const nextCode = [...digits];

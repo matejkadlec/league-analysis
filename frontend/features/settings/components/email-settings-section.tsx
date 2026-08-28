@@ -5,14 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail } from "lucide-react";
 import { ACCOUNT_ACTION_BUTTON_CLASS } from "../utils/settings-helpers";
-import type { ChangeEmailState } from "./use-change-email";
 
 interface EmailSettingsSectionProps {
-  emailChange: ChangeEmailState;
+  onChangeEmail: () => void;
+  isSubmitting: boolean;
+  isLocked: boolean;
 }
 
 export function EmailSettingsSection({
-  emailChange,
+  onChangeEmail,
+  isSubmitting,
+  isLocked,
 }: EmailSettingsSectionProps) {
   const { user } = useAuth();
 
@@ -31,18 +34,15 @@ export function EmailSettingsSection({
           <button
             type="button"
             className={ACCOUNT_ACTION_BUTTON_CLASS}
-            onClick={emailChange.handleOpenEmailDialog}
-            disabled={
-              emailChange.isEmailDialogSubmitting ||
-              emailChange.isEmailChangeLocked
-            }
+            onClick={onChangeEmail}
+            disabled={isSubmitting || isLocked}
           >
             <Mail className="h-4 w-4" />
             Change
           </button>
         </div>
       </div>
-      {emailChange.isEmailChangeLocked && (
+      {isLocked && (
         <p className="text-xs text-red-500">
           Too many failed attempts. Try again in 5 minutes.
         </p>

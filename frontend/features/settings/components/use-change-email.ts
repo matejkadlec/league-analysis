@@ -22,64 +22,55 @@ import {
   settingsErrorDetail,
 } from "../utils/settings-helpers";
 
+/**
+ * Where the workflow is and what that step may carry; `null` is closed. A
+ * union, so an unentered address cannot coexist with a half-typed code.
+ */
+type EmailDialogState =
+  | { step: "email"; email: string; error: string | null }
+  | { step: "code"; email: string; digits: string[]; error: string | null };
+
 export function useChangeEmail() {
   const toast = useToast();
   const { checkAuth } = useAuth();
   const queryClient = useQueryClient();
-  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [emailDialogStep, setEmailDialogStep] = useState<"email" | "code">(
-    "email",
-  );
-  const [newEmail, setNewEmail] = useState("");
-  const [newEmailError, setNewEmailError] = useState<string | null>(null);
-  const [emailCodeDigits, setEmailCodeDigits] = useState(() =>
-    emptyCodeDigits(),
-  );
-  const [emailCodeError, setEmailCodeError] = useState<string | null>(null);
-  const [emailChangeLockedUntil, setEmailChangeLockedUntil] =
-    useState<Date | null>(null);
-  const [lockCheckTimestamp, setLockCheckTimestamp] = useState(0);
+  const [dialog, setDialog] = useState<EmailDialogState | null>(null);
+  // The server's lock is the brake on guessing a six-digit code, so it
+  // deliberately outlives the dialog it closed.
+  const [lockedUntil, setLockedUntil] = useState<Date | null>(null);
 
-  const isEmailChangeLocked =
-    emailChangeLockedUntil !== null &&
-    emailChangeLockedUntil.getTime() > lockCheckTimestamp;
+  const isEmailChangeLocked = lockedUntil !== null;
 
   useEffect(() => {
-    if (!isEmailChangeLocked) {
+    if (lockedUntil === null) {
       return;
     }
 
-    const lockDurationMs =
-      emailChangeLockedUntil.getTime() - lockCheckTimestamp;
+    // Read the clock here rather than during render, so the derived flag
+    // stays a pure function of state. A lock restored already expired just
+    // gets a zero-delay timer.
+    const remainingMs = Math.max(lockedUntil.getTime() - Date.now(), 0);
 
-    const unlockTimer = window.setTimeout(() => {
-      setLockCheckTimestamp(Date.now());
-    }, lockDurationMs);
-
+    const unlockTimer = window.setTimeout(
+      () => setLockedUntil(null),
+      remainingMs,
+    );
     return () => window.clearTimeout(unlockTimer);
-  }, [emailChangeLockedUntil, isEmailChangeLocked, lockCheckTimestamp]);
+  }, [lockedUntil]);
 
-  const resetEmailDialogState = () => {
-    setEmailDialogStep("email");
-    setNewEmail("");
-    setNewEmailError(null);
-    setEmailCodeDigits(emptyCodeDigits());
-    setEmailCodeError(null);
-  };
+  const closeDialog = () => setDialog(null);
 
   const handleEmailDialogOpenChange = (open: boolean) => {
     if (!open) {
-      resetEmailDialogState();
+      closeDialog();
     }
-    setEmailDialogOpen(open);
   };
 
-  const applyEmailLock = (lockedUntil?: string) => {
-    if (lockedUntil) {
-      setEmailChangeLockedUntil(new Date(lockedUntil));
-      setLockCheckTimestamp(Date.now());
+  const applyEmailLock = (isoLockedUntil?: string) => {
+    if (isoLockedUntil) {
+      setLockedUntil(new Date(isoLockedUntil));
     }
-    handleEmailDialogOpenChange(false);
+    closeDialog();
     toast.error("Too many failed attempts.", {
       description: "Try again in 5 minutes.",
     });
@@ -95,12 +86,14 @@ export function useChangeEmail() {
         ),
       );
     },
-    onSuccess: () => {
+    onSuccess: (_data, targetEmail) => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });
-      setNewEmailError(null);
-      setEmailCodeError(null);
-      setEmailCodeDigits(emptyCodeDigits());
-      setEmailDialogStep("code");
+      setDialog({
+        step: "code",
+        email: targetEmail,
+        digits: emptyCodeDigits(),
+        error: null,
+      });
       toast.success("Email verification code sent", {
         description: "Check your new email inbox for the 6-digit code.",
       });
@@ -112,7 +105,7 @@ export function useChangeEmail() {
         : undefined;
 
       if (fieldError) {
-        setNewEmailError(fieldError);
+        setStepError(fieldError);
         return;
       }
 
@@ -137,8 +130,8 @@ export function useChangeEmail() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });
-      setEmailChangeLockedUntil(null);
-      handleEmailDialogOpenChange(false);
+      setLockedUntil(null);
+      closeDialog();
       toast.success("Email address updated");
       void checkAuth();
     },
@@ -149,7 +142,7 @@ export function useChangeEmail() {
         : undefined;
 
       if (codeError) {
-        setEmailCodeError(codeError);
+        setStepError(codeError);
         return;
       }
 
@@ -164,6 +157,13 @@ export function useChangeEmail() {
     },
   });
 
+  /** Report a failure against whichever step is on screen, if any still is. */
+  function setStepError(message: string) {
+    setDialog((current) =>
+      current === null ? current : { ...current, error: message },
+    );
+  }
+
   const handleOpenEmailDialog = () => {
     if (isEmailChangeLocked) {
       toast.error("Too many failed attempts.", {
@@ -172,57 +172,55 @@ export function useChangeEmail() {
       return;
     }
 
-    setEmailDialogOpen(true);
+    setDialog({ step: "email", email: "", error: null });
   };
 
-  const handleRequestEmailCode = () => {
-    const normalizedEmail = newEmail.trim().toLowerCase();
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
-      setNewEmailError("The email address is invalid, check your input.");
+  /** Typing anywhere in a step retires the error that step was showing. */
+  const editEmail = (email: string) =>
+    setDialog((current) =>
+      current?.step === "email" ? { ...current, email, error: null } : current,
+    );
+
+  const editCodeDigits = (digits: string[]) =>
+    setDialog((current) =>
+      current?.step === "code" ? { ...current, digits, error: null } : current,
+    );
+
+  const handleEmailDialogSubmit = () => {
+    if (dialog === null) {
       return;
     }
 
-    setNewEmail(normalizedEmail);
-    setNewEmailError(null);
-    requestEmailCodeMutation.mutate(normalizedEmail);
-  };
+    if (dialog.step === "email") {
+      const normalizedEmail = dialog.email.trim().toLowerCase();
+      if (!EMAIL_REGEX.test(normalizedEmail)) {
+        setStepError("The email address is invalid, check your input.");
+        return;
+      }
 
-  const handleVerifyEmailCode = () => {
-    const combinedCode = emailCodeDigits.join("");
+      requestEmailCodeMutation.mutate(normalizedEmail);
+      return;
+    }
+
+    const combinedCode = dialog.digits.join("");
     if (combinedCode.length !== EMAIL_CODE_LENGTH) {
-      setEmailCodeError("Enter all 6 digits.");
+      setStepError("Enter all 6 digits.");
       return;
     }
 
-    setEmailCodeError(null);
     verifyEmailCodeMutation.mutate(combinedCode);
   };
 
-  const handleEmailDialogSubmit = () => {
-    if (emailDialogStep === "email") {
-      handleRequestEmailCode();
-      return;
-    }
-
-    handleVerifyEmailCode();
-  };
-
   const handleResendCode = () => {
-    if (!newEmail) {
+    if (dialog?.step !== "code") {
       return;
     }
 
-    setEmailCodeError(null);
-    requestEmailCodeMutation.mutate(newEmail);
+    requestEmailCodeMutation.mutate(dialog.email);
   };
 
   return {
-    emailDialogOpen,
-    emailDialogStep,
-    newEmail,
-    newEmailError,
-    emailCodeDigits,
-    emailCodeError,
+    dialog,
     isEmailChangeLocked,
     isEmailDialogSubmitting:
       requestEmailCodeMutation.isPending || verifyEmailCodeMutation.isPending,
@@ -231,10 +229,8 @@ export function useChangeEmail() {
     handleEmailDialogOpenChange,
     handleEmailDialogSubmit,
     handleResendCode,
-    setNewEmail,
-    setNewEmailError,
-    setEmailCodeDigits,
-    setEmailCodeError,
+    editEmail,
+    editCodeDigits,
   };
 }
 

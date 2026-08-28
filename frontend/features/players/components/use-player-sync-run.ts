@@ -39,6 +39,44 @@ function playerSyncActiveQueryKey(puuid: string) {
   return ["player-sync-active", puuid] as const;
 }
 
+/**
+ * Every cache a finished update makes stale, by its leading namespace. Named
+ * rather than inferred: `query-key-scope-contract.test.ts` fails when a new
+ * player-derived key is added without deciding whether it belongs here.
+ */
+export const PLAYER_DERIVED_SYNC_ROOTS = [
+  "player",
+  "player-league",
+  "player-stats",
+  "champion-stats",
+  "lane-stats",
+  "match-history-stats",
+  "match-history-detailed",
+  // Analyses read the games the update just changed, so their stored answers
+  // are about a smaller history than the one now on screen.
+  "matchmaking-analysis",
+  "matchmaking-analysis-results",
+  "matchmaking-analysis-history",
+  "matchmaking-analysis-status",
+  "smurf-boost-detection",
+] as const;
+
+/**
+ * Match a cache this player's update invalidates. The PUUID must sit where its
+ * owner puts it; a bare `includes(puuid)` also matched this hook's own
+ * lifecycle keys and refetched the poll that was reporting the run.
+ */
+function isPlayerDerivedQuery(
+  queryKey: readonly unknown[],
+  puuid: string,
+): boolean {
+  return (
+    typeof queryKey[0] === "string" &&
+    (PLAYER_DERIVED_SYNC_ROOTS as readonly string[]).includes(queryKey[0]) &&
+    queryKey[1] === puuid
+  );
+}
+
 interface ProfileUpdateStart {
   puuid: string;
   quiet?: boolean | undefined;
@@ -227,11 +265,8 @@ export function usePlayerSyncRun(
         return;
       }
 
-      // Scoped to this player. Prefix matches without the PUUID would
-      // invalidate every cached player, so switching to someone else
-      // afterwards would refetch their data too.
       const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
-        query.queryKey.includes(puuid);
+        isPlayerDerivedQuery(query.queryKey, puuid);
       try {
         await queryClient.invalidateQueries({
           predicate: exactPlayerQuery,

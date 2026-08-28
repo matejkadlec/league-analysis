@@ -34,7 +34,11 @@ export function AccountSettingsCard({
         <TooltipProvider>
           <div className="space-y-4">
             <DisplayNameField />
-            <EmailSettingsSection emailChange={emailChange} />
+            <EmailSettingsSection
+              onChangeEmail={emailChange.handleOpenEmailDialog}
+              isSubmitting={emailChange.isEmailDialogSubmitting}
+              isLocked={emailChange.isEmailChangeLocked}
+            />
             <PasswordChangeSection />
 
             <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-end gap-3">

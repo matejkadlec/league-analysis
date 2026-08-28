@@ -39,6 +39,9 @@ import {
   numericSettings,
   SMURF_BOOST_CARD_ID,
   THRESHOLD_FIELDS,
+  byThreshold,
+  type ThresholdName,
+  type ThresholdSettings,
 } from "../smurf-boost-settings";
 import { SmurfBoostSettingsPresets } from "./smurf-boost-settings-presets";
 import { SmurfBoostSettingsThresholds } from "./smurf-boost-settings-thresholds";
@@ -54,7 +57,9 @@ const PRESETS_KEY = ["smurf-boost-presets"] as const;
 export function SmurfBoostSettingsDialog() {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [draft, setDraft] = useState<Record<string, string> | null>(null);
+  const [draft, setDraft] = useState<Record<ThresholdName, string> | null>(
+    null,
+  );
   const [failure, setFailure] = useState<string | null>(null);
 
   const presetsQuery = useQuery({
@@ -92,7 +97,7 @@ export function SmurfBoostSettingsDialog() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: async (settings: Record<string, number>) => {
+    mutationFn: async (settings: ThresholdSettings) => {
       const result = await updateCardPreference(SMURF_BOOST_CARD_ID, settings);
       if (!result.success) {
         throw new Error(
@@ -160,24 +165,17 @@ export function SmurfBoostSettingsDialog() {
     );
   } else {
     const effective = numericSettings(preference.settings);
-    const values: Record<string, string> =
+    const values =
       draft ??
-      Object.fromEntries(
-        THRESHOLD_FIELDS.map((field) => [
-          field.name,
-          String(effective[field.name] ?? ""),
-        ]),
-      );
+      byThreshold((field) => String(effective[field.name] ?? ""));
 
-    const parsed: Record<string, number> = Object.fromEntries(
-      THRESHOLD_FIELDS.map((field) => {
-        const raw = values[field.name] ?? "";
-        return [field.name, raw.trim() === "" ? Number.NaN : Number(raw)];
-      }),
-    );
-    const errors: Record<string, string> = {};
+    const parsed = byThreshold((field) => {
+      const raw = values[field.name];
+      return raw.trim() === "" ? Number.NaN : Number(raw);
+    });
+    const errors: Partial<Record<ThresholdName, string>> = {};
     for (const field of THRESHOLD_FIELDS) {
-      const message = fieldError(field, parsed[field.name] ?? Number.NaN);
+      const message = fieldError(field, parsed[field.name]);
       if (message) {
         errors[field.name] = message;
       }

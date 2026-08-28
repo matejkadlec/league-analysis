@@ -21,25 +21,18 @@ interface ChangeEmailDialogProps {
 
 export function ChangeEmailDialog({ emailChange }: ChangeEmailDialogProps) {
   const {
-    emailDialogOpen: open,
-    emailDialogStep: step,
-    newEmail,
-    newEmailError,
-    emailCodeDigits,
-    emailCodeError,
+    dialog,
     isEmailDialogSubmitting: isSubmitting,
     isRequestingCode,
     handleEmailDialogOpenChange: onOpenChange,
-    setNewEmail: onNewEmailChange,
-    setEmailCodeDigits: onDigitsChange,
-    setNewEmailError,
-    setEmailCodeError,
+    editEmail: onNewEmailChange,
+    editCodeDigits: onDigitsChange,
     handleEmailDialogSubmit: onSubmit,
     handleResendCode: onResendCode,
   } = emailChange;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={dialog !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[540px]">
         <DialogHeader className="text-left">
           <DialogTitle className="flex items-center gap-2">
@@ -53,7 +46,7 @@ export function ChangeEmailDialog({ emailChange }: ChangeEmailDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 text-left">
-          {step === "email" ? (
+          {dialog?.step !== "code" ? (
             <div className="space-y-2">
               <div className="space-y-1.5">
                 <Label htmlFor="new-email">New email</Label>
@@ -61,17 +54,14 @@ export function ChangeEmailDialog({ emailChange }: ChangeEmailDialogProps) {
                   id="new-email"
                   type="email"
                   placeholder="john.doe@email.com"
-                  value={newEmail}
-                  onChange={(event) => {
-                    onNewEmailChange(event.target.value);
-                    setNewEmailError(null);
-                  }}
+                  value={dialog?.email ?? ""}
+                  onChange={(event) => onNewEmailChange(event.target.value)}
                   disabled={isSubmitting}
                   className="w-full"
                 />
               </div>
-              {newEmailError && (
-                <p className="text-sm text-red-500">{newEmailError}</p>
+              {dialog?.error && (
+                <p className="text-sm text-red-500">{dialog.error}</p>
               )}
               <p className="text-sm text-muted-foreground">
                 We will send a code to your new email to verify it.
@@ -80,14 +70,13 @@ export function ChangeEmailDialog({ emailChange }: ChangeEmailDialogProps) {
           ) : (
             <div className="space-y-2">
               <EmailCodeInputs
-                digits={emailCodeDigits}
+                digits={dialog.digits}
                 onDigitsChange={onDigitsChange}
-                onClearError={() => setEmailCodeError(null)}
                 disabled={isSubmitting}
               />
 
-              {emailCodeError && (
-                <p className="text-sm text-red-500">{emailCodeError}</p>
+              {dialog.error && (
+                <p className="text-sm text-red-500">{dialog.error}</p>
               )}
 
               <button

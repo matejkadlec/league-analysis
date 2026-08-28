@@ -18,6 +18,7 @@ import {
   SmurfBoostPresetsResponseSchema,
 } from "@/lib/core/schemas";
 import type { CardId } from "@/lib/core/schemas";
+import type { ThresholdSettings } from "./smurf-boost-settings";
 
 export async function startSmurfBoostDetection(
   puuid: string,
@@ -68,7 +69,7 @@ export async function getCardPreferences(
 
 export async function updateCardPreference(
   cardId: CardId,
-  settings: Record<string, number>,
+  settings: ThresholdSettings,
 ): Promise<ApiResponse<CardPreference>> {
   return validatedPut(
     CardPreferenceSchema,

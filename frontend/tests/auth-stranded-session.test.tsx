@@ -66,8 +66,13 @@ function clearHint() {
   document.cookie = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/`;
 }
 
+/**
+ * Flush the effects and resolved promises a render queued. No wall clock: a
+ * fixed sleep only looks like waiting for this, and gets slower or flakier as
+ * the work behind it changes.
+ */
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await act(async () => {});
 }
 
 beforeEach(() => {

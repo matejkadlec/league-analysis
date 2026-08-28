@@ -66,11 +66,12 @@ describe("changing the address an account is identified by", () => {
   it("refuses a malformed address without asking the server", async () => {
     const { result } = renderChangeEmail();
 
-    act(() => result.current.setNewEmail("not-an-address"));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("not-an-address"));
     act(() => result.current.handleEmailDialogSubmit());
 
     await waitFor(() =>
-      expect(result.current.newEmailError).toBe(
+      expect(result.current.dialog?.error).toBe(
         "The email address is invalid, check your input.",
       ),
     );
@@ -87,7 +88,8 @@ describe("changing the address an account is identified by", () => {
     });
     const { result } = renderChangeEmail();
 
-    act(() => result.current.setNewEmail("  User@Example.COM  "));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("  User@Example.COM  "));
     act(() => result.current.handleEmailDialogSubmit());
 
     await waitFor(() =>
@@ -97,10 +99,10 @@ describe("changing the address an account is identified by", () => {
         { new_email: "user@example.com" },
       ),
     );
-    await waitFor(() => expect(result.current.newEmail).toBe(
+    await waitFor(() => expect(result.current.dialog?.email).toBe(
       "user@example.com",
     ));
-    expect(result.current.emailDialogStep).toBe("code");
+    expect(result.current.dialog?.step).toBe("code");
   });
 
   it("puts an already-registered address on the field, not in a toast", async () => {
@@ -110,35 +112,37 @@ describe("changing the address an account is identified by", () => {
     validatedPost.mockResolvedValue(refusal("EMAIL_ALREADY_REGISTERED"));
     const { result } = renderChangeEmail();
 
-    act(() => result.current.setNewEmail("taken@example.com"));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("taken@example.com"));
     act(() => result.current.handleEmailDialogSubmit());
 
     await waitFor(() =>
-      expect(result.current.newEmailError).toBe(
+      expect(result.current.dialog?.error).toBe(
         "This email address is already registered.",
       ),
     );
-    expect(result.current.emailDialogStep).toBe("email");
+    expect(result.current.dialog?.step).toBe("email");
     expect(toastError).not.toHaveBeenCalled();
   });
 
   it("will not send a partial code", async () => {
     const { result } = renderChangeEmail();
 
-    act(() => result.current.setNewEmail("new@example.com"));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("new@example.com"));
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "sent", expires_in_minutes: 10 },
     });
     act(() => result.current.handleEmailDialogSubmit());
-    await waitFor(() => expect(result.current.emailDialogStep).toBe("code"));
+    await waitFor(() => expect(result.current.dialog?.step).toBe("code"));
 
     validatedPost.mockClear();
-    act(() => result.current.setEmailCodeDigits(["1", "2", "3", "", "", ""]));
+    act(() => result.current.editCodeDigits(["1", "2", "3", "", "", ""]));
     act(() => result.current.handleEmailDialogSubmit());
 
     await waitFor(() =>
-      expect(result.current.emailCodeError).toBe("Enter all 6 digits."),
+      expect(result.current.dialog?.error).toBe("Enter all 6 digits."),
     );
     expect(validatedPost).not.toHaveBeenCalled();
   });
@@ -152,16 +156,17 @@ describe("changing the address an account is identified by", () => {
       data: { message: "sent", expires_in_minutes: 10 },
     });
     const { result } = renderChangeEmail();
-    act(() => result.current.setNewEmail("new@example.com"));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("new@example.com"));
     act(() => result.current.handleEmailDialogSubmit());
-    await waitFor(() => expect(result.current.emailDialogStep).toBe("code"));
+    await waitFor(() => expect(result.current.dialog?.step).toBe("code"));
 
     validatedPost.mockResolvedValue({
       success: true,
       data: { id: 1, email: "new@example.com" },
     });
     act(() =>
-      result.current.setEmailCodeDigits(["1", "2", "3", "4", "5", "6"]),
+      result.current.editCodeDigits(["1", "2", "3", "4", "5", "6"]),
     );
     act(() => result.current.handleEmailDialogSubmit());
 
@@ -171,7 +176,7 @@ describe("changing the address an account is identified by", () => {
       "/auth/change-email/verify",
       { code: "123456" },
     );
-    expect(result.current.emailDialogOpen).toBe(false);
+    expect(result.current.dialog).toBeNull();
   });
 
   it("keeps the dialog shut while the server says the account is locked", async () => {
@@ -184,16 +189,17 @@ describe("changing the address an account is identified by", () => {
     );
     const { result } = renderChangeEmail();
 
-    act(() => result.current.setNewEmail("new@example.com"));
+    act(() => result.current.handleOpenEmailDialog());
+    act(() => result.current.editEmail("new@example.com"));
     act(() => result.current.handleEmailDialogSubmit());
 
     await waitFor(() => expect(result.current.isEmailChangeLocked).toBe(true));
-    expect(result.current.emailDialogOpen).toBe(false);
+    expect(result.current.dialog).toBeNull();
 
     toastError.mockClear();
     act(() => result.current.handleOpenEmailDialog());
 
-    expect(result.current.emailDialogOpen).toBe(false);
+    expect(result.current.dialog).toBeNull();
     expect(toastError).toHaveBeenCalled();
   });
 });

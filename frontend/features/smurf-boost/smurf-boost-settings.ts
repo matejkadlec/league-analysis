@@ -159,11 +159,32 @@ export const THRESHOLD_FIELDS = [
 export type ThresholdName = (typeof THRESHOLD_FIELDS)[number]["name"];
 
 /**
+ * Thresholds on their way to the server. Partial because a value the response
+ * never carried is left out rather than posted as a guess.
+ */
+export type ThresholdSettings = Partial<Record<ThresholdName, number>>;
+
+/**
+ * Derive one value per threshold. The loop is what makes the result total, so
+ * this is the only place that has to assert it -- every caller gets a map the
+ * compiler knows has an entry for each name.
+ */
+export function byThreshold<T>(
+  derive: (field: (typeof THRESHOLD_FIELDS)[number]) => T,
+): Record<ThresholdName, T> {
+  const values = {} as Record<ThresholdName, T>;
+  for (const field of THRESHOLD_FIELDS) {
+    values[field.name] = derive(field);
+  }
+  return values;
+}
+
+/**
  * The one cross-field rule the backend enforces, restated here so the form can
  * say what is wrong before a request is sent. The server remains the authority
  * and rejects the write regardless.
  */
-export function crossFieldError(values: Record<string, number>): string | null {
+export function crossFieldError(values: ThresholdSettings): string | null {
   const novel = values.a3MinimumNovelGames;
   const recent = values.recentWindowSize;
   if (
@@ -214,11 +235,11 @@ export function numericSettings(
  */
 export function writableSettings(
   settings: Record<string, number>,
-): Record<string, number> {
+): ThresholdSettings {
   // A loop, not `THRESHOLD_FIELDS.map(...)` into `Object.fromEntries`: that
   // map loses the tuple, so the narrowing it then needs is an assertion the
   // compiler cannot check, and a widened value type would post a string.
-  const payload: Record<string, number> = {};
+  const payload: ThresholdSettings = {};
   for (const field of THRESHOLD_FIELDS) {
     const value = settings[field.name];
     if (value !== undefined) {

@@ -1,54 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { type ApiResponse, unwrap, validatedPost } from "@/lib/core/api";
-import { type ToastVariant, useToast } from "@/lib/core/hooks";
+import { useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,
   type JobControlActionResponse,
   JobControlActionResponseSchema,
   JobExecution,
-  type JobStatus,
   JobTriggerResponseSchema,
 } from "@/lib/core/schemas";
 
 import { invalidateJobsData } from "../jobs-query";
+import { useManualRunOutcome } from "./use-manual-run-outcome";
 
 type ToastFn = ReturnType<typeof useToast>["toast"];
-
-/** What a finished manual run announces, by the status it finished in. */
-const MANUAL_RUN_OUTCOMES: Partial<
-  Record<JobStatus, { suffix: string; description: string; variant: ToastVariant }>
-> = {
-  SUCCESS: {
-    suffix: "run finished",
-    description: "The manually triggered job completed successfully.",
-    variant: "success",
-  },
-  RATE_LIMITED: {
-    suffix: "run was rate limited",
-    description: "Riot temporarily limited requests. Try again later.",
-    variant: "warning",
-  },
-  CANCELLED: {
-    suffix: "run stopped",
-    description: "The manually triggered job is no longer active.",
-    variant: "success",
-  },
-};
-
-function manualRunToast(jobName: string, status: JobStatus) {
-  const outcome = MANUAL_RUN_OUTCOMES[status] ?? {
-    suffix: "run failed",
-    description: "Open the execution history for details, then try again.",
-    variant: "error" as const,
-  };
-  return {
-    title: `${jobName} ${outcome.suffix}`,
-    description: outcome.description,
-    variant: outcome.variant,
-  };
-}
 
 // The six control endpoints answer the same shape and want the same toast
 // handling. The mutationFn stays at each call site because the backend's
@@ -97,11 +63,9 @@ export function useJobCardControls(
   const [optimisticTestRunning, setOptimisticTestRunning] = useState<
     boolean | null
   >(null);
-  const awaitingManualRunRef = useRef(false);
-  const manualRunBaselineIdRef = useRef<number | null>(null);
-  const manualRunRequestedAtRef = useRef<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const watchManualRun = useManualRunOutcome(job.name, recentExecutions);
 
   const isRunning = job.is_running;
   const serverTestRunning = job.is_test_running;
@@ -134,39 +98,6 @@ export function useJobCardControls(
     void invalidateJobsData(queryClient);
   };
 
-  useEffect(() => {
-    if (!awaitingManualRunRef.current) {
-      return;
-    }
-
-    const baselineId = manualRunBaselineIdRef.current;
-    const requestedAt = manualRunRequestedAtRef.current;
-    const manualExecution = recentExecutions.find((execution) => {
-      if (execution.triggered_by !== "user") {
-        return false;
-      }
-      if (baselineId !== null) {
-        return execution.id > baselineId;
-      }
-      return (
-        requestedAt !== null &&
-        Date.parse(execution.started_at) >= requestedAt - 2_000
-      );
-    });
-
-    if (
-      !manualExecution ||
-      manualExecution.status === "PENDING" ||
-      manualExecution.status === "RUNNING" ||
-      manualExecution.status === "PAUSED"
-    ) {
-      return;
-    }
-
-    awaitingManualRunRef.current = false;
-    toast(manualRunToast(job.name, manualExecution.status));
-  }, [job.name, recentExecutions, toast]);
-
   // Every mutationFn unwraps, so a failed request rejects and `onError` (plus
   // the global `MutationCache.onError` reporting) runs; an HTTP 200 that
   // declines -- `data.success === false` -- stays in `onSuccess`.
@@ -177,9 +108,7 @@ export function useJobCardControls(
       ),
     onSuccess: (response) => {
       if (response.success) {
-        awaitingManualRunRef.current = true;
-        manualRunBaselineIdRef.current = lastExecutionId;
-        manualRunRequestedAtRef.current = Date.now();
+        watchManualRun(lastExecutionId);
         toast({
           title: `${job.name} run started`,
           description: "The job is running in the background.",
