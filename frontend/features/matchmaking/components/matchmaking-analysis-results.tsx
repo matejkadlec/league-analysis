@@ -9,7 +9,10 @@ import { Medal, Shield, Swords, TrendingUp } from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 
-import { getLatestCompletedMatchmakingAnalysis } from "../matchmaking-api";
+import {
+  getLatestCompletedMatchmakingAnalysis,
+  getMatchmakingAnalysisStatus,
+} from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,6 +50,9 @@ import { TierDistribution } from "./tier-distribution";
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
   analyzedPlayerLabel: string;
+  /** A run picked out of the history card; null shows the latest completed. */
+  selectedCreatedAt: string | null;
+  onShowLatest: () => void;
 }
 
 function RankFigure({ label, value }: { label: string; value: number }) {
@@ -96,54 +102,92 @@ function PerformanceRow({
   );
 }
 
+/** What the card says while it has no run to show, for either source. */
+function emptyMessage(
+  isSelection: boolean,
+  isLoading: boolean,
+  hasError: boolean,
+): string {
+  if (isLoading) {
+    return isSelection
+      ? "Loading the selected result..."
+      : "Loading the latest completed result...";
+  }
+  if (hasError) {
+    return isSelection
+      ? "The selected result could not be loaded."
+      : "The latest result could not be loaded.";
+  }
+  return isSelection
+    ? "That analysis is no longer available."
+    : "No completed analysis is available for this player yet.";
+}
+
 export function MatchmakingAnalysisResults({
   puuid,
   analyzedPlayerLabel,
+  selectedCreatedAt,
+  onShowLatest,
 }: MatchmakingAnalysisResultsProps) {
   const [scope, setScope] = useState<MatchScope>("all");
   const {
-    data: latestAnalysis,
+    data: shownAnalysis,
     isLoading,
     error,
   } = useQuery({
-    queryKey: matchmakingResultsQueryKey(puuid),
+    // The picked run is part of the cache identity, and the factory stays the
+    // prefix `invalidateMatchmakingRun` refreshes.
+    queryKey: [...matchmakingResultsQueryKey(puuid), selectedCreatedAt],
     queryFn: async ({ signal }) => {
       return unwrapOr404(
-        await getLatestCompletedMatchmakingAnalysis(puuid, signal),
+        selectedCreatedAt
+          ? await getMatchmakingAnalysisStatus(puuid, selectedCreatedAt, signal)
+          : await getLatestCompletedMatchmakingAnalysis(puuid, signal),
         null,
       );
     },
     retry: false,
     staleTime: 30000,
   });
+  const cardTitle = selectedCreatedAt
+    ? "Selected Analysis Result"
+    : "Last Analysis Result";
+  const showLatestButton = selectedCreatedAt ? (
+    <button
+      type="button"
+      onClick={onShowLatest}
+      className="cursor-pointer text-sm text-primary hover:underline"
+    >
+      Show latest
+    </button>
+  ) : null;
 
   if (
     isLoading ||
     error ||
-    !latestAnalysis ||
-    latestAnalysis.status !== "completed"
+    !shownAnalysis ||
+    shownAnalysis.status !== "completed"
   ) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            Last Analysis Result
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              {cardTitle}
+            </CardTitle>
+            {showLatestButton}
+          </div>
           <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          {isLoading
-            ? "Loading the latest completed result..."
-            : error
-              ? "The latest result could not be loaded."
-              : "No completed analysis is available for this player yet."}
+          {emptyMessage(Boolean(selectedCreatedAt), isLoading, Boolean(error))}
         </CardContent>
       </Card>
     );
   }
 
-  const { results } = latestAnalysis;
+  const { results } = shownAnalysis;
   const perMatch = results.per_match ?? null;
   const soloAggregates = perMatch ? scopeAggregates(perMatch, "solo") : null;
   const duoAggregates = perMatch ? scopeAggregates(perMatch, "duo") : null;
@@ -161,7 +205,7 @@ export function MatchmakingAnalysisResults({
             matchCount: perMatch?.length ?? null,
           };
 
-  const { params } = latestAnalysis;
+  const { params } = shownAnalysis;
   const spineFound = results.spine_matches_found ?? null;
   const windowCount =
     spineFound !== null && spineFound < params.match_count
@@ -189,7 +233,7 @@ export function MatchmakingAnalysisResults({
           perMatch,
           results.player_ranks,
           effectiveScope,
-          latestAnalysis.puuid,
+          shownAnalysis.puuid,
         )
       : null;
   const allyRank = scopedRanks
@@ -212,7 +256,7 @@ export function MatchmakingAnalysisResults({
         perMatch,
         results.player_ranks,
         effectiveScope,
-        latestAnalysis.puuid,
+        shownAnalysis.puuid,
       )
     : null;
   const gapLp = gap ? Math.round(gap.lobbyAvg - gap.playerValue) : 0;
@@ -220,14 +264,17 @@ export function MatchmakingAnalysisResults({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            Last Analysis Result
+            {cardTitle}
           </CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {formatDateTime(latestAnalysis.created_at)}
-          </span>
+          <div className="flex items-center gap-3">
+            {showLatestButton}
+            <span className="text-sm text-muted-foreground">
+              {formatDateTime(shownAnalysis.created_at)}
+            </span>
+          </div>
         </div>
         <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>

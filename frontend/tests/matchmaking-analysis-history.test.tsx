@@ -76,9 +76,16 @@ function answerWith(items: (typeof AHEAD | typeof BEHIND)[]) {
   });
 }
 
-function renderHistory() {
+const select = vi.fn<(createdAt: string | null) => void>();
+
+function renderHistory(selectedCreatedAt: string | null = null) {
   return renderWithQueryClient(
-    <MatchmakingAnalysisHistory puuid={PUUID} analyzedPlayerLabel="Sett#EUN" />,
+    <MatchmakingAnalysisHistory
+      puuid={PUUID}
+      analyzedPlayerLabel="Sett#EUN"
+      selectedCreatedAt={selectedCreatedAt}
+      onSelect={select}
+    />,
   ).queryClient;
 }
 
@@ -96,6 +103,7 @@ describe("the matchmaking analysis history card", () => {
     getMatchmakingAnalysisHistory.mockReset();
     deleteMatchmakingAnalysisRecord.mockReset();
     Object.values(toast).forEach((fn) => fn.mockReset());
+    select.mockReset();
     answerWith([AHEAD, BEHIND]);
   });
 
@@ -133,6 +141,8 @@ describe("the matchmaking analysis history card", () => {
         <MatchmakingAnalysisHistory
           puuid={PUUID}
           analyzedPlayerLabel="Sett#EUN"
+          selectedCreatedAt={null}
+          onSelect={select}
         />
       </QueryClientProvider>,
     );
@@ -234,6 +244,8 @@ describe("the matchmaking analysis history card", () => {
         <MatchmakingAnalysisHistory
           puuid={PUUID}
           analyzedPlayerLabel="Sett#EUN"
+          selectedCreatedAt={null}
+          onSelect={select}
         />
         <Probe
           queryKey={["matchmaking-analysis-results", PUUID]}
@@ -295,6 +307,78 @@ describe("the matchmaking analysis history card", () => {
     expect(toast.success).not.toHaveBeenCalled();
     expect(rows.getByText("4.3.2026 2:07 PM")).toBeTruthy();
 
+    queryClient.clear();
+  });
+  it("hands the picked run's timestamp to the result card", async () => {
+    // The row is the only way into an older analysis. Send the wrong
+    // timestamp and the card opposite shows a run nobody asked for.
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    const older = rows.getByText("3.3.2026 12:05 AM");
+    fireEvent.click(older);
+
+    expect(older.getAttribute("title")).toBe(
+      "Show this analysis in the result card",
+    );
+    expect([...new Set(select.mock.calls.flat())]).toEqual([
+      BEHIND.created_at,
+    ]);
+    queryClient.clear();
+  });
+
+  it("marks the picked row apart from the rest", async () => {
+    const queryClient = renderHistory(BEHIND.created_at);
+
+    const rows = await table();
+    const picked = rows.getByText("3.3.2026 12:05 AM");
+    expect(picked.getAttribute("aria-current")).toBe("true");
+    expect(
+      rows.getByText("4.3.2026 2:07 PM").getAttribute("aria-current"),
+    ).toBeNull();
+    queryClient.clear();
+  });
+
+  it("deletes a row without also opening it", async () => {
+    // The delete button sits inside the row that selects on click. Without
+    // stopping that bubble, removing a record displays it on the way out.
+    deleteMatchmakingAnalysisRecord.mockResolvedValue({
+      success: true,
+      data: { message: "deleted" },
+    });
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+
+    await waitFor(
+      () => expect(deleteMatchmakingAnalysisRecord).toHaveBeenCalled(),
+      { timeout: 2000 },
+    );
+    expect(deleteMatchmakingAnalysisRecord.mock.calls[0]).toEqual([
+      PUUID,
+      AHEAD.created_at,
+    ]);
+    expect(select.mock.calls).toEqual([]);
+    queryClient.clear();
+  });
+
+  it("lets go of the picked run once it is deleted", async () => {
+    // The result card asks for the picked run by timestamp; leaving a deleted
+    // one selected leaves that card reporting a 404 forever.
+    deleteMatchmakingAnalysisRecord.mockResolvedValue({
+      success: true,
+      data: { message: "deleted" },
+    });
+    const queryClient = renderHistory(AHEAD.created_at);
+
+    const rows = await table();
+    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled(), {
+      timeout: 2000,
+    });
+    expect(select.mock.calls).toEqual([[null]]);
     queryClient.clear();
   });
 });
