@@ -360,6 +360,9 @@ async function installPopulatedPlayerMocks(page: Page): Promise<void> {
   });
 }
 
+/** Every card still waiting on its query, whatever page it sits on. */
+const SKELETON = '[data-slot="skeleton"]';
+
 /**
  * The three data-rich player routes, each with a `ready` selector only its
  * populated content renders. Gate on content, never on a loading marker
@@ -402,5 +405,8 @@ export async function gotoPopulatedRoute(
   // Attached rather than visible: the matchmaking gate element is the
   // stacked mobile list, present in the DOM at every viewport.
   await expect(page.locator(route.ready).first()).toBeAttached();
-  await page.waitForLoadState("networkidle");
+  // Every other gated card, so a scan or a measurement cannot land on one
+  // still showing its placeholder. Not `networkidle`: the shell polls on
+  // timers, making network quiet a property of the clock, not of the page.
+  await expect(page.locator(SKELETON)).toHaveCount(0);
 }
