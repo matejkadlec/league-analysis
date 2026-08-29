@@ -21,29 +21,27 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // The run card leads, full width: starting an analysis is what people come
-// here for. Below it the tall result sits beside the reference and the
-// history, which otherwise wait out its full height in a second grid row.
+// here for. The result and the history it is picked from sit together below,
+// and the flowchart waits at the very bottom as reference.
 function AnalysisLayout({
   start,
   results,
-  explanation,
   history,
+  explanation,
 }: {
   start: ReactNode;
   results: ReactNode;
-  explanation: ReactNode;
   history: ReactNode;
+  explanation: ReactNode;
 }) {
   return (
     <div className="space-y-6">
       {start}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {results}
-        <div className="space-y-6">
-          {explanation}
-          {history}
-        </div>
+        {history}
       </div>
+      {explanation}
     </div>
   );
 }
@@ -115,8 +113,8 @@ function MatchmakingAnalysisContent() {
             <AnalysisLayout
               start={<LoadingCard />}
               results={<LoadingCard />}
-              explanation={<LoadingCard />}
               history={<LoadingCard />}
+              explanation={<LoadingCard />}
             />
           ) : analyzedPlayer ? (
             <AnalysisLayout
@@ -136,7 +134,6 @@ function MatchmakingAnalysisContent() {
                   onShowLatest={() => selectAnalysis(null)}
                 />
               }
-              explanation={<MatchmakingExplanationCard />}
               history={
                 <MatchmakingAnalysisHistory
                   puuid={analyzedPlayer.puuid}
@@ -145,6 +142,7 @@ function MatchmakingAnalysisContent() {
                   onSelect={selectAnalysis}
                 />
               }
+              explanation={<MatchmakingExplanationCard />}
             />
           ) : (
             <AnalysisLayout
@@ -180,7 +178,6 @@ function MatchmakingAnalysisContent() {
                   </CardContent>
                 </Card>
               }
-              explanation={<MatchmakingExplanationCard />}
               history={
                 <Card>
                   <CardHeader>
@@ -191,6 +188,7 @@ function MatchmakingAnalysisContent() {
                   </CardContent>
                 </Card>
               }
+              explanation={<MatchmakingExplanationCard />}
             />
           )}
         </div>
@@ -210,11 +208,9 @@ export default function MatchmakingAnalysisPage() {
               <Skeleton className="h-48 w-full rounded-lg" />
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <Skeleton className="h-48 w-full rounded-lg" />
-                <div className="space-y-6">
-                  <Skeleton className="h-48 w-full rounded-lg" />
-                  <Skeleton className="h-48 w-full rounded-lg" />
-                </div>
+                <Skeleton className="h-48 w-full rounded-lg" />
               </div>
+              <Skeleton className="h-48 w-full rounded-lg" />
             </div>
           </div>
         }
