@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PLATFORMS, getPlatformDisplayName } from "../lib/core/riot/platform-utils";
-import { getRankColors } from "../features/players/utils/rank-colors";
+import { getRankColors } from "../features/players/rank-colors";
 import { TierSchema } from "../lib/core/schemas";
 
 describe("platform presentation", () => {

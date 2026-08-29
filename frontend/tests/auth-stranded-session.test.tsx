@@ -14,7 +14,7 @@ import {
   clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/lib/session/auth-state-cookie";
-import { PUBLIC_ROUTES } from "@/features/auth/utils/public-routes";
+import { PUBLIC_ROUTES } from "@/features/auth/public-routes";
 import type { AuthContextType } from "@/features/auth/types";
 import { AUTH_PROBE_TIMEOUT_MS } from "@/lib/session/login-error";
 import {

@@ -9,7 +9,7 @@ import {
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
-} from "@/features/cookie-consent/utils/consent-storage";
+} from "@/features/cookie-consent/consent-storage";
 
 function storageName(name: string): string {
   return name.replaceAll("_", "_\u200b");

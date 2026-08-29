@@ -13,7 +13,7 @@ import {
 import type {
   MatchSideParticipant,
   SideStatHighlight,
-} from "./match-row-format";
+} from "../match-row-format";
 import {
   ChampionPortrait,
   renderRunes,

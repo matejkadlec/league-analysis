@@ -44,7 +44,7 @@ import {
   parseRiotId,
   RIOT_ID_SEARCH_MAX_LENGTH,
   type RiotIdParts,
-} from "../utils/riot-id";
+} from "../riot-id";
 
 // Long enough that a typed Riot ID is one suggestion request, short enough
 // that the list still feels attached to the keyboard.
@@ -58,7 +58,7 @@ interface DiscoverAttempt {
 import {
   playerNotFoundMessage,
   playerTrackingFailureKind,
-} from "../utils/tracking-feedback";
+} from "../tracking-feedback";
 
 // Keeps its own wrapper: the platform suffix is this picker's concern, not
 // part of the Riot ID.

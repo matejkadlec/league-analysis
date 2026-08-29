@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clearOptionalBrowserStorage } from "@/features/cookie-consent/utils/consent-storage";
+import { clearOptionalBrowserStorage } from "@/features/cookie-consent/consent-storage";
 
 afterEach(() => {
   vi.restoreAllMocks();

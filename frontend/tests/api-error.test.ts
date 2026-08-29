@@ -6,7 +6,7 @@ import {
   apiErrorMessage,
   normalizeApiError,
 } from "../lib/core/http/api-error";
-import { playerTrackingFailureKind } from "../features/players/utils/tracking-feedback";
+import { playerTrackingFailureKind } from "../features/players/tracking-feedback";
 
 function axiosError(
   status: number | undefined,

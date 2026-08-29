@@ -26,7 +26,7 @@ import {
   ChampionPaginationState,
   getChampionPage,
   pageForChampionDataSource,
-} from "../utils/champion-pagination";
+} from "../champion-pagination";
 
 interface ChampionStatsCardProps {
   dataSourceKey: string;

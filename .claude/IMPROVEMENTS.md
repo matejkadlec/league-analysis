@@ -7,15 +7,7 @@ issue, newest last:
 
 ## Open
 
-- 2026-08-28 frontend/tests/api-contract-alignment.test.ts: the query names a
-  `validatedPost`/`validatedPut`/`validatedPatch` call site sends are never
-  checked against OpenAPI. The bag sits one slot past an arbitrary body
-  expression, which the parser does not try to reach. Two live sites pass one
-  (`/players/discover`, `/jobs/{id}/stop`).
-- 2026-08-28 frontend/features: there is no rule for where a feature's pure
-  helpers live -- the feature root, `utils/`, or `components/` are all in use,
-  and `features/matches` uses all three. This is the half of the desloppify
-  `package_organization` finding that the lib/core regrouping did not address.
+Nothing open.
 
 ## Findings that did not survive measurement
 
@@ -76,6 +68,14 @@ written with no `jobs.job_executions` row covering the instant, but 2,776 of
 production's 3,778 matches sit outside every execution window, and
 `MatchmakingAnalysisService` calls `upsert_match` on the request path. Match
 writes outside a recorded execution are the normal case here.
+
+**The body-verb query bag (2026-08-28, undercounted).** The entry named two
+call sites passing a query past a body; there were three, and the third
+(`/jobs/{id}/test`) sent `suspend_regular`, a name no test in either language
+mentioned. Reaching the bag turned out to be one balanced-bracket scan, not the
+parser rewrite the entry implied -- but two of the three sites then had to be
+rewritten as plain object literals before their names could be read at all, so
+the extractor was the smaller half of the work.
 
 ## Standing lesson
 

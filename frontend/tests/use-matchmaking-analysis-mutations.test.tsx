@@ -36,7 +36,7 @@ vi.mock("@/lib/core/hooks", () => ({
 }));
 
 import { useMatchmakingAnalysisMutations } from "@/features/matchmaking/components/use-matchmaking-analysis-mutations";
-import type { AnalysisUiAction } from "@/features/matchmaking/components/matchmaking-analysis-state";
+import type { AnalysisUiAction } from "@/features/matchmaking/matchmaking-analysis-state";
 import {
   matchmakingAnalysisQueryKey,
   matchmakingHistoryQueryKey,

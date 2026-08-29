@@ -19,7 +19,7 @@ import { cn } from "@/lib/core/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getRankColors } from "../utils/rank-colors";
+import { getRankColors } from "../rank-colors";
 import { TrackPlayerButton } from "../components/track-player-button";
 import { usePlayerLeague } from "./use-player-league";
 import { usePlayerSyncRun } from "./use-player-sync-run";

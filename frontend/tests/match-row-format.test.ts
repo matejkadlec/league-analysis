@@ -7,7 +7,7 @@ import {
   getMatchOutcome,
   switchTarget,
   winsStat,
-} from "@/features/matches/components/match-row-format";
+} from "@/features/matches/match-row-format";
 
 /**
  * These four are pure and only reachable through a full `MatchRow` render in

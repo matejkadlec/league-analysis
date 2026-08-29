@@ -231,7 +231,7 @@ export default defineConfig({
     {
       files: [
         "lib/session/auth-state-cookie.ts",
-        "features/cookie-consent/utils/consent-storage.ts",
+        "features/cookie-consent/consent-storage.ts",
       ],
       rules: { "house/session-teardown-syntax": "off" },
     },

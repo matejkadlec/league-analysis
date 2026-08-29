@@ -66,7 +66,7 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
       "Importing the session teardown dynamically evades the import allowlist. Only the refresh call may end a session.",
   },
   // A non-literal specifier has no `source.value` at all, so
-  // `await import(`@/features/auth/utils/${name}`)` is invisible above too.
+  // `await import(`@/features/auth/${name}`)` is invisible above too.
   {
     selector: "ImportExpression:not([source.type='Literal'])",
     message:
@@ -94,7 +94,7 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
 export const EDGE_ISOLATION_SYNTAX: readonly SyntaxRestriction[] = [
   {
     selector:
-      "ImportDeclaration:not([source.value='next/server']):not([source.value='@/lib/session/auth-state-cookie']):not([source.value='@/features/auth/utils/public-routes'])",
+      "ImportDeclaration:not([source.value='next/server']):not([source.value='@/lib/session/auth-state-cookie']):not([source.value='@/features/auth/public-routes'])",
     message:
       "proxy.ts may import only next/server, the session-hint constants and the public-route list. A helper imported here can make the request this file must never make: the edge cannot tell a refusal from an outage.",
   },

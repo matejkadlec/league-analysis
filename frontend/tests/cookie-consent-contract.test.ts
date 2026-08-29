@@ -9,7 +9,7 @@ import {
   canUseOptionalStorage,
   readCookieConsentFromBrowser,
   writeCookieConsent,
-} from "../features/cookie-consent/utils/consent-storage";
+} from "../features/cookie-consent/consent-storage";
 
 function setConsentCookie(value: string) {
   document.cookie = `${COOKIE_CONSENT_COOKIE_NAME}=${encodeURIComponent(value)}; path=/`;

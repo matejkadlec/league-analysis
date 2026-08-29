@@ -11,7 +11,7 @@ import { ChangeEmailDialog } from "./change-email-dialog";
 import { DisplayNameField } from "./display-name-field";
 import { EmailSettingsSection } from "./email-settings-section";
 import { PasswordChangeSection } from "./password-change-section";
-import { ACCOUNT_ACTION_BUTTON_CLASS } from "../utils/settings-helpers";
+import { ACCOUNT_ACTION_BUTTON_CLASS } from "../settings-helpers";
 import { useChangeEmail } from "./use-change-email";
 
 interface AccountSettingsCardProps {

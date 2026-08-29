@@ -8,7 +8,7 @@ import {
 } from "../matchmaking-api";
 import { useToast } from "@/lib/core/hooks";
 
-import type { AnalysisUiAction } from "./matchmaking-analysis-state";
+import type { AnalysisUiAction } from "../matchmaking-analysis-state";
 import {
   invalidateMatchmakingRun,
   matchmakingAnalysisQueryKey,

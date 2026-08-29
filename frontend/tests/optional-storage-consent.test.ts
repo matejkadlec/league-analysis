@@ -13,7 +13,7 @@ import { allSourceFiles } from "./support/source-scan-support";
  */
 const CONSENT_STORAGE = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../features/cookie-consent/utils/consent-storage.ts",
+  "../features/cookie-consent/consent-storage.ts",
 );
 
 function consentStorageSource(): string {

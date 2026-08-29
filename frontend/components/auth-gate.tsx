@@ -8,7 +8,7 @@ import {
   subscribeToAuthStateCookie,
 } from "@/lib/session/auth-state-cookie";
 // oxlint-disable-next-line no-restricted-imports -- shell infra bound to the public-route list; tests/auth-stranded-session.test.tsx asserts this behaviour
-import { isPublicRoute as pathnameIsPublic } from "@/features/auth/utils/public-routes";
+import { isPublicRoute as pathnameIsPublic } from "@/features/auth/public-routes";
 
 /**
  * How long the screen may stay empty before it owes the visitor a word: long

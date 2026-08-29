@@ -5,7 +5,7 @@ process.env.TZ = "Pacific/Kiritimati";
 
 import { describe, expect, it } from "vitest";
 
-import { formatDate } from "@/features/players/components/player-card-format";
+import { formatDate } from "@/features/players/player-card-format";
 
 describe("the last-updated date", () => {
   it("reads the same clock everywhere it is rendered", () => {

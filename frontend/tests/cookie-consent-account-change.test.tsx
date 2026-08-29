@@ -31,7 +31,7 @@ import {
   COOKIE_CONSENT_COOKIE_NAME,
   COOKIE_CONSENT_VERSION,
   readCookieConsentFromBrowser,
-} from "../features/cookie-consent/utils/consent-storage";
+} from "../features/cookie-consent/consent-storage";
 
 /** The banner is the only element that is blocking, so its title identifies it. */
 const BANNER_TITLE = "Cookie and Local Storage Preferences";

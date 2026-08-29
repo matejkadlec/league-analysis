@@ -8,7 +8,7 @@ import { CookieSettingsTrigger } from "@/components/cookie-settings-trigger";
 import { LegalNotice } from "@/components/legal-notice";
 // The barrel does not re-export the event name; the manager reads it from
 // here too, which is the pairing this test exists to hold together.
-import { COOKIE_CONSENT_OPEN_PREFERENCES_EVENT } from "@/features/cookie-consent/utils/consent-storage";
+import { COOKIE_CONSENT_OPEN_PREFERENCES_EVENT } from "@/features/cookie-consent/consent-storage";
 import { LEGAL_PAGES } from "@/lib/core/legal-pages";
 
 /**

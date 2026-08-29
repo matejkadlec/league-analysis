@@ -4,7 +4,7 @@ import { JobStatusResponse } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExecutionStatusBadge } from "./execution-status-badge";
-import { formatNextRun, formatLastRun } from "./job-card-format";
+import { formatNextRun, formatLastRun } from "../job-card-format";
 import {
   CheckCircle2,
   XCircle,

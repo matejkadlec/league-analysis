@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { analysisFailureMessage } from "@/features/matchmaking/components/matchmaking-analysis-state";
+import { analysisFailureMessage } from "@/features/matchmaking/matchmaking-analysis-state";
 import { MatchmakingAnalysisResponseSchema } from "@/lib/core/schemas";
 
 function failed(error_code: string, error_message: string | null = null) {

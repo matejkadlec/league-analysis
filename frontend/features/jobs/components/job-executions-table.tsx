@@ -17,7 +17,7 @@ import {
   formatDuration,
   formatJobTimestamp,
   formatRecordsSummary,
-} from "./job-execution-format";
+} from "../job-execution-format";
 
 interface JobExecutionsTableProps {
   executions: JobExecution[];

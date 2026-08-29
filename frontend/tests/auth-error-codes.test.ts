@@ -19,7 +19,7 @@ const BRANCHING_FILES = [
   "lib/session/login-error.ts",
   "features/auth/components/sign-in-form.tsx",
   "features/settings/components/use-change-email.ts",
-  "features/settings/utils/settings-helpers.ts",
+  "features/settings/settings-helpers.ts",
 ];
 
 function backendCodes(): Set<string> {

@@ -1,10 +1,10 @@
 import type { TeamStats } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
-import { RIOT_OBJECTIVE_ICON_SOURCES } from "./objective-icon-assets";
+import { RIOT_OBJECTIVE_ICON_SOURCES } from "../objective-icon-assets";
 import {
   OBJECTIVE_DEFINITIONS,
   type ObjectiveId,
-} from "./objective-definitions";
+} from "../objective-definitions";
 
 interface ObjectiveGlyphProps {
   className: string;
