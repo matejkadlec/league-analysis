@@ -13,7 +13,7 @@ import {
 import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
 import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/hooks/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
-import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
+import { getMatchHistoryErrorMessage } from "../match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   DEFAULT_MATCH_HISTORY_QUEUE_SELECTION,

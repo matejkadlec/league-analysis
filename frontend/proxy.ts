@@ -5,7 +5,7 @@ import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
 } from "@/lib/session/auth-state-cookie";
-import { isPublicRoute } from "@/features/auth/utils/public-routes";
+import { isPublicRoute } from "@/features/auth/public-routes";
 
 // The edge asks nobody anything: it routes on the hint cookie alone and makes
 // no requests, because one unanswered probe cannot tell "signed out" from

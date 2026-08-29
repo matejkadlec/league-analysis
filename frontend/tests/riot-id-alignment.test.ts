@@ -8,7 +8,7 @@ import {
   RIOT_ID_GAME_NAME_PATTERN,
   RIOT_ID_TAG_LINE_MAX_LENGTH,
   RIOT_ID_TAG_LINE_PATTERN,
-} from "@/features/players/utils/riot-id";
+} from "@/features/players/riot-id";
 
 /**
  * The Riot ID rules exist on both sides, so something has to hold them equal.

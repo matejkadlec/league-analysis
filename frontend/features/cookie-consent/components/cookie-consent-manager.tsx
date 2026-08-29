@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/core/utils";
-import { canUseOptionalStorage } from "../utils/consent-storage";
+import { canUseOptionalStorage } from "../consent-storage";
 import { useCookieConsent } from "./use-cookie-consent";
 
 export function CookieConsentManager() {

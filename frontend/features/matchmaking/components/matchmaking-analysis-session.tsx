@@ -23,14 +23,14 @@ import {
   resolveDisplayedAnimProgress,
   resolveDisplayedFailure,
   resolveWatchingCreatedAt,
-} from "./matchmaking-analysis-state";
+} from "../matchmaking-analysis-state";
 import {
   appendThroughputSample,
   estimateMatchmakingMinutesRemaining,
   observedPlayersPerSecond,
   projectMatchmakingProgress,
   type ThroughputSample,
-} from "./matchmaking-progress";
+} from "../matchmaking-progress";
 import { useMatchmakingAnalysisMutations } from "./use-matchmaking-analysis-mutations";
 import {
   invalidateMatchmakingRun,

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { EMAIL_CODE_LENGTH } from "@/features/settings/utils/settings-helpers";
+import { EMAIL_CODE_LENGTH } from "@/features/settings/settings-helpers";
 
 /**
  * The form's box count comes from `EMAIL_CODE_SLOTS.length` and the API's from

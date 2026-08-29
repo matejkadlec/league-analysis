@@ -20,7 +20,7 @@ import {
   emptyCodeDigits,
   isEmailLockCode,
   settingsErrorDetail,
-} from "../utils/settings-helpers";
+} from "../settings-helpers";
 
 /**
  * Where the workflow is and what that step may carry; `null` is closed. A

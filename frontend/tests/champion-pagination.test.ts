@@ -4,7 +4,7 @@ import {
   CHAMPIONS_PER_PAGE,
   getChampionPage,
   pageForChampionDataSource,
-} from "../features/profile/utils/champion-pagination";
+} from "../features/profile/champion-pagination";
 
 describe("Top Champions pagination", () => {
   it("uses a fixed five-row page size across first, middle, and partial-final pages", () => {

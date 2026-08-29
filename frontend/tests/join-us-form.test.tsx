@@ -64,7 +64,7 @@ vi.mock("@marsidev/react-turnstile", () => ({
 }));
 
 import { JoinUsForm } from "@/features/auth/components/join-us-form";
-import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/utils/join-us-message";
+import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/join-us-message";
 import type { AuthContextType } from "@/features/auth/types";
 
 const LONG_ENOUGH = "a".repeat(300);

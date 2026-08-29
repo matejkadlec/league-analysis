@@ -14,7 +14,7 @@ import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
 import {
   readOptionalStorage,
   writeOptionalStorage,
-} from "@/features/cookie-consent/utils/consent-storage";
+} from "@/features/cookie-consent/consent-storage";
 import {
   SERVICE_STATUS_QUERY_KEY,
   serviceStatusQueryOptions,

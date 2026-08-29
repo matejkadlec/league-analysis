@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { isPasswordStrong } from "@/features/settings/utils/settings-helpers";
+import { isPasswordStrong } from "@/features/settings/settings-helpers";
 
 /**
  * The password policy is written twice and nothing else notices when they

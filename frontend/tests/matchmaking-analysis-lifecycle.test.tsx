@@ -47,7 +47,7 @@ import {
   observedPlayersPerSecond,
   projectMatchmakingProgress,
   type ThroughputSample,
-} from "../features/matchmaking/components/matchmaking-progress";
+} from "../features/matchmaking/matchmaking-progress";
 import type { ApiResponse } from "@/lib/core/http/api";
 import {
   MatchmakingAnalysisResponseSchema,

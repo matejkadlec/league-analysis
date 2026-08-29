@@ -3,8 +3,8 @@
 import type { JobExecution } from "@/lib/core/schemas";
 
 import { ExecutionStatusBadge } from "./execution-status-badge";
-import { formatLastRun } from "./job-card-format";
-import { formatDuration } from "./job-execution-format";
+import { formatLastRun } from "../job-card-format";
+import { formatDuration } from "../job-execution-format";
 
 interface JobCardHistoryProps {
   recentExecutions: JobExecution[];

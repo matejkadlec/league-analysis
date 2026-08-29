@@ -6,7 +6,7 @@ import {
   formatDuration,
   formatJobTimestamp,
   formatRecordsSummary,
-} from "../features/jobs/components/job-execution-format";
+} from "../features/jobs/job-execution-format";
 
 describe("how a job run is worded", () => {
   it.each([

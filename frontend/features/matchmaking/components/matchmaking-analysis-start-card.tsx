@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { MAX_MATCH_COUNT, MIN_MATCH_COUNT } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
-import { ANALYSIS_CARD_TRANSITION } from "./matchmaking-analysis-state";
+import { ANALYSIS_CARD_TRANSITION } from "../matchmaking-analysis-state";
 
 const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
 

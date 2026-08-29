@@ -75,7 +75,7 @@ const EXPECTED_EXEMPTIONS: Record<string, string[][]> = {
     ["tests/**", "e2e/**"],
     [
       "lib/session/auth-state-cookie.ts",
-      "features/cookie-consent/utils/consent-storage.ts",
+      "features/cookie-consent/consent-storage.ts",
     ],
   ],
   "no-restricted-imports": [
