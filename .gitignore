@@ -68,3 +68,7 @@ frontend/build/
 # Untracked
 docs/examples/
 untracked/
+
+# Stryker mutation testing (ad-hoc, never committed)
+frontend/reports/
+frontend/.stryker-tmp/
