@@ -17,7 +17,13 @@ from sqlalchemy import (
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, MappedColumn, mapped_column
+
+# The type every JSONB column whose `None` means "there is no document" is
+# declared with. SQLAlchemy's default stores `'null'::jsonb` for a written
+# `None`, which reads back as `None` but is not the SQL NULL `IS NULL` finds.
+ABSENT_AS_NULL_JSONB = JSONB(none_as_null=True)
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes

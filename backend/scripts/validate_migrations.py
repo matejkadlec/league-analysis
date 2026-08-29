@@ -29,6 +29,12 @@ RECONCILE_REVISION = (
     / "versions"
     / "20260816_0014_reconcile_models_and_schema.py"
 )
+JSONB_ABSENCE_REVISION = (
+    BACKEND_ROOT / "alembic" / "versions" / "20260829_0034_jsonb_absence_is_sql_null.py"
+)
+# Names the one job execution seeded for revision 0034, in a column no other
+# fixture writes.
+_JSON_NULL_EXECUTION_MARKER = "seeded for the JSON null normalisation"
 PROJECT_ROOT = BACKEND_ROOT.parent
 SNAPSHOT_SQL = PROJECT_ROOT / "backup" / "postgres-snapshot.sql"
 EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
@@ -413,6 +419,122 @@ def validate_revision_0022_retired_the_absent_stand_ins(database: str) -> None:
     if sentinels != (None, None):
         raise RuntimeError(
             f'revision 0022 left a "None" string in summary_stats: {sentinels!r}'
+        )
+
+
+def normalised_jsonb_columns() -> tuple[tuple[str, str, str], ...]:
+    """Read the columns straight out of the revision that normalises them.
+
+    Parsed rather than copied, for the reason `tightened_participant_columns`
+    is: a hand-kept second list here could drift into agreeing with nothing.
+    """
+    module = ast.parse(JSONB_ABSENCE_REVISION.read_text(encoding="utf-8"))
+    for node in module.body:
+        if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
+            continue
+        if node.target.id == "ABSENT_JSONB_COLUMNS" and node.value is not None:
+            columns = ast.literal_eval(node.value)
+            if not columns:
+                raise RuntimeError("ABSENT_JSONB_COLUMNS in revision 0034 is empty")
+            return columns
+    raise RuntimeError(
+        f"no ABSENT_JSONB_COLUMNS assignment in {JSONB_ABSENCE_REVISION.name}"
+    )
+
+
+def seed_rows_revision_0034_must_normalise(database: str) -> None:
+    """Seed the JSON `null` that a `None` write used to leave in five columns.
+
+    Raw SQL, because no writer can produce this value any more: the models now
+    declare the type that sends SQL NULL. Revision 0022 runs over the seeded
+    playstyle row on the way to head and cannot see it, which is the bug.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO core.players (puuid, game_name, tag_line, "
+                    "platform, is_tracked, profile_icon_id, summoner_level) VALUES "
+                    "('JSON_NULL_VALIDATION', 'JsonNull', 'TEST', 'eun1', false, 29, 0)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO core.playstyle_analyses "
+                    "(puuid, status, tags, summary_stats) VALUES "
+                    "('JSON_NULL_VALIDATION', 'COMPLETED', '{}'::jsonb, "
+                    "'null'::jsonb)"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE core.match_participants "
+                    "SET runes = 'null'::jsonb, advanced_stats = 'null'::jsonb "
+                    "WHERE match_id = 'EUN1_VALIDATION'"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO jobs.job_executions "
+                    "(job_config_id, status, api_requests_made, records_created, "
+                    " records_updated, error_message, execution_log, detailed_logs) "
+                    "SELECT id, 'FAILED', 0, 0, 0, :marker, 'null'::jsonb, "
+                    " 'null'::jsonb FROM jobs.job_configurations ORDER BY id LIMIT 1"
+                ),
+                {"marker": _JSON_NULL_EXECUTION_MARKER},
+            )
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0034_left_one_absent_value(database: str) -> None:
+    """Assert no column revision 0034 names still holds a JSON `null`.
+
+    The count runs over every column the revision lists, so dropping one from
+    it fails here; the seeded rows are what makes the count non-vacuous.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    remaining: list[str] = []
+    try:
+        with engine.connect() as connection:
+            for schema, table, column in normalised_jsonb_columns():
+                left = connection.execute(
+                    text(
+                        f"SELECT count(*) FROM {schema}.{table} "
+                        f"WHERE {column} = 'null'::jsonb"
+                    )
+                ).scalar_one()
+                if left:
+                    remaining.append(f"{schema}.{table}.{column}: {left} row(s)")
+            emptied = connection.execute(
+                text(
+                    "SELECT (SELECT count(*) FROM core.playstyle_analyses "
+                    "  WHERE puuid = 'JSON_NULL_VALIDATION' "
+                    "  AND summary_stats IS NULL), "
+                    " (SELECT count(*) FROM core.match_participants "
+                    "  WHERE match_id = 'EUN1_VALIDATION' "
+                    "  AND runes IS NULL AND advanced_stats IS NULL), "
+                    " (SELECT count(*) FROM jobs.job_executions "
+                    "  WHERE error_message = :marker "
+                    "  AND execution_log IS NULL AND detailed_logs IS NULL)"
+                ),
+                {"marker": _JSON_NULL_EXECUTION_MARKER},
+            ).one()
+    finally:
+        engine.dispose()
+
+    if remaining:
+        raise RuntimeError(
+            "revision 0034 left a JSON `null` in a column it normalises, so "
+            "`IS NULL` still misses rows that hold no document: " + "; ".join(remaining)
+        )
+    if emptied != (1, 1, 1):
+        raise RuntimeError(
+            "the rows seeded for revision 0034 did not survive as SQL NULL "
+            f"(playstyle, participant, execution counts: {emptied!r})"
         )
 
 
@@ -1020,8 +1142,10 @@ def main() -> int:
         # them. Left after head this check would read zero rows.
         validate_revision_0017_rewrote_the_seeded_basis(database)
         seed_riot_keys_revision_0019_must_collapse(database)
+        seed_rows_revision_0034_must_normalise(database)
         run_upgrade(database)
         validate_revision(database)
+        validate_revision_0034_left_one_absent_value(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)

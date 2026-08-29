@@ -7,6 +7,7 @@ whatever the fixture handed it and sees none of this.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.auth.users.models import User
 from app.features.auth.users.user_card_preference import UserCardPreference
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
+from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 from app.features.players.models import Player
 from app.features.playstyle_analysis.models import (
     AnalysisStatus,
@@ -52,14 +54,14 @@ DETECTED_TAG: DetectedTag = {
 }
 
 
-async def test_an_empty_analysis_writes_json_null_that_is_not_sql_null(
+async def test_an_empty_analysis_writes_the_sql_null_its_column_promises(
     database_session: AsyncSession, stored_player: Player
 ) -> None:
-    """`none_as_null` is off, so a `None` written to JSONB lands as JSON `null`.
+    """A `None` written to JSONB must land as SQL NULL, not as JSON `null`.
 
     Python reads both back as `None`, which is why no unit test sees this, but
     `IS NULL` matches only one of them -- and revision 0022's backfilled rows
-    are the other one.
+    are that one, so the other would be a second spelling of the same absence.
     """
     service = PlaystyleAnalysisService(database_session)
     await service._save_empty_analysis(stored_player.puuid)
@@ -68,11 +70,11 @@ async def test_an_empty_analysis_writes_json_null_that_is_not_sql_null(
         select(
             PlaystyleAnalysis.summary_stats,
             PlaystyleAnalysis.summary_stats.is_(None),
-            text("summary_stats = 'null'::jsonb"),
+            text("summary_stats IS NOT DISTINCT FROM 'null'::jsonb"),
             PlaystyleAnalysis.tags,
         ).where(PlaystyleAnalysis.puuid == stored_player.puuid)
     )
-    assert stored.one() == (None, False, True, {})
+    assert stored.one() == (None, True, False, {})
 
 
 async def test_the_analysis_upsert_replaces_the_whole_tags_document(
@@ -121,6 +123,46 @@ async def test_a_repeat_card_preference_replaces_the_stored_settings(
             "included_roles": [],
         }
     ]
+
+
+async def test_a_failed_run_is_not_a_run_that_kept_its_results(
+    database_session: AsyncSession, stored_player: Player, stored_user: User
+) -> None:
+    """`_complete_with_error` writes `results=None`, and `IS NOT NULL` must miss it.
+
+    `_completed_run_where` reads that clause to mean "finished and kept
+    results". Written as JSON `null` the row satisfies it, and only the
+    `status == "completed"` half of the same `and_` keeps it off the history.
+    """
+    created_at = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
+    await database_session.execute(
+        insert(MatchmakingAnalysis).values(
+            user_id=stored_user.id,
+            puuid=stored_player.puuid,
+            created_at=created_at,
+            status="in_progress",
+        )
+    )
+    service = MatchmakingAnalysisService(database_session, None, stored_user.id)
+    await service._complete_with_error(
+        stored_player.puuid, created_at, "No matches", error_code="no_matches"
+    )
+
+    stored = await database_session.execute(
+        select(
+            MatchmakingAnalysis.results,
+            MatchmakingAnalysis.results.is_(None),
+            MatchmakingAnalysis.status,
+        ).where(MatchmakingAnalysis.created_at == created_at)
+    )
+    kept_results = await database_session.execute(
+        select(MatchmakingAnalysis.created_at).where(
+            MatchmakingAnalysis.puuid == stored_player.puuid,
+            MatchmakingAnalysis.results.isnot(None),
+        )
+    )
+    assert kept_results.all() == []
+    assert stored.one() == (None, True, "failed")
 
 
 async def test_the_matchmaking_params_default_stores_a_json_null_end_date(
