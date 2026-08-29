@@ -14,10 +14,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type MatchmakingApi = typeof import("@/features/matchmaking/matchmaking-api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
-const { getMatchmakingAnalysisHistory, deleteMatchmakingAnalysisRecord, toast } =
+const {
+  getMatchmakingAnalysisHistory,
+  getLatestCompletedMatchmakingAnalysis,
+  deleteMatchmakingAnalysisRecord,
+  toast,
+} =
   vi.hoisted(() => ({
     getMatchmakingAnalysisHistory:
       vi.fn<MatchmakingApi["getMatchmakingAnalysisHistory"]>(),
+    // The card shares this query with the result card, to highlight the run
+    // that card is showing. Unmocked it would reach the network.
+    getLatestCompletedMatchmakingAnalysis:
+      vi.fn<MatchmakingApi["getLatestCompletedMatchmakingAnalysis"]>(),
     deleteMatchmakingAnalysisRecord:
       vi.fn<MatchmakingApi["deleteMatchmakingAnalysisRecord"]>(),
     toast: {
@@ -33,6 +42,7 @@ vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
     typeof import("@/features/matchmaking/matchmaking-api")
   >()),
   getMatchmakingAnalysisHistory,
+  getLatestCompletedMatchmakingAnalysis,
   deleteMatchmakingAnalysisRecord,
 }));
 
@@ -76,6 +86,27 @@ function answerWith(items: (typeof AHEAD | typeof BEHIND)[]) {
   });
 }
 
+/** The completed run the result card falls back to when nothing is picked. */
+function latestCompleted(createdAt: string) {
+  getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
+    success: true,
+    data: {
+      puuid: PUUID,
+      status: "completed",
+      progress: 10,
+      total_puuids: 10,
+      requests_saved: 0,
+      created_at: createdAt,
+      params: { match_count: 10, end_date: null },
+      results: {
+        team_avg_winrate: 0.523,
+        enemy_avg_winrate: 0.491,
+        matches_analyzed: 10,
+      },
+    },
+  });
+}
+
 const select = vi.fn<(createdAt: string | null) => void>();
 
 function renderHistory(selectedCreatedAt: string | null = null) {
@@ -101,10 +132,12 @@ async function table() {
 describe("the matchmaking analysis history card", () => {
   beforeEach(() => {
     getMatchmakingAnalysisHistory.mockReset();
+    getLatestCompletedMatchmakingAnalysis.mockReset();
     deleteMatchmakingAnalysisRecord.mockReset();
     Object.values(toast).forEach((fn) => fn.mockReset());
     select.mockReset();
     answerWith([AHEAD, BEHIND]);
+    latestCompleted(AHEAD.created_at);
   });
 
   afterEach(() => {
@@ -335,6 +368,24 @@ describe("the matchmaking analysis history card", () => {
     expect(picked.getAttribute("aria-current")).toBe("true");
     expect(
       rows.getByText("4.3.2026 2:07 PM").getAttribute("aria-current"),
+    ).toBeNull();
+    queryClient.clear();
+  });
+
+  it("marks the run the result card fell back to, with nothing picked", async () => {
+    // Choosing a player shows their latest completed run without any pick
+    // here. Highlighting only an explicit pick left that card and this one
+    // disagreeing about which run was on screen.
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    await waitFor(() =>
+      expect(
+        rows.getByText("4.3.2026 2:07 PM").getAttribute("aria-current"),
+      ).toBe("true"),
+    );
+    expect(
+      rows.getByText("3.3.2026 12:05 AM").getAttribute("aria-current"),
     ).toBeNull();
     queryClient.clear();
   });
