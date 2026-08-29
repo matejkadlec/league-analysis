@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bandMeaning,
   familyDescription,
   familyTitle,
   noteLabel,
@@ -33,5 +34,11 @@ describe("wording for a result this build has not seen", () => {
     // turns into a snake_case identifier.
     expect(familyTitle("rapid_improvement")).toBe("Rapid Improvement Pattern");
     expect(familyDescription("rapid_improvement")).toContain("earlier games");
+    // The render test reads this sentence back through `BAND_MEANINGS`, so it
+    // cannot see the wording change. Written out, the band keeps saying what
+    // the finding word alone does not.
+    expect(bandMeaning("notable_indicators")).toBe(
+      "Two different areas moved together",
+    );
   });
 });

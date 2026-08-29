@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_chains import is_riot_api_key_error
 from app.core.riot_api.client import APICallRecord
-from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -349,10 +348,6 @@ def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
     # the fixture's match endpoint deliberately spans two regions.
     match_entry = next(e for e in stored if e["endpoint"].startswith("/lol/match"))
     assert match_entry["region"] == "europe, americas"
-
-
-def test_match_fetcher_uses_every_canonical_queue() -> None:
-    assert list(PRODUCT_SUPPORTED_QUEUE_IDS) == [420, 440, 480, 400, 450, 2400]
 
 
 def test_job_response_carries_the_resolved_interval() -> None:

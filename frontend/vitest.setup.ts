@@ -1,6 +1,8 @@
-import { afterEach } from "vitest";
+import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { configure } from "@testing-library/dom";
+
+import { server } from "./tests/support/msw-server";
 
 // Unmount between tests once, here, rather than in every file that renders.
 // Vitest runs without `globals`, so Testing Library's auto-cleanup -- which
@@ -27,3 +29,10 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 // shared aarch64 Pi that builds containers in the same job. The timeout only
 // bounds how long a *failing* query waits, so it costs nothing.
 configure({ asyncUtilTimeout: 5000 });
+
+// The seam the data-fetching suites are written against: the real axios
+// client, its interceptors and its zod validation all run, and only the
+// socket is answered from a handler. `error` is what makes a wrong URL fail.
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());

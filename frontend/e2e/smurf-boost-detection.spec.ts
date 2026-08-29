@@ -37,7 +37,6 @@ async function expectNoForbiddenWording(page: Page, stage: string) {
 test("runs a comparison and reports both families without accusing anyone", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   const api = await installSmurfBoostMocks(page);
@@ -226,7 +225,7 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   const bands = page.locator("[data-testid^='smurf-boost-band-']");
   await expect(bands).toHaveCount(2);
   for (const band of await bands.all()) {
-    expect(await band.innerText()).not.toMatch(/\d/);
+    await expect(band).not.toHaveText(/\d/);
   }
 
   // The stored result is read back on a fresh visit rather than re-run.
@@ -241,7 +240,6 @@ test("runs a comparison and reports both families without accusing anyone", asyn
 test("renders the page at the sizes the layout was specified in", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   await installSmurfBoostMocks(page);
@@ -249,8 +247,6 @@ test("renders the page at the sizes the layout was specified in", async ({
   await page.goto(`/rank-manipulation?puuid=${PUUID}`);
   await acceptCookieBanner(page);
 
-  const fontSize = (locator: ReturnType<typeof page.locator>) =>
-    locator.evaluate((element) => getComputedStyle(element).fontSize);
 
   // The settings live in a dialog; open it before measuring anything inside.
   await page
@@ -262,13 +258,13 @@ test("renders the page at the sizes the layout was specified in", async ({
   // the class in the markup.
   const helper = page.locator("#smurf-boost-recentWindowSize-help");
   await expect(helper).toBeVisible();
-  expect(await fontSize(helper)).toBe("14px");
+  await expect(helper).toHaveCSS("font-size", "14px");
 
   const presetDescription = page
     .getByTestId("smurf-boost-preset-conservative")
     .locator("span")
     .last();
-  expect(await fontSize(presetDescription)).toBe("14px");
+  await expect(presetDescription).toHaveCSS("font-size", "14px");
 
   // Section headers inside Detection Settings carry the shared 16px title
   // treatment, so they read as sections rather than as another field label.
@@ -276,7 +272,7 @@ test("renders the page at the sizes the layout was specified in", async ({
     const section = page
       .locator("#smurf-boost-settings")
       .getByRole("heading", { name: heading, exact: true });
-    expect(await fontSize(section), heading).toBe("16px");
+    await expect(section, heading).toHaveCSS("font-size", "16px");
   }
 
   // Counting the resolved template catches a breakpoint that never applies,
@@ -289,9 +285,11 @@ test("renders the page at the sizes the layout was specified in", async ({
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-  expect(await columnsOf("smurf-boost-thresholds-windows")).toBe(2);
+  await expect
+    .poll(() => columnsOf("smurf-boost-thresholds-windows"))
+    .toBe(2);
   await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
-  expect(await columnsOf("smurf-boost-thresholds-pattern")).toBe(4);
+  await expect.poll(() => columnsOf("smurf-boost-thresholds-pattern")).toBe(4);
 
   // The point of the grouped layout: with its tallest tab open, the dialog
   // holds everything at desktop size without scrolling itself. Measured on
@@ -313,7 +311,10 @@ test("renders the page at the sizes the layout was specified in", async ({
     (await page.locator("#smurf-boost-settings").boundingBox())!.height;
   const tallestTabHeight = await dialogHeight();
   await page.getByRole("tab", { name: "Games Compared" }).click();
-  expect(await dialogHeight()).toBe(tallestTabHeight);
+  // Polled, not read once: `click()` awaits actionability but not React's
+  // commit or the layout that follows, so a single read measures whichever
+  // height happened to be current.
+  await expect.poll(dialogHeight).toBe(tallestTabHeight);
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
@@ -352,7 +353,6 @@ test("renders the page at the sizes the layout was specified in", async ({
 test("compares a player the account has never tracked, and stays itself", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   const api = await installSmurfBoostMocks(page);
@@ -409,7 +409,6 @@ test("compares a player the account has never tracked, and stays itself", async 
 test("does not carry one player's fetch report onto another", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   await installSmurfBoostMocks(page);
@@ -470,7 +469,6 @@ test("seeds the card's search with the first player an empty account picks", asy
 test("has no WCAG A/AA violations, before or after a comparison", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   await installSmurfBoostMocks(page);

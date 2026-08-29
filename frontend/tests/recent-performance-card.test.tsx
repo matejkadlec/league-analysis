@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { renderWithQueryClient } from "./support/render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
-}));
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
 
 import { RecentPerformanceCard } from "@/features/profile/components/recent-performance-card";
 
@@ -57,24 +51,26 @@ const IMPROVED: Stats = {
   avg_vision_score: 30,
 };
 
+/** The query string of every stats request the card actually put on the wire. */
+const requests: Record<string, string>[] = [];
+
 /**
- * Answers the card's two requests by the parameters they carry: the one with
- * a `limit` is the recent window, the one without is the whole history.
+ * Answers the card's two requests by the query they carry: the one with a
+ * `limit` is the recent window, the one without is the whole history.
  */
-function respondWith(recent: Stats | null, overall: Stats | null) {
-  validatedGet.mockImplementation(async (_schema, _path, options) => {
-    const stats = options?.params?.limit === undefined ? overall : recent;
-    return stats === null
-      ? {
-          success: false,
-          error: {
-            status: 404,
-            kind: "not-found",
-            message: "This player has no stats yet.",
-          },
-        }
-      : { success: true, data: { puuid: PUUID, wins: 0, losses: 0, ...stats } };
-  });
+function respondWith(recent: Stats, overall: Stats) {
+  server.use(
+    http.get(apiRoute("/matches/player/:puuid/stats"), ({ request, params }) => {
+      const query = new URL(request.url).searchParams;
+      requests.push(Object.fromEntries(query));
+      return HttpResponse.json({
+        puuid: params.puuid,
+        wins: 0,
+        losses: 0,
+        ...(query.has("limit") ? recent : overall),
+      });
+    }),
+  );
 }
 
 function renderCard() {
@@ -95,12 +91,8 @@ function verdictFor(label: string): string {
 
 describe("the recent performance card", () => {
   beforeEach(() => {
-    validatedGet.mockReset();
+    requests.length = 0;
     respondWith(IMPROVED, OVERALL);
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   it("reads fewer deaths as improvement, not decline", async () => {
@@ -140,10 +132,9 @@ describe("the recent performance card", () => {
     // stat reads "stable" forever, with nothing on screen looking broken.
     const queryClient = renderCard();
 
-    await waitFor(() => expect(validatedGet).toHaveBeenCalledTimes(2));
-    const params = validatedGet.mock.calls.map((call) => call[2]?.params);
-    expect(params).toContainEqual({ queues: "420", limit: 10 });
-    expect(params).toContainEqual({ queues: "420" });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests).toContainEqual({ queues: "420", limit: "10" });
+    expect(requests).toContainEqual({ queues: "420" });
 
     queryClient.clear();
   });

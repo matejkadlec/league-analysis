@@ -14,9 +14,12 @@ from unittest.mock import Mock
 
 import pytest
 from sqlalchemy import Connection as SAConnection
+from sqlalchemy import Table
 from sqlalchemy.sql import Executable
 
 from app.core.config import Settings
+from app.core.models import Base
+from app.model_registry import import_all_models
 from scripts import cleanse_local_riot_data as cleanup
 from scripts.cleanse_local_riot_data import (
     PRESERVED_TABLES,
@@ -157,10 +160,15 @@ def test_preflight_refuses_a_wildcard_postgresql_listener_before_table_access(
         )
 
 
-def test_validate_configured_target_accepts_the_explicit_local_target(
+def test_validate_configured_target_accepts_the_local_target_and_no_other(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The pre-connection guard permits only the documented local configuration."""
+    """The pre-connection guard permits only the documented local configuration.
+
+    The guard returns nothing, so "it accepts" is only a claim next to a
+    configuration it refuses: a guard that raised at every target, or at none,
+    would otherwise satisfy half of this test.
+    """
     monkeypatch.setenv("ENVIRONMENT", "dev")
     settings = SimpleNamespace(
         environment="dev",
@@ -168,7 +176,14 @@ def test_validate_configured_target_accepts_the_explicit_local_target(
         postgres_db="league_analysis_local_dev",
     )
 
+    remote = SimpleNamespace(**vars(settings) | {"postgres_host": "db.internal"})
+
     validate_configured_target(cast(Settings, settings), "league_analysis_local_dev")
+
+    with pytest.raises(LocalCleanupRefusal, match="loopback"):
+        validate_configured_target(cast(Settings, remote), "league_analysis_local_dev")
+    with pytest.raises(LocalCleanupRefusal, match="POSTGRES_DB"):
+        validate_configured_target(cast(Settings, settings), "some_other_database")
 
 
 def test_main_refuses_a_remote_target_before_creating_an_engine(
@@ -533,12 +548,33 @@ def test_apply_locks_tables_before_creating_the_backup(
     )
 
 
+def test_the_deletion_order_removes_dependents_before_what_they_reference() -> None:
+    """`RIOT_DATA_TABLES` must be a real reverse-dependency order, not a list.
+
+    Edges are read off the mapped metadata rather than restated, so a new
+    foreign key is covered the day it is mapped.
+    """
+    import_all_models()
+    positions = {table: index for index, table in enumerate(RIOT_DATA_TABLES)}
+
+    def _qualified(table: Table) -> tuple[str, str]:
+        return (table.schema or "public", table.name)
+
+    for table in Base.metadata.sorted_tables:
+        dependent = _qualified(table)
+        if dependent not in positions:
+            continue
+        for key in table.foreign_keys:
+            referenced = _qualified(key.column.table)
+            if referenced not in positions or referenced == dependent:
+                continue
+            assert positions[dependent] < positions[referenced], (
+                f"{dependent} references {referenced} but is deleted after it"
+            )
+
+
 def test_cleanup_plan_includes_every_riot_data_category() -> None:
     """The reviewed deletion order covers data and user tracking mappings."""
-    assert RIOT_DATA_TABLES[:2] == (
-        ("jobs", "player_sync_runs"),
-        ("auth", "user_tracked_players"),
-    )
     assert set(RIOT_DATA_TABLES) == {
         ("jobs", "player_sync_runs"),
         ("auth", "user_tracked_players"),

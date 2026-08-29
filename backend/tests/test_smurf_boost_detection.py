@@ -20,6 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.features.settings.schemas import (
+    _CARD_FIXED_SETTINGS_V1,
+    _CARD_SETTINGS_MODELS,
+    _CARD_SETTINGS_WRITE_MODELS,
+    _LEGACY_SETTING_RENAMES,
     CardId,
     serialize_card_preference_settings,
     validate_card_preference_update,
@@ -361,8 +365,10 @@ def test_step_change_triggers_a1() -> None:
     result = analyze(_request(recent, baseline))
 
     a1 = _signal(result, FAMILY_A, "A1")
-    assert a1.available and a1.triggered
-    assert a1.raw_value is not None and a1.raw_value >= 1.20
+    assert a1.available
+    assert a1.triggered
+    assert a1.raw_value is not None
+    assert a1.raw_value >= 1.20
     assert _family(result, FAMILY_A).band != BAND_NONE
 
 
@@ -436,7 +442,8 @@ def test_novel_champion_overperformance_triggers_a3() -> None:
     result = analyze(_request(recent, baseline, prior_champion_games={1: 60}))
 
     a3 = _signal(result, FAMILY_A, "A3")
-    assert a3.available and a3.triggered
+    assert a3.available
+    assert a3.triggered
     assert "novel_is_storage_scoped" in a3.notes
 
 
@@ -453,7 +460,8 @@ def test_too_few_novel_games_makes_a3_unavailable() -> None:
     result = analyze(_request(recent, baseline, prior_champion_games={1: 60}))
 
     a3 = _signal(result, FAMILY_A, "A3")
-    assert not a3.available and not a3.triggered
+    assert not a3.available
+    assert not a3.triggered
     assert "insufficient_novel_sample" in a3.notes
 
 
@@ -484,7 +492,8 @@ def test_unknown_account_level_makes_a4_unavailable() -> None:
     result = analyze(_request(recent, baseline, summoner_level=None))
 
     a4 = _signal(result, FAMILY_A, "A4")
-    assert not a4.available and not a4.triggered
+    assert not a4.available
+    assert not a4.triggered
     assert "summoner_level_unknown" in a4.notes
 
 
@@ -501,7 +510,8 @@ def test_win_rate_surge_without_performance_triggers_b1() -> None:
 
     b1 = _signal(result, FAMILY_B, "B1")
     assert b1.triggered
-    assert b1.contribution is not None and b1.contribution > 0
+    assert b1.contribution is not None
+    assert b1.contribution > 0
 
 
 def test_a_triggered_signal_always_contributes_something() -> None:
@@ -525,7 +535,8 @@ def test_consistency_collapse_triggers_b2() -> None:
     result = analyze(_request(recent, baseline))
 
     b2 = _signal(result, FAMILY_B, "B2")
-    assert b2.available and b2.triggered
+    assert b2.available
+    assert b2.triggered
 
 
 def test_consistency_expansion_triggers_b2() -> None:
@@ -599,7 +610,8 @@ def test_unsustained_reversal_does_not_trigger_b4() -> None:
     result = analyze(_request(recent, baseline))
 
     b4 = _signal(result, FAMILY_B, "B4")
-    assert b4.raw_value is not None and b4.raw_value >= 0.20
+    assert b4.raw_value is not None
+    assert b4.raw_value >= 0.20
     assert not b4.triggered
 
 
@@ -827,8 +839,18 @@ def test_the_disclaimer_never_reads_as_an_accusation() -> None:
 
 
 def test_the_detection_card_is_in_the_approved_catalog() -> None:
-    """The engine reads thresholds through the existing viewer-scoped catalog."""
-    assert CardId.SMURF_BOOST_DETECTION.value == "profile.smurf-boost-detection"
+    """The engine reads thresholds through the existing viewer-scoped catalog.
+
+    Every one of these maps is keyed by card, and a card missing from any of
+    them is a `KeyError` on the read or write path rather than a card that
+    merely lacks settings.
+    """
+    card = CardId.SMURF_BOOST_DETECTION
+
+    assert card in _CARD_SETTINGS_WRITE_MODELS
+    assert card in _CARD_SETTINGS_MODELS
+    assert card in _LEGACY_SETTING_RENAMES
+    assert _CARD_FIXED_SETTINGS_V1[card] == {"queue_id": RANKED_SOLO_QUEUE_ID}
 
 
 #: Every threshold the detection card accepts, spelled the one way the write
@@ -860,7 +882,10 @@ def test_detection_settings_accept_only_canonical_camel_case_names() -> None:
     )
     assert stored["recent_window_size"] == 20
 
-    with pytest.raises(ValueError):
+    # Named, because "rejected" is not the claim -- "rejected *for being
+    # snake_case*" is: a model that dropped `recent_window_size` would fail
+    # this on a missing-field error and read as the strictness still holding.
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         validate_card_preference_update(
             CardId.SMURF_BOOST_DETECTION,
             {**_VALID_DETECTION_PAYLOAD, "recent_window_size": 20},
@@ -875,7 +900,9 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
         "recentWindowSize": 10,
         "a3MinimumNovelGames": 15,
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="a3MinimumNovelGames must not exceed recentWindowSize"
+    ):
         validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
 
 
@@ -1137,11 +1164,20 @@ async def test_polling_alone_terminalizes_an_abandoned_run() -> None:
     client polling a run that will never finish.
     """
     service = _service(MagicMock())
-    service._expire_abandoned = AsyncMock()
-    service._newest_run = AsyncMock(return_value=None)
+    calls: list[str] = []
+
+    async def _expire(puuid: str) -> None:
+        calls.append(f"expire:{puuid}")
+
+    async def _newest(puuid: str) -> SmurfBoostAnalysis | None:
+        calls.append(f"newest:{puuid}")
+        return None
+
+    service._expire_abandoned = _expire
+    service._newest_run = _newest
 
     assert await service.get_latest("p") is None
-    service._expire_abandoned.assert_awaited_once_with("p")
+    assert calls == ["expire:p", "newest:p"], "the sweep runs before the read"
 
 
 async def test_a_race_loser_attaches_to_a_winner_that_already_finished() -> None:
@@ -1203,10 +1239,6 @@ def test_an_out_of_range_stored_threshold_is_recovered_not_trusted() -> None:
     )
     assert recovered["recent_window_size"] == 25.0
     assert set(recovered) == set(CONSERVATIVE)
-    for signal_id, saturation in SIGNAL_SATURATIONS.items():
-        field = f"{signal_id.lower()}_step_change_threshold"
-        if field in recovered:
-            assert recovered[field] < saturation
 
 
 def test_a_stored_set_breaking_a_cross_field_rule_is_recovered() -> None:

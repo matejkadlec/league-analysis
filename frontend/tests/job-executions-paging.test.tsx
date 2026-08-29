@@ -2,19 +2,14 @@
 
 import { act, screen, waitFor } from "@testing-library/react";
 
-import { renderWithQueryClient } from "./support/render-support";
+import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { renderWithQueryClient } from "./support/render-support";
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
+
 import type { JobExecution, JobExecutionListResponse } from "@/lib/core/schemas";
-
-const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
-}));
 
 import { JobExecutions } from "@/features/jobs/components/job-executions";
 
@@ -34,17 +29,16 @@ class FakeIntersectionObserver {
 }
 
 /**
- * A paging number off a recorded call. Throws rather than defaulting: losing
- * the param is the failure these tests exist to catch, and a default would
- * quietly answer page 1 for every request instead.
+ * A paging number off a request's query string. Throws rather than
+ * defaulting: losing the param is the failure these tests exist to catch, and
+ * a default would quietly answer page 1 for every request instead.
  */
-function paging(
-  options: Parameters<typeof validatedGet>[2],
-  name: "page" | "size",
-): number {
-  const value = options?.params?.[name];
-  if (typeof value !== "number") {
-    throw new Error(`expected a numeric ${name} param, got ${String(value)}`);
+function paging(query: URLSearchParams, name: "page" | "size"): number {
+  const value = Number(query.get(name));
+  if (!query.has(name) || !Number.isInteger(value)) {
+    throw new Error(
+      `expected an integer ${name} param, got ${String(query.get(name))}`,
+    );
   }
   return value;
 }
@@ -88,14 +82,29 @@ function scrollSentinelIntoView() {
   });
 }
 
+/** The `[page, size]` of every executions request that reached the API. */
+const requested: [number, number][] = [];
+
+/** Serve the page the request asks for -- or refuse every request, the way a
+ * deploy does mid-poll. */
+function servePages(failing = false) {
+  server.use(
+    http.get(apiRoute("/jobs/executions/all"), ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      const page = paging(query, "page");
+      requested.push([page, paging(query, "size")]);
+      return failing
+        ? new HttpResponse(null, { status: 500 })
+        : HttpResponse.json(pageOf(page));
+    }),
+  );
+}
+
 beforeEach(() => {
   vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
   observerCallbackRef.current = null;
-  validatedGet.mockReset();
-  validatedGet.mockImplementation(async (_schema, _url, options) => ({
-    success: true,
-    data: pageOf(paging(options, "page")),
-  }));
+  requested.length = 0;
+  servePages();
 });
 
 
@@ -117,11 +126,7 @@ describe("the executions list's paging", () => {
     await waitFor(() =>
       expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy(),
     );
-    expect(validatedGet).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/jobs/executions/all",
-      { params: { page: 2, size: 20 }, signal: expect.any(AbortSignal) },
-    );
+    expect(requested.at(-1)).toEqual([2, 20]);
   });
 
   it("never grows the page size past the backend's cap", async () => {
@@ -142,14 +147,10 @@ describe("the executions list's paging", () => {
       expect(screen.getByText("All 50 executions loaded")).toBeTruthy(),
     );
 
-    for (const call of validatedGet.mock.calls) {
-      expect(paging(call[2], "size")).toBeLessThanOrEqual(20);
+    for (const [, size] of requested) {
+      expect(size).toBeLessThanOrEqual(20);
     }
-    expect(
-      validatedGet.mock.calls.map(
-        (call) => paging(call[2], "page"),
-      ),
-    ).toEqual([1, 2, 3]);
+    expect(requested.map(([page]) => page)).toEqual([1, 2, 3]);
   });
 
   it("stops asking once everything is loaded", async () => {
@@ -165,11 +166,11 @@ describe("the executions list's paging", () => {
     await waitFor(() =>
       expect(screen.getByText("All 50 executions loaded")).toBeTruthy(),
     );
-    const calls = validatedGet.mock.calls.length;
+    const calls = requested.length;
 
     scrollSentinelIntoView();
 
-    expect(validatedGet.mock.calls.length).toBe(calls);
+    expect(requested).toHaveLength(calls);
   });
 
   it("keeps every loaded page on screen through a failed poll", async () => {
@@ -185,27 +186,18 @@ describe("the executions list's paging", () => {
       expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy(),
     );
 
-    validatedGet.mockResolvedValue({
-      success: false,
-      error: { kind: "service", status: 500, message: "deploying" },
-    });
+    servePages(true);
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
     });
     expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
 
     // And the next successful poll still refetches both pages, not just one.
-    validatedGet.mockImplementation(async (_schema, _url, options) => ({
-      success: true,
-      data: pageOf(paging(options, "page")),
-    }));
+    servePages();
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
     });
     expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
-    const refetchedPages = validatedGet.mock.calls
-      .slice(-2)
-      .map((call) => paging(call[2], "page"));
-    expect(refetchedPages).toEqual([1, 2]);
+    expect(requested.slice(-2).map(([page]) => page)).toEqual([1, 2]);
   });
 });

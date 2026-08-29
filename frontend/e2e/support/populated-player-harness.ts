@@ -269,10 +269,6 @@ const matchmakingHistory = {
 async function installPopulatedPlayerMocks(page: Page): Promise<void> {
   await seedAuthenticatedSession(page);
   await blockUpstreamRequests(page);
-  await page.addInitScript(() => {
-    localStorage.setItem("theme", "dark");
-  });
-
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const json = (body: unknown) =>

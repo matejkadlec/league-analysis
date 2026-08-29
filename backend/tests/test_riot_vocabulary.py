@@ -13,6 +13,7 @@ from app.core.riot_api.constants import (
 )
 from app.core.runs import ints_in_sql, nullable_values_in_sql, values_in_sql
 from app.features.matches.match_stats import LANE_DISPLAY_NAMES
+from app.features.matches.schemas import LaneDisplayName
 from app.features.settings.schemas import CardRole
 
 REVISION = (
@@ -33,13 +34,7 @@ def test_card_role_is_team_position() -> None:
 
 def test_lane_display_names_cover_every_team_position() -> None:
     assert set(LANE_DISPLAY_NAMES) == TEAM_POSITIONS
-    assert set(LANE_DISPLAY_NAMES.values()) == {
-        "Top",
-        "Jungle",
-        "Mid",
-        "Bottom",
-        "Support",
-    }
+    assert set(LANE_DISPLAY_NAMES.values()) == set(get_args(LaneDisplayName))
 
 
 def test_check_sql_matches_the_python_vocabularies() -> None:

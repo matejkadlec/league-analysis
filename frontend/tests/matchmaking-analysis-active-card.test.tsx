@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { MatchmakingAnalysisActiveCard } from "@/features/matchmaking/components/matchmaking-analysis-active-card";
@@ -27,7 +28,8 @@ function renderCard(
 }
 
 describe("the active matchmaking analysis card", () => {
-  it("reports authoritative progress, its rounded share, and a way out", () => {
+  it("reports authoritative progress, its rounded share, and a way out", async () => {
+    const user = userEvent.setup();
     const { props } = renderCard();
 
     // The header counter is the backend's own number; the percentage below
@@ -38,7 +40,7 @@ describe("the active matchmaking analysis card", () => {
 
     const cancel = screen.getByRole("button", { name: "Cancel Analysis" });
     expect((cancel as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(cancel);
+    await user.click(cancel);
     expect(props.onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -81,14 +83,15 @@ describe("the active matchmaking analysis card", () => {
     expect(screen.getByText("Analyzing 42 of 100 players")).toBeTruthy();
   });
 
-  it("locks the cancel control while the cancellation is in flight", () => {
+  it("locks the cancel control while the cancellation is in flight", async () => {
+    const user = userEvent.setup();
     const { props } = renderCard({ cancelPending: true });
 
     const cancel = screen.getByRole("button", {
       name: "Cancelling...",
     }) as HTMLButtonElement;
     expect(cancel.disabled).toBe(true);
-    fireEvent.click(cancel);
+    await user.click(cancel);
     expect(props.onCancel).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("button", { name: "Cancel Analysis" }),

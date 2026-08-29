@@ -1,20 +1,17 @@
 // @vitest-environment jsdom
 
 import { cleanup, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
+
 type UsePlayerSyncRun =
   typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
-const { validatedGet, usePlayerSyncRun } = vi.hoisted(() => ({
-  validatedGet: vi.fn<ValidatedGet>(),
+const { usePlayerSyncRun } = vi.hoisted(() => ({
   usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
 }));
 
 vi.mock("@/features/players/components/use-player-sync-run", () => ({
@@ -70,9 +67,19 @@ const player: Player = {
   updated_at: "2026-08-19T08:00:00Z",
 };
 
+/** The query string of every ranked-aggregate request that reached the API. */
+const statsRequests: Record<string, string>[] = [];
+
 beforeEach(() => {
-  validatedGet.mockReset();
-  validatedGet.mockResolvedValue({ success: true, data: stats });
+  statsRequests.length = 0;
+  server.use(
+    http.get(apiRoute(`/matches/player/${PUUID}/stats`), ({ request }) => {
+      statsRequests.push(
+        Object.fromEntries(new URL(request.url).searchParams),
+      );
+      return HttpResponse.json(stats);
+    }),
+  );
   usePlayerSyncRun.mockReturnValue({
     isUpdating: false,
     isFetchingMatches: false,
@@ -93,17 +100,9 @@ it("asks for one player's ranked aggregate once per page, not once per card", as
     </>,
   );
 
-  await waitFor(() =>
-    expect(validatedGet.mock.calls.length).toBeGreaterThanOrEqual(2),
-  );
+  await waitFor(() => expect(statsRequests.length).toBeGreaterThanOrEqual(2));
 
-  const unlimited = validatedGet.mock.calls.filter(
-    (call: unknown[]) =>
-      typeof call[1] === "string" &&
-      call[1].endsWith(`/${PUUID}/stats`) &&
-      (call[2] as { params?: { limit?: number } } | undefined)?.params
-        ?.limit === undefined,
-  );
+  const unlimited = statsRequests.filter((query) => !("limit" in query));
 
   expect(unlimited).toHaveLength(1);
   queryClient.clear();

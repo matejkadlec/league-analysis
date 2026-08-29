@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from sqlalchemy import Table, Update
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.testing import capture_logs
 
 from app.core.error_chains import is_riot_puuid_binding_error
 from app.core.models import Base
@@ -678,11 +679,17 @@ async def test_a_failed_optional_recovery_does_not_stop_startup(
         "_mark_stale_jobs_as_failed",
         AsyncMock(side_effect=RuntimeError("transient")),
     )
-    monkeypatch.setattr(
-        scheduler_module, "_cancel_orphaned_player_syncs", AsyncMock(return_value=None)
-    )
+    mandatory = AsyncMock(return_value=None)
+    monkeypatch.setattr(scheduler_module, "_cancel_orphaned_player_syncs", mandatory)
 
-    await scheduler_module._run_startup_recovery()
+    with capture_logs() as logs:
+        await scheduler_module._run_startup_recovery()
+
+    mandatory.assert_awaited_once()
+    failures = [
+        entry for entry in logs if entry["event"] == "Startup recovery step failed"
+    ]
+    assert [entry["mandatory"] for entry in failures] == [False]
 
 
 async def test_startup_recovery_failure_reaches_the_application(

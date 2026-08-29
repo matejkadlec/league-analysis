@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { UserEvent } from "@testing-library/user-event";
 
 import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,8 +57,8 @@ function type(value: string): void {
   fireEvent.change(field(), { target: { value } });
 }
 
-function save(): void {
-  fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+async function save(user: UserEvent): Promise<void> {
+  await user.click(screen.getByRole("button", { name: /Save/ }));
 }
 
 describe("the display name on the settings page", () => {
@@ -75,13 +77,14 @@ describe("the display name on the settings page", () => {
   });
 
   it("sends the trimmed name, not what the box contains", async () => {
+    const user = userEvent.setup();
     // This is the name other people see. A pasted value carries whatever
     // whitespace came with it, and the server stores the string it is given,
     // so without the trim the name renders with a gap in front of it.
     const queryClient = renderField();
 
     type("  Padded Name  ");
-    save();
+    await save(user);
 
     await waitFor(() =>
       expect(validatedPatch).toHaveBeenCalledWith(
@@ -98,13 +101,14 @@ describe("the display name on the settings page", () => {
   });
 
   it("tells someone who cleared the box that it is empty", async () => {
+    const user = userEvent.setup();
     // Drop the empty-name guard and the blank field is still refused -- by
     // the length check below it, which answers "Use at least 3 characters"
     // to someone who typed nothing. Only the message tells the two apart.
     const queryClient = renderField();
 
     type("     ");
-    save();
+    await save(user);
 
     await waitFor(() =>
       expect(toast.warning).toHaveBeenCalledWith("Enter a display name"),
@@ -118,10 +122,11 @@ describe("the display name on the settings page", () => {
   });
 
   it("refuses a name shorter than three characters", async () => {
+    const user = userEvent.setup();
     const queryClient = renderField();
 
     type("Jo");
-    save();
+    await save(user);
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPatch).not.toHaveBeenCalled();
@@ -139,10 +144,11 @@ describe("the display name on the settings page", () => {
     // The rule is printed in the refusal, so each of these is a case someone
     // will actually type. Widen the pattern and the name goes to the server,
     // which answers with a generic failure toast that names none of this.
+    const user = userEvent.setup();
     const queryClient = renderField();
 
     type(name);
-    save();
+    await save(user);
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPatch).not.toHaveBeenCalled();
@@ -152,13 +158,14 @@ describe("the display name on the settings page", () => {
   });
 
   it("accepts letters from outside the Latin alphabet", async () => {
+    const user = userEvent.setup();
     // The pattern is written with `\p{L}`, not `[a-zA-Z]`, and the deployment
     // this runs on is a single European region. A name in accented or
     // non-Latin letters must save, or the rule quietly means "English only".
     const queryClient = renderField();
 
     type("Žluťoučký Kůň");
-    save();
+    await save(user);
 
     await waitFor(() =>
       expect(validatedPatch).toHaveBeenCalledWith(
@@ -174,6 +181,7 @@ describe("the display name on the settings page", () => {
   });
 
   it("re-reads the session so the new name appears everywhere else", async () => {
+    const user = userEvent.setup();
     // The header and the sidebar read the display name off the auth session,
     // not off this mutation. Without the re-read the field shows the new name
     // and every other surface keeps the old one until a full page reload.
@@ -183,7 +191,7 @@ describe("the display name on the settings page", () => {
     queryClient.setQueryData(USER_QUERY_KEY, { display_name: "Original Name" });
 
     type("Renamed Person");
-    save();
+    await save(user);
 
     await waitFor(() => expect(checkAuth).toHaveBeenCalled());
     expect(queryClient.getQueryState(USER_QUERY_KEY)?.isInvalidated).toBe(true);
@@ -192,6 +200,7 @@ describe("the display name on the settings page", () => {
   });
 
   it("says so when the rename did not happen", async () => {
+    const user = userEvent.setup();
     validatedPatch.mockResolvedValue({
       success: false,
       error: {
@@ -203,7 +212,7 @@ describe("the display name on the settings page", () => {
     const queryClient = renderField();
 
     type("Renamed Person");
-    save();
+    await save(user);
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(toast.success).not.toHaveBeenCalled();

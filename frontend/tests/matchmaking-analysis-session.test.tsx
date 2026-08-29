@@ -138,6 +138,7 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("starts a run with the match count and end date the form collected", async () => {
+    const user = userEvent.setup();
     startMatchmakingAnalysis.mockReturnValue(
       new Promise<ApiResponse<MatchmakingAnalysisResponse>>(() => undefined),
     );
@@ -147,11 +148,11 @@ describe("the matchmaking analysis session", () => {
     // The start card's controls are the session's own state; changing them
     // here proves the wiring that carries the form into the start request.
     // A date input is set whole, not typed digit by digit.
-    fireEvent.click(screen.getByRole("button", { name: "20" }));
+    await user.click(screen.getByRole("button", { name: "20" }));
     fireEvent.change(screen.getByLabelText("Last day to include (optional)"), {
       target: { value: "2026-08-01" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Start Analysis" }));
+    await user.click(screen.getByRole("button", { name: "Start Analysis" }));
 
     await waitFor(() => {
       expect(startMatchmakingAnalysis).toHaveBeenCalledWith(

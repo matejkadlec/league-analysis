@@ -38,9 +38,10 @@ describe("SmurfBoostExplanationCard", () => {
     ).not.toBeNull();
   });
 
-  it("names both signal families in the model's own words", () => {
-    // Driven from the vocabulary module rather than restated, so this test
-    // cannot become a second copy the specification has to be kept against.
+  it("reads both signal families out of the vocabulary rather than its own copy", () => {
+    // Not a pin on the wording -- `smurf-boost-vocabulary.test.ts` holds that.
+    // What this rules out is the card spelling the copy inline, where an edit
+    // to the vocabulary would leave the page showing the old sentences.
     render(<SmurfBoostExplanationCard />);
 
     for (const family of ["rapid_improvement", "playing_pattern_change"]) {

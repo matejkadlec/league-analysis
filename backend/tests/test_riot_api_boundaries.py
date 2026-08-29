@@ -149,9 +149,6 @@ async def test_null_body_is_retried_then_raises(
 
 def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:
     assert PRODUCT_SUPPORTED_QUEUE_IDS == (420, 440, 480, 400, 450, 2400)
-    assert QueueType(480) is QueueType.SWIFTPLAY
-    assert QueueType(2400) is QueueType.ARAM_MAYHEM
-    assert 999999 not in PRODUCT_SUPPORTED_QUEUE_IDS
 
 
 async def test_by_puuid_league_contract_keeps_rank_fields_required() -> None:

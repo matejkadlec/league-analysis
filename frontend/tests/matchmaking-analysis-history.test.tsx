@@ -3,12 +3,12 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MatchmakingApi = typeof import("@/features/matchmaking/matchmaking-api");
@@ -243,6 +243,7 @@ describe("the matchmaking analysis history card", () => {
     // The results panel beside this card is a separate query keyed on the
     // same player. Nothing else invalidates it, so without this the analysis
     // someone just deleted stays on screen as the current result.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -294,7 +295,7 @@ describe("the matchmaking analysis history card", () => {
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(1));
     const remove = (await table()).getAllByTitle("Delete this analysis");
-    fireEvent.click(remove[0]!);
+    await user.click(remove[0]!);
 
     // The click starts a 300ms fade before the request goes out.
     await waitFor(
@@ -320,6 +321,7 @@ describe("the matchmaking analysis history card", () => {
     // The row fades out the moment the button is clicked and comes back when
     // the request fails. Without the message that is all the viewer sees: a
     // row that flickered and stayed, with no sign the delete was refused.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
       error: {
@@ -332,7 +334,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory();
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled(), {
       timeout: 2000,
@@ -345,11 +347,12 @@ describe("the matchmaking analysis history card", () => {
   it("hands the picked run's timestamp to the result card", async () => {
     // The row is the only way into an older analysis. Send the wrong
     // timestamp and the card opposite shows a run nobody asked for.
+    const user = userEvent.setup();
     const queryClient = renderHistory();
 
     const rows = await table();
     const older = rows.getByText("3.3.2026 12:05 AM");
-    fireEvent.click(older);
+    await user.click(older);
 
     expect(older.getAttribute("title")).toBe(
       "Show this analysis in the result card",
@@ -393,6 +396,7 @@ describe("the matchmaking analysis history card", () => {
   it("deletes a row without also opening it", async () => {
     // The delete button sits inside the row that selects on click. Without
     // stopping that bubble, removing a record displays it on the way out.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -400,7 +404,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory();
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(
       () => expect(deleteMatchmakingAnalysisRecord).toHaveBeenCalled(),
@@ -417,6 +421,7 @@ describe("the matchmaking analysis history card", () => {
   it("lets go of the picked run once it is deleted", async () => {
     // The result card asks for the picked run by timestamp; leaving a deleted
     // one selected leaves that card reporting a 404 forever.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -424,7 +429,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory(AHEAD.created_at);
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(() => expect(toast.success).toHaveBeenCalled(), {
       timeout: 2000,

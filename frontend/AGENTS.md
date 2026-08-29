@@ -116,6 +116,13 @@ The authoritative gate selects the Node version from `../.nvmrc`, installs with
 across the production build. Install the matching browser once before the
 separate Playwright suite: `npx playwright install chromium`.
 
+Vitest runs in randomised order, so a test may not depend on one before it.
+Drive user actions with `user-event`, not `fireEvent` — `house/no-fire-event-click`
+enforces that, because `fireEvent` passes on controls no user can reach. Query
+by role and accessible name before test id. A test states a rule the code must
+satisfy, never a copy of its current value; the standard is in
+[`../docs/quality-checks.md`](../docs/quality-checks.md#what-makes-a-test-worth-keeping).
+
 The production image is defined by `Dockerfile`, installs with `npm ci`, builds
 the Next standalone output, and runs `server.js` as non-root UID/GID 10001.
 `NEXT_PUBLIC_API_URL` is the browser-visible backend origin baked at build

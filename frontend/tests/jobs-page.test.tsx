@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { renderWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -121,6 +122,7 @@ describe("the background jobs page", () => {
   });
 
   it("carries a click inside a job card over to the executions tab", async () => {
+    const user = userEvent.setup();
     // The two tabs are siblings and the selected execution lives above both.
     // Without the tab switch, clicking an execution in a job card selects it
     // in a list nobody is looking at, and the click reads as broken.
@@ -134,7 +136,7 @@ describe("the background jobs page", () => {
     // the active tab can see.
     expect(screen.queryByText(/executions list/)).toBeNull();
 
-    fireEvent.click(screen.getByText(/job card Match Fetcher/));
+    await user.click(screen.getByText(/job card Match Fetcher/));
 
     await waitFor(() =>
       expect(screen.getByText(/executions list, selected: 42/)).toBeTruthy(),

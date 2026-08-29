@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
@@ -24,6 +25,12 @@ from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 # The account these tests act as. Every stored run belongs to one, so a service
 # cannot be built without saying which.
 _USER_ID = 7
+
+
+def _compiled_values(statement: ClauseElement) -> list[object]:
+    params = statement.compile().params
+    assert params is not None, "a compiled DML statement always carries bind params"
+    return list(params.values())
 
 
 def _request() -> Request:
@@ -122,5 +129,7 @@ async def test_matchmaking_progress_writes_when_maintenance_is_inactive(
     await service._update_progress("test-puuid", created_at, {"key": True})
 
     guard.assert_awaited_once_with(database)
-    database.execute.assert_awaited_once()
+    values = _compiled_values(database.execute.await_args.args[0])
+    assert {"key": True} in values, "the UPDATE carries the progress it was given"
+    assert "failed" not in values, "progress is not a terminal state"
     database.commit.assert_awaited_once()

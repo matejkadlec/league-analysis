@@ -7,7 +7,15 @@ issue, newest last:
 
 ## Open
 
-Nothing open.
+- 2026-08-29 backend/app: `insert(...).values(col=None)` on a JSONB column
+  stores JSON `null`, not SQL NULL — SQLAlchemy's `JSON.none_as_null` defaults
+  to False and nothing here sets it. Python reads both back as `None`, which
+  is why no unit test ever saw it, but `MatchmakingAnalysis.results.isnot(None)`
+  in `matchmaking_analysis/service.py:211` is therefore true for a row written
+  with `results=None`, and revision 0022's backfilled `summary_stats` rows are
+  SQL NULL while every row written since is not. Today the `status ==
+  "completed"` half of that WHERE clause hides it; pinned as-is by
+  `tests/integration/test_jsonb_semantics.py`.
 
 ## Findings that did not survive measurement
 

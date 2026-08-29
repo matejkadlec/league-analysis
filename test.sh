@@ -98,11 +98,17 @@ run_pre_commit_config_validation() {
 
 run_backend_tests() {
   cd "$repository_root/backend"
-  POSTGRES_DB=league_analysis_test \
-    POSTGRES_USER=league_analysis_test \
-    POSTGRES_PASSWORD=league-analysis-test-password \
-    POSTGRES_HOST=127.0.0.1 \
-    POSTGRES_PORT=5432 \
+  # Defaults, not overrides. The offline suite needs these four to be *set* and
+  # never connects, so any value did -- but `tests/integration` does connect,
+  # and hard-coding 127.0.0.1 here shadowed the `POSTGRES_HOST=postgres` that
+  # compose.gate.yml puts in the container. Nothing listens on loopback there,
+  # so the tier skipped inside the one environment built to run it, and the
+  # gate reported a green pytest step for tests it never executed.
+  POSTGRES_DB="${POSTGRES_DB:-league_analysis_test}" \
+    POSTGRES_USER="${POSTGRES_USER:-league_analysis_test}" \
+    POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-league-analysis-test-password}" \
+    POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
+    POSTGRES_PORT="${POSTGRES_PORT:-5432}" \
     DEBUG=false \
     JWT_SECRET_KEY=league-analysis-test-jwt-secret-32-characters \
     ENVIRONMENT=test \
@@ -130,6 +136,15 @@ run_backend_ruff_format() {
 run_backend_comment_hygiene() {
   cd "$repository_root/backend"
   uv run python scripts/check_comments.py app tests scripts
+}
+
+run_backend_test_meaningfulness() {
+  cd "$repository_root/backend"
+  # The backend half of the frontend's `house/meaningful-tests` oxlint rule.
+  # Nothing else in this gate asks whether a test can fail: ruff and pyright
+  # read the suite for correctness, not for whether its assertions assert
+  # anything.
+  uv run python scripts/check_tests.py tests
 }
 
 run_backend_pyright() {
@@ -263,6 +278,13 @@ run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test-postgres-backup-retention.sh"
 
+# Ordering rule for everything below: cheapest failure first. Measured on this
+# box, `ruff check` and `ruff format --check` are ~1s each while the frontend
+# production build and the Playwright suite are minutes. They used to sit
+# behind both, so a misplaced import in `app/` was reported at the very end of
+# a run it could have failed at the start of. The two slowest steps -- the
+# build and the e2e suite that runs against it -- are now last in the whole
+# gate, and nothing cheap sits behind them.
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091
   source "$repository_root/scripts/use-project-node.sh"
@@ -270,9 +292,6 @@ if [[ "$run_frontend" == true ]]; then
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck
   run_step 'Frontend knip dead-code scan' run_frontend_deadcode
-  run_step 'Frontend regression tests' run_frontend_tests
-  run_step 'Frontend production build' run_frontend_build
-  run_step 'Frontend end-to-end tests' run_frontend_e2e
 fi
 
 if [[ "$run_backend" == true ]]; then
@@ -282,20 +301,39 @@ if [[ "$run_backend" == true ]]; then
   }
   run_step 'Backend deterministic sync' run_backend_sync
   run_step 'Pre-commit configuration' run_pre_commit_config_validation
-  run_step 'Backend tests' run_backend_tests
-  run_step 'Alembic migration validation' run_backend_migration_validation
   run_step 'Backend Ruff lint' run_backend_ruff_lint
   run_step 'Backend Ruff format' run_backend_ruff_format
   run_step 'Backend comment hygiene' run_backend_comment_hygiene
   run_step 'Backend Pyright' run_backend_pyright
+  run_step 'Backend test meaningfulness' run_backend_test_meaningfulness
+fi
+
+if [[ "$run_frontend" == true ]]; then
+  run_step 'Frontend regression tests' run_frontend_tests
+fi
+
+if [[ "$run_backend" == true ]]; then
+  run_step 'Backend tests' run_backend_tests
+fi
+
+# Immediately after both suites, and well before the build: a zod/Pydantic
+# drift is the most likely failure when a schema changes, and it used to be
+# the very last step in the gate.
+if [[ "$run_frontend" == true && "$run_backend" == true ]]; then
+  run_step 'API contract alignment (OpenAPI vs zod)' run_api_contract_alignment
+fi
+
+if [[ "$run_backend" == true ]]; then
+  run_step 'Alembic migration validation' run_backend_migration_validation
   run_step 'Backend Bandit medium-confidence scan' run_backend_bandit
   run_step 'Backend vulture dead-code scan' run_backend_vulture
   run_step 'Backend deptry dependency scan' run_backend_deptry
   run_step 'Backend xenon complexity' run_backend_xenon
 fi
 
-if [[ "$run_frontend" == true && "$run_backend" == true ]]; then
-  run_step 'API contract alignment (OpenAPI vs zod)' run_api_contract_alignment
+if [[ "$run_frontend" == true ]]; then
+  run_step 'Frontend production build' run_frontend_build
+  run_step 'Frontend end-to-end tests' run_frontend_e2e
 fi
 
 printf '\nAll selected quality checks passed.\n'
