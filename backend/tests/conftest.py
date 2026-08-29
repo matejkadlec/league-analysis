@@ -64,15 +64,17 @@ def recorded_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 def reset_process_wide_state() -> Iterator[None]:
     """Reset every process-global the application keeps, between tests.
 
-    The burst clock lives on `RateLimiter` and the two run registries are
-    module-level dicts, because each belongs to the process rather than to one
-    client or request. All three leak across tests.
+    The burst clock, the two run registries and slowapi's limiter belong to
+    the process rather than to one client or request, so all four leak across
+    tests -- the limiter's wall-clock window even across whole sessions.
     """
+    from app.core.http_rate_limit import limiter
     from app.core.riot_api.rate_limiter import RateLimiter
     from app.features.jobs import control
     from app.features.matchmaking_analysis import service
 
     RateLimiter._last_request_time = 0.0
+    limiter.reset()
     yield
     # After, not before: a test that leaves a run registered would otherwise
     # hand it to whichever test happens to follow, and under a shuffled order
@@ -80,3 +82,4 @@ def reset_process_wide_state() -> Iterator[None]:
     RateLimiter._last_request_time = 0.0
     service._running_analyses.clear()
     control._runtime_controls.clear()
+    limiter.reset()
