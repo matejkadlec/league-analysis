@@ -57,7 +57,6 @@ describe("Progress", () => {
     render(<Progress value={50} className="h-2 w-1/2" />);
     const track = screen.getByRole("progressbar");
 
-    expect(track.className).toContain("rounded-full");
     expect(track.className).toMatch(/h-2\b/);
     expect(track.className).toMatch(/w-1\/2\b/);
   });

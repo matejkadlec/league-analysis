@@ -1,16 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
-}));
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
 
 import { JobExecutions } from "@/features/jobs/components/job-executions";
 import type {
@@ -31,7 +27,6 @@ class NoopIntersectionObserver {
     return [];
   }
 }
-vi.stubGlobal("IntersectionObserver", NoopIntersectionObserver);
 
 function execution(overrides: Partial<JobExecution> = {}): JobExecution {
   return {
@@ -77,27 +72,26 @@ const MATCH_FETCHER: JobConfiguration = {
 };
 
 /**
- * The component owns its query, so a fixture is installed on the mocked
- * `validatedGet` rather than handed in as a prop -- taking both means two
- * requests for the identical first page.
+ * Answer the table's own request with one page, or refuse it. The component
+ * owns that query, so the fixture goes on the wire rather than in as a prop --
+ * taking both means two requests for the identical first page.
  */
+function serveExecutions(executions: JobExecutionListResponse | null) {
+  server.use(
+    http.get(apiRoute("/jobs/executions/all"), () =>
+      executions === null
+        ? new HttpResponse(null, { status: 500 })
+        : HttpResponse.json(executions),
+    ),
+  );
+}
+
 function renderExecutions(props: {
   executions: JobExecutionListResponse | null;
   jobs?: JobConfiguration[];
   selectedExecutionId?: number | null;
 }) {
-  validatedGet.mockResolvedValue(
-    props.executions === null
-      ? {
-          success: false,
-          error: {
-            kind: "service",
-            status: 500,
-            message: "The service is unavailable.",
-          },
-        }
-      : { success: true, data: props.executions },
-  );
+  serveExecutions(props.executions);
   const tree = (selectedExecutionId: number | null) => (
     <JobExecutions
       jobs={props.jobs ?? [MATCH_FETCHER]}
@@ -115,7 +109,10 @@ function renderExecutions(props: {
 
 describe("the executions table on the jobs page", () => {
   beforeEach(() => {
-    validatedGet.mockReset();
+    // Re-stubbed each time: `unstubGlobals` tears every stub down after a
+    // test, so a single module-scope stub leaves test two onwards without an
+    // `IntersectionObserver` at all.
+    vi.stubGlobal("IntersectionObserver", NoopIntersectionObserver);
   });
 
   afterEach(() => {
@@ -132,10 +129,7 @@ describe("the executions table on the jobs page", () => {
 
     expect(await screen.findByText("Match Fetcher")).toBeTruthy();
 
-    validatedGet.mockResolvedValue({
-      success: false,
-      error: { kind: "service", status: 500, message: "boom" },
-    });
+    serveExecutions(null);
     await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
 
     expect(screen.getByText("Match Fetcher")).toBeTruthy();
@@ -197,6 +191,7 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("lets a later deep link close a dialog the click opened", async () => {
+    const user = userEvent.setup();
     // Clicking a row remembers it internally *and* reports it upwards, which is
     // what puts the id in the URL. So once a `selectedExecutionId` arrives it is
     // the answer, including when it resolves to nothing.
@@ -205,7 +200,7 @@ describe("the executions table on the jobs page", () => {
       selectedExecutionId: null,
     });
 
-    fireEvent.click(await screen.findByText("Match Fetcher"));
+    await user.click(await screen.findByText("Match Fetcher"));
     expect(await screen.findByRole("dialog")).toBeTruthy();
 
     setSelectedExecutionId(999);

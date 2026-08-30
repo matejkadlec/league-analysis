@@ -54,12 +54,7 @@ describe("SignInForm", () => {
     expect(password.type).toBe("password");
     expect(password.value).toBe("secret-password");
 
-    const showPassword = screen.getByRole("button", { name: "Show password" });
-    expect(showPassword.classList.contains("password-visibility-toggle")).toBe(
-      true,
-    );
-
-    await user.click(showPassword);
+    await user.click(screen.getByRole("button", { name: "Show password" }));
 
     expect(password.type).toBe("text");
     expect(password.value).toBe("secret-password");

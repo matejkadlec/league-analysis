@@ -4,6 +4,7 @@
 import { meaningfulTestsRule } from "./meaningful-tests.mts";
 import { noCompatShimsRule } from "./no-compat-shims.mts";
 import { noDeferralCommentsRule } from "./no-deferral-comments.mts";
+import { noFireEventClickRule } from "./no-fire-event-click.mts";
 import { noRawJsonParseRule } from "./no-raw-json-parse.mts";
 import { noLongCommentsRule } from "./no-long-comments.mts";
 import { noSpreadInputInQueryKeyRule } from "./no-spread-input-in-query-key.mts";
@@ -23,6 +24,7 @@ export default {
     "meaningful-tests": meaningfulTestsRule,
     "no-compat-shims": noCompatShimsRule,
     "no-deferral-comments": noDeferralCommentsRule,
+    "no-fire-event-click": noFireEventClickRule,
     "no-raw-json-parse": noRawJsonParseRule,
     "no-long-comments": noLongCommentsRule,
     "no-spread-input-in-query-key": noSpreadInputInQueryKeyRule,

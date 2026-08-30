@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, normalizeApiError } from "@/lib/core/http/api";
@@ -216,7 +217,9 @@ describe("the axios interceptor", () => {
 
 describe("the can't-reach-the-server surface", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    // `shouldAdvanceTime` because user-event's own inter-event waits are real
+    // timers: a frozen clock never delivers them and the click never lands.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
@@ -244,6 +247,7 @@ describe("the can't-reach-the-server surface", () => {
   });
 
   it("still signs the visitor out when they press the button here", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     // Why `logout` takes a flag rather than never tearing down: this screen
     // exists for the server that is not answering, so its Sign out is the one
     // caller that must act anyway.
@@ -259,9 +263,7 @@ describe("the can't-reach-the-server surface", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    });
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
@@ -295,6 +297,7 @@ describe("cookie consent", () => {
   });
 
   it("does not take the session hint with it when a choice is saved", async () => {
+    const user = userEvent.setup();
     setHint();
     document.cookie = "league_analysis_cookie_consent=; max-age=0; path=/";
 
@@ -302,9 +305,7 @@ describe("cookie consent", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Accept necessary" }));
-    });
+    await user.click(screen.getByRole("button", { name: "Accept necessary" }));
 
     expect(hasAuthStateCookie()).toBe(true);
   });

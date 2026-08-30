@@ -28,17 +28,20 @@ from app.features.auth.users.models import User
 from route_helpers import loopback_request, undecorated
 
 
+# Each password trips exactly one rule and the message says which. Without the
+# pairing, a bare `pytest.raises(ValueError)` passes when the uppercase check
+# rejects the missing-digit password, so the rules could be reordered or merged.
 @pytest.mark.parametrize(
-    "password",
+    ("password", "expected_rule"),
     [
-        "missing-uppercase-1!",
-        "MISSING-LOWERCASE-1!",
-        "MissingNumber!",
-        "MissingSpecial1",
+        ("missing-uppercase-1!", "at least one uppercase letter"),
+        ("MISSING-LOWERCASE-1!", "at least one lowercase letter"),
+        ("MissingNumber!", "at least one digit"),
+        ("MissingSpecial1", "at least one special character"),
     ],
 )
-def test_user_create_rejects_weak_passwords(password: str) -> None:
-    with pytest.raises(ValueError):
+def test_user_create_rejects_weak_passwords(password: str, expected_rule: str) -> None:
+    with pytest.raises(ValueError, match=expected_rule):
         UserCreate(email="player@example.com", display_name="Player", password=password)
 
 
@@ -61,17 +64,21 @@ def test_join_us_body_is_trimmed_and_whitespace_only_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    "weak",
+    ("weak", "expected_rule"),
     [
-        "missing-uppercase-1!",
-        "MISSING-LOWERCASE-1!",
-        "MissingNumber!",
-        "MissingSpecial1",
-        "Sh0rt!",
+        ("missing-uppercase-1!", "at least one uppercase letter"),
+        ("MISSING-LOWERCASE-1!", "at least one lowercase letter"),
+        ("MissingNumber!", "at least one digit"),
+        ("MissingSpecial1", "at least one special character"),
+        # Pydantic's `Field(min_length=8)`, not `validate_password_strength`:
+        # the field constraint runs first and the policy never sees this one.
+        # Naming the message is what made that visible.
+        ("Sh0rt!", "String should have at least 8 characters"),
     ],
 )
 def test_password_change_holds_the_new_password_to_the_strength_policy(
     weak: str,
+    expected_rule: str,
 ) -> None:
     """Registration's policy applies to a change too, and nothing said so.
 
@@ -79,7 +86,7 @@ def test_password_change_holds_the_new_password_to_the_strength_policy(
     the `validate_password_strength` call from `PasswordChangeRequest` left
     the suite green and accepted any eight characters.
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=expected_rule):
         PasswordChangeRequest(
             current_password="Old-password-1!",
             new_password=weak,

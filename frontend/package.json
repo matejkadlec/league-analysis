@@ -67,6 +67,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "30.0.1",
     "knip": "^6.32.2",
+    "msw": "^2.15.0",
     "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
     "tailwindcss": "^4.3.3",
@@ -79,6 +80,7 @@
   },
   "allowScripts": {
     "fsevents@2.3.3": true,
+    "msw@2.15.0": false,
     "unrs-resolver@1.12.2": true
   }
 }

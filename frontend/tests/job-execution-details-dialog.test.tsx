@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { JobExecutionDetailsDialog } from "@/features/jobs/components/job-execution-details-dialog";
@@ -96,7 +97,8 @@ describe("the job execution details dialog", () => {
     expect(screen.getByText("Riot returned 503 for every retry.")).toBeTruthy();
   });
 
-  it("hands a close back to the caller that owns the selection", () => {
+  it("hands a close back to the caller that owns the selection", async () => {
+    const user = userEvent.setup();
     const onOpenChange = vi.fn<(open: boolean) => void>();
     render(
       <JobExecutionDetailsDialog
@@ -108,7 +110,7 @@ describe("the job execution details dialog", () => {
     // The dialog the caller opened is on screen before its close is asked
     // for; the callback is how the owner learns to clear the selection.
     expect(screen.getByRole("dialog")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

@@ -8,9 +8,17 @@ import {
 } from "@/features/matches/match-history-pagination";
 
 describe("Match History pagination", () => {
-  it("uses the approved page sizes and default", () => {
-    expect(MATCH_HISTORY_PAGE_SIZES).toEqual([25, 50, 100, 250, 500, 1000]);
-    expect(DEFAULT_MATCH_HISTORY_PAGE_SIZE).toBe(25);
+  it("offers page sizes the selector can render and a default among them", () => {
+    // Restating the six numbers only copies the constant. What the dropdown
+    // needs is a default it can show as selected, and a list that climbs --
+    // it is rendered in array order.
+    expect(MATCH_HISTORY_PAGE_SIZES).toContain(DEFAULT_MATCH_HISTORY_PAGE_SIZE);
+    expect([...MATCH_HISTORY_PAGE_SIZES]).toEqual(
+      [...MATCH_HISTORY_PAGE_SIZES].sort((a, b) => a - b),
+    );
+    expect(new Set(MATCH_HISTORY_PAGE_SIZES).size).toBe(
+      MATCH_HISTORY_PAGE_SIZES.length,
+    );
   });
 
   it("shows all pages when five or fewer exist", () => {

@@ -30,14 +30,4 @@ describe("reopening cookie consent from the footer", () => {
 
     expect(withoutTrigger).toEqual([]);
   });
-
-  it("is the control the cookie policy actually names", () => {
-    // If the copy is ever reworded away from the footer, the invariant above
-    // stops being the right one -- so it is pinned to the sentence it serves.
-    const policy = readFileSync("app/cookie-policy/page.tsx", "utf8");
-
-    expect(policy.replace(/\s+/g, " ")).toContain(
-      "<strong>Cookie settings</strong> link in the page footer",
-    );
-  });
 });

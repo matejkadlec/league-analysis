@@ -16,11 +16,11 @@ describe("CardTitle", () => {
       </Card>,
     );
 
-    // The upstream shadcn primitive renders a div here. Re-adding `card` from
-    // the shadcn CLI reverts the local patch, and this assertion is what
-    // catches that: a div leaves the accessible heading tree empty.
+    // The upstream shadcn primitive renders a div, and re-adding `card` from
+    // the CLI reverts the local patch. The level is the part that matters:
+    // every surface's heading outline is built on `CardTitle` being an `h3`.
     expect(
-      screen.getByRole("heading", { name: "Tracked Players" }),
-    ).toBeDefined();
+      screen.getByRole("heading", { name: "Tracked Players" }).tagName,
+    ).toBe("H3");
   });
 });

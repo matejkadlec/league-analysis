@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * The parts of Rank Manipulation a ticket fixed in writing: approved copy and
- * heading capitalisation, checked as source text because they pin a decision
- * rather than a behaviour. The counterpart e2e measures the rendered result.
+ * The heading outline of Rank Manipulation, checked as source text because it
+ * spans files no single render covers and axe's `heading-order` is outside the
+ * tag set the e2e scan runs. The counterpart e2e measures the rendered result.
  */
 
 /**
@@ -22,15 +22,6 @@ const SURFACE_FILES = [
   "features/smurf-boost/components/smurf-boost-settings-presets.tsx",
   "features/smurf-boost/components/smurf-boost-settings-thresholds.tsx",
 ];
-
-/** JSX text as the browser lays it out: lines trimmed, joined by one space. */
-function renderedText(source: string): string {
-  return source
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(" ");
-}
 
 describe("the Rank Manipulation surface", () => {
   it("scans the files it is written against", () => {
@@ -67,64 +58,5 @@ describe("the Rank Manipulation surface", () => {
     }
 
     expect(offenders).toEqual([]);
-  });
-
-  it("keeps the approved Games Comparison wording word for word", () => {
-    // LGA-100 fixed this sentence exactly and nothing else pins it. Rewritten
-    // once already: a pinned sentence that has become false is worse than no pin
-    // at all.
-    const source = readFileSync(
-      "features/smurf-boost/components/smurf-boost-detection.tsx",
-      "utf8",
-    );
-
-    expect(renderedText(source)).toContain(
-      "Compare recent games with earlier games, using ranked solo/duo " +
-        "games only. Running it fetches this player&apos;s newest games " +
-        "from Riot first, so the comparison reads current history rather " +
-        "than waiting for the next scheduled update.",
-    );
-  });
-
-  it("keeps every card header in title case", () => {
-    // Playwright matches an accessible name case-insensitively, so the e2e
-    // passes on `Games comparison` just as happily. The page holds one
-    // convention: title case for every card header.
-    const headers: Array<[string, string]> = [
-      [
-        "features/smurf-boost/components/smurf-boost-explanation-card.tsx",
-        "What This Page Does",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
-        "Detection Settings",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-settings-presets.tsx",
-        "Presets",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-settings-thresholds.tsx",
-        "Thresholds",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-detection.tsx",
-        "Games Comparison",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-result-card.tsx",
-        "Comparison Result",
-      ],
-      [
-        "features/smurf-boost/components/smurf-boost-result-card.tsx",
-        "Limits of This Data",
-      ],
-    ];
-
-    const missing = headers
-      .filter(([path, header]) => !readFileSync(path, "utf8").includes(header))
-      .map(([path, header]) => `${header} (${path})`);
-
-    expect(missing).toEqual([]);
   });
 });

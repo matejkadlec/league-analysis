@@ -8,9 +8,9 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { formatDateTime } from "@/lib/core/format";
 import type { ApiResponse } from "@/lib/core/http/api";
 
 type Api = typeof import("@/lib/core/http/api");
@@ -71,7 +71,9 @@ const DB_SETTING = {
   category: "riot",
   is_sensitive: true,
   created_at: "2026-01-01T00:00:00.000Z",
-  updated_at: "2026-01-02T00:00:00.000Z",
+  // Late enough in the UTC day that a five-hour-behind viewer reads the day
+  // before, and an asymmetric day and month so a swapped date order shows.
+  updated_at: "2026-01-05T03:20:45.000Z",
 };
 
 function status(overrides: Record<string, unknown> = {}) {
@@ -118,17 +120,20 @@ describe("the card that swaps the Riot API key", () => {
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllEnvs();
   });
 
   it("stamps the stored key in the viewer's clock, not UTC", async () => {
-    // An operator comparing "last updated" against a job run must not read two
-    // different clocks. `formatDateTime` is the one clock, and nothing else
-    // stops another copy reappearing.
+    // Written out rather than built with `formatDateTime`, which cannot
+    // notice its own output changing. The zone sits five hours behind the
+    // stored instant, so the date rolls back a day: the "not UTC" half.
+    vi.stubEnv("TZ", "America/New_York");
+
     const queryClient = renderCard();
 
-    await screen.findByText(
-      `Last updated: ${formatDateTime(DB_SETTING.updated_at, { seconds: true })}`,
-    );
+    expect(
+      await screen.findByText("Last updated: 4.1.2026 10:20:45 PM"),
+    ).toBeTruthy();
 
     queryClient.clear();
   });
@@ -137,10 +142,11 @@ describe("the card that swaps the Riot API key", () => {
     // The key this writes is what every ingestion job authenticates with, and
     // saving activates it with no restart. The prefix check is all that keeps a
     // mis-pasted string from becoming the live credential.
+    const user = userEvent.setup();
     const queryClient = renderCard();
 
     const input = await typeKey("not-a-riot-key");
-    fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
+    await user.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPut).not.toHaveBeenCalled();
@@ -155,6 +161,7 @@ describe("the card that swaps the Riot API key", () => {
     // A mutation returning the `ApiResponse` envelope cannot reject, which
     // leaves `onError` dead and hides a failed key save from the global
     // `MutationCache.onError`.
+    const user = userEvent.setup();
     validatedPut.mockResolvedValue({
       success: false,
       error: {
@@ -167,7 +174,7 @@ describe("the card that swaps the Riot API key", () => {
     const queryClient = renderCard();
 
     const input = await typeKey(VALID_KEY);
-    fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
+    await user.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
@@ -186,6 +193,7 @@ describe("the card that swaps the Riot API key", () => {
     // Testing is the point of the button beside it. Once a test comes back
     // failed, saving anyway would put a known-bad key live and take ingestion
     // down until someone noticed.
+    const user = userEvent.setup();
     validatedPost.mockResolvedValue({
       success: true,
       data: { success: false, status: "invalid", message: "Forbidden" },
@@ -193,7 +201,7 @@ describe("the card that swaps the Riot API key", () => {
     const queryClient = renderCard();
 
     await typeKey(VALID_KEY);
-    fireEvent.click(screen.getByRole("button", { name: /Test Key/ }));
+    await user.click(screen.getByRole("button", { name: /Test Key/ }));
 
     await screen.findByText("Forbidden");
     expect(
@@ -211,6 +219,7 @@ describe("the card that swaps the Riot API key", () => {
     // Without clearing the previous result, one rejected key leaves the save
     // button disabled for every key typed after it -- locked out of applying a
     // good key, with the reason no longer on screen.
+    const user = userEvent.setup();
     validatedPost.mockResolvedValue({
       success: true,
       data: { success: false, status: "invalid", message: "Forbidden" },
@@ -218,7 +227,7 @@ describe("the card that swaps the Riot API key", () => {
     const queryClient = renderCard();
 
     await typeKey(VALID_KEY);
-    fireEvent.click(screen.getByRole("button", { name: /Test Key/ }));
+    await user.click(screen.getByRole("button", { name: /Test Key/ }));
     await screen.findByText("Forbidden");
 
     await typeKey(OTHER_VALID_KEY);
@@ -277,6 +286,7 @@ describe("the card that swaps the Riot API key", () => {
     // Nothing polls for this. Panels elsewhere reload their credential health
     // off this event, so without it they keep showing the old key's verdict
     // -- including a red "invalid" beside a key that was just fixed.
+    const user = userEvent.setup();
     validatedPut.mockResolvedValue({ success: true, data: DB_SETTING });
     const heard = vi.fn<EventListener>();
     window.addEventListener(RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT, heard);
@@ -284,7 +294,7 @@ describe("the card that swaps the Riot API key", () => {
     const queryClient = renderCard();
 
     const input = await typeKey(VALID_KEY);
-    fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
+    await user.click(screen.getByRole("button", { name: /Save & Apply/ }));
 
     await waitFor(() => expect(heard).toHaveBeenCalled());
     expect(validatedPut).toHaveBeenCalledWith(

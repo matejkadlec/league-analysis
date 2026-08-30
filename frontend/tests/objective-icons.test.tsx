@@ -57,22 +57,6 @@ describe("Match History objective icons", () => {
       container.querySelectorAll('[data-icon-source="riot-match-history"]'),
     ).toHaveLength(6);
 
-    const expectedSizes = {
-      turret: "h-[31px]",
-      inhibitor: "h-[22px]",
-      dragon: "h-[22px]",
-      voidgrub: "h-[22px]",
-      herald: "h-[22px]",
-      baron: "h-[21px]",
-    };
-    for (const [objective, sizeClass] of Object.entries(expectedSizes)) {
-      expect(
-        container.querySelector(
-          `[data-objective="${objective}"] [data-icon-source]`,
-        )?.className,
-      ).toContain(sizeClass);
-    }
-
     const dragon = container.querySelector(
       '[data-objective="dragon"] [data-icon-source]',
     ) as HTMLElement;

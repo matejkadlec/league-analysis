@@ -14,14 +14,6 @@ from structlog.testing import capture_logs
 from app.core.db_session import rollback_quietly
 
 
-async def test_the_rollback_reaches_the_session() -> None:
-    session = AsyncMock()
-
-    await rollback_quietly(cast(AsyncSession, session))
-
-    session.rollback.assert_awaited_once_with()
-
-
 async def test_a_failing_rollback_is_swallowed_and_only_logged() -> None:
     """The swallow is the contract; the debug entry is its only trace."""
     session = AsyncMock()

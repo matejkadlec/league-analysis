@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthContextType } from "@/features/auth/types";
@@ -57,6 +58,7 @@ afterEach(() => {
 
 describe("the sidebar Sign Out button", () => {
   it("signs the visitor out even when the server cannot be reached", async () => {
+    const user = userEvent.setup();
     // The context is mocked, so the only thing left to watch is what the
     // sidebar does with the signed-out state a completed logout leaves.
     auth.logout.mockImplementation(async () => {
@@ -68,14 +70,10 @@ describe("the sidebar Sign Out button", () => {
     // The menu is closed on a narrow viewport; open it if there is a toggle.
     const toggle = screen.queryByRole("button", { name: /menu/i });
     if (toggle) {
-      await act(async () => {
-        fireEvent.click(toggle);
-      });
+      await user.click(toggle);
     }
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    });
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
 
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
@@ -85,6 +83,7 @@ describe("the sidebar Sign Out button", () => {
   });
 
   it("goes dead while the request is in flight", async () => {
+    const user = userEvent.setup();
     // Sign Out waits for the server, because only the server can revoke.
     // Against a backend that hangs that is the full ten-second deadline, so
     // without the pending state every further click stacks another request.
@@ -98,18 +97,14 @@ describe("the sidebar Sign Out button", () => {
 
     render(<SidebarNav />);
     const button = screen.getByRole("button", { name: /sign out/i });
-    await act(async () => {
-      fireEvent.click(button);
-    });
+    await user.click(button);
 
     expect(
       screen.getByRole("button", { name: /signing out/i }),
     ).toHaveProperty("disabled", true);
     expect(auth.logout).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /signing out/i }));
-    });
+    await user.click(screen.getByRole("button", { name: /signing out/i }));
     expect(auth.logout).toHaveBeenCalledTimes(1);
 
     await act(async () => {

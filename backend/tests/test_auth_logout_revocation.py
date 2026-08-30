@@ -97,21 +97,25 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
 
 async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
     service = _service(user_id=9)
+    response = Response()
 
-    await logout(
+    result = await logout(
         request=_request_with_cookies(
             **{
                 ACCESS_TOKEN_COOKIE_NAME: "access-token",
                 REFRESH_TOKEN_COOKIE_NAME: "refresh-token",
             }
         ),
-        response=Response(),
+        response=response,
         auth_service=service,
     )
 
     cast(AsyncMock, service).revoke_access_token.assert_awaited_once_with(
         "access-token", reason="logout"
     )
+    assert result == MessageResponse(message="Successfully logged out")
+    cleared = response.headers.getlist("set-cookie")
+    assert any(header.startswith(f"{ACCESS_TOKEN_COOKIE_NAME}=") for header in cleared)
 
 
 async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
@@ -122,19 +126,26 @@ async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
     the refresh cookie's owner may be signed out.
     """
     service = _service(user_id=7)
+    response = Response()
 
-    await logout(
+    result = await logout(
         request=_request_with_cookies(
             bearer="someone-elses-access-token",
             **{REFRESH_TOKEN_COOKIE_NAME: "refresh-token"},
         ),
-        response=Response(),
+        response=response,
         auth_service=service,
     )
 
     cast(
         AsyncMock, service
     ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(7)
+    cast(AsyncMock, service).resolve_user_id_for_refresh_token.assert_awaited_once_with(
+        "refresh-token"
+    )
+    assert result == MessageResponse(message="Successfully logged out")
+    cleared = response.headers.getlist("set-cookie")
+    assert any(header.startswith(f"{REFRESH_TOKEN_COOKIE_NAME}=") for header in cleared)
 
 
 async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:

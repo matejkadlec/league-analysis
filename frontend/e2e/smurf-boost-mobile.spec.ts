@@ -12,12 +12,14 @@ import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 const PHONE = { width: 390, height: 844 };
 
 test.describe("smurf and boost detection on a phone", () => {
-  test.use({ viewport: PHONE });
+  // A viewport alone leaves a desktop user agent, a mouse and no touch, so
+  // these specs could not catch a hover-only affordance on a phone -- and
+  // this app has them (`track-player-button` swaps its label on group-hover).
+  test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   test("never scrolls the page sideways, before or after a comparison", async ({
     page,
   }) => {
-    test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
     await page.goto(`/rank-manipulation?puuid=${PUUID}`);
@@ -46,7 +48,6 @@ test.describe("smurf and boost detection on a phone", () => {
   test("keeps every measurement readable without a sideways gesture", async ({
     page,
   }) => {
-    test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
     await page.goto(`/rank-manipulation?puuid=${PUUID}`);
@@ -80,7 +81,6 @@ test.describe("smurf and boost detection on a phone", () => {
   test("keeps the settings form usable at one field per row", async ({
     page,
   }) => {
-    test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
     await page.goto(`/rank-manipulation?puuid=${PUUID}`);

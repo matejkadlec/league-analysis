@@ -1,14 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HttpResponse, http, type JsonBodyType } from "msw";
+import { beforeEach, describe, expect, it } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
-}));
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
 
 import {
   championStatsQueryOptions,
@@ -37,39 +32,53 @@ const championStats = {
 const laneStats = {
   puuid: "player-puuid",
   total_lanes: 1,
-  lanes: [{ lane: "Middle", ...performance }],
+  lanes: [{ lane: "Mid", ...performance }],
 };
 
+/** The query string of every request the API actually received. */
+const received: Record<string, string>[] = [];
+
+/** Serve one route, and only that route: anything else reaches no handler and
+ * `onUnhandledRequest: "error"` fails the request the card depends on. */
+function serve(path: string, body: JsonBodyType) {
+  server.use(
+    http.get(apiRoute(path), ({ request }) => {
+      received.push(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json(body);
+    }),
+  );
+}
+
+function retryFreeClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
 describe("the profile cards' two aggregate reads", () => {
-  beforeEach(() => validatedGet.mockReset());
+  beforeEach(() => {
+    received.length = 0;
+  });
 
   it("asks for champion stats over ranked solo only, under the player's own key", async () => {
     // These cards are ranked standings: the queue is fixed, and the key
     // carries it so a future second queue cannot collide with this cache.
-    validatedGet.mockResolvedValue({ success: true, data: championStats });
-    const queryClient = new QueryClient();
+    serve("/matches/player/player-puuid/champion-stats", championStats);
+    const queryClient = retryFreeClient();
 
     await queryClient.fetchQuery(championStatsQueryOptions("player-puuid"));
 
-    expect(validatedGet.mock.calls[0]?.[1]).toBe(
-      "/matches/player/player-puuid/champion-stats",
-    );
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({ queues: "420" });
+    expect(received).toEqual([{ queues: "420" }]);
     expect(
       queryClient.getQueryData(["champion-stats", "player-puuid", 420]),
     ).toEqual(championStats);
   });
 
   it("asks for lane stats over the same ranked-solo scope", async () => {
-    validatedGet.mockResolvedValue({ success: true, data: laneStats });
-    const queryClient = new QueryClient();
+    serve("/matches/player/player-puuid/lane-stats", laneStats);
+    const queryClient = retryFreeClient();
 
     await queryClient.fetchQuery(laneStatsQueryOptions("player-puuid"));
 
-    expect(validatedGet.mock.calls[0]?.[1]).toBe(
-      "/matches/player/player-puuid/lane-stats",
-    );
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({ queues: "420" });
+    expect(received).toEqual([{ queues: "420" }]);
     expect(
       queryClient.getQueryData(["lane-stats", "player-puuid", 420]),
     ).toEqual(laneStats);

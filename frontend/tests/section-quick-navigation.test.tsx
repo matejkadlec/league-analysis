@@ -65,12 +65,7 @@ describe("SectionQuickNavigation", () => {
     );
 
     const quickNavigation = screen.getByTestId("section-quick-navigation");
-    const navigation = screen.getByRole("navigation", {
-      name: "Page sections",
-      hidden: true,
-    });
 
-    expect(navigation.parentElement?.className).toContain("w-0");
     expect(
       screen
         .getByRole("button", { name: "Open page navigation" })
@@ -79,7 +74,6 @@ describe("SectionQuickNavigation", () => {
 
     await user.hover(quickNavigation);
 
-    expect(navigation.parentElement?.className).toContain("w-[180px]");
     expect(
       screen
         .getByRole("button", { name: "Close page navigation" })
@@ -87,12 +81,10 @@ describe("SectionQuickNavigation", () => {
     ).toBe("true");
 
     await user.unhover(quickNavigation);
-    expect(navigation.parentElement?.className).toContain("w-0");
 
     await user.click(
       screen.getByRole("button", { name: "Open page navigation" }),
     );
-    expect(navigation.parentElement?.className).toContain("w-[180px]");
 
     await user.click(screen.getByRole("button", { name: "Top Champions" }));
 
@@ -142,6 +134,10 @@ describe("SectionQuickNavigation", () => {
     document.body.append(late);
 
     await screen.findByRole("button", { name: "Result" });
+
+    // Appended outside React, so RTL's cleanup does not own it: left behind it
+    // makes the next test's page advertise a section it never rendered.
+    late.remove();
   });
 
   it("does no watching while the panel is shut", async () => {

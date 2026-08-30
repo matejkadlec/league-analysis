@@ -160,8 +160,9 @@ export default defineConfig({
         // put in. The rule earns its keep against the API's `unknown` fields.
         "typescript/no-base-to-string": "off",
         // Tests assert behaviour rather than describe it, so they carry the
-        // test rule the application files have no use for.
+        // test rules the application files have no use for.
         "house/meaningful-tests": "error",
+        "house/no-fire-event-click": "error",
         // A test names the key it is asserting on; routing that through the
         // factory would hide the thing under test.
         "house/require-query-key-factory": "off",
@@ -275,6 +276,10 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/fixtures/meaningful-tests.fixture.ts"],
       rules: { "house/meaningful-tests": "error" },
+    },
+    {
+      files: [".oxlint-plugins/fixtures/no-fire-event-click.fixture.ts"],
+      rules: { "house/no-fire-event-click": "error" },
     },
     {
       files: [".oxlint-plugins/fixtures/require-fetch-timeout.fixture.ts"],

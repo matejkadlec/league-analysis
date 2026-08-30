@@ -138,6 +138,7 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("starts a run with the match count and end date the form collected", async () => {
+    const user = userEvent.setup();
     startMatchmakingAnalysis.mockReturnValue(
       new Promise<ApiResponse<MatchmakingAnalysisResponse>>(() => undefined),
     );
@@ -147,11 +148,11 @@ describe("the matchmaking analysis session", () => {
     // The start card's controls are the session's own state; changing them
     // here proves the wiring that carries the form into the start request.
     // A date input is set whole, not typed digit by digit.
-    fireEvent.click(screen.getByRole("button", { name: "20" }));
+    await user.click(screen.getByRole("button", { name: "20" }));
     fireEvent.change(screen.getByLabelText("Last day to include (optional)"), {
       target: { value: "2026-08-01" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Start Analysis" }));
+    await user.click(screen.getByRole("button", { name: "Start Analysis" }));
 
     await waitFor(() => {
       expect(startMatchmakingAnalysis).toHaveBeenCalledWith(
@@ -179,6 +180,29 @@ describe("the matchmaking analysis session", () => {
       screen.queryByRole("button", { name: "Cancel Analysis" }),
     ).toBeNull();
     expect(getMatchmakingAnalysisStatus).not.toHaveBeenCalled();
+  });
+
+  it("stops polling once the watched run reports a terminal status", async () => {
+    // The poll is what keeps a finished run costing requests forever. Nothing
+    // else here outlives one status answer, so only waiting past the 3s
+    // interval can tell a stopped watch from a running one.
+    answerStatusWith(analysis("completed"));
+
+    renderSession(analysis("in_progress"));
+
+    // The watch is over once the session offers a new run rather than a cancel.
+    expect(
+      await screen.findByRole("button", { name: "Run New Analysis" }),
+    ).toBeTruthy();
+    const callsOnceFinished = getMatchmakingAnalysisStatus.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 3_500));
+
+    expect(getMatchmakingAnalysisStatus).toHaveBeenCalledTimes(
+      callsOnceFinished,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Cancel Analysis" }),
+    ).toBeNull();
   });
 
   it("ends the watch quietly when the watched run disappears", async () => {

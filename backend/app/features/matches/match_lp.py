@@ -120,7 +120,8 @@ def attribute_lp_change(
     )
     if precondition is not None:
         return precondition
-    assert before is not None and after is not None
+    assert before is not None
+    assert after is not None
     assert match.game_end_timestamp is not None
 
     match_end = datetime.fromtimestamp(

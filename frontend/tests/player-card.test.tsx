@@ -1,23 +1,21 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
 
-type ValidatedGet = typeof import("@/lib/core/http/api").validatedGet;
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
+
 type UsePlayerSyncRun =
   typeof import("@/features/players/components/use-player-sync-run").usePlayerSyncRun;
 
-const { validatedGet, usePlayerSyncRun, startSync } = vi.hoisted(() => ({
-  validatedGet: vi.fn<ValidatedGet>(),
+const { usePlayerSyncRun, startSync } = vi.hoisted(() => ({
   usePlayerSyncRun: vi.fn<UsePlayerSyncRun>(),
   startSync: vi.fn<ReturnType<UsePlayerSyncRun>["startSync"]>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
 }));
 
 vi.mock("@/features/players/components/use-player-sync-run", () => ({
@@ -84,10 +82,10 @@ const league = {
   wins: 60,
   losses: 40,
   created_at: "2026-08-19T08:00:00Z",
-  // Post-parse shape: the schema has already normalized the API's percent to
-  // a fraction. Deliberately disagrees with the stats fixture's 0.6 so an
+  // The percentage this one endpoint serves, which the schema turns into a
+  // fraction. Deliberately disagrees with the stats fixture's 0.6 so an
   // assertion can tell which source the ranked branch rendered.
-  win_rate: 0.555,
+  win_rate: 55.5,
   total_games: 100,
   display_rank: "Gold II",
 };
@@ -106,35 +104,35 @@ const stats = {
   avg_vision_score: 22,
 };
 
+/** The query string of every ranked-aggregate request the card sent. */
+const statsRequests: Record<string, string>[] = [];
+
 // `/players/{puuid}/league` answers an unranked player with a 200 carrying
 // `null`, so `leagueData: null` is a *successful* empty response here.
 // `failLeagueWith` covers the failure case separately.
 function answerWith({
   leagueData = league as typeof league | null,
-  statsData = stats as typeof stats | null,
+  statsData = stats,
 } = {}) {
-  validatedGet.mockImplementation(async (_schema, url: string) => {
-    if (url.endsWith("/league")) {
-      return { success: true, data: leagueData };
-    }
-    return { success: true, data: statsData };
-  });
+  server.use(
+    http.get(apiRoute("/players/p-1/league"), () =>
+      HttpResponse.json(leagueData),
+    ),
+    http.get(apiRoute("/matches/player/p-1/stats"), ({ request }) => {
+      statsRequests.push(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json(statsData);
+    }),
+  );
 }
 
 function failLeagueWith(status: number) {
-  validatedGet.mockImplementation(async (_schema, url: string) => {
-    if (url.endsWith("/league")) {
-      return {
-        success: false,
-        error: {
-          status,
-          message: "The service is unavailable.",
-          kind: "service" as const,
-        },
-      };
-    }
-    return { success: true, data: stats };
-  });
+  answerWith();
+  server.use(
+    http.get(
+      apiRoute("/players/p-1/league"),
+      () => new HttpResponse(null, { status }),
+    ),
+  );
 }
 
 function renderCard(p: Player = player(), onRefreshAll?: () => void) {
@@ -148,7 +146,7 @@ function profileIcon() {
 }
 
 beforeEach(() => {
-  validatedGet.mockReset();
+  statsRequests.length = 0;
   answerWith();
   startSync.mockReset();
   usePlayerSyncRun.mockReset();
@@ -208,16 +206,12 @@ describe("what the card says about the player", () => {
     expect(screen.queryByText(/Played/)).toBeNull();
   });
 
-  it("asks for ranked-solo stats, not the player's whole match history", () => {
+  it("asks for ranked-solo stats, not the player's whole match history", async () => {
     // The queue filter lives only in this inline queryFn. Dropped, the card
     // blends ARAM and normals into a number labelled as ranked form.
     renderCard();
 
-    const statsCall = validatedGet.mock.calls.find(([, url]) =>
-      String(url).endsWith("/stats"),
-    );
-    expect(statsCall?.[1]).toBe("/matches/player/p-1/stats");
-    expect(statsCall?.[2]?.params).toEqual({ queues: "420" });
+    await waitFor(() => expect(statsRequests).toEqual([{ queues: "420" }]));
   });
 });
 
@@ -260,7 +254,8 @@ describe("the profile icon", () => {
 });
 
 describe("the update button", () => {
-  it("starts a sync and hands completion to the page's refresh", () => {
+  it("starts a sync and hands completion to the page's refresh", async () => {
+    const user = userEvent.setup();
     let refreshes = 0;
     let completeSync: () => void = () => {
       throw new Error("usePlayerSyncRun was never called");
@@ -276,7 +271,7 @@ describe("the update button", () => {
     };
     renderCard(player(), onRefreshAll);
 
-    fireEvent.click(screen.getByRole("button", { name: /Update/ }));
+    await user.click(screen.getByRole("button", { name: /Update/ }));
     expect(startSync).toHaveBeenCalledTimes(1);
 
     completeSync();

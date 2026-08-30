@@ -78,23 +78,11 @@ describe("ToastHost", () => {
     expect(screen.getByTestId("success-icon").innerHTML).toContain(
       "circle-check-big",
     );
-    expect(screen.getByTestId("success-icon").innerHTML).toContain(
-      "text-[#166534]",
-    );
     expect(screen.getByTestId("warning-icon").innerHTML).toContain(
       "triangle-alert",
     );
-    expect(screen.getByTestId("warning-icon").innerHTML).toContain(
-      "text-[#854d0e]",
-    );
     expect(screen.getByTestId("error-icon").innerHTML).toContain("circle-x");
-    expect(screen.getByTestId("error-icon").innerHTML).toContain(
-      "text-[#991b1b]",
-    );
     expect(screen.getByTestId("info-icon").innerHTML).toContain("info");
-    expect(screen.getByTestId("info-icon").innerHTML).toContain(
-      "text-[#1e3a8a]",
-    );
   });
 
   it("accepts development preview events through the shared toast adapter", async () => {

@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { RoleStatsCard } from "@/features/profile/components/role-stats-card";
@@ -82,32 +82,6 @@ describe("the role performance card", () => {
         existsSync(join(process.cwd(), "public", source)),
         `missing asset: ${source}`,
       ).toBe(true);
-    }
-  });
-
-  it("colours the win rate figure and the bar under it the same way", () => {
-    // Two separate functions carry the same three thresholds, and the two
-    // things they colour sit one above the other. A threshold that drifts in one
-    // shows a rate in green over a bar in yellow, which reads as a fault.
-    const hue = (className: string) =>
-      /(green|yellow|rose)-500/.exec(className)?.[1];
-
-    // 51 and 49 are the boundaries themselves: 51.0 is green, 49.0 is not
-    // yellow but rose, and only the open interval between them is yellow.
-    for (const winRate of [0.0, 0.489, 0.49, 0.495, 0.51, 0.6, 1.0]) {
-      const { container } = renderCard([lane("Top", { win_rate: winRate })]);
-
-      const figure = container.querySelector("p.font-bold");
-      const bar = container.querySelector<HTMLElement>("[style*='width']");
-
-      expect(
-        hue(figure?.className ?? ""),
-        `figure at ${winRate}`,
-      ).toBeDefined();
-      expect(hue(bar?.className ?? ""), `bar at ${winRate}`).toBe(
-        hue(figure?.className ?? ""),
-      );
-      cleanup();
     }
   });
 

@@ -6,8 +6,21 @@ out
 coverage
 playwright-report
 test-results
-e2e
-tests
+tsconfig.tsbuildinfo
 *.log
 .env
 .env.*
+
+# The production image type-checks whatever it copies: tsconfig.json includes
+# `**/*.ts` and `**/*.mts`, and `next build` fails on any import it cannot
+# resolve. So a harness entrypoint left here while the directory it drives is
+# ignored breaks the image build and nothing else -- `./test.sh` builds in the
+# full repository, where every one of these resolves. Keep each pair together.
+e2e
+playwright.config.ts
+tests
+vitest.config.mts
+vitest.setup.ts
+.oxlint-plugins
+oxlint.config.mts
+knip.jsonc

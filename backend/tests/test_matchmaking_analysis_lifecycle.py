@@ -7,7 +7,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import Insert
+from sqlalchemy import Insert, Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
@@ -690,7 +690,8 @@ async def test_spine_fetch_uses_the_runs_count_and_end_time() -> None:
 
     result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
 
-    assert result is not None and len(result) == 20
+    assert result is not None
+    assert len(result) == 20
     service._api_fetch_match_ids.assert_awaited_once_with(
         _PUUID,
         count=20,
@@ -708,7 +709,8 @@ async def test_a_sparse_window_above_the_floor_still_analyzes() -> None:
 
     result = await service._load_spine_match_ids(_PUUID, datetime.now(UTC))
 
-    assert result is not None and len(result) == 12
+    assert result is not None
+    assert len(result) == 12
     service._complete_with_error.assert_not_awaited()
 
 
@@ -738,10 +740,11 @@ def _gold_entry(lp: int = 40) -> LeagueEntryDTO:
 
 async def test_route_threads_non_default_params_into_the_service() -> None:
     """A chosen preset and end date must reach start_analysis, not defaults."""
+    expected = _analysis()
     service = MagicMock(spec=MatchmakingAnalysisService)
-    service.start_analysis.return_value = _analysis()
+    service.start_analysis.return_value = expected
 
-    await analysis_router.start_analysis(
+    result = await analysis_router.start_analysis(
         request=_request(),
         payload=MatchmakingAnalysisRequest(
             puuid=_PUUID, match_count=30, end_date=date(2026, 7, 26)
@@ -752,6 +755,7 @@ async def test_route_threads_non_default_params_into_the_service() -> None:
     service.start_analysis.assert_awaited_once_with(
         _PUUID, MatchmakingAnalysisParams(match_count=30, end_date=date(2026, 7, 26))
     )
+    assert result is expected
 
 
 async def test_a_fresh_snapshot_resolves_a_rank_without_a_league_call() -> None:
@@ -834,8 +838,15 @@ async def test_store_rank_snapshot_skips_tracked_players() -> None:
 
     await service._store_rank_snapshot("p1", _gold_entry())
 
-    # Only the tracked probe ran; no insert statement followed it.
-    assert execute.await_count == 1
+    # A count would only say how many statements ran: an INSERT put in place of
+    # the probe keeps it at one. Assert which statement was executed.
+    executed: list[ClauseElement] = [call.args[0] for call in execute.await_args_list]
+    assert len(executed) == 1
+    probe = executed[0]
+    bound = _compiled_values(probe)
+    assert isinstance(probe, Select)
+    assert "core.players" in str(probe.compile())
+    assert "p1" in bound
 
 
 async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
@@ -854,8 +865,12 @@ async def test_store_rank_snapshot_skips_an_identical_latest_row() -> None:
 
     await service._store_rank_snapshot("p1", entry)
 
-    # Tracked probe and latest-snapshot read only; no insert statement.
-    assert execute.await_count == 2
+    # Tracked probe and latest-snapshot read only. A count cannot say that: an
+    # INSERT swapped in for either read keeps it at two.
+    executed: list[ClauseElement] = [call.args[0] for call in execute.await_args_list]
+    assert len(executed) == 2
+    assert all(isinstance(statement, Select) for statement in executed)
+    assert "core.player_leagues" in str(executed[1].compile())
 
 
 async def test_store_rank_snapshot_inserts_a_changed_rank(

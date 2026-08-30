@@ -71,8 +71,14 @@ def test_threshold_keys_hold_numbers() -> None:
     for tag_code, config in TAG_CONFIG.items():
         for key, value in config.items():
             if key.startswith(("min_", "max_")):
-                assert isinstance(value, int | float) and not isinstance(value, bool), (
+                assert isinstance(value, int | float), (
                     f"{tag_code}.{key} is not a number, so it is silently skipped"
+                )
+                # `bool` is a subclass of `int`, so the check above accepts
+                # `True`. A threshold of `True` compares as 1 and the tag fires
+                # on the wrong data rather than erroring.
+                assert not isinstance(value, bool), (
+                    f"{tag_code}.{key} is a bool, so it compares as 0 or 1"
                 )
 
 

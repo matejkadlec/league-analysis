@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { MatchmakingAnalysisStartCard } from "@/features/matchmaking/components/matchmaking-analysis-start-card";
@@ -34,7 +35,8 @@ function customInput(): HTMLInputElement {
 }
 
 describe("the matchmaking analysis start card", () => {
-  it("marks the chosen preset and only it as pressed", () => {
+  it("marks the chosen preset and only it as pressed", async () => {
+    const user = userEvent.setup();
     const { props } = renderCard();
 
     expect(pressed("10")).toBe("true");
@@ -42,14 +44,15 @@ describe("the matchmaking analysis start card", () => {
     expect(pressed("30")).toBe("false");
     expect(pressed("Custom")).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: "20" }));
+    await user.click(screen.getByRole("button", { name: "20" }));
     expect(props.onMatchCountChange).toHaveBeenCalledWith(20);
   });
 
-  it("reveals a custom count that respects the backend's bounds", () => {
+  it("reveals a custom count that respects the backend's bounds", async () => {
+    const user = userEvent.setup();
     const { props } = renderCard();
 
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    await user.click(screen.getByRole("button", { name: "Custom" }));
     expect(customInput()).toBeTruthy();
 
     // An in-range integer reports as it is typed.
@@ -107,7 +110,8 @@ describe("the matchmaking analysis start card", () => {
     expect(screen.queryByText(warning)).toBeNull();
   });
 
-  it("shows the failure the last run left, and a start that cannot double-fire", () => {
+  it("shows the failure the last run left, and a start that cannot double-fire", async () => {
+    const user = userEvent.setup();
     const { props, rerender } = renderCard({
       analysisFailure: "The analysis did not finish. Please try again.",
     });
@@ -116,7 +120,7 @@ describe("the matchmaking analysis start card", () => {
     ).toBeTruthy();
 
     const start = screen.getByRole("button", { name: "Start Analysis" });
-    fireEvent.click(start);
+    await user.click(start);
     expect(props.onStart).toHaveBeenCalledTimes(1);
 
     // Pending means an in-flight request: the label owns up to it and the
@@ -138,7 +142,7 @@ describe("the matchmaking analysis start card", () => {
       name: "Starting...",
     }) as HTMLButtonElement;
     expect(pending.disabled).toBe(true);
-    fireEvent.click(pending);
+    await user.click(pending);
     expect(props.onStart).toHaveBeenCalledTimes(1);
 
     cleanup();
@@ -150,7 +154,8 @@ describe("the matchmaking analysis start card", () => {
     ).toBeTruthy();
   });
 
-  it("lets the end date be set to Latest again", () => {
+  it("lets the end date be set to Latest again", async () => {
+    const user = userEvent.setup();
     const { props } = renderCard({ endDate: "2026-08-01" });
 
     expect(
@@ -158,7 +163,7 @@ describe("the matchmaking analysis start card", () => {
         .value,
     ).toBe("2026-08-01");
 
-    fireEvent.click(screen.getByRole("button", { name: "Latest" }));
+    await user.click(screen.getByRole("button", { name: "Latest" }));
     expect(props.onEndDateChange).toHaveBeenCalledWith(null);
   });
 });

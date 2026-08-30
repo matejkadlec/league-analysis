@@ -368,30 +368,36 @@ def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -
     )
 
 
+def _wrap_a_malformed_league_entry() -> None:
+    """Reproduce the one wrapping production performs, outside the raises block.
+
+    The fixture omits `queueType` on purpose, which is what produces the
+    wrapped ValidationError under test. `raise ... from` is the only wrapping
+    production performs, now that `ServiceException`'s second chain is gone.
+    """
+    try:
+        LeagueEntryDTO.model_validate(
+            {
+                "tier": "GOLD",
+                "rank": "II",
+                "leaguePoints": 42,
+                "wins": 12,
+                "losses": 8,
+                "veteran": False,
+                "inactive": False,
+                "freshBlood": False,
+                "hotStreak": False,
+            }
+        )
+    except PydanticValidationError as validation_error:
+        raise ServiceException("validation failed") from validation_error
+
+
 def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
     job = _NoopJob(job_config_id=7)
-    # The fixture is malformed on purpose: `queueType` is missing, which is what
-    # produces the wrapped ValidationError under test. `model_validate` because
-    # a provider payload is untyped data at that boundary.
+
     with pytest.raises(ServiceException) as excinfo:
-        try:
-            LeagueEntryDTO.model_validate(
-                {
-                    "tier": "GOLD",
-                    "rank": "II",
-                    "leaguePoints": 42,
-                    "wins": 12,
-                    "losses": 8,
-                    "veteran": False,
-                    "inactive": False,
-                    "freshBlood": False,
-                    "hotStreak": False,
-                }
-            )
-        except PydanticValidationError as validation_error:
-            # `raise ... from` is the only wrapping production performs, now
-            # that `ServiceException`'s second chain is gone.
-            raise ServiceException("validation failed") from validation_error
+        _wrap_a_malformed_league_entry()
 
     job.record_error(excinfo.value, operation="player league update")
 
