@@ -25,6 +25,20 @@ issue, newest last:
   on a pull request. A check that no unignored file imports an ignored path
   would catch it in seconds.
 
+- 2026-08-30 frontend/features/matchmaking/matchmaking-analysis-state.ts: the
+  380-line reducer scores 45.90% under Stryker on 77% line coverage, the worst
+  non-trivial file measured. No test imports `analysisUiReducer`,
+  `resolveDisplayPhase` or `isSameAnalysisInstance` directly -- they are reached
+  only through components, so a survivor like `isSameAnalysisInstance` returning
+  `true` for two absent analysis ids changes nothing any assertion reads.
+  Detail in `.claude/stryker-trial-2026-08-29.md` §2.5.
+
+- 2026-08-30 backend/app/features/smurf_boost_detection/signals.py: A4, B1, B3
+  and B4 gate on a second threshold or ceiling, so the boundary test added for
+  A1/A2/A3/B2 does not cover them and `>=` is still free to become `>` on those
+  four. Named in the table beside `BOUNDARY_SIGNALS` in
+  `tests/test_smurf_boost_signals.py`.
+
 ## Findings that did not survive measurement
 
 The findings worth not rediscovering — the ones that were wrong, or right

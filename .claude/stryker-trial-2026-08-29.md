@@ -107,9 +107,17 @@ refetchInterval: (query) => {
 ```
 
 Each of the three terminal-status comparisons also mutates to `false` independently and
-survives. A build that polls the backend forever after a run finishes ships green. The
-missing test: drive a watched run to `completed` and assert the status query stops
-refetching.
+survives. The missing test: drive a watched run to `completed` and assert the status
+query stops refetching. Written on 2026-08-30 as "stops polling once the watched run
+reports a terminal status".
+
+**Correction, measured after the fact.** `return true` is an *equivalent* mutant, not a
+gap: TanStack Query ignores a non-numeric interval, so it behaves exactly like
+`return false` and the new test does not kill it -- nor should it. The realistic
+regression is `return 3000`, and that one the test does kill. The claim above that such
+a build "polls the backend forever" was wrong. Equivalent mutants were not one of the
+classification buckets in §4, so the true noise rate is higher than the 14.5 %
+presentational figure suggests.
 
 ### 2.5 `matchmaking-analysis-state.ts` — a 380-line state machine no test imports
 
