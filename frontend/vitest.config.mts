@@ -50,9 +50,9 @@ export default defineConfig({
         "**/*.config.*",
         "next-env.d.ts",
       ],
-      // Floors, not targets: each sits ~2 points under the last measurement
-      // (2026-08-30: 92.19/86.80/88.80/92.29). Ratchet every batch or they
-      // drift -- these were 11 points low, so 408 statements were deletable.
+      // Floors, ~2 points under the measurement (2026-08-30: 92.19/86.80/
+      // 88.80/92.29). Keep the buffer: two gate runs over identical code gave
+      // 92.30 and 92.19, so this number moves on its own. Ratchet each batch.
       thresholds: {
         statements: 90,
         branches: 85,
