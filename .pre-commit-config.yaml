@@ -164,6 +164,15 @@ repos:
         always_run: true
         pass_filenames: false
 
+      # Whole-tree for the same reason as the docs links above: the breaking
+      # change is often to .dockerignore, not to the file that imports.
+      - id: check-docker-context-imports
+        name: Frontend image build context imports resolve
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/check-docker-context-imports.sh"'
+        language: system
+        always_run: true
+        pass_filenames: false
+
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.4

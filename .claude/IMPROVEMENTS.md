@@ -7,14 +7,6 @@ issue, newest last:
 
 ## Open
 
-- 2026-08-29 frontend/.dockerignore: nothing local catches a harness entrypoint
-  that survives into the production image while the directory it drives is
-  ignored. `./test.sh` builds in the full repository, where every import
-  resolves; only the `Build and verify isolated production containers` CI step
-  builds from a filtered context, so the feedback is ~16 minutes away and only
-  on a pull request. A check that no unignored file imports an ignored path
-  would catch it in seconds.
-
 ## Findings that did not survive measurement
 
 The findings worth not rediscovering — the ones that were wrong, or right
