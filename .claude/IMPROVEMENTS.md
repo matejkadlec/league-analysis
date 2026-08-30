@@ -8,13 +8,25 @@ issue, newest last:
 ## Open
 
 - 2026-08-30 frontend/vitest.config.mts: the frontend coverage total is not
-  reproducible in the gate container. Two runs over identical code gave 92.30
-  and 92.19, while the host gave 92.19 on seven runs including three explicit
-  `--sequence.seed` values, so the shuffle is ruled out and the host is
-  deterministic. Cause unidentified; a timing-sensitive branch running only
-  under container load is the obvious suspect but is unproven. Until it is
-  understood the coverage floors must keep their ~2 point buffer, which is why
-  tightening them onto the measurement was backed out in #253.
+  reproducible in the gate container. Four runs over identical code gave 92.19
+  three times and 92.30 once, while the host gave 92.19 on seven runs including
+  three explicit `--sequence.seed` values, so the shuffle is ruled out and the
+  host is deterministic. The container figure is a rare anomaly rather than a
+  coin flip, which makes it harder to sample, not easier to dismiss. Cause
+  unidentified; a timing-sensitive branch running only under container load is
+  the obvious suspect but is unproven. Until it is understood the coverage
+  floors must keep their ~2 point buffer, which is why tightening them onto the
+  measurement was backed out in #253.
+
+- 2026-08-30 backend/app/features/jobs/base.py: `_refresh_config` opens by
+  expiring `self.job_config` so a config committed by another session is
+  visible, but that branch is unreachable. `run()` calls `_reset_run_state()`,
+  which sets `job_config = None`, before the only production call site, so the
+  guard never fires and its comment describes a refresh that the reset already
+  guarantees. Found by mutation: deleting the `db.expire` call changes nothing
+  the suite or the runtime can observe. Either delete it or, if it is meant as
+  defence for a second refresh within one run, say so — the current comment
+  claims a job it does not have.
 
 ## Findings that did not survive measurement
 

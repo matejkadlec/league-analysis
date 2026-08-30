@@ -166,4 +166,54 @@ describe("SectionQuickNavigation", () => {
     observe.mockRestore();
     disconnect.mockRestore();
   });
+
+  it("keeps the panel pinned while focus moves between its own items", async () => {
+    // `onBlurCapture` fires for focus moving *within* the panel too. Reading
+    // the containment backwards shuts the panel the moment a keyboard user
+    // reaches its first item, so the list can only be used with a mouse.
+    const user = userEvent.setup();
+    render(
+      <>
+        <Page withResult />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+
+    const quickNavigation = screen.getByTestId("section-quick-navigation");
+    const tab = screen.getByRole("button", { name: "Open page navigation" });
+    await user.click(tab);
+    await user.unhover(quickNavigation);
+    expect(tab.getAttribute("aria-expanded")).toBe("true");
+
+    await user.tab();
+    expect(quickNavigation.contains(document.activeElement)).toBe(true);
+    expect(tab.getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: "Elsewhere" }));
+    expect(tab.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("takes its items out of the tab order once shut", async () => {
+    // A shut panel keeps its items mounted; `aria-hidden` is what hides them,
+    // and `queryByRole` honours that. Nothing hides them from the tab key, so
+    // a focusable item in that subtree is reachable and never visible.
+    const user = userEvent.setup();
+    render(<Page withResult />);
+    const quickNavigation = screen.getByTestId("section-quick-navigation");
+
+    await user.hover(quickNavigation);
+    const items = () =>
+      Array.from(quickNavigation.querySelectorAll("nav button"));
+    expect(items().map((item) => item.getAttribute("tabindex"))).toEqual([
+      "0",
+      "0",
+    ]);
+
+    await user.unhover(quickNavigation);
+    expect(items()).toHaveLength(2);
+    expect(items().map((item) => item.getAttribute("tabindex"))).toEqual([
+      "-1",
+      "-1",
+    ]);
+  });
 });
