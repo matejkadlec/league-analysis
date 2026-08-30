@@ -322,8 +322,9 @@ class BaseJob(ABC):
     async def _refresh_config(self, db: AsyncSession) -> None:
         """Load fresh job configuration from database.
 
-        Expires any cached ORM state first so changes committed by other
-        sessions (e.g. a config update from the API router) are visible.
+        `_reset_run_state` clears `job_config` before every run, so this always
+        selects rather than reading a cached instance: a config committed by
+        another session (an API update, say) is visible on the next tick.
 
         Args:
             db: Database session for querying configuration.
@@ -331,10 +332,6 @@ class BaseJob(ABC):
         Raises:
             JobSetupError: If configuration is missing or deleted.
         """
-        # Expire cached state so the SELECT actually hits the DB
-        if self.job_config is not None:
-            db.expire(self.job_config)
-
         stmt = select(JobConfiguration).where(JobConfiguration.id == self.job_config_id)
         result = await db.execute(stmt)
         job_config = result.scalar_one_or_none()
