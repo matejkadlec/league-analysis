@@ -182,6 +182,29 @@ describe("the matchmaking analysis session", () => {
     expect(getMatchmakingAnalysisStatus).not.toHaveBeenCalled();
   });
 
+  it("stops polling once the watched run reports a terminal status", async () => {
+    // The poll is what keeps a finished run costing requests forever. Nothing
+    // else here outlives one status answer, so only waiting past the 3s
+    // interval can tell a stopped watch from a running one.
+    answerStatusWith(analysis("completed"));
+
+    renderSession(analysis("in_progress"));
+
+    // The watch is over once the session offers a new run rather than a cancel.
+    expect(
+      await screen.findByRole("button", { name: "Run New Analysis" }),
+    ).toBeTruthy();
+    const callsOnceFinished = getMatchmakingAnalysisStatus.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 3_500));
+
+    expect(getMatchmakingAnalysisStatus).toHaveBeenCalledTimes(
+      callsOnceFinished,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Cancel Analysis" }),
+    ).toBeNull();
+  });
+
   it("ends the watch quietly when the watched run disappears", async () => {
     // A 404 from the status endpoint is the ordinary end of a watch -- the
     // record was deleted -- so the session resolves it to "nothing to

@@ -60,6 +60,18 @@ describe("trimmedMean", () => {
     expect(trimmedMean(values)).toBeCloseTo(expected, 10);
   });
 
+  it("sorts before trimming, so input order cannot change the answer", () => {
+    // Both fixtures arrive sorted, so dropping the sort still trims the same
+    // window. This permutation is picked so it does not: reversing, or moving
+    // the extremes inward, happens to drop a pair summing to the same 1.0.
+    const [values, expected] = TRIM_FIXTURES[0]!;
+    const shuffled = [0.45, 0.0, 0.4, 1.0, 0.5, 0.5, 0.55, 0.55, 0.6, 0.5];
+
+    const ascending = (a: number, b: number) => a - b;
+    expect([...shuffled].sort(ascending)).toEqual([...values].sort(ascending));
+    expect(trimmedMean(shuffled)).toBeCloseTo(expected, 10);
+  });
+
   it("trims inside scopeAggregates once a scope holds ten matches", () => {
     const perMatch = TRIM_FIXTURES[0]![0].map((wr, i) => ({
       match_id: `m${i}`,
@@ -212,6 +224,27 @@ describe("rankAggregates", () => {
       allyTierCounts: { PLATINUM: 1 },
       enemyTierCounts: { EMERALD: 1, UNRANKED: 1 },
     });
+  });
+
+  it("means the ranked players on a side rather than summing them", () => {
+    // Every other case here leaves at most one ranked player per side, where
+    // a mean, a sum, and "take the first" are all the same number. Two per
+    // side is what tells them apart.
+    const twoRankedPerSide = [
+      {
+        match_id: "m1",
+        duo: true,
+        team_avg: 0.5,
+        enemy_avg: 0.5,
+        ally_puuids: ["me", "soloAlly", "stranger"],
+        enemy_puuids: ["foe1", "partner"],
+      },
+    ];
+
+    const duo = rankAggregates(twoRankedPerSide, RANKS, "duo", "me");
+
+    expect(duo?.allyAvg).toBe(1650);
+    expect(duo?.enemyAvg).toBe(1900);
   });
 
   it("buckets unranked players without dragging the average to null", () => {

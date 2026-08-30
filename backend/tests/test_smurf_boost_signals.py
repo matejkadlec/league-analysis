@@ -4,12 +4,22 @@ The engine suite drives all eight signals end to end; these call the
 evaluators straight, pinning guards a healthy run never exercises.
 """
 
+from collections.abc import Callable
+
+import pytest
+
 from app.features.smurf_boost_detection.composite import CompositeContext, EligibleMatch
+from app.features.smurf_boost_detection.config import PRESET_CONSERVATIVE, PRESETS
 from app.features.smurf_boost_detection.signals import (
     NOTE_INSUFFICIENT_SHAPE_SAMPLE,
     NOTE_SUMMONER_LEVEL_UNKNOWN,
     SignalInputs,
+    SignalResult,
+    evaluate_a1,
+    evaluate_a2,
+    evaluate_a3,
     evaluate_a4,
+    evaluate_b2,
     evaluate_b4,
 )
 
@@ -40,6 +50,7 @@ def _inputs(
     recent: list[EligibleMatch],
     baseline: list[EligibleMatch],
     composite_recent: list[float],
+    composite_baseline: list[float] | None = None,
     summoner_level: int | None = 300,
     thresholds: dict[str, float],
 ) -> SignalInputs:
@@ -47,7 +58,9 @@ def _inputs(
         recent=recent,
         baseline=baseline,
         composite_recent=composite_recent,
-        composite_baseline=[0.0] * len(baseline),
+        composite_baseline=(
+            [0.0] * len(baseline) if composite_baseline is None else composite_baseline
+        ),
         prior_champion_games={},
         summoner_level=summoner_level,
         context=CompositeContext(
@@ -166,3 +179,55 @@ def test_b4_requires_the_whole_window_below_the_baseline_not_just_the_average() 
     assert recovered.triggered is False
     assert fallen.triggered is True
     assert fallen.sample_size == 10
+
+
+BASE_THRESHOLDS = {
+    key: float(value) for key, value in PRESETS[PRESET_CONSERVATIVE].items()
+}
+
+# Every one of these compares `value >= threshold`. The compound signals (A4,
+# B1, B3, B4) gate on a second gate or ceiling and are not covered here.
+SignalEvaluator = Callable[[SignalInputs], SignalResult]
+
+BOUNDARY_SIGNALS: tuple[tuple[SignalEvaluator, str], ...] = (
+    (evaluate_a1, "a1_step_change_threshold"),
+    (evaluate_a2, "a2_win_rate_surge_threshold"),
+    (evaluate_a3, "a3_novel_champion_threshold"),
+    (evaluate_b2, "b2_consistency_shift_threshold"),
+)
+
+
+def _boundary_inputs(thresholds: dict[str, float]) -> SignalInputs:
+    """One measurable window: wins throughout, and spread on both sides."""
+    return _inputs(
+        recent=[_match(index, win=True) for index in range(10)],
+        baseline=[_match(20 + index, win=False) for index in range(10)],
+        composite_recent=[1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4, 3.8, 4.2, 4.6],
+        composite_baseline=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8],
+        thresholds=thresholds,
+    )
+
+
+@pytest.mark.parametrize(
+    ("evaluate", "threshold_key"),
+    BOUNDARY_SIGNALS,
+    ids=[key for _, key in BOUNDARY_SIGNALS],
+)
+def test_a_value_sitting_exactly_on_the_threshold_triggers(
+    evaluate: SignalEvaluator, threshold_key: str
+) -> None:
+    """The published threshold is the lowest triggering value.
+
+    Every other fixture clears its threshold comfortably, so `>=` and `>`
+    behave identically there and the boundary can move unnoticed.
+    """
+    measured = evaluate(_boundary_inputs({**BASE_THRESHOLDS, threshold_key: -100.0}))
+    assert measured.available, measured.reason
+    assert measured.raw_value is not None
+
+    at_threshold = evaluate(
+        _boundary_inputs({**BASE_THRESHOLDS, threshold_key: measured.raw_value})
+    )
+
+    assert at_threshold.threshold == measured.raw_value
+    assert at_threshold.triggered

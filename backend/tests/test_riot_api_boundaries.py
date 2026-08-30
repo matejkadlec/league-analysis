@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import httpx
 import pytest
 from pydantic import ValidationError as PydanticValidationError
+from structlog.testing import capture_logs
 
 from app.core.enums import Tier
 from app.core.riot_api.client import RiotAPIClient
@@ -411,6 +412,64 @@ async def test_elapsed_windows_are_dropped_rather_than_carried() -> None:
 
     assert slept == []
     assert limiter._app_windows == {}
+
+
+async def test_a_saturated_method_window_waits_while_the_app_window_is_idle() -> None:
+    """The method half of every response's headers must reach the windows.
+
+    Nothing else in this suite reads `_method_windows`, so both that parse and
+    the wait it feeds could be deleted with the gate green -- and the method
+    limit is the one a single hot route reaches first.
+    """
+    limiter = RateLimiter()
+    headers = httpx.Headers(
+        {
+            "X-App-Rate-Limit": "100:1",
+            "X-App-Rate-Limit-Count": "1:1",
+            "X-Method-Rate-Limit": "5:10",
+            "X-Method-Rate-Limit-Count": "5:10",
+        }
+    )
+
+    with patch(RATE_LIMITER_CLOCK, return_value=100.0):
+        limiter.update_limits(headers, MATCH_DETAIL_ENDPOINT)
+
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    with (
+        patch(RATE_LIMITER_CLOCK, return_value=100.4),
+        patch(RATE_LIMITER_SLEEP, side_effect=record),
+    ):
+        await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+
+    # 9.6 is what remains of the method window's 10s interval. The app window
+    # has 99 of 100 requests spare, so nothing but the method limit can wait.
+    assert slept == [pytest.approx(9.6)]
+
+
+def test_a_header_parse_that_raises_is_swallowed_and_reported() -> None:
+    """The `except` exists so an advisory parse cannot fail a live request.
+
+    Reaching it needs a parser that actually raises: every malformed header
+    tried here returns no window instead, so without this the whole handler
+    could be deleted and the suite would not notice.
+    """
+    limiter = RateLimiter()
+
+    def explode(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("unreadable window")
+
+    with (
+        patch.object(RateLimiter, "_process_rate_limit_pair", explode),
+        capture_logs() as logs,
+    ):
+        limiter.update_limits(_app_window_headers("20:1", "1:1"), MATCH_DETAIL_ENDPOINT)
+
+    assert limiter._app_windows == {}
+    assert [log["error_type"] for log in logs] == ["ValueError"]
 
 
 def test_riot_id_lookups_share_one_method_window() -> None:
