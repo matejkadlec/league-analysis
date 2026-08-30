@@ -51,13 +51,13 @@ export default defineConfig({
         "next-env.d.ts",
       ],
       // Floors, not targets: each sits ~2 points under the last measurement
-      // (2026-08-29: 91.70/86.15/88.70/91.79). Ratchet every batch or they
+      // (2026-08-30: 92.19/86.80/88.80/92.29). Ratchet every batch or they
       // drift -- these were 11 points low, so 408 statements were deletable.
       thresholds: {
-        statements: 89,
-        branches: 84,
-        functions: 86,
-        lines: 89,
+        statements: 90,
+        branches: 85,
+        functions: 87,
+        lines: 90,
       },
     },
   },

@@ -250,8 +250,9 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
-# A floor, not a target. Measured 2026-08-29: 78.28% with branch coverage on
-# (8,623 statements, 1,620 branches). The branch figure is the honest one,
+# A floor, not a target. Measured 2026-08-30: 78.53% with branch coverage on
+# (8,624 statements, 1,620 branches), and 78.30% on a host with no PostgreSQL,
+# where the integration tier skips. The branch figure is the honest one,
 # because a half-tested `if` is half-tested. The floor sits ~2 points under the
 # measurement so ordinary fluctuations do not flip the gate; ratchet it on the
 # way out of every batch, or it stops catching anything. It is armed by the
