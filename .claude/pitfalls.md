@@ -253,20 +253,3 @@ row failed exactly six specs this way and passed on a bare re-run. Wait for the
 content instead: `gotoPopulatedRoute` gates on the route's `ready` anchor and
 then on zero `[data-slot="skeleton"]`, which is what "this page has finished
 loading" actually means here.
-
-## A root config file importing an ignored directory breaks only the image build
-
-`npm run build` failing on `Cannot find module './tests/support/msw-server'`
-from `vitest.setup.ts`, with the full local gate green. `frontend/.dockerignore`
-excludes `tests` and `e2e`, but `tsconfig.json` includes `**/*.ts` and
-`**/*.mts`, so `next build` type-checks every harness entrypoint the image
-still copies — against a context the imported directory was filtered out of.
-`./test.sh` builds in the full repository, where the import resolves, so the
-only thing that sees it is the `Build and verify isolated production
-containers` CI step: about 16 minutes in, on a pull request, never locally.
-The fix that holds is keeping each entrypoint ignored alongside the directory
-it drives — ignoring `tests` but not `vitest.setup.ts`, or `.oxlint-plugins`
-but not `oxlint.config.mts`, reproduces it exactly. Check `.dockerignore`
-whenever a root-level config file grows an import. A check that no unignored
-file imports an ignored path would replace this entry; it is logged in
-`.claude/IMPROVEMENTS.md`.

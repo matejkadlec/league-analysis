@@ -27,7 +27,12 @@ so it is safe to call from the main checkout or any worktree.
   builds both production images, runs the Compose migration service,
   health-checks the stack, and performs a real dump and restore. It is
   deliberately outside `./test.sh`, which must stay fast enough to run during
-  implementation.
+  implementation. One failure class does not need the build to find, though:
+  an import reaching a path `.dockerignore` removes fails `next build` inside
+  the image and nothing anywhere else, because `./test.sh` builds in the full
+  repository where every import resolves. `scripts/check-docker-context-imports.sh`
+  decides that from the two files alone, in under a second, so the answer
+  arrives at commit time rather than sixteen CI minutes later.
 - **The Playwright suite is inside the gate, and runs against the production
   build.** It used to sit outside because provisioning a pinned browser was not
   deterministic; `gate.Dockerfile` now installs the Chromium matching the
