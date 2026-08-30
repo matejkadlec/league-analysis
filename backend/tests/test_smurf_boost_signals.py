@@ -363,3 +363,43 @@ def test_b4_triggers_with_the_baseline_at_its_floor_and_the_drop_at_its_threshol
 
     assert result.raw_value == 0.5
     assert result.triggered
+
+
+def _b4_sustained_inputs(newer_wins: int) -> SignalInputs:
+    """A 40-game window whose older half sits exactly at the sustained cut.
+
+    Twenty games a half is the smallest window where a half rate of 0.95 is
+    reachable at all, and 0.95 is exactly `baseline_rate - 0.05` when the
+    baseline is a clean sweep.
+    """
+    newer = [_match(index, win=index < newer_wins) for index in range(20)]
+    older = [_match(20 + index, win=index < 19) for index in range(20)]
+    return _inputs(
+        recent=newer + older,
+        baseline=[_match(60 + index, win=True) for index in range(10)],
+        composite_recent=[1.0] * 40,
+        thresholds={
+            **BASE_THRESHOLDS,
+            "b4_high_rate_floor": 0.9,
+            # Low enough that both cases below clear it, so `sustained` is the
+            # only thing that differs between them.
+            "b4_drop_threshold": 0.02,
+        },
+    )
+
+
+def test_b4_counts_a_half_sitting_exactly_on_the_sustained_cut() -> None:
+    """`older_rate <= baseline - 0.05` includes its boundary.
+
+    A half exactly at the cut is the shallowest decline B4 is meant to call
+    sustained, and it is the only case that separates `<=` from `<`.
+    """
+    assert evaluate_b4(_b4_sustained_inputs(19)).triggered
+
+
+def test_b4_ignores_a_half_that_did_not_fall_at_all() -> None:
+    """One clean half is not a sustained decline, however far the other fell."""
+    result = evaluate_b4(_b4_sustained_inputs(20))
+
+    assert result.available, result.reason
+    assert not result.triggered

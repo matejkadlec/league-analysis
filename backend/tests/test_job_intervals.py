@@ -47,6 +47,22 @@ def test_the_three_schedule_formats_the_scheduler_understands() -> None:
         )
 
 
+def test_a_schedule_of_zero_is_floored_to_one_second() -> None:
+    """`max(..., 1)` is what stops a stored zero becoming a hot loop.
+
+    The override path rejects a non-positive interval, but `schedule` is
+    parsed rather than validated, so zero arrives well-formed and only the
+    floor stands between it and a scheduler firing continuously.
+    """
+    for schedule in ("0", "0s", "interval:0"):
+        assert (
+            resolve_interval_seconds(
+                name="Player Updater", schedule=schedule, config_json=None
+            )
+            == 1
+        )
+
+
 def test_a_row_with_neither_source_raises() -> None:
     for schedule in ("", None, "0 */2 * * *"):
         with pytest.raises(JobIntervalError):

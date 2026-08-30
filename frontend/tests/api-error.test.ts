@@ -168,6 +168,34 @@ describe("API error presentation", () => {
     });
   });
 
+  it("keeps a backend message of exactly the length limit, and drops one over", () => {
+    // 240 is the limit, so only these two lengths separate `>` from `>=`.
+    // Over it the viewer gets the generic sentence instead of a wall of text.
+    const atLimit = "a".repeat(240);
+    const overLimit = "a".repeat(241);
+
+    expect(normalizeApiError(axiosError(400, { detail: atLimit })).message).toBe(
+      atLimit,
+    );
+    expect(
+      normalizeApiError(axiosError(400, { detail: overLimit })).message,
+    ).not.toContain("aaa");
+  });
+
+  it("reads a connect timeout as a timeout, not as an unknown failure", () => {
+    // Axios reports a read timeout as ECONNABORTED and a connect timeout as
+    // ETIMEDOUT. This error's message says nothing about time, so the branch
+    // is the only thing that can classify it.
+    const connectTimeout = normalizeApiError(
+      axiosError(undefined, undefined, "ETIMEDOUT"),
+    );
+
+    expect(connectTimeout).toMatchObject({
+      kind: "timeout",
+      code: "REQUEST_TIMEOUT",
+    });
+  });
+
   it("uses a feature-specific fallback for unexpected and service failures", () => {
     const service = normalizeApiError(
       axiosError(500, { detail: "Internal server error" }),
