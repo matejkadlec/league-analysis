@@ -7,6 +7,15 @@ issue, newest last:
 
 ## Open
 
+- 2026-08-30 frontend/vitest.config.mts: the frontend coverage total is not
+  reproducible in the gate container. Two runs over identical code gave 92.30
+  and 92.19, while the host gave 92.19 on seven runs including three explicit
+  `--sequence.seed` values, so the shuffle is ruled out and the host is
+  deterministic. Cause unidentified; a timing-sensitive branch running only
+  under container load is the obvious suspect but is unproven. Until it is
+  understood the coverage floors must keep their ~2 point buffer, which is why
+  tightening them onto the measurement was backed out in #253.
+
 ## Findings that did not survive measurement
 
 The findings worth not rediscovering — the ones that were wrong, or right

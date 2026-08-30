@@ -225,6 +225,72 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(
     assert scheduler_module.get_scheduler() is None
 
 
+def test_a_job_that_has_never_run_is_overdue_from_the_start() -> None:
+    """No execution row means catch-up, not "on schedule".
+
+    A configuration activated between restarts has nothing to measure an
+    interval from, and reading that as up to date leaves it waiting for a
+    tick that only fires after its first run.
+    """
+    started = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+
+    assert scheduler_module._overdue_reason(None, started, 900) == "never run before"
+
+
+def test_a_job_is_overdue_only_once_more_than_its_interval_has_passed() -> None:
+    """The comparison is strict, so a job exactly on its interval waits."""
+    started = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+    last_execution = SimpleNamespace(started_at=started)
+
+    exactly_due = scheduler_module._overdue_reason(
+        cast(JobExecution, last_execution), started + timedelta(seconds=900), 900
+    )
+    one_second_late = scheduler_module._overdue_reason(
+        cast(JobExecution, last_execution), started + timedelta(seconds=901), 900
+    )
+
+    assert exactly_due is None
+    assert one_second_late is not None
+
+
+async def test_deactivating_a_job_takes_it_out_of_the_scheduler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An inactive configuration is removed, not left running on its old tick.
+
+    Nothing else stops a job switched off in the UI: the scheduler holds its
+    own trigger, so a sync that ignores `is_active` keeps firing it.
+    """
+
+    class ResultDouble:
+        def scalar_one_or_none(self) -> object:
+            return SimpleNamespace(id=7, is_active=False)
+
+    class SessionDouble:
+        async def execute(self, _statement: object) -> ResultDouble:
+            return ResultDouble()
+
+    @asynccontextmanager
+    async def get_session() -> AsyncGenerator[SessionDouble]:
+        yield SessionDouble()
+
+    removed: list[str] = []
+
+    class SchedulerDouble:
+        def remove_job(self, job_id: str) -> None:
+            removed.append(job_id)
+
+        def add_job(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("an inactive job was rescheduled")
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
+    monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())
+
+    await scheduler_module.sync_job_configuration(7)
+
+    assert removed == ["job_7"]
+
+
 async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
