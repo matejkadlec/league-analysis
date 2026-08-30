@@ -7,16 +7,6 @@ issue, newest last:
 
 ## Open
 
-- 2026-08-29 backend/app: `insert(...).values(col=None)` on a JSONB column
-  stores JSON `null`, not SQL NULL — SQLAlchemy's `JSON.none_as_null` defaults
-  to False and nothing here sets it. Python reads both back as `None`, which
-  is why no unit test ever saw it, but `MatchmakingAnalysis.results.isnot(None)`
-  in `matchmaking_analysis/service.py:211` is therefore true for a row written
-  with `results=None`, and revision 0022's backfilled `summary_stats` rows are
-  SQL NULL while every row written since is not. Today the `status ==
-  "completed"` half of that WHERE clause hides it; pinned as-is by
-  `tests/integration/test_jsonb_semantics.py`.
-
 - 2026-08-29 frontend/.dockerignore: nothing local catches a harness entrypoint
   that survives into the production image while the directory it drives is
   ignored. `./test.sh` builds in the full repository, where every import
@@ -24,20 +14,6 @@ issue, newest last:
   builds from a filtered context, so the feedback is ~16 minutes away and only
   on a pull request. A check that no unignored file imports an ignored path
   would catch it in seconds.
-
-- 2026-08-30 frontend/features/matchmaking/matchmaking-analysis-state.ts: the
-  380-line reducer scores 45.90% under Stryker on 77% line coverage, the worst
-  non-trivial file measured. No test imports `analysisUiReducer`,
-  `resolveDisplayPhase` or `isSameAnalysisInstance` directly -- they are reached
-  only through components, so a survivor like `isSameAnalysisInstance` returning
-  `true` for two absent analysis ids changes nothing any assertion reads.
-  Detail in `.claude/stryker-trial-2026-08-29.md` §2.5.
-
-- 2026-08-30 backend/app/features/smurf_boost_detection/signals.py: A4, B1, B3
-  and B4 gate on a second threshold or ceiling, so the boundary test added for
-  A1/A2/A3/B2 does not cover them and `>=` is still free to become `>` on those
-  four. Named in the table beside `BOUNDARY_SIGNALS` in
-  `tests/test_smurf_boost_signals.py`.
 
 ## Findings that did not survive measurement
 

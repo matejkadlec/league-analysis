@@ -19,7 +19,9 @@ from app.features.smurf_boost_detection.signals import (
     evaluate_a2,
     evaluate_a3,
     evaluate_a4,
+    evaluate_b1,
     evaluate_b2,
+    evaluate_b3,
     evaluate_b4,
 )
 
@@ -185,8 +187,9 @@ BASE_THRESHOLDS = {
     key: float(value) for key, value in PRESETS[PRESET_CONSERVATIVE].items()
 }
 
-# Every one of these compares `value >= threshold`. The compound signals (A4,
-# B1, B3, B4) gate on a second gate or ceiling and are not covered here.
+# Every one of these compares `value >= threshold` against a single key. The
+# compound signals gate on a second threshold too, so each has its own
+# boundary test below rather than a row here.
 SignalEvaluator = Callable[[SignalInputs], SignalResult]
 
 BOUNDARY_SIGNALS: tuple[tuple[SignalEvaluator, str], ...] = (
@@ -231,3 +234,132 @@ def test_a_value_sitting_exactly_on_the_threshold_triggers(
 
     assert at_threshold.threshold == measured.raw_value
     assert at_threshold.triggered
+
+
+def test_a4_triggers_on_an_account_sitting_exactly_on_the_level_gate() -> None:
+    """Both of A4's conditions include their boundary.
+
+    An account exactly at the gate is the one the gate was chosen for, and the
+    threshold is the figure the preset publishes.
+    """
+    result = evaluate_a4(
+        _inputs(
+            recent=[_match(index, win=True) for index in range(4)],
+            baseline=[_match(20 + index, win=False) for index in range(4)],
+            composite_recent=[1.0, 2.0],
+            summoner_level=45,
+            thresholds={
+                **BASE_THRESHOLDS,
+                "a4_summoner_level_gate": 45.0,
+                "a4_performance_threshold": 1.5,
+            },
+        )
+    )
+
+    assert result.raw_value == 1.5
+    assert result.triggered
+
+
+def test_b1_triggers_with_the_delta_at_its_floor_and_the_drift_at_its_ceiling() -> None:
+    """B1 pairs an inclusive floor with an inclusive ceiling.
+
+    Performance drift exactly at the ceiling is still flat enough to count, so
+    a strict comparison on either side drops the case the signal describes.
+    """
+    result = evaluate_b1(
+        _inputs(
+            recent=[_match(index, win=True) for index in range(10)],
+            baseline=[_match(20 + index, win=False) for index in range(10)],
+            composite_recent=[0.5] * 10,
+            composite_baseline=[0.0] * 10,
+            thresholds={
+                **BASE_THRESHOLDS,
+                "b1_win_rate_delta_threshold": 1.0,
+                "b1_composite_flat_ceiling": 0.5,
+            },
+        )
+    )
+
+    assert result.raw_value == 1.0
+    assert result.triggered
+
+
+def _b3_inputs(thresholds: dict[str, float]) -> SignalInputs:
+    """A recent window split exactly on both cuts, half high and half low."""
+    return _inputs(
+        recent=[_match(index, win=index % 2 == 0) for index in range(12)],
+        baseline=[_match(20 + index, win=False) for index in range(12)],
+        composite_recent=[1.0] * 6 + [-0.5] * 6,
+        composite_baseline=[float(index) for index in range(12)],
+        thresholds=thresholds,
+    )
+
+
+def test_b3_counts_games_sitting_exactly_on_the_high_and_low_cuts() -> None:
+    """The tail fractions include their boundary, and the cuts include theirs.
+
+    Every game here sits exactly on a cut, so a strict comparison anywhere in
+    the pair counts no tails at all and the signal can never fire.
+    """
+    result = evaluate_b3(
+        _b3_inputs(
+            {**BASE_THRESHOLDS, "b3_tail_fraction": 0.5, "b3_bimodality_threshold": 0.0}
+        )
+    )
+
+    assert result.available, result.reason
+    assert result.triggered
+
+
+def test_b3_does_not_fire_on_a_coefficient_only_equal_to_its_threshold() -> None:
+    """B3's coefficient comparison is strict, unlike every other threshold.
+
+    Pinned because the asymmetry looks like an oversight: the tails include
+    their boundary and this one does not.
+    """
+    measured = evaluate_b3(
+        _b3_inputs(
+            {**BASE_THRESHOLDS, "b3_tail_fraction": 0.5, "b3_bimodality_threshold": 0.0}
+        )
+    )
+    assert measured.raw_value is not None
+
+    at_threshold = evaluate_b3(
+        _b3_inputs(
+            {
+                **BASE_THRESHOLDS,
+                "b3_tail_fraction": 0.5,
+                "b3_bimodality_threshold": measured.raw_value,
+            }
+        )
+    )
+
+    assert not at_threshold.triggered
+
+
+def test_b4_triggers_with_the_baseline_at_its_floor_and_the_drop_at_its_threshold() -> (
+    None
+):
+    """B4's floor and drop are both inclusive, and the halves must both fall.
+
+    The recent window is split so each half sits below the baseline, which is
+    what separates a sustained decline from one bad stretch.
+    """
+    recent = [_match(index, win=index < 3) for index in range(5)]
+    recent += [_match(5 + index, win=index < 2) for index in range(5)]
+
+    result = evaluate_b4(
+        _inputs(
+            recent=recent,
+            baseline=[_match(20 + index, win=True) for index in range(10)],
+            composite_recent=[1.0] * 10,
+            thresholds={
+                **BASE_THRESHOLDS,
+                "b4_high_rate_floor": 1.0,
+                "b4_drop_threshold": 0.5,
+            },
+        )
+    )
+
+    assert result.raw_value == 0.5
+    assert result.triggered

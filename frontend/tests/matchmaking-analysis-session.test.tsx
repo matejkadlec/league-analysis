@@ -45,6 +45,22 @@ import { renderWithQueryClient } from "./support/render-support";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 
+// A run stored as complete but carrying no results is rewritten to `failed`
+// by the schema, so a fixture meant to be completed has to carry a payload.
+const RESULTS = {
+  team_avg_winrate: 0.5,
+  enemy_avg_winrate: 0.5,
+  matches_analyzed: 10,
+};
+
+function completedRun(): MatchmakingAnalysisResponse {
+  return analysis("completed", {
+    progress: 100,
+    results: RESULTS,
+    completed_at: createdAt,
+  });
+}
+
 // Parsed through the real schema so a fixture the API could never send fails
 // here rather than agreeing with a mock's stale shape.
 function analysis(
@@ -170,7 +186,7 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("offers a fresh run once the latest one is finished", async () => {
-    renderSession(analysis("completed", { progress: 100 }));
+    renderSession(completedRun());
 
     expect(
       await screen.findByRole("button", { name: "Run New Analysis" }),
@@ -182,11 +198,11 @@ describe("the matchmaking analysis session", () => {
     expect(getMatchmakingAnalysisStatus).not.toHaveBeenCalled();
   });
 
-  it("stops polling once the watched run reports a terminal status", async () => {
-    // The poll is what keeps a finished run costing requests forever. Nothing
-    // else here outlives one status answer, so only waiting past the 3s
-    // interval can tell a stopped watch from a running one.
-    answerStatusWith(analysis("completed"));
+  it("stops polling once the watched run ends badly", async () => {
+    // A run the backend failed keeps its watch id, so `refetchInterval` is the
+    // only thing that can end the poll -- a completed run stops anyway when
+    // the query goes disabled. Only waiting past the 3s interval sees it.
+    answerStatusWith(analysis("failed", { error_code: "no_matches_analyzed" }));
 
     renderSession(analysis("in_progress"));
 
@@ -194,6 +210,9 @@ describe("the matchmaking analysis session", () => {
     expect(
       await screen.findByRole("button", { name: "Run New Analysis" }),
     ).toBeTruthy();
+    await waitFor(() => {
+      expect(getMatchmakingAnalysisStatus).toHaveBeenCalled();
+    });
     const callsOnceFinished = getMatchmakingAnalysisStatus.mock.calls.length;
     await new Promise((resolve) => setTimeout(resolve, 3_500));
 
