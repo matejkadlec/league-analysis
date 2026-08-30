@@ -19,11 +19,17 @@ from sqlalchemy import (
 from sqlalchemy import (
     text as sa_text,
 )
-from sqlalchemy.dialects.postgresql import ENUM, JSONB
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from app.core.models import Base, created_at_column, id_column, updated_at_column
+from app.core.models import (
+    ABSENT_AS_NULL_JSONB,
+    Base,
+    created_at_column,
+    id_column,
+    updated_at_column,
+)
 from app.core.runs import values_in_sql
 from app.features.auth.users.user_reference import user_id_column
 
@@ -107,7 +113,7 @@ class JobConfiguration(Base):
     )
 
     config_json: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Job-specific configuration parameters in JSON format",
     )
@@ -202,14 +208,14 @@ class JobExecution(Base):
 
     # Detailed execution log
     execution_log: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Detailed execution log and metrics in JSON format",
     )
 
     # Detailed logs captured during execution
     detailed_logs: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="All logs captured during job execution (INFO, WARNING, ERROR, etc.)",
     )

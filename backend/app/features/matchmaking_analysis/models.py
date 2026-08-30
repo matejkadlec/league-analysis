@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import LobbyTier
-from app.core.models import Base, created_at_column
+from app.core.models import ABSENT_AS_NULL_JSONB, Base, created_at_column
 from app.core.runs import values_in_sql
 from app.features.auth.users.user_reference import user_id_column
 from app.features.matchmaking_analysis.ranks import PlayerRankJSON
@@ -110,7 +110,7 @@ class MatchmakingAnalysis(Base):
 
     # Analysis results - stored as JSON for flexibility
     results: Mapped[MatchmakingAnalysisResultsJSON | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Analysis results as JSON (team/enemy winrates)",
     )
@@ -150,7 +150,7 @@ class MatchmakingAnalysis(Base):
 
     # Progress tracking - which PUUIDs have been analyzed
     puuid_progress: Mapped[dict[str, bool] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         default=dict,
         comment="Tracks analyzed PUUIDs: {puuid: true/false}",

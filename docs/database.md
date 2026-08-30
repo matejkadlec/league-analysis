@@ -112,6 +112,17 @@ because these values drive staleness decisions.
   `Division` / `LeagueQueueType`, and `match_participants.team_id` /
   `team_position` against `TeamId` / `TeamPosition` (unknown stored lanes were
   folded to NULL first).
+- Absence in a nullable JSONB column is SQL `NULL`, never the JSON document
+  `null`. `JSON.none_as_null` defaults to off, so a `None` written through
+  SQLAlchemy used to store `'null'::jsonb`: Python reads both back as `None`,
+  but `IS NULL` matches only one of them, and
+  `MatchmakingAnalysis.results.isnot(None)` — the "finished and kept results"
+  half of the history filter — was true for a run that kept none. All nine
+  nullable JSONB columns are declared with `ABSENT_AS_NULL_JSONB`
+  (`backend/app/core/models.py`), and revision `20260829_0034` rewrote the rows
+  already stored the other way: 22 in production, all in
+  `jobs.job_executions.detailed_logs`, the one column that held both spellings
+  of absence at once.
 - `core.riot_api_keys` holds at most one row (revision `20260820_0019`). Past
   keys are secrets with no diagnostic value, and the surviving row's `id` is
   what `riot_credential_health.db_key_id` binds to, so replacing the key
