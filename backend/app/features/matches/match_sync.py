@@ -37,6 +37,11 @@ OnMatchStored = Callable[[int, str], None] | None
 # number today but records a permanent fact rather than a movable policy.
 OLDEST_SYNCED_GAME_MAJOR = 16
 
+# Bounds every id page with Riot's own filter, so a release older than
+# `OLDEST_SYNCED_GAME_MAJOR` is never listed, fetched, paged past -- or
+# timeline-repaired. Err early: too late drops current matches in silence.
+OLDEST_SYNCED_MATCH_START_TIME = 1767225600  # 2026-01-01T00:00:00Z
+
 
 def is_current_game_version(game_version: str) -> bool:
     """Whether a Riot match belongs to a release still worth syncing.
@@ -113,6 +118,7 @@ async def fetch_queue_match_list(
             start=start,
             count=count,
             queue=context.queue_id,
+            start_time=OLDEST_SYNCED_MATCH_START_TIME,
         )
     except RIOT_FATAL_ERRORS:
         raise

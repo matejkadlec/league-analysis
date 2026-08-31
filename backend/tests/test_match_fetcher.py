@@ -1,6 +1,7 @@
 """Deterministic Match Fetcher release, rate-limit, and diagnostic tests."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast, override
 from unittest.mock import AsyncMock
@@ -75,6 +76,19 @@ class _QueueSyncClient:
                 "info": {"frameInterval": 60_000, "frames": []},
             }
         )
+
+
+class _CapturingQueueSyncClient(_QueueSyncClient):
+    """`_QueueSyncClient`, keeping what each id page actually asked Riot for."""
+
+    def __init__(self, game_version: str) -> None:
+        super().__init__(game_version)
+        self.id_page_calls: list[dict[str, object]] = []
+
+    @override
+    async def get_match_list_by_puuid(self, **kwargs: object) -> SimpleNamespace:
+        self.id_page_calls.append(kwargs)
+        return SimpleNamespace(match_ids=["EUN1_123"])
 
 
 class _NoopJob(BaseJob):
@@ -479,3 +493,31 @@ async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
 
     assert should_stop is True
     assert len(job.execution_log["errors"]) == 1
+
+
+async def test_every_id_page_is_bounded_to_a_release_window_in_epoch_seconds() -> None:
+    """Riot's own filter, so a release we would reject is never even listed.
+
+    Asserted as a date, not against the constant: read as milliseconds the same
+    integer asks for the year ~57000 and Riot answers with nothing, which the
+    client's validator does not catch -- it only rejects negatives.
+    """
+    client = _CapturingQueueSyncClient("16.15.1")
+    service = MatchService(cast(AsyncSession, _QueueSyncSession()))
+    service._reprocess_match = AsyncMock()
+
+    await service._sync_single_queue_for_player(
+        riot_client=cast(RiotAPIClient, client),
+        puuid="test-puuid",
+        region=Region.EUROPE,
+        queue_id=420,
+        on_failure=None,
+    )
+
+    start_time = client.id_page_calls[0]["start_time"]
+    assert isinstance(start_time, int)
+    floor = datetime.fromtimestamp(start_time, UTC)
+    # Patch 16.1 landed 2026-01-08 and 15.x ran to 2026-01-03. Below that
+    # window the floor filters nothing and restores the full walk; above it,
+    # current matches are dropped in silence.
+    assert datetime(2025, 12, 1, tzinfo=UTC) < floor < datetime(2026, 1, 8, tzinfo=UTC)
