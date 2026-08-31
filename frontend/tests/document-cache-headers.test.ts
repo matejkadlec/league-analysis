@@ -74,9 +74,11 @@ describe("the production image passes the commit as the deployment id", () => {
       /: "\$\{NEXT_DEPLOYMENT_ID:\?must be passed as a build arg\}"/,
     );
     // The runtime stage re-declares the ARG; a builder-only ARG dies at FROM.
-    const runtimeStage = dockerfile.slice(
-      dockerfile.indexOf("FROM node:26.7.0-bookworm-slim AS runtime"),
-    );
+    // Found by stage name, not by base image: a pinned Node version here fails
+    // on every bump, and -1 from indexOf silently sliced the whole file away.
+    const runtimeStageStart = dockerfile.search(/^FROM \S+ AS runtime$/m);
+    expect(runtimeStageStart).toBeGreaterThan(-1);
+    const runtimeStage = dockerfile.slice(runtimeStageStart);
     expect(runtimeStage).toMatch(/ARG NEXT_DEPLOYMENT_ID\b/);
     expect(runtimeStage).toMatch(/NEXT_DEPLOYMENT_ID=\$NEXT_DEPLOYMENT_ID/);
   });
