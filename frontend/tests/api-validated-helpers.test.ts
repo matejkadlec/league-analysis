@@ -17,9 +17,7 @@ const { notifyRiotCredentialHealthUpdated, refreshAccessToken } = vi.hoisted(
         typeof import("@/lib/core/riot/riot-credential-health-events").notifyRiotCredentialHealthUpdated
       >(),
     refreshAccessToken:
-      vi.fn<
-        typeof import("@/lib/session/token-manager").refreshAccessToken
-      >(),
+      vi.fn<typeof import("@/lib/session/token-manager").refreshAccessToken>(),
   }),
 );
 
@@ -319,5 +317,38 @@ describe("the response interceptor", () => {
       error: { code: "RIOT_API_KEY_INVALID", status: 503, kind: "service" },
     });
     expect(notifyRiotCredentialHealthUpdated).toHaveBeenCalledTimes(1);
+  });
+  it("reports an invalid Riot key sent as a bare string detail", async () => {
+    // FastAPI raises this one both ways: `detail` is the structured object on
+    // some paths and the bare code string on others. Watching only the object
+    // shape leaves half the endpoints reporting healthy credentials.
+    reply = { status: 503, data: { detail: "RIOT_API_KEY_INVALID" } };
+
+    const result = await validatedGet(Schema, "/players/x/league");
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "RIOT_API_KEY_INVALID", kind: "service" },
+    });
+    expect(notifyRiotCredentialHealthUpdated).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the session cookie and the request deadline on every verb", async () => {
+    // Read off the adapter, not the module: `validatedRequest` builds a fresh
+    // config per call, so a spread that replaced the instance defaults instead
+    // of merging them would drop both and no other test would notice.
+    await validatedGet(Schema, "/thing");
+    await validatedPost(Schema, "/thing", { name: "x" });
+    await validatedDelete(Schema, "/thing");
+
+    expect(seen).toHaveLength(3);
+    expect(seen.map((config) => config.withCredentials)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // Zero means "no deadline" to axios, so a server that accepts the
+    // connection and never answers would hold the query unsettled forever.
+    expect(seen.map((config) => config.timeout)).toEqual([30000, 30000, 30000]);
   });
 });
