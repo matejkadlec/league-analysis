@@ -91,6 +91,23 @@ parser rewrite the entry implied -- but two of the three sites then had to be
 rewritten as plain object literals before their names could be read at all, so
 the extractor was the smaller half of the work.
 
+**The font preload follow-up (2026-08-31, measured and dropped).** #268 traded
+`next/font`'s preload link and its metric-adjusted fallback for a build that no
+longer needs Google. The obvious repair was five `next/font/local` calls, one
+per unicode subset — `declarations` applies to every face in a call, so one
+subset per call keeps each `unicode-range` correct. Measured against the built
+CSS before writing it: a next/font `variable` resolves to `"leagueFont",
+"leagueFont Fallback"`, so the adjusted fallback lives *inside* the variable.
+Stacking five of them puts `montserratLatin Fallback` — Arial at
+`size-adjust: 131.24%` — ahead of `montserratLatinExt`, and é, ł and ā render
+in Arial while every test still passes. Suppressing that with
+`adjustFontFallback: false` on all five discards the fallback metrics the
+change existed to restore, so the plan can buy back the preload or the metrics
+but not both. What stays unfixed is roughly one round trip of extra FOUT on a
+stylesheet Next already preloads, with text visible throughout under
+`font-display: swap`. Revisit only if `next/font/local` gains per-`src`
+`unicode-range`.
+
 ## Standing lesson
 
 Measure before believing an entry in this file, including one you wrote
