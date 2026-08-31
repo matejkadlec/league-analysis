@@ -7,16 +7,7 @@ issue, newest last:
 
 ## Open
 
-- 2026-08-30 frontend/vitest.config.mts: the frontend line-coverage total is
-  not reproducible in the gate container. Five runs have now produced three
-  distinct values — 92.19, 92.22 and 92.30 — while the host gave 92.19 on seven
-  runs including three explicit `--sequence.seed` values, so the shuffle is
-  ruled out and the host is deterministic. Do not restate the tally here; it
-  has gone stale twice. The finding is the spread, roughly 0.1 points, and that
-  only the container shows it. Cause unidentified; a timing-sensitive branch
-  running only under container load is the obvious suspect but is unproven.
-  Until it is understood the coverage floors must keep their ~2 point buffer,
-  which is why tightening them onto the measurement was backed out in #253.
+Nothing open.
 
 ## Findings that did not survive measurement
 
@@ -77,6 +68,20 @@ written with no `jobs.job_executions` row covering the instant, but 2,776 of
 production's 3,778 matches sit outside every execution window, and
 `MatchmakingAnalysisService` calls `upsert_match` on the request path. Match
 writes outside a recorded execution are the normal case here.
+
+**The container-only coverage variance (2026-08-30, was a column mix-up).**
+The entry claimed the frontend line-coverage total was irreproducible in the
+gate container — three distinct values against a deterministic host — and #253
+backed a floor tightening out because of it. Measured: eleven runs agree to the
+byte. Four seeds on the host, four seeded and three unseeded in the container,
+and once the `/workspace` prefix is normalised the container's per-file summary
+equals the host's exactly, `TZ=UTC` against BST and all. The spread was the
+*statements* column of one run read against the *lines* column of another; those
+two columns differ by 0.10 in the 2026-08-30 measurement and by 0.10 today,
+which is exactly why it read as a constant ~0.1 fluctuation. Nothing was
+timing-sensitive and nothing was container-specific. The floors now sit just
+under the measurement, and `vitest.config.mts` records it with labelled
+counters so the next reader cannot compare two different metrics by position.
 
 **The body-verb query bag (2026-08-28, undercounted).** The entry named two
 call sites passing a query past a body; there were three, and the third
