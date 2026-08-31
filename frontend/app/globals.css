@@ -35,6 +35,11 @@
   --color-input: oklch(91.4% 0.009 256.26);
   --color-ring: oklch(53.3% 0.237 263.53);
   --radius: 0.5rem;
+
+  /* Named here rather than injected by `next/font`: the @font-face rules come
+     from @fontsource-variable/montserrat, imported in app/layout.tsx. The
+     fallbacks carry text while the woff2 loads under `font-display: swap`. */
+  --font-sans: "Montserrat Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Dark mode color overrides */
