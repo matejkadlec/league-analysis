@@ -5,7 +5,7 @@
 #
 # Node comes from the base image, so .nvmrc is not consulted here. Keep the two
 # in step when bumping Node.
-FROM node:26.7.0-bookworm
+FROM node:26.8.1-bookworm
 
 # The base image bundles npm 11.19.0, which frontend/package.json rejects
 # through devEngines. Install the pinned npm rather than relaxing that check.
