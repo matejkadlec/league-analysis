@@ -207,7 +207,12 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         ranked_match_ids: set[str],
         league_before: PlayerLeague | None,
     ) -> tuple[bool, int]:
-        """Close one Match Fetcher observation window and commit its evidence."""
+        """Close one Match Fetcher observation window and commit its evidence.
+
+        Runs on every tick, including one that found no ranked match: an idle
+        refresh is what isolates LP decay into a snapshot of its own, so the
+        next ranked match is not charged for it.
+        """
         league_updated = await player_service.update_player_league(player, riot_client)
         if league_updated:
             await db.flush()
