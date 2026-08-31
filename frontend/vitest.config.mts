@@ -50,14 +50,17 @@ export default defineConfig({
         "**/*.config.*",
         "next-env.d.ts",
       ],
-      // Floors, ~2 points under the measurement (2026-08-30: 92.19/86.80/
-      // 88.80/92.29). Keep the buffer: two gate runs over identical code gave
-      // 92.30 and 92.19, so this number moves on its own. Ratchet each batch.
+      // Measured 2026-08-31: statements 92.22, branches 86.83, functions
+      // 88.80, lines 92.32. Labelled deliberately -- reading an unlabelled
+      // `92.19/86.80/88.80/92.29` by position is what invented the drift.
       thresholds: {
-        statements: 90,
-        branches: 85,
-        functions: 87,
-        lines: 90,
+        // Reproducible to the byte: 11 runs -- 4 seeds on the host, 4 seeded
+        // and 3 unseeded in the gate container -- agreed per file. Nothing
+        // moves these but a code change, so they sit just under. Ratchet them.
+        statements: 92,
+        branches: 86,
+        functions: 88,
+        lines: 92,
       },
     },
   },
