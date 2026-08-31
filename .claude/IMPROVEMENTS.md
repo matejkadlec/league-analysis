@@ -7,16 +7,7 @@ issue, newest last:
 
 ## Open
 
-- 2026-08-31 frontend/app/layout.tsx: `next/font/google` fetches Montserrat
-  from Google at build time and Turbopack has no offline fallback, so losing
-  that one request fails the entire production build. It failed #266's first
-  gate run with `Can't resolve
-  '@vercel/turbopack-next/internal/font/google/font'` and passed unchanged on
-  re-run, with the same build succeeding locally in the gate container
-  throughout — so every build and every deploy carries a silent dependency on
-  fonts.googleapis.com being reachable from the Pi at that moment. The same
-  file already imports `next/font/local`; self-hosting the woff2 would take the
-  network out of the build path entirely.
+Nothing open.
 
 ## Findings that did not survive measurement
 
