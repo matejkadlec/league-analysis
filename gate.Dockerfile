@@ -3,6 +3,14 @@
 # step by step on a runner. It is never deployed; production images are
 # backend/Dockerfile and frontend/Dockerfile.
 #
+# Every pinned tool below is named by a `FROM`, never by `COPY --from=<image>`.
+# Dependabot reads `FROM` lines only: this file's node pin has been bumped for
+# us, while the four it reached solely through a COPY never once were.
+FROM koalaman/shellcheck:v0.11.0 AS shellcheck
+FROM rhysd/actionlint:1.7.12 AS actionlint
+FROM zricethezav/gitleaks:v8.30.1 AS gitleaks
+FROM ghcr.io/astral-sh/uv:0.12.7 AS uv
+
 # Node comes from the base image, so .nvmrc is not consulted here. Keep the two
 # in step when bumping Node.
 FROM node:26.8.1-bookworm
@@ -32,12 +40,14 @@ RUN set -eux; \
 
 # Pinned linters, taken from their own release images rather than downloaded
 # and checksummed by hand.
-COPY --from=koalaman/shellcheck:v0.11.0 /bin/shellcheck /usr/local/bin/shellcheck
-COPY --from=rhysd/actionlint:1.7.12 /usr/local/bin/actionlint /usr/local/bin/actionlint
-COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
+COPY --from=shellcheck /bin/shellcheck /usr/local/bin/shellcheck
+COPY --from=actionlint /usr/local/bin/actionlint /usr/local/bin/actionlint
+COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 
-# uv, and the Python it resolves from .python-version.
-COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
+# uv, and the Python it resolves from .python-version. Keep the version in step
+# with backend/Dockerfile: `.githooks/pre-commit` runs the host's uv, so three
+# copies of the same tool decide whether a hook and the gate agree.
+COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=0
