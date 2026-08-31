@@ -54,4 +54,17 @@ describe("concurrent refreshes in one tab", () => {
     // revokes every session this person has.
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+  it("sends the session cookies it exists to rotate", async () => {
+    // The refresh token lives in an HttpOnly cookie, so the browser attaches
+    // it only for `credentials: "include"`. Omitted, every refresh reaches the
+    // server bare and 401s, and each tab quietly dies at token expiry.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    expect(await refreshAccessToken()).toEqual({ outcome: "refreshed" });
+
+    const [, init] = fetchSpy.mock.calls[0] ?? [];
+    expect(init?.credentials).toBe("include");
+  });
 });

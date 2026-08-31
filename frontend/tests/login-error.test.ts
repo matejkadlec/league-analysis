@@ -11,10 +11,7 @@ describe("sign-in error mapping", () => {
   it("maps trusted authentication responses without rendering backend details", () => {
     expect(
       getLoginErrorMessage(
-        createAuthLoginError(
-          { detail: "Incorrect email or password" },
-          401,
-        ),
+        createAuthLoginError({ detail: "Incorrect email or password" }, 401),
       ),
     ).toBe("The email or password is incorrect.");
     expect(
@@ -31,12 +28,16 @@ describe("sign-in error mapping", () => {
 
   it("distinguishes network, timeout, and unexpected browser failures", () => {
     expect(
-      getLoginErrorMessage(createAuthLoginError(null, undefined, "NETWORK_ERROR")),
+      getLoginErrorMessage(
+        createAuthLoginError(null, undefined, "NETWORK_ERROR"),
+      ),
     ).toBe(
       "Sign-in is temporarily unavailable. Please check your connection and try again.",
     );
     expect(
-      getLoginErrorMessage(createAuthLoginError(null, undefined, "REQUEST_TIMEOUT")),
+      getLoginErrorMessage(
+        createAuthLoginError(null, undefined, "REQUEST_TIMEOUT"),
+      ),
     ).toBe("Sign-in is taking too long. Please try again.");
     expect(getLoginErrorMessage(new Error("Failed to fetch"))).toBe(
       "Something went wrong while signing in. Please try again.",
@@ -54,9 +55,9 @@ describe("sign-in error mapping", () => {
     expect(getLoginRequestError(abortError, false).code).toBe(
       "REQUEST_TIMEOUT",
     );
-    expect(
-      getLoginErrorMessage(getLoginRequestError(abortError, true)),
-    ).toBe("Sign-in is taking too long. Please try again.");
+    expect(getLoginErrorMessage(getLoginRequestError(abortError, true))).toBe(
+      "Sign-in is taking too long. Please try again.",
+    );
     expect(
       isAuthLoginError(
         createAuthLoginError(null, undefined, "REQUEST_TIMEOUT"),
@@ -83,7 +84,9 @@ describe("sign-in error mapping", () => {
       getLoginErrorMessage(
         createAuthLoginError({ detail: { code: "ACCOUNT_INACTIVE" } }, 403),
       ),
-    ).toBe("This account is inactive. Contact an administrator to restore access.");
+    ).toBe(
+      "This account is inactive. Contact an administrator to restore access.",
+    );
     expect(
       getLoginErrorMessage(
         createAuthLoginError(
@@ -154,6 +157,18 @@ describe("sign-in error mapping", () => {
     ).toBe("The security check could not be verified. Please try again.");
     expect(getLoginErrorMessage(createAuthLoginError(null, 429))).toBe(
       "Too many sign-in attempts. Please wait a moment and try again.",
+    );
+  });
+  it("tells a person a 500 is the server's fault, not their password", () => {
+    // 500 is the boundary and the commonest of the range, so `> 500` reads as
+    // covered while failing the exact status most outages produce. The generic
+    // fallback invites them to re-check credentials that were never wrong.
+    const outage = "Sign-in is temporarily unavailable. Please try again.";
+
+    expect(getLoginErrorMessage(createAuthLoginError(null, 500))).toBe(outage);
+    expect(getLoginErrorMessage(createAuthLoginError(null, 503))).toBe(outage);
+    expect(getLoginErrorMessage(createAuthLoginError(null, 499))).toBe(
+      "Something went wrong while signing in. Please try again.",
     );
   });
 });
