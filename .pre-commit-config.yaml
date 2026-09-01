@@ -77,9 +77,9 @@ repos:
       # submodule import, so a package `__init__.py` stays docstring-only.
       - id: forbid-feature-init-imports
         name: feature __init__.py stays import-free (no re-exports)
-        entry: '^\s*(?:from|import)\s'
+        entry: '^\s*(?:from|import)\s|__import__\('
         language: pygrep
-        files: '^backend/app/features/(?:[a-z_]+/)*__init__\.py$'
+        files: '^backend/app/features/(?:[a-z0-9_]+/)*__init__\.py$'
 
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
@@ -94,7 +94,8 @@ repos:
       # `ck_%(table_name)s_%(constraint_name)s`, so a `ck_` prefix doubles.
       - id: forbid-ck-prefixed-constraint-name
         name: CheckConstraint names stay bare (the convention adds ck_)
-        entry: 'name=["'']ck_'
+        # `f?` and `\s*`: an f-string or spaced spelling doubles the prefix too.
+        entry: 'name\s*=\s*f?["'']ck_'
         language: pygrep
         files: '^backend/app/.*\.py$'
 
