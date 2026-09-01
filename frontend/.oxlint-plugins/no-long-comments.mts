@@ -3,6 +3,9 @@
 
 // A blank ` *` line still counts toward the limit; only a bare `/**`/`*/`
 // does not. A run sitting exactly at the ceiling passes; only going over reports.
+
+// A blank line between blocks separates them on purpose: adjacent distinct
+// thoughts are legitimate, and splitting one essay that way is on the author.
 const DEFAULT_MAX_LINES = 2;
 
 const BARE_DELIMITERS = new Set(["/**", "/*", "*/", "{/*", "{/**", "*/}"]);
@@ -13,7 +16,12 @@ type Comment = {
   value: string;
   loc: { start: Position; end: Position };
 };
-type Block = { type: string; start: Comment; end: Comment };
+type Block = {
+  type: string;
+  start: Comment;
+  end: Comment;
+  bridged: Set<number>;
+};
 
 type SourceCode = {
   lines: readonly string[];
@@ -22,6 +30,10 @@ type SourceCode = {
     comment: Comment,
     options: { includeComments: boolean },
   ) => { value?: string; loc: { end: Position } } | null;
+  getTokenAfter: (
+    comment: Comment,
+    options: { includeComments: boolean },
+  ) => { value?: string; loc: { start: Position } } | null;
 };
 
 type Context = {
@@ -31,19 +43,23 @@ type Context = {
 };
 
 // `foo(); // why` starts its own block: an aside cannot extend the run above
-// it. A `{` hugging the comment is its own JSX container, not trailed code.
+// it. Only `{comment}` — braces hugging both ends — is a container, not code.
 const isTrailing = (sourceCode: SourceCode, comment: Comment) => {
   const before = sourceCode.getTokenBefore(comment, { includeComments: false });
   if (before == null || before.loc.end.line !== comment.loc.start.line) {
     return false;
   }
-  return !(
-    before.value === "{" && before.loc.end.column === comment.loc.start.column
-  );
+  const after = sourceCode.getTokenAfter(comment, { includeComments: false });
+  const contained =
+    before.value === "{" &&
+    before.loc.end.column === comment.loc.start.column &&
+    after?.value === "}" &&
+    after.loc.start.column === comment.loc.end.column;
+  return !contained;
 };
 
-// Prose, not span: a bare delimiter line carries no words, so the same
-// rationale costs the same in any comment spelling.
+// Prose, not span: bare delimiter lines and bridged directive lines carry no
+// words, so the same rationale costs the same in any comment spelling.
 const proseLines = (sourceCode: SourceCode, block: Block) => {
   let count = 0;
   for (
@@ -52,7 +68,7 @@ const proseLines = (sourceCode: SourceCode, block: Block) => {
     line += 1
   ) {
     const text = sourceCode.lines[line - 1]?.trim() ?? "";
-    if (!BARE_DELIMITERS.has(text)) count += 1;
+    if (!BARE_DELIMITERS.has(text) && !block.bridged.has(line)) count += 1;
   }
   return count;
 };
@@ -98,10 +114,22 @@ const blocksOf = (sourceCode: SourceCode) => {
       joins &&= comment.loc.start.line > open.end.loc.end.line;
     }
     if (joins && open !== null) {
+      for (
+        let line = open.end.loc.end.line + 1;
+        line < comment.loc.start.line;
+        line += 1
+      ) {
+        open.bridged.add(line);
+      }
       open.end = comment;
       continue;
     }
-    open = { type: comment.type, start: comment, end: comment };
+    open = {
+      type: comment.type,
+      start: comment,
+      end: comment,
+      bridged: new Set(),
+    };
     blocks.push(open);
   }
   return blocks;

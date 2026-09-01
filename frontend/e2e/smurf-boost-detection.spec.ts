@@ -146,8 +146,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   // Scoped to the panel: the rail's own open/close control is a button too,
   // and counting it would loosen the bound below by a whole entry.
   const entryCount = await panel.getByRole("button").count();
-  // ~40px an entry plus the nav's `py-2`: loose enough to survive a font change,
-  // tight enough that a return to the 242px rail height fails.
+  // ~40px an entry, the nav's 16px `py-2`, and 8px of slack: loose enough to
+  // survive a font change, tight enough that a return to the 242px rail fails.
   expect(panelBox!.height).toBeLessThanOrEqual(entryCount * 40 + 16 + 8);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();

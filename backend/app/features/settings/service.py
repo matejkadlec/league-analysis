@@ -199,8 +199,6 @@ class SettingsService:
             )
 
         except RiotAPIError as e:
-            # All of these are RiotAPIError aliases, so the status is the only
-            # discriminator.
             if e.status_code == 401:
                 logger.warning(
                     "riot_api_key_validation_failed", error="401", details=str(e)
@@ -222,6 +220,8 @@ class SettingsService:
                     details="Received 403 Forbidden from Riot API. Development keys expire every 24 hours - please generate a new key at developer.riotgames.com",
                 )
             elif e.status_code == 404:
+                # The key authenticated and only the hard-coded test account is
+                # missing, so a 404 reports valid.
                 logger.info(
                     "riot_api_key_validated",
                     status="success",

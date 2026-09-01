@@ -83,8 +83,8 @@ def build_player_search_query(
     tag_line: str | None,
 ) -> Select[tuple[Player]]:
     """Build SQLAlchemy query based on search type."""
-    # `ck_players_platform_is_lowercase` means the enum values are the only
-    # spelling the column can hold, so equality is enough.
+    # `ck_players_platform_is_lowercase` and `ck_players_platform_supported`
+    # together leave the enum values as the only spelling, so equality is enough.
     platform_filter = [Player.platform == platform.value] if platform else []
 
     if search_type == "full_id" and game_name and tag_line:

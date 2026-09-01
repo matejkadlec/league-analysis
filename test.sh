@@ -135,7 +135,7 @@ run_backend_ruff_format() {
 
 run_backend_comment_hygiene() {
   cd "$repository_root/backend"
-  uv run python scripts/check_comments.py app tests scripts
+  uv run python scripts/check_comments.py app tests scripts alembic/env.py
 }
 
 run_backend_test_meaningfulness() {

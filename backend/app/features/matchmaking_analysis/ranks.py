@@ -123,7 +123,7 @@ def duo_partner_puuids(
 ) -> set[str]:
     """Non-analyzed allies recurring in >= 2 spine matches: the likely duo.
 
-    Ignores ``analyzed_puuid`` (they appear in every match). ponytail: no party data.
+    Ignores ``analyzed_puuid`` (they appear in every match). Known gap: no party data.
     """
     appearances = Counter(
         puuid

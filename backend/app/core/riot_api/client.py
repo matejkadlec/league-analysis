@@ -380,7 +380,7 @@ class RiotAPIClient:
         return float(2 ** (retry_state.attempt_number - 1))
 
     def _log_transient_retry(self, retry_state: RetryCallState, url: str) -> None:
-        """Keep every retry decision visible before its sleep, as before."""
+        """Log each retry before its sleep, except the two cases skipped below."""
         error = retry_state.outcome.exception() if retry_state.outcome else None
         attempt = retry_state.attempt_number - 1
         if isinstance(error, RateLimitError):
@@ -619,11 +619,7 @@ class RiotAPIClient:
     async def get_league_entries_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> list[LeagueEntryDTO]:
-        """Get league entries by encrypted PUUID.
-
-        This is the preferred method as it doesn't require getting Summoner ID first.
-        Returns league entries for all ranked queues (Solo/Duo, Flex, etc.)
-        """
+        """Get league entries for every ranked queue by encrypted PUUID."""
         used_platform = platform or self.platform
         self._record_api_call(
             LEAGUE_ENTRIES_BY_PUUID,

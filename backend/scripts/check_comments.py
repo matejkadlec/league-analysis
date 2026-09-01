@@ -1,7 +1,7 @@
-"""Comment hygiene for Python, mirroring the frontend's oxlint rules.
+"""Comment hygiene for Python, mirroring the frontend's oxlint comment rules.
 
-Ruff has no comment-length rule, so the backend half is a script, not a fork.
-Run from `backend/`: `python scripts/check_comments.py [path]`.
+The docstring rules are backend-only (the frontend has no docstring construct).
+Ruff has no comment-length rule, so run from `backend/`: `python scripts/check_comments.py [path]`.
 """
 
 from __future__ import annotations
@@ -14,9 +14,9 @@ import tokenize
 from pathlib import Path
 
 MAX_PROSE_LINES = 2
-# `alembic` is deliberately out: revisions are immutable historical records
-# whose prose narrates legacy/compat transitions by design.
-DEFAULT_PATHS = ("app", "tests", "scripts")
+# `alembic/versions` is deliberately out: revisions are immutable historical
+# records whose prose narrates legacy/compat transitions by design.
+DEFAULT_PATHS = ("app", "tests", "scripts", "alembic/env.py")
 
 DIRECTIVE = re.compile(r"^#\s*(noqa\b|type:\s*ignore|ruff:|mypy:|pyright:|pylint:)")
 
@@ -88,6 +88,10 @@ def comment_blocks(source: str) -> list[list[tokenize.TokenInfo]]:
         if token.type != tokenize.COMMENT:
             continue
         trailing = token.line[: token.start[1]].strip() != ""
+        # A trailing directive is machinery on a code line; dropping it keeps
+        # the code's run-break and mirrors the frontend rule.
+        if trailing and DIRECTIVE.match(token.string):
+            continue
         joins = (
             bool(blocks)
             and not trailing
@@ -149,8 +153,8 @@ def stray_string_docs(tree: ast.Module) -> list[tuple[int, str]]:
     `ast.get_docstring` sees only a docstring holder's first statement; any
     other bare string (attribute docstring, f-string) is caught here instead.
     """
-    docstring_lines = {
-        node.body[0].lineno
+    docstrings = {
+        (node.body[0].lineno, node.body[0].col_offset)
         for node in ast.walk(tree)
         if isinstance(
             node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
@@ -159,7 +163,9 @@ def stray_string_docs(tree: ast.Module) -> list[tuple[int, str]]:
     }
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Expr) or node.lineno in docstring_lines:
+        if not isinstance(node, ast.Expr):
+            continue
+        if (node.lineno, node.col_offset) in docstrings:
             continue
         text = _string_text(node.value)
         if text is None:
@@ -224,13 +230,13 @@ def marker_hits(line: int, text: str) -> list[tuple[int, str]]:
 
 def doc_texts(tree: ast.Module) -> list[tuple[int, str]]:
     """Every documentation string in the tree: docstrings and bare strings."""
-    texts: dict[int, str] = {}
+    texts: dict[tuple[int, int], str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Expr):
             text = _string_text(node.value)
             if text is not None:
-                texts.setdefault(node.lineno, text)
-    return sorted(texts.items())
+                texts.setdefault((node.lineno, node.col_offset), text)
+    return [(line, text) for (line, _col), text in sorted(texts.items())]
 
 
 def check_source(source: str) -> list[tuple[int, str]]:

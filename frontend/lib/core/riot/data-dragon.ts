@@ -19,7 +19,6 @@ export function getChampionIconUrl(
   return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
 }
 
-/** Get the URL for a summoner profile icon. */
 export function getProfileIconUrl(
   profileIconId: number,
   version: string = DDRAGON_FALLBACK_VERSION,

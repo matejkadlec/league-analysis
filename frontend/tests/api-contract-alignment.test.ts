@@ -674,7 +674,7 @@ describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", (
         // `kinds()` reduces an enum to the "string" it also declares, so
         // membership drift is invisible to it.
 
-        // ponytail: reads the enum off the direct property node only, so a
+        // Known gap: reads the enum off the direct property node only, so a
         // nullable enum, one in an array, and one in a union arm are invisible.
         const zodEnum = zr.enum as unknown[] | undefined;
         const apiEnum = ar.enum as unknown[] | undefined;

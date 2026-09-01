@@ -4,17 +4,8 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-# Imported for its side effect: it registers an enum comparator on Alembic's
-# `schema` dispatch hook. Without it, `alembic check` is blind to enum members
-# — the one schema change autogenerate does not look at.
-#
-# Its `drop_unused_enums` option is left at its default of True, so a PostgreSQL
-# enum type bound to no mapped column is reported as drift. That is the stricter
-# reading and matches how the rest of this file treats the models as the schema's
-# description. The cost to know about: such a type makes `alembic revision
-# --autogenerate` emit a destructive `DROP TYPE`, so an enum used only from
-# PL/pgSQL or a domain would need `set_configuration(Config(
-# drop_unused_enums=False))` here rather than a hand-edit of the revision.
+# Side-effect import: the enum comparator `alembic check` needs; the default
+# drop_unused_enums=True stays, so an unbound enum is drift (DROP TYPE).
 import alembic_postgresql_enum  # noqa: F401
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -23,10 +14,8 @@ from app.core.config import get_global_settings
 from app.core.models import Base
 from app.model_registry import import_all_models
 
-# Every mapped model must be imported before Alembic reads `Base.metadata`, or
-# its table is invisible here and the migration silently omits it. The baseline
-# revision is SQL-backed because it also holds PostgreSQL-only objects that
-# SQLAlchemy cannot express; this metadata carries everything after it.
+# Every mapped model must be imported before Alembic reads `Base.metadata`,
+# or its table is invisible here and the migration silently omits it.
 import_all_models()
 
 config = context.config
@@ -36,14 +25,11 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Tables created and owned by a runtime library rather than by a revision. They
-# are in the database and will never be in `Base.metadata`, so autogenerate and
-# `alembic check` would propose dropping them on every run.
-#
-# `alembic_version` needs the entry despite Alembic having its own exclusion for
-# it: that one only fires when the table's schema equals `version_table_schema`,
-# and `include_schemas=True` reports the default schema as None, so the
-# comparison is `None == "public"` and never matches.
+# Runtime-library-owned tables: in the database, never in `Base.metadata`,
+# so autogenerate would propose dropping them on every run.
+
+# `alembic_version` is listed because Alembic's own exclusion compares the
+# schema as `None == "public"` under `include_schemas=True` and never fires.
 RUNTIME_OWNED_TABLES = {
     ("jobs", "apscheduler_jobs"),  # APScheduler creates its own job store
     (None, "alembic_version"),  # Alembic's own revision pointer

@@ -803,8 +803,8 @@ def _rendered_default(value: object) -> str:
 def validate_column_defaults(database: str) -> None:
     """Assert no column's DEFAULT disagrees with the model's own default.
 
-    `compare_server_default` is off in `alembic/env.py` for being too noisy,
-    which hides the case where the two name *different* values.
+    Alembic compares server defaults only under `compare_server_default=True`,
+    which `alembic/env.py` does not set, so it never sees a disagreement.
     """
     from app.core.models import Base
     from app.model_registry import import_all_models

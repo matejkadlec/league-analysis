@@ -109,8 +109,8 @@ api.interceptors.response.use(
     originalRequest._retry = true;
     const refresh = await refreshAccessToken();
     if (refresh.outcome !== "refreshed") {
-      // Only the refresh call can tell a rejected session from an unreachable
-      // server, so forward what it reported rather than the original 401.
+      // A refusal is a genuine rejection, so the original 401 stands; the other
+      // outcomes are re-reported with what only the refresh call could learn.
       if (refresh.outcome === "refused") {
         return Promise.reject(error);
       }

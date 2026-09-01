@@ -81,8 +81,8 @@ class MatchParticipant(Base):
     team_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        # Led by `idx_participants_team_win`, as `champion_id` below is led by
-        # `idx_participants_champion_win`.
+        # No `index=True`: `idx_participants_team_win` already leads with this
+        # column, as `idx_participants_champion_win` does for `champion_id` below.
         comment="100 (Blue) or 200 (Red)",
     )
 

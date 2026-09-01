@@ -305,8 +305,8 @@ export function usePlayerSyncRun(
   return {
     isUpdating,
     /**
-     * `match_execution_id` is stamped between Match Fetcher and Player
-     * Updater, so its arrival means every match this run stores is stored.
+     * `match_execution_id` lands once the Match Fetcher stopped, successfully
+     * or not; the `isUpdating` conjunct is what excludes the failed run.
      */
     isFetchingMatches: isUpdating && !observedRun?.match_execution_id,
     /**

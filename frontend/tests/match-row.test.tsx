@@ -311,6 +311,10 @@ describe("a match history row", () => {
     expect(container.querySelectorAll("[title][class*='ring-']")).toHaveLength(
       0,
     );
+    // The placeholder is the point: dropping it for `null` leaves the icon
+    // assertion above green while the column silently renders nothing.
+    const compositions = container.querySelector("div[class*='w-37']");
+    expect(compositions?.textContent).toBe("—");
   });
 
   it("writes the date, the clock and the duration the way a human reads them", () => {

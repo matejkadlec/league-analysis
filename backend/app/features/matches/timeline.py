@@ -137,8 +137,6 @@ class MatchTimeline(Base):
             "participant_id",
             name="uq_match_timelines_match_participant",
         ),
-        # Bare names: the `ck` convention already prefixes `ck_%(table_name)s_`,
-        # so spelling the prefix here would double it.
         CheckConstraint(
             "participant_id BETWEEN 1 AND 10",
             name="participant_id_range",
@@ -192,7 +190,6 @@ class MatchTimeline(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
-    # The column comment is the decoder for the short keys, kept next to the data.
     objective_events: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
@@ -236,7 +233,11 @@ def _increment_counter(counter: dict[str, int], key: str) -> None:
 
 
 def _uses_historical_atakhan_contract(game_version: str) -> bool:
-    """Whether the match predates the 2026 objective-set change."""
+    """Whether the match predates the 2026 objective-set change.
+
+    Pre-2026 patches are 15.x and below; Atakhan was removed in 26.1
+    (docs/riot-api.md).
+    """
     try:
         return int(game_version.split(".", 1)[0]) < 16
     except AttributeError, TypeError, ValueError:

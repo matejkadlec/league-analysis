@@ -150,11 +150,7 @@ async def _lock_newest_key(db: AsyncSession) -> RiotAPIKey | None:
 
 
 async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
-    """Lock and return the stored key, whether or not it is still usable.
-
-    Deleting an aged key here would blank `riot_credential_health.db_key_id`
-    through its `ON DELETE SET NULL` before the caller could notice.
-    """
+    """Lock and return the stored key, usable or not; this never deletes."""
     key_record = await _lock_newest_key(db)
     if key_record is None:
         # `LIMIT 1 ... FOR UPDATE` picks its row from its own snapshot before

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
         ]
 
     # Must precede `jwt_secret_key` (the validator reads it from `info.data`) and
-    # carry no default. Gate: tests/test_settings_jwt_secret.py.
+    # carry no default; only the ordering is gated, by tests/test_settings_jwt_secret.py.
     environment: Literal["dev", "test", "production"]
 
     jwt_secret_key: str = Field(

@@ -131,8 +131,8 @@ class PlaystyleAnalysisService:
         else:
             logger.warning("playstyle_analysis_player_row_missing", puuid=puuid)
 
-        # Ordering by match ID rather than `game_start_timestamp` can mark a
-        # boundary match the analysis never read, and that stops a Riot re-fetch.
+        # Marks the newest 100 by match ID, not `game_start_timestamp` as read
+        # above: a boundary match never analysed can be marked, blocking a re-fetch.
         subquery = (
             select(MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)

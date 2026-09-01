@@ -249,7 +249,7 @@ repos:
         entry: >
           bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
           cd "$repository_root/backend" &&
-          uv run --locked python scripts/check_comments.py app tests scripts'
+          uv run --locked python scripts/check_comments.py app tests scripts alembic/env.py'
         language: system
         pass_filenames: false
         always_run: true

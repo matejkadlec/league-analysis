@@ -1,7 +1,7 @@
 """Error-chain walking and classification shared across features.
 
-`__cause__` is the one exception lineage the language carries; jobs and the
-matches sync pipeline both classify failures through these predicates.
+Jobs and the matches sync pipeline both classify failures through these
+predicates.
 """
 
 from collections.abc import Iterator

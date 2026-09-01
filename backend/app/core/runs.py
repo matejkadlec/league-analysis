@@ -1,4 +1,4 @@
-"""Lifecycle primitives shared by one-active-run-per-player analyses.
+"""Run-lifecycle primitives, and the SQL vocabulary helpers models share.
 
 One active row per account and PUUID, insert races resolved by re-reading the
 concurrent winner, and guarded updates that can never revive a finished run.
@@ -19,8 +19,8 @@ from .db_session import rollback_quietly
 def values_in_sql(column: str, values: Sequence[str]) -> str:
     """The ``<column> IN (...)`` text a Python vocabulary renders to in SQL.
 
-    Every run table spells its status vocabulary twice in DDL (CHECK constraint
-    and partial unique index), so rendering both from Python keeps them in step.
+    Renders a closed Python vocabulary into the SQL a CHECK or partial index
+    needs; run tables spell theirs twice, so both stay in step from one source.
     """
     joined = ", ".join(f"'{value}'" for value in values)
     return f"{column} IN ({joined})"

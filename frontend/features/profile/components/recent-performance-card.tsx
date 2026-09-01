@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { formatFractionAsPercent, formatKDA } from "@/lib/core/format";
 import { cn } from "@/lib/core/utils";
 
-/** The comparison window the card labels "Last 10 games". */
+/** The comparison window; the "Recent 10 games" badge repeats the 10 by hand. */
 const RECENT_GAME_COUNT = 10;
 
 interface RecentPerformanceCardProps {
@@ -65,8 +65,8 @@ function formatNumber(value: number): string {
   return oneDecimalFormatter.format(value);
 }
 
-// Stat comparison row. `small` is the 75%-size variant the 3-column row wants;
-// nothing but the size tokens differs between the two.
+// `small` is the tighter variant the 3-column row wants; nothing but the size
+// tokens differs between the two.
 function StatComparisonRow({
   label,
   recentValue,
@@ -124,7 +124,6 @@ export function RecentPerformanceCard({
   puuid,
   lastUpdated,
 }: RecentPerformanceCardProps) {
-  // Same query as the overall one below, limited to RECENT_GAME_COUNT games.
   const { data: recent = null, isLoading: isRecentLoading } = useQuery(
     playerStatsQueryOptions(puuid, RECENT_GAME_COUNT),
   );
