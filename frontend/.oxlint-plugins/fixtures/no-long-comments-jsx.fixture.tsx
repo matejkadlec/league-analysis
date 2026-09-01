@@ -34,9 +34,18 @@ export const AcceptedBareDelimiters = () => (
 export const MustFlagClosingBraceBelow = () => (
   <div>
     {/* oxlint-disable-next-line house/no-long-comments */}
-    {/* MUST flag: a container whose closing brace sits on the next line is */}
+    {/* MUST flag: a container whose closing brace sits on its own line is */}
     {/* still a container, so these three prose lines are one block even
-        when the last comment spills its brace down. */}
+        when the last container parks its brace below. */
+    }
     <span>brace-below</span>
+  </div>
+);
+
+export const AcceptedBraceBelow = () => (
+  <div>
+    {/* one prose line, brace parked below, still not trailed code */
+    }
+    <span>accepted-brace-below</span>
   </div>
 );

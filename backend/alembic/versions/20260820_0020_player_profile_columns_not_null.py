@@ -21,7 +21,7 @@ depends_on = None
 # value the schema permits it not to have. The columns were nullable only
 # because the initial schema made them so; nothing has written a NULL since.
 #
-# Every insert path supplies a value: `resolve_player_display_fields` defaults
+# Every insert path supplies a value: `the participant-field resolution in players/identity.py` defaults
 # them to 29 and 0, `players/service.py` writes the summoner payload, and
 # `player_updater` refreshes both from Riot. Production agrees -- 30,582 player
 # rows, zero NULLs in either column, checked before writing this.
@@ -36,7 +36,7 @@ def upgrade() -> None:
     """State the non-null invariant the writers and the API already keep."""
     # Belt and braces: the counts were zero when this was written, but a row
     # inserted between then and the deploy must not fail the ALTER. These are
-    # the same defaults `resolve_player_display_fields` uses.
+    # the same defaults `the participant-field resolution in players/identity.py` uses.
     op.execute(
         sa.text(
             "UPDATE core.players SET profile_icon_id = 29 WHERE profile_icon_id IS NULL"

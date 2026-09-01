@@ -1,7 +1,7 @@
 """Persist explained smurf and boost detection runs.
 
 Revision ID: 20260814_0010
-Revises: 20260812_0009
+Revises: 20260813_0010
 Create Date: 2026-08-14
 """
 

@@ -69,7 +69,8 @@ const EXPECTED_HINT_READING_PAGES = [
 ];
 
 /**
- * Every opt-out spelled out, so an added one has to be argued here first.
+ * The opt-outs for these three guards, spelled out so a widened one has to
+ * be argued here first; other rules' opt-outs are not pinned by this test.
  */
 const EXPECTED_EXEMPTIONS: Record<string, string[][]> = {
   "house/session-teardown-syntax": [
