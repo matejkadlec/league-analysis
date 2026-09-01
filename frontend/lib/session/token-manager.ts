@@ -70,8 +70,8 @@ function isBrowser(): boolean {
 
 export function endLocalSession(): void {
   sessionEpoch += 1;
-  // The one place that retracts the cookie `proxy.ts` routes on; without it
-  // the server admits the visitor to a page the client cannot render.
+  // Retracts the cookie `proxy.ts` routes on; without it the server admits
+  // the visitor to a page the client cannot render.
   clearAuthStateCookie();
 }
 

@@ -376,7 +376,7 @@ describe("the manually triggered run's finishing notice", () => {
   });
 
   it("ignores an execution that predates the trigger", async () => {
-    // `manualRunBaselineIdRef` is the newest execution id at the press, so
+    // `baselineIdRef` is the newest execution id at the press, so
     // `> baselineId` stops the previous manual run being reported as this one.
     const toasts = await triggerThenReport([execution({ id: 99 })]);
 

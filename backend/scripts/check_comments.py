@@ -14,7 +14,11 @@ import tokenize
 from pathlib import Path
 
 MAX_PROSE_LINES = 2
+# `alembic` is deliberately out: revisions are immutable historical records
+# whose prose narrates legacy/compat transitions by design.
 DEFAULT_PATHS = ("app", "tests", "scripts")
+
+DIRECTIVE = re.compile(r"^#\s*(noqa\b|type:\s*ignore|ruff:|mypy:|pyright:|pylint:)")
 
 DEFERRAL = re.compile(
     r"\b(TODO|FIXME|XXX)\b|\bhack(y|ish)?\b|for now\b|\btemporar(y|ily)\b"
@@ -140,43 +144,56 @@ def long_docstrings(tree: ast.Module) -> list[tuple[int, str]]:
 
 
 def stray_string_docs(tree: ast.Module) -> list[tuple[int, str]]:
-    """Return over-ceiling bare string statements (PEP 257 attribute docstrings).
+    """Return over-ceiling bare string statements anywhere in the tree.
 
-    `ast.get_docstring` sees only a body's first statement, so prose parked in
-    a string after an assignment would otherwise escape the ceiling entirely.
+    `ast.get_docstring` sees only a docstring holder's first statement; any
+    other bare string (attribute docstring, f-string) is caught here instead.
     """
+    docstring_lines = {
+        node.body[0].lineno
+        for node in ast.walk(tree)
+        if isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        )
+        and ast.get_docstring(node) is not None
+    }
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(
-            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
-        ):
+        if not isinstance(node, ast.Expr) or node.lineno in docstring_lines:
             continue
-        # `body[0]` is the docstring slot `long_docstrings` already covers.
-        for statement in node.body[1:]:
-            if not (
-                isinstance(statement, ast.Expr)
-                and isinstance(statement.value, ast.Constant)
-                and isinstance(statement.value.value, str)
-            ):
-                continue
-            prose = docstring_prose(statement.value.value)
-            if prose > MAX_PROSE_LINES:
-                found.append(
-                    (
-                        statement.lineno,
-                        LONG_DOCSTRING_MESSAGE.format(
-                            count=prose, ceiling=MAX_PROSE_LINES
-                        ),
-                    )
+        text = _string_text(node.value)
+        if text is None:
+            continue
+        prose = docstring_prose(text)
+        if prose > MAX_PROSE_LINES:
+            found.append(
+                (
+                    node.lineno,
+                    LONG_DOCSTRING_MESSAGE.format(count=prose, ceiling=MAX_PROSE_LINES),
                 )
+            )
     return found
+
+
+def _string_text(value: ast.expr) -> str | None:
+    """The text of a plain or formatted string expression, else None."""
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return value.value
+    if isinstance(value, ast.JoinedStr):
+        return "".join(
+            part.value
+            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+            else "{}"
+            for part in value.values
+        )
+    return None
 
 
 def compat_names(tree: ast.Module) -> list[tuple[int, str]]:
     """Return declared names that announce a legacy or deprecated thing.
 
-    Decorators are read too: `@deprecated` is the JSDoc tag's Python spelling,
-    and `warnings.deprecated` reaches it through an attribute.
+    Decorators are read too: the deprecation decorator is the JSDoc tag's
+    Python spelling, and `warnings` reaches it through an attribute.
     """
     declared: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -193,30 +210,46 @@ def compat_names(tree: ast.Module) -> list[tuple[int, str]]:
     return [(line, name) for line, name in declared if COMPAT_NAME.search(name)]
 
 
+def marker_hits(line: int, text: str) -> list[tuple[int, str]]:
+    """Deferral and compat findings for one comment or docstring's text."""
+    found: list[tuple[int, str]] = []
+    deferral = DEFERRAL.search(text)
+    if deferral:
+        found.append((line, DEFERRAL_MESSAGE.format(match=deferral.group(0))))
+    compat = COMPAT_COMMENT.search(text)
+    if compat:
+        found.append((line, COMPAT_COMMENT_MESSAGE.format(match=compat.group(0))))
+    return found
+
+
+def doc_texts(tree: ast.Module) -> list[tuple[int, str]]:
+    """Every documentation string in the tree: docstrings and bare strings."""
+    texts: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expr):
+            text = _string_text(node.value)
+            if text is not None:
+                texts.setdefault(node.lineno, text)
+    return sorted(texts.items())
+
+
 def check_source(source: str) -> list[tuple[int, str]]:
     """Return every `(line, message)` the four checks find in one file."""
     found: list[tuple[int, str]] = []
     for block in comment_blocks(source):
-        if len(block) > MAX_PROSE_LINES:
-            message = LONG_MESSAGE.format(count=len(block), ceiling=MAX_PROSE_LINES)
+        # A tool directive is machinery, not prose, but it stays in the run so
+        # it cannot split one thought into two blocks under the ceiling.
+        prose = [token for token in block if not DIRECTIVE.match(token.string)]
+        if len(prose) > MAX_PROSE_LINES:
+            message = LONG_MESSAGE.format(count=len(prose), ceiling=MAX_PROSE_LINES)
             found.append((block[0].start[0], message))
         for token in block:
-            deferral = DEFERRAL.search(token.string)
-            if deferral:
-                found.append(
-                    (token.start[0], DEFERRAL_MESSAGE.format(match=deferral.group(0)))
-                )
-            compat = COMPAT_COMMENT.search(token.string)
-            if compat:
-                found.append(
-                    (
-                        token.start[0],
-                        COMPAT_COMMENT_MESSAGE.format(match=compat.group(0)),
-                    )
-                )
+            found.extend(marker_hits(token.start[0], token.string))
     tree = ast.parse(source)
     found.extend(long_docstrings(tree))
     found.extend(stray_string_docs(tree))
+    for line, text in doc_texts(tree):
+        found.extend(marker_hits(line, text))
     found.extend(
         (line, COMPAT_NAME_MESSAGE.format(name=name))
         for line, name in compat_names(tree)

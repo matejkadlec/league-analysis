@@ -46,10 +46,8 @@ export function SmurfBoostExplanationCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* The whole idea in one glance: two windows of the same player's
-            games, older set against newer set. */}
-        {/* `muted-foreground` strokes, not the border token: these boxes sit
-            on the card surface that token is tuned against, so it vanishes. */}
+        {/* One glance: two windows of the same player's games, old vs new.
+            `muted-foreground` strokes; the border token vanishes on this surface. */}
         <div className="rounded-lg border border-muted-foreground/35 bg-muted/20 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             <div className="space-y-1.5">

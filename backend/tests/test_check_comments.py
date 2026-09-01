@@ -132,3 +132,33 @@ def test_an_attribute_docstring_past_the_ceiling_is_reported() -> None:
 
 def test_an_attribute_docstring_at_the_ceiling_passes() -> None:
     assert check_source(ATTRIBUTE_DOCSTRING_AT_CEILING) == []
+
+
+def test_a_tool_directive_line_is_not_prose() -> None:
+    source = "\n".join(["# one", "# noqa: E501", "# two", "value = 1"])
+    assert check_source(source) == []
+
+
+def test_a_directive_cannot_split_an_over_ceiling_run() -> None:
+    source = "\n".join(["# one", "# noqa: E501", "# two", "# three", "value = 1"])
+    reported = check_source(source)
+    assert len(reported) == 1
+    assert "3 lines of prose" in reported[0][1]
+
+
+def test_a_deferral_marker_in_a_docstring_is_reported() -> None:
+    messages = _messages('"""Summary.\n\nTODO: finish this.\n"""')
+    assert any("no-deferral-comments" in message for message in messages)
+
+
+def test_an_over_ceiling_fstring_statement_is_reported() -> None:
+    source = 'x = 1\nf"""Summary.\n\none {x}\ntwo\nthree\n"""'
+    reported = check_source(source)
+    assert len(reported) == 1
+    assert "3 lines of prose past its summary" in reported[0][1]
+
+
+def test_an_over_ceiling_string_in_a_nested_block_is_reported() -> None:
+    source = 'with open("x") as fh:\n    """Summary.\n\n    one\n    two\n    three\n    """\n    fh.read()\n'
+    reported = check_source(source)
+    assert len(reported) == 1

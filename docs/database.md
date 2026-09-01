@@ -111,7 +111,11 @@ because these values drive staleness decisions.
   enum, `player_leagues.tier` / `rank` / `queue_type` against `Tier` /
   `Division` / `LeagueQueueType`, and `match_participants.team_id` /
   `team_position` against `TeamId` / `TeamPosition` (unknown stored lanes were
-  folded to NULL first).
+  folded to NULL first). Both platform CHECKs are asserted for every
+  platform-bearing table by `backend/tests/test_schema_conventions.py`, which
+  compares the stored predicate text — `platform = lower(platform)` and the
+  `Platform` membership list — not just the constraint names, so a new table
+  that forgets one fails the backend gate.
 - Absence in a nullable JSONB column is SQL `NULL`, never the JSON document
   `null`. `JSON.none_as_null` defaults to off, so a `None` written through
   SQLAlchemy used to store `'null'::jsonb`: Python reads both back as `None`,

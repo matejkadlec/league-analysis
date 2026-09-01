@@ -57,7 +57,8 @@ than from a run would have added a fourth mock nobody needed.
 
 **The logout docstring (2026-08-25, already fixed).** The entry described a
 ~1000-character OpenAPI `description` and proposed a `\f` truncation marker.
-Read before writing any code: #223's three-line prose ceiling had already cut it
+Read before writing any code: #223's then-three-line prose ceiling (two since
+2026-09) had already cut it
 to a summary line plus the caller-facing contract, which is what the entry
 wanted, and `\f` would have hidden nothing worth hiding. Second time this file
 has logged work that a merged PR had already done — see "Four unmocked routes"

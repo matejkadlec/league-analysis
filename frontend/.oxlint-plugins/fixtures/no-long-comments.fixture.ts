@@ -81,6 +81,6 @@ export const trailingAfterRun = 9; // why
 // three
 export const mixedJsdocThenLine = 10;
 
-// Accepted: the directive above broke the run, so this block and the
-// MUST-flag explanation above it were never glued together by it.
+// Accepted: a directive line is transparent — the run joins across it — but
+// the blank line above it still separated this block from the one before.
 export const afterDirectiveBreak = 11;

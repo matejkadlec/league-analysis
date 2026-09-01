@@ -21,8 +21,8 @@ from .ranks import (
 def trimmed_mean(values: Sequence[float]) -> float:
     """Mean with a floor'd 10% trimmed from each end -- under ten values, plain mean.
 
-    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the fixtures
-    duplicated across both test suites must stay identical.
+    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts, whose test
+    parses the fixtures out of `test_matchmaking_analysis_lifecycle.py`.
     """
     k = int(len(values) * 0.1)
     kept = sorted(values)[k : len(values) - k]

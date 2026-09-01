@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 class AccountLockedError(Exception):
-    """Raised when a user account is temporarily locked after failed logins."""
+    """Raised while a user account's failed-login lockout has not yet expired."""
 
     def __init__(self, locked_until: datetime):
         self.locked_until = locked_until
@@ -24,7 +24,7 @@ class CaptchaVerificationError(Exception):
 
 
 class EmailChangeLockedError(Exception):
-    """Raised when email-change actions are temporarily locked for a user."""
+    """Raised while a user's email-change lockout has not yet expired."""
 
     def __init__(self, locked_until: datetime):
         self.locked_until = locked_until

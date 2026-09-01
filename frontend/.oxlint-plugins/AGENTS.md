@@ -28,7 +28,8 @@ including attribute regexes and `:not()` — which is how `restricted-syntax.mts
 carries a rule oxlint does not implement.
 
 `context.sourceCode` is the full ESLint `SourceCode`: `getAllComments()`,
-`lines`, `text`, `getTokenBefore`, and `loc` on every comment.
+`lines`, `text`, `getTokenBefore`, and `value`/`loc` on every comment —
+`value` is the comment's own text, the only way to read what it says.
 
 ## Fixtures are the test
 

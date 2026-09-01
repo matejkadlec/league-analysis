@@ -29,14 +29,19 @@ but not the `typescript/bin/tsc` CLI path the Next.js toolchain expects.
   kebab-case files, PascalCase components.
 - `"use client"` for hooks/events/browser APIs.
 - TanStack Query for all data fetching (`validatedGet` + Zod schemas from
-  `lib/core`); always handle loading/error/success states.
+  `lib/core`); always handle loading/error/success states. Spell the request
+  path inline at the call site as a string or template literal —
+  `house/require-literal-api-path` enforces it, because the backend and
+  frontend path scanners find requests by regex-matching that argument and a
+  path hoisted behind a constant goes unchecked.
 - Resolve the current Data Dragon version server-side through the cached
   manifest helper and consume it through `useDDragonVersion()` for versioned
   assets. Keep the reviewed fallback and null behavior for unknown IDs.
 - Features expose public APIs via `index.ts`.
 - Use Next.js `proxy.ts` file convention (not `middleware.ts`).
-- A comment carries at most three lines of prose, and a run of `//` lines is
-  one comment. Say what the constraint is; drop the narration.
+- A comment carries at most two lines of prose, and consecutive comment lines
+  are one comment regardless of spelling — `//`, `/* */`, or JSX `{/* */}`.
+  Say what the constraint is; drop the narration.
 - House lint rules live in `.oxlint-plugins/` — read its `AGENTS.md` before
   adding one. Each rule states what it is for in its own report message.
 

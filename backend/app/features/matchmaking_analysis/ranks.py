@@ -30,8 +30,8 @@ _DIVISION_OFFSET = {
 }
 MASTER_FLOOR = _TIER_INDEX[Tier.MASTER.value] * 400
 
-# The frontend formatter `rankValueToDisplay` mirrors this scale; the shared
-# fixtures in `test_matchmaking_ranks.py` / `rank-display.test.ts` guard drift.
+# The frontend formatter `rankValueToDisplay` mirrors this scale; the fixtures in
+# `test_matchmaking_ranks.py` / `rank-scale-alignment.test.ts` guard drift.
 
 
 def rank_value(tier: str, rank: str | None, league_points: int) -> int:

@@ -304,8 +304,8 @@ describe("the oxlint config's shared teardown rules", () => {
       (block) => block.rules?.["house/edge-isolation-syntax"] === "error",
     );
     expect(edgeBlock?.files).toContain("proxy.ts");
-    // Next takes the LAST discovery match, so a `proxy.tsx` or `middleware.ts`
-    // beside `proxy.ts` silently becomes the edge.
+    // Next takes the LAST discovery match, so a `proxy.tsx` beside `proxy.ts`
+    // silently becomes the edge; `middleware.*` is the other name Next accepts.
     expect(edgeBlock?.files).toContain("proxy.tsx");
     expect(edgeBlock?.files).toContain("middleware.ts");
   });

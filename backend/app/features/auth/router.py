@@ -99,7 +99,7 @@ async def login(
 ) -> Token:
     """Authenticate user credentials and issue an access token.
 
-    Brute-force protections apply: temporary lockout after repeated failures,
+    Brute-force protections apply: an expiring lockout after repeated failures,
     and an adaptive CAPTCHA requirement once the failure threshold is reached.
     """
     try:

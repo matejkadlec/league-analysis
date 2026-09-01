@@ -40,7 +40,7 @@ router = APIRouter(
 
 
 def _raise_job_not_found(job_id: int) -> NoReturn:
-    """The one 404 this router has, raised from six places.
+    """The one 404 this router has.
 
     `NoReturn` is what lets call sites keep narrowing `job` to non-None after
     the call, exactly as an inline `raise` did.
@@ -258,7 +258,7 @@ async def trigger_job(
 def _require_control_state(
     state: JobControlActionResponse | None, job_id: int
 ) -> JobControlActionResponse:
-    """Turn a control-action result into the 404/409 the three routes share.
+    """Turn a control-action result into the 404/409 the six control routes share.
 
     `None` means the job configuration does not exist; a present-but-unsuccessful
     state means it exists and refused, which is a conflict rather than a miss.

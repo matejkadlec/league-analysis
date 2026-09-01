@@ -18,13 +18,25 @@ Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
 ## Rules
 
 - async/await for all I/O; type hints everywhere.
-- Features depend on core, never the reverse. Feature `__init__.py` files stay
-  minimal; import from submodules directly. Keep routes thin and logic in
-  services.
+- Features depend on core, never the reverse. Feature `__init__.py` files carry
+  no imports at all — a name forwarded there runs the feature's router and
+  service on any submodule import — so import from submodules directly; the
+  `forbid-feature-init-imports` pre-commit hook rejects the re-export. Keep
+  routes thin and logic in services.
 - Log through `structlog.get_logger(__name__)` with structured key-value
   fields. Event names are static snake_case identifiers — never interpolate
   values into the event string — and logs must never carry tokens,
   passwords, codes, or API keys.
+- A comment carries at most two lines of prose, and consecutive comment lines
+  count as one comment. Tool directives (`noqa`, `type: ignore`, `ruff:`,
+  `pyright:`) do not count toward that total but do not split a run either. A
+  docstring's prose past its summary line is under the same ceiling, with
+  `Args:`/`Returns:`-style sections excepted; attribute docstrings, f-strings,
+  and other bare string statements are read as docstrings too. Deferral markers
+  (`TODO`, "for now") and backwards-compatibility markers are rejected in
+  comments and docstrings alike. `scripts/check_comments.py` is the gate;
+  `alembic/` is deliberately outside it, because revisions are immutable
+  historical records whose prose narrates legacy transitions by design.
 
 ## Commands
 
@@ -32,8 +44,10 @@ Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
 ../test.sh -b              # Repository tooling plus the complete backend gate
 uv run pytest              # Focused backend regression suite
 uv run python scripts/migrate.py upgrade head
-uv run ruff check app tests scripts ../scripts/*.py
-uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
+uv run ruff check app tests scripts
+uv run ruff format --check --exclude '*.md' app tests scripts
+uv run python scripts/check_comments.py app tests scripts
+uv run python scripts/check_tests.py tests
 uv run pyright
 uv run bandit --quiet --recursive app scripts --severity-level medium --confidence-level medium --skip B104
 uv run vulture

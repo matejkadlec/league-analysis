@@ -10,8 +10,8 @@ from app.features.matchmaking_analysis.ranks import (
 )
 from app.features.matchmaking_analysis.service import theoretical_max_requests
 
-# Parsed by frontend/tests/rank-scale-alignment.test.ts: a row naming a
-# division must display exactly the string the client renders for that value.
+# Parsed by frontend/tests/rank-scale-alignment.test.ts: a row whose display
+# carries " · " must be what the client renders; apex rows are worded apart.
 SCALE_FIXTURES = [
     ("IRON", "IV", 0, 0, "Iron IV · 0 LP"),
     ("IRON", "IV", 99, 99, "Iron IV · 99 LP"),

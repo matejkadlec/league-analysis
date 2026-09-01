@@ -29,7 +29,7 @@ RIOT_PERKS = {
 
 def test_flattening_keeps_only_what_the_match_row_renders() -> None:
     # The column stores Riot's whole perks tree; the response carries the
-    # three values `match-row.tsx` draws icons from and nothing else.
+    # three values `match-row-icons.tsx` draws icons from and nothing else.
     assert transform_runes_payload(RIOT_PERKS) == {
         "primary_style": 8200,
         "sub_style": 8300,

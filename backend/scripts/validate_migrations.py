@@ -110,7 +110,7 @@ def drop_database(url: URL, database: str) -> None:
 
 
 def migration_environment(database: str) -> dict[str, str]:
-    """Pass only a temporary database name to the migration subprocess."""
+    """Pass only the throwaway database's name to the migration subprocess."""
     environment = os.environ.copy()
     environment["POSTGRES_DB"] = database
     return environment

@@ -31,7 +31,7 @@ const basePlayer = (now: string) => ({
   tag_line: "",
   platform: "eun1",
   // Non-null in the DB, the API and zod; these are the defaults
-  // `resolve_player_display_fields` writes before Riot is asked.
+  // `upsert_player_statement` (players/identity.py) writes before Riot is asked.
   summoner_level: 0,
   profile_icon_id: 29,
   is_tracked: true,

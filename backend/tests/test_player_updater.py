@@ -25,7 +25,7 @@ def _load_row(_model: object, puuid: str) -> Player:
 
 
 def _player(puuid: str) -> Player:
-    """One unattached row, which is what `_load_tracked_players` returns."""
+    """One unattached row, which is what the loops' per-player `db.get` returns."""
     return Player(
         puuid=puuid,
         game_name="Sanitized",

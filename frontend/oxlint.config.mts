@@ -261,8 +261,8 @@ export default defineConfig({
         "house/require-fetch-timeout": "off",
       },
     },
-    // The filename-scoped rules above do not reach the fixtures directory, so
-    // each is turned back on here by name.
+    // Only edge-isolation-syntax, meaningful-tests, no-fire-event-click and
+    // require-fetch-timeout are scoped away here; the rest are redundant pins.
     {
       files: [".oxlint-plugins/fixtures/edge-isolation-syntax.fixture.ts"],
       rules: { "house/edge-isolation-syntax": "error" },
