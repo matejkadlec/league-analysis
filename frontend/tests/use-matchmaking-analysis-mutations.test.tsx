@@ -147,9 +147,8 @@ describe("starting a matchmaking analysis", () => {
   });
 
   it("clears this player's run without emptying the whole cache", async () => {
-    // `removeQueries` called with no key drops every query the app holds. The
-    // test above cannot see that, because it only ever seeds this player --
-    // the wipe and the targeted removal leave identical state behind.
+    // `removeQueries` with no key drops every query the app holds, which a test
+    // seeding only this player cannot tell from the targeted removal.
     const started = run({ progress: 55 });
     startMatchmakingAnalysis.mockResolvedValue({ success: true, data: started });
     const { result, queryClient } = renderMutations();

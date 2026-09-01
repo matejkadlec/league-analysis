@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { JoinUsRoleCards } from "@/features/auth/components/join-us-role-cards";
 
-// Static recruiting copy, but the commitments are the product's promises: the
-// hours asked of a beta tester or the 3+ month term for developers are what a
-// candidate signs up against, and dropping one should be a noticed decision.
+// Static copy, but the commitments are what a candidate signs up against, so
+// dropping one should be a noticed decision.
 
 describe("JoinUsRoleCards", () => {
   it("presents all three ways to join as card headings", () => {

@@ -7,9 +7,8 @@ export interface ApiErrorReportContext {
   url?: string | undefined;
 }
 
-// Only kinds a developer must act on. The rest are expected product flows the
-// UI already handles -- except `invalid-response`, which `logValidationError`
-// in `lib/core/http/api.ts` already records at the point of detection.
+// Only kinds a developer must act on; the rest are product flows the UI
+// handles, and `invalid-response` is already logged where it is detected.
 const REPORTED_ERROR_KINDS: ReadonlySet<ApiErrorKind> = new Set([
   "unexpected",
   "service",
@@ -18,9 +17,8 @@ const REPORTED_ERROR_KINDS: ReadonlySet<ApiErrorKind> = new Set([
 ]);
 
 /**
- * Record a normalized API failure for developer observability. Secret-safe by
- * construction: `ApiError.message` is the scrubbed product message and
- * `details` is excluded, while `url` and `key` come from the calling context.
+ * Secret-safe by construction: `ApiError.message` is the scrubbed product
+ * message and `details` is excluded.
  */
 export function reportApiError(
   error: ApiError,

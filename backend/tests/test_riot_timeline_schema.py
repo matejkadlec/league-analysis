@@ -1,8 +1,7 @@
 """The timeline DTOs must keep agreeing with Riot's published schema.
 
-The specification slice is vendored next to this test rather than fetched,
-because the suite is offline by construction (`--disable-socket`). Refresh it
-with `backend/tests/data/refresh_timeline_schema.py` when Riot changes a field.
+The specification slice is vendored because the suite is offline by construction;
+refresh it with `backend/tests/data/refresh_timeline_schema.py`.
 """
 
 from __future__ import annotations
@@ -88,9 +87,8 @@ def test_dto_invents_no_field(schema_name: str) -> None:
 def test_only_the_structural_spine_is_required() -> None:
     """Leaves stay optional even where Riot marks them required.
 
-    Riot's specification carries documented errors — a field the portal called
-    required and the live API omitted. Requiring a leaf nothing reads would turn
-    a Riot quirk into a failed match sync, so the guarantee is deliberately narrow.
+    Riot's portal marks fields required that the live API omits, so requiring a
+    leaf nothing reads would turn a Riot quirk into a failed match sync.
     """
     required_by_model = {
         name: {
@@ -118,8 +116,7 @@ def test_only_the_structural_spine_is_required() -> None:
 def test_every_key_timeline_parsing_reads_is_documented() -> None:
     """The keys the parser consumes all exist in Riot's schema.
 
-    `app/features/matches/timeline.py` reads the payload by name. This pins the
-    names it depends on to the published schema, so a Riot rename shows up here
+    `timeline.py` reads the payload by name, so a Riot rename must show up here
     rather than as a column that quietly stops being populated.
     """
     schemas = load_schemas()

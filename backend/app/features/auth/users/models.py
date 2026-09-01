@@ -120,9 +120,8 @@ class User(Base):
 # Create composite indexes for common queries
 Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
 Index("idx_users_email_is_active", User.email, User.is_active)
-# `last_login` and `locked_until` already carry `index=True`, which is what the
-# database was built with; declaring them again here would be a second index on
-# each. `created_at` has no `index=True`, so it needs this one.
+# Only `created_at` needs this; `last_login` and `locked_until` carry
+# `index=True`, so repeating them here would build a second index on each.
 Index("idx_users_created_at", User.created_at)
 
 # Ensure consent mapper is registered even when this module is imported directly.

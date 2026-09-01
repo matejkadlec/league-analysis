@@ -16,9 +16,8 @@ function iconSourceFor(objective: ObjectiveId): string {
 
 describe("the embedded Riot objective art", () => {
   it("has a source for every objective the match row renders", () => {
-    // A missing or renamed key does not fail anything at runtime: the glyph
-    // just builds a `url(undefined)` background and renders as empty space
-    // beside its count. Only the key set says it is gone.
+    // A renamed key fails nothing at runtime: the glyph builds a
+    // `url(undefined)` background and renders as empty space beside its count.
     expect(Object.keys(RIOT_OBJECTIVE_ICON_SOURCES).sort()).toEqual([
       "baron",
       "dragon",

@@ -1,6 +1,5 @@
-// Regression fixture for `house/meaningful-tests`. Every directive below
-// suppresses a shape the rule MUST flag; accepted cases carry none. An unused
-// directive means a detection stopped matching, a report here means it grew.
+// Regression fixture for `house/meaningful-tests`: every directive suppresses
+// a shape the rule must flag, so an unused one means a detection broke.
 
 type Matchers = {
   toBe: (value: unknown) => void;
@@ -41,8 +40,7 @@ declare const clearOptionalBrowserStorage: () => void;
 declare const failingQuery: () => Promise<unknown>;
 
 describe("mock-call-only assertions", () => {
-  // MUST flag: the whole test is wiring. The `.not` chain is a call assertion
-  // too, so it does not rescue the test.
+  // MUST flag: all wiring; the `.not` chain is a call assertion too.
   // oxlint-disable-next-line house/meaningful-tests
   it("posts the sync request", () => {
     startSync();
@@ -50,8 +48,7 @@ describe("mock-call-only assertions", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
-  // MUST flag: the same shape through `it.each`, where the test body is an
-  // argument to the call the table returns.
+  // MUST flag: the same shape through `it.each`.
   // oxlint-disable-next-line house/meaningful-tests
   it.each([["Faker#KR1"], ["QA#TEST"]])("forwards %s", (player: never) => {
     startSync(player);
@@ -95,8 +92,7 @@ describe("mock-call-only assertions", () => {
 
 describe("throws that name nothing", () => {
   it("rejects a Riot ID without a tag", () => {
-    // MUST flag: every error satisfies this, the TypeError from a renamed
-    // export included.
+    // MUST flag: every error satisfies this, a renamed export's TypeError too.
     // oxlint-disable-next-line house/meaningful-tests
     expect(() => parseRiotId("Imagine Dragon")).toThrow();
   });

@@ -124,9 +124,8 @@ describe("the matchmaking analysis session", () => {
 
     renderSession(active);
 
-    // The session adopts the run handed down through `latestAnalysis` as its
-    // own: its counter, its cancel button, and a status watch keyed to the
-    // run's `created_at` — not to the player alone.
+    // The session adopts the run handed down through `latestAnalysis`, keying
+    // its status watch to that run's `created_at` rather than to the player.
     const cancel = await screen.findByRole("button", {
       name: "Cancel Analysis",
     });
@@ -161,9 +160,8 @@ describe("the matchmaking analysis session", () => {
 
     renderSession(null);
 
-    // The start card's controls are the session's own state; changing them
-    // here proves the wiring that carries the form into the start request.
-    // A date input is set whole, not typed digit by digit.
+    // The start card's controls are the session's own state. A date input is
+    // set whole, not typed digit by digit.
     await user.click(screen.getByRole("button", { name: "20" }));
     fireEvent.change(screen.getByLabelText("Last day to include (optional)"), {
       target: { value: "2026-08-01" },
@@ -177,9 +175,8 @@ describe("the matchmaking analysis session", () => {
         "2026-08-01",
       );
     });
-    // In flight is visible: the form swaps for the active card. Before the
-    // first status answer the expected player count is still the 10-match
-    // default; the ETA is the static estimate, so it is matched loosely.
+    // Before the first status answer the expected count is still the 10-match
+    // default and the ETA is a static estimate, so this matches loosely.
     expect(
       await screen.findByText(/Analyzing 0 of 100 players/),
     ).toBeTruthy();
@@ -199,9 +196,8 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("stops polling once the watched run ends badly", async () => {
-    // A run the backend failed keeps its watch id, so `refetchInterval` is the
-    // only thing that can end the poll -- a completed run stops anyway when
-    // the query goes disabled. Only waiting past the 3s interval sees it.
+    // A failed run keeps its watch id, so `refetchInterval` is the only thing
+    // that can end the poll; only waiting past the 3s interval sees it.
     answerStatusWith(analysis("failed", { error_code: "no_matches_analyzed" }));
 
     renderSession(analysis("in_progress"));
@@ -225,9 +221,8 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("ends the watch quietly when the watched run disappears", async () => {
-    // A 404 from the status endpoint is the ordinary end of a watch -- the
-    // record was deleted -- so the session resolves it to "nothing to
-    // report" instead of throwing a toast at the reader.
+    // A 404 from the status endpoint is the ordinary end of a watch, so the
+    // session resolves it to "nothing to report" instead of toasting.
     answerStatusWith(null);
 
     renderSession(analysis("in_progress", { progress: 12 }));

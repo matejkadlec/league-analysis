@@ -105,9 +105,7 @@ function answer(url: string): ApiResponse<Player | PlayerContext> {
 }
 
 /**
- * A whole session, because the mock is typed against the real `useAuth`: the
- * provider reads three fields, but a partial object would only say the mock
- * agrees with today's reading of it.
+ * A whole session: a partial stub would only assert today's reading of `useAuth`.
  */
 function session(user: AuthContextType["user"]): AuthContextType {
   return {
@@ -134,9 +132,8 @@ const ACCOUNT = {
 };
 
 /**
- * Leave the persist round-trip in flight: its `onSuccess` overwrites the saved
- * player with the URL's, so once it resolves the two agree and the assertions
- * pass against any implementation.
+ * Hold the persist in flight: its `onSuccess` makes saved and URL agree, so a
+ * settled fixture would pass against any implementation.
  */
 function holdThePut() {
   validatedPut.mockImplementation(() => new Promise(() => {}));
@@ -181,13 +178,7 @@ beforeEach(() => {
 
 describe("which player the app thinks you are looking at", () => {
   it("lets the URL win over the saved player", async () => {
-    // A shared link carries `?puuid=`; the saved player is whoever this
-    // account looked at last. Read the saved one while a URL is present and
-    // the link shows a different player's data under that name in the bar.
-
-    // The persist round-trip is held open on purpose. Once it resolves the
-    // saved player *becomes* the URL player and the two readings agree, so a
-    // fixture that lets it settle passes against reading either one.
+    // Reading the saved player while a link names one shows the wrong player's data.
     holdThePut();
     search.current = "puuid=url-puuid";
     const { result, queryClient } = renderContext();
@@ -195,9 +186,7 @@ describe("which player the app thinks you are looking at", () => {
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("url-puuid"),
     );
-    // And the saved player really is still someone else at this point --
-    // read from the context query's own cache entry, because the hook
-    // deliberately exposes only the resolved current player.
+    // Read from the cache entry: the hook exposes only the resolved current player.
     expect(
       queryClient.getQueryData<PlayerContext>(playerContextQueryKey(1))
         ?.current_player?.puuid,
@@ -213,9 +202,7 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("treats an empty `?puuid=` as no player rather than as nobody", async () => {
-    // A link that carries the parameter with nothing after it. The empty string
-    // reaches the context and reads as "the URL names a player", so the
-    // account's saved player vanishes and the page asks them to pick one.
+    // An empty string read as "the URL names a player" makes the saved player vanish.
     search.current = "puuid=";
     const { result } = renderContext();
 
@@ -225,9 +212,7 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("does not read the saved player on a page that is not about a player", async () => {
-    // `isPlayerCentricPath` is what stops `?puuid=` on, say, the settings page
-    // being treated as a player selection. The URL parameter is only meaningful
-    // on the three routes that render a player.
+    // `isPlayerCentricPath` stops `?puuid=` counting as a selection off a player route.
     pathname.current = "/settings";
     search.current = "puuid=url-puuid";
     const { result } = renderContext();
@@ -240,9 +225,7 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("puts the saved player into the address bar through the router", async () => {
-    // Restoring the last player has to go through `router.replace`:
-    // `history.replaceState` changes the address bar without telling the router,
-    // so `useSearchParams` elsewhere keeps returning nothing.
+    // `history.replaceState` would not tell the router, leaving `useSearchParams` empty.
     const { result } = renderContext();
 
     await waitFor(() => expect(replace).toHaveBeenCalled());
@@ -253,16 +236,13 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("leaves an address bar that already names a player alone", async () => {
-    // The early return on `urlPuuid` is what stops this effect fighting the
-    // URL it just wrote. Without it the replace runs on every render with the
-    // saved player, overwriting the player the link asked for.
+    // Without the early return on `urlPuuid` the replace overwrites the linked player.
     holdThePut();
     search.current = "puuid=url-puuid";
     const { result } = renderContext();
 
-    // Wait for both queries to have *landed*: the effect cannot run before
-    // `savedPlayer` exists, and `isLoading` ORs in the context query's. Not
-    // "the PUT was called" -- that fires while the context query is undefined.
+    // Wait for both queries to land; "the PUT was called" fires while the context
+    // query is still undefined.
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(replace).not.toHaveBeenCalled();
   });
@@ -288,9 +268,7 @@ describe("persisting the player named in the URL", () => {
   });
 
   it("writes the same player once rather than on every render", async () => {
-    // `persistedUrlPuuidRef` is the whole guard: both effects depend on
-    // `contextQuery.data`, which this mutation's `onSuccess` rewrites, so
-    // without it each success schedules the next write -- a PUT loop.
+    // Without `persistedUrlPuuidRef`, each `onSuccess` rewrite schedules the next PUT.
     holdThePut();
     search.current = "puuid=url-puuid";
     const { rerender, result } = renderContext();
@@ -326,9 +304,7 @@ describe("persisting the player named in the URL", () => {
   });
 
   it("waits for the player to load before saving them", async () => {
-    // The URL is user input: `?puuid=` can name a player who does not exist.
-    // Persisting it before the fetch resolves stores a PUUID the account can
-    // never load, and every later page starts by failing.
+    // `?puuid=` is user input; persisting it unresolved stores a PUUID that never loads.
     search.current = "puuid=missing-puuid";
     const { result } = renderContext();
 
@@ -339,9 +315,8 @@ describe("persisting the player named in the URL", () => {
 
 describe("whether the app says it is still loading", () => {
   it("does not wait on a player query that was never asked for", async () => {
-    // With no `?puuid=` the URL player query is disabled. React Query v5
-    // derives `isLoading` as `isPending && isFetching`, so a disabled query
-    // reports false and needs no `!!urlPuuid &&` guard in the provider.
+    // React Query v5 derives `isLoading` as `isPending && isFetching`, so a disabled
+    // query already reports false without an `!!urlPuuid &&` guard.
     const { result } = renderContext();
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -358,9 +333,8 @@ describe("whether the app says it is still loading", () => {
   });
 
   it("does not probe a URL PUUID while nobody is signed in either", async () => {
-    // The case above leaves `?puuid=` empty, so it passes whether or not the
-    // auth half of `enabled` survives. This one does not: the PUUID guard sits
-    // on `queryFn`, so dropping `enabled` sends an unauthenticated request.
+    // The PUUID guard sits on `queryFn`, so only `enabled` stops an unauthenticated
+    // request once `?puuid=` is set.
     search.current = `puuid=${FROM_URL.puuid}`;
     useAuth.mockReturnValue(session(null));
     const { result } = renderContext();
@@ -372,9 +346,7 @@ describe("whether the app says it is still loading", () => {
 
 describe("choosing a player from the picker", () => {
   it("saves the choice, seeds its cache entry, and navigates", async () => {
-    // `setQueryData` on the player key is why the destination page renders the
-    // player immediately instead of flashing a skeleton: the picker already
-    // holds the whole record, so refetching it is a wasted round trip.
+    // `setQueryData` on the player key spares the destination page a skeleton refetch.
     const { result, queryClient } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
@@ -394,9 +366,8 @@ describe("choosing a player from the picker", () => {
   });
 
   it("does not let the stale URL revert an explicit choice", async () => {
-    // `selectPlayer` persists first and navigates second, so one commit has
-    // the context naming the chosen player while the URL still names the
-    // previous one. The mocked URL never advances, so that window lasts.
+    // `selectPlayer` persists before it navigates, so one commit has the context and
+    // the URL naming different players; the mocked URL never advances past it.
     search.current = "puuid=saved-puuid";
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
@@ -416,9 +387,7 @@ describe("choosing a player from the picker", () => {
   });
 
   it("sends a picker choice made off a player page to the overview", async () => {
-    // `playerRoute` redirects anything that is not a player-centric path, so
-    // picking a player from the settings sidebar lands somewhere that shows
-    // one rather than reloading settings with a parameter it ignores.
+    // `playerRoute` redirects a non-player-centric path to one that renders a player.
     pathname.current = "/settings";
     const { result } = renderContext();
     await waitFor(() => expect(validatedGet).toHaveBeenCalled());
@@ -438,9 +407,7 @@ describe("choosing a player from the picker", () => {
 
 describe("switching to a participant by PUUID", () => {
   it("starts the target's update and navigates, but never persists a stranger", async () => {
-    // Clicking an enemy laner starts their update and switches the page, but
-    // the persist effect skips an untracked player -- so tomorrow's visit
-    // still defaults to the last *tracked* player, not to a stranger.
+    // The persist effect skips an untracked player, so the next visit keeps the tracked one.
     const { result, rerender } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
@@ -494,9 +461,8 @@ describe("switching to a participant by PUUID", () => {
 
 describe("the provider requirement", () => {
   it("refuses to be used outside its provider rather than returning nothing", () => {
-    // The alternative is a `null` context and a `Cannot read properties of
-    // null` from whichever consumer happens to destructure first, nowhere near
-    // the component that was rendered in the wrong place.
+    // The alternative is a null-deref in whichever consumer destructures first, far
+    // from the misplaced component.
     expect(() => renderHook(() => usePlayerContext())).toThrow(
       /must be used within PlayerContextProvider/,
     );

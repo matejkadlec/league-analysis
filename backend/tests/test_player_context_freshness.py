@@ -87,8 +87,7 @@ class _FinishedJob:
     """The writer scalars `_failure_from_job` classifies a finished run from.
 
     A real `BaseJob` would reach for the rolled-back session the mapping exists
-    to avoid touching, so the double carries only the cached scalars and the
-    two error predicates, cast at the call.
+    to avoid touching, so only cached scalars and error predicates are carried.
     """
 
     def __init__(self, *, status: JobStatus) -> None:
@@ -132,9 +131,8 @@ def _no_active_run_db(
 ) -> SimpleNamespace:
     """A session double for a start with no active run for the clicked player.
 
-    `scalar` answers the same-PUUID lookup first and the cross-player lookup
-    second; `get` answers the clicked player's row first and, when the busy
-    check needs a name, the running player's row second.
+    `scalar` answers same-PUUID then cross-player; `get` answers the clicked
+    player's row then, when the busy check needs a name, the running player's.
     """
     execute = AsyncMock(
         return_value=SimpleNamespace(
@@ -154,9 +152,8 @@ def _no_active_run_db(
 async def test_a_start_during_another_players_run_refuses_and_names_them() -> None:
     """No doomed run row: the click is refused up front, naming who is running.
 
-    Before this, the run was created, the job layer skipped it as already
-    running, and the click's answer arrived minutes later as a failed run --
-    which Match History then reported as "No matches found".
+    A run created here is skipped by the job layer and answers minutes later as
+    a failure, which Match History reports as "No matches found".
     """
     db = _no_active_run_db(
         other_active=SimpleNamespace(id=11, puuid="other-puuid", status="running"),
@@ -256,9 +253,8 @@ async def test_a_failure_before_the_writers_still_terminates_the_run(
 ) -> None:
     """Loading the run and stamping it running sit inside the recovery net.
 
-    A DB blip in either used to strand the row as `pending` until a restart,
-    and the up-front busy check reads any active run as a held pipeline, so an
-    unfinishable row would refuse every other player's clicks too.
+    A DB blip in either strands the row as `pending` until restart, and the
+    busy check reads that as a held pipeline refusing every other player.
     """
     finished: list[dict[str, object]] = []
 

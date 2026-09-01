@@ -11,9 +11,8 @@ import {
 } from "@/features/players/riot-id";
 
 /**
- * The Riot ID rules exist on both sides, so something has to hold them equal.
- * The route declares them as `Query(...)`, which puts them in the OpenAPI
- * document; without `OPENAPI_JSON` this skips rather than pretending to pass.
+ * The Riot ID rules exist on both sides, so something has to hold them equal;
+ * without `OPENAPI_JSON` this skips rather than pretending to pass.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath
@@ -45,9 +44,8 @@ function operationParameter(path: string, name: string) {
 
 describe.skipIf(!spec)("Riot ID rules against the API contract", () => {
   it("caps the search box at what the suggestions query accepts", () => {
-    // Not a Riot ID bound but the same failure: without the cap the box takes
-    // more than `q` allows, and the viewer meets a 422 error toast from the
-    // shared QueryCache rather than an empty result list.
+    // Without the cap the box takes more than `q` allows and the viewer meets
+    // a 422 error toast rather than an empty result list.
     expect(
       operationParameter("/api/v1/players/suggestions", "q")?.maxLength,
     ).toBe(RIOT_ID_SEARCH_MAX_LENGTH);

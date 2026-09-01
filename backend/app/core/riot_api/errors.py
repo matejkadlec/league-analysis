@@ -47,9 +47,8 @@ class AuthenticationError(RiotAPIError):
     pass
 
 
-# HTTPException detail for endpoints that surface an invalid Riot API key.
-# The frontend maps the code (api-error.ts, api.ts); the message is for
-# direct API consumers.
+# The frontend maps `code` (api-error.ts, api.ts); `message` is what direct API
+# consumers see.
 RIOT_API_KEY_INVALID_DETAIL = {
     "code": "RIOT_API_KEY_INVALID",
     "message": "Riot data is temporarily unavailable. Please contact an administrator.",
@@ -77,9 +76,8 @@ class ServiceUnavailableError(RiotAPIError):
 class NullResponseBodyError(RiotAPIError):
     """A 200 whose JSON body is `null` - a proxy or cache glitch, retried.
 
-    Riot answers objects and lists, never a bare `null`. Carried as its own
-    type so the retry predicate can treat it as transient without inventing
-    a status code for a response that nominally succeeded.
+    Its own type so the retry predicate can treat it as transient without
+    inventing a status code for a response that nominally succeeded.
     """
 
     pass
@@ -94,9 +92,8 @@ class BadRequestError(RiotAPIError):
 class PuuidDecryptionError(BadRequestError):
     """Bad request (400) - a stored PUUID belongs to another developer account.
 
-    Riot encrypts PUUIDs per developer account, so one captured under a
-    different account cannot be decrypted by the active key. The condition is
-    carried by the exception type so no PUUID payload travels with the error.
+    Riot encrypts PUUIDs per developer account. The type carries the condition so
+    no PUUID payload travels with the error.
     """
 
     pass

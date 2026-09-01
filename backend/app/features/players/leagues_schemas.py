@@ -11,9 +11,8 @@ from app.core.riot_api.constants import LeagueQueueType
 class PlayerLeagueResponse(BaseModel):
     """One immutable league snapshot, as the API returns it.
 
-    `league_points` carries no upper bound on purpose: Master, Grandmaster and
-    Challenger have no divisions and accumulate LP without a ceiling, so an
-    `le=100` would 500 every read for a player above Diamond.
+    `league_points` has no upper bound on purpose: Master and above accumulate
+    LP without a ceiling, so an `le=100` would 500 every read above Diamond.
     """
 
     puuid: str = Field(

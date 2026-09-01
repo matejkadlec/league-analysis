@@ -14,15 +14,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(here, "../../backend/app/features/smurf_boost_detection");
 
 /**
- * The engine's identifiers are copied by hand into the vocabulary module, and
- * a self-naming fallback means nothing else notices the copy drifting. Both
- * constant shapes matter: family ids do not spell the NOTE_ prefix.
+ * The engine's identifiers are copied by hand into the vocabulary module and a
+ * self-naming fallback hides the drift; family ids omit the NOTE_ prefix.
  */
 function backendIdentifiers(prefix: "NOTE_" | "FAMILY_"): string[] {
   const ids: string[] = [];
   // Every module in the feature, not a hardcoded list, so a new engine file
-  // cannot carry identifiers this sweep never reads. The pattern tolerates a
-  // type annotation (`NOTE_X: Final = "..."`) for the same reason.
+  // cannot carry identifiers this sweep never reads.
   for (const file of readdirSync(ENGINE_DIR).filter((f) => f.endsWith(".py"))) {
     const source = readFileSync(join(ENGINE_DIR, file), "utf8");
     for (const [, value] of source.matchAll(

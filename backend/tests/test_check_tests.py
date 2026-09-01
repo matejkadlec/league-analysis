@@ -1,8 +1,7 @@
 """Both directions of every rule in the test-meaningfulness check.
 
 Every fixture is a string literal rather than a real test, so this file stays
-clean under the rules it exercises. Each rule is proven on a shape it must
-report and on the nearest shape it must not.
+clean under the rules it exercises.
 """
 
 from scripts.check_tests import check_source
@@ -107,8 +106,7 @@ def test_an_assertion_inside_an_installed_callback_counts() -> None:
     """The transport-handler tests keep their assertions in a callback.
 
     `conftest.py` builds `httpx.MockTransport` clients whose handler asserts on
-    the request it is handed. Ignoring callback bodies would report the most
-    thorough tests in this suite as asserting nothing.
+    the request it is handed.
     """
     assert _messages(NESTED_CALLBACK_ASSERTION) == []
 

@@ -4,9 +4,8 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * A server component page: the test awaits the element it returns and renders
- * that. `next/headers` is the only server boundary, mocked as a plain cookie
- * jar the tests fill by hand.
+ * A server component page: the test awaits the element it returns, with
+ * `next/headers` -- the only server boundary -- mocked as a plain cookie jar.
  */
 
 type CookieStore = {
@@ -78,9 +77,8 @@ describe("the cookie policy page", () => {
   it("lists every storage key the application actually opens", async () => {
     await renderPage();
 
-    // A page about storage that misses a key the app uses is a silent
-    // disclosure gap, so the names are pinned as rendered text. They render
-    // with a zero-width break after each underscore so long keys can wrap.
+    // A missing key here is a silent disclosure gap; the names carry a
+    // zero-width break after each underscore so long keys can wrap.
     expect(
       screen.getByText("league_\u200banalysis_\u200bauth_\u200bstate"),
     ).toBeTruthy();
@@ -101,9 +99,8 @@ describe("the cookie policy page", () => {
   });
 
   it("drops the public chrome when the signed-in hint is present", async () => {
-    // While the client session probe is still in flight, the hint cookie is
-    // all the shell has: the page has to pass it on or a signed-in visitor
-    // gets the "back to sign in" button over the app they are already in.
+    // While the session probe is in flight the hint cookie is all the shell
+    // has, so without it a signed-in visitor gets the "back to sign in" button.
     auth.isLoading = true;
     jar.set(AUTH_STATE_COOKIE_NAME, AUTH_STATE_COOKIE_VALUE);
 

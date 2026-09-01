@@ -7,9 +7,8 @@ import {
 } from "@/lib/session/auth-state-cookie";
 import { isPublicRoute } from "@/features/auth/public-routes";
 
-// The edge asks nobody anything: it routes on the hint cookie alone and makes
-// no requests, because one unanswered probe cannot tell "signed out" from
-// "unreachable" and it has no way to refresh.
+// The edge routes on the hint cookie alone: an unanswered probe cannot tell
+// "signed out" from "unreachable", and it has no way to refresh.
 function isStaticOrInternal(pathname: string): boolean {
   return (
     pathname.startsWith("/_next") ||

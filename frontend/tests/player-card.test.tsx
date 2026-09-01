@@ -82,9 +82,8 @@ const league = {
   wins: 60,
   losses: 40,
   created_at: "2026-08-19T08:00:00Z",
-  // The percentage this one endpoint serves, which the schema turns into a
-  // fraction. Deliberately disagrees with the stats fixture's 0.6 so an
-  // assertion can tell which source the ranked branch rendered.
+  // A percentage here, which the schema turns into a fraction; disagrees with
+  // the stats fixture's 0.6 so assertions can tell the two sources apart.
   win_rate: 55.5,
   total_games: 100,
   display_rank: "Gold II",
@@ -107,9 +106,8 @@ const stats = {
 /** The query string of every ranked-aggregate request the card sent. */
 const statsRequests: Record<string, string>[] = [];
 
-// `/players/{puuid}/league` answers an unranked player with a 200 carrying
-// `null`, so `leagueData: null` is a *successful* empty response here.
-// `failLeagueWith` covers the failure case separately.
+// An unranked player is a 200 carrying `null`, so `leagueData: null` is a
+// successful empty response; `failLeagueWith` covers failures.
 function answerWith({
   leagueData = league as typeof league | null,
   statsData = stats,
@@ -181,9 +179,8 @@ describe("what the card says about the player", () => {
   });
 
   it("does not pass a failed league request off as unranked", async () => {
-    // The card cannot tell the viewer anything useful here, so the failure has
-    // to reach the QueryCache toast -- which only happens if the query ends in
-    // `error`. Swallowing it to `null` renders the unranked branch instead.
+    // The failure has to reach the QueryCache toast, which needs the query to
+    // end in `error`; swallowing it to `null` renders the unranked branch.
     failLeagueWith(500);
     const { queryClient } = renderCard();
 
@@ -222,9 +219,8 @@ describe("the freshness line", () => {
   });
 
   it("says so when any of the three syncs has never run", () => {
-    // The label is fed by the *oldest complete* of profile, league and match
-    // sync. Dropping one from that list makes a player whose matches never
-    // synced claim to be up to date — the lie the label exists to prevent.
+    // The label reads the oldest complete of profile, league and match sync;
+    // dropping one lets an unsynced player claim to be up to date.
     renderCard(player({ match_synced_at: null }));
 
     expect(screen.getByText("Not fully synced yet")).toBeTruthy();
@@ -241,9 +237,8 @@ describe("the profile icon", () => {
   });
 
   it("retries the real icon when the player changes theirs", () => {
-    // The failure is remembered per puuid+icon, not forever. A player who
-    // picks a new icon after ours 404'd gets the new icon tried, not the
-    // fallback carried over.
+    // The failure is remembered per puuid+icon, so a newly picked icon is
+    // tried rather than the fallback carried over.
     const view = renderCard();
     fireEvent.error(profileIcon());
     expect(profileIcon().src).toContain("/29.png");

@@ -1,8 +1,7 @@
 """What presenting an already-revoked refresh token gets you, and costs others.
 
-Pins `_answer_reused_refresh_token` through `rotate_refresh_token`: an unused
-replacement heals the innocent race into a fresh pair, a used one kills the
-descendant chain, and one with no replacement refuses and touches nothing else.
+Pins `_answer_reused_refresh_token`: an unused replacement heals the race, a
+used one kills the descendant chain, none at all refuses and touches nothing.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -69,9 +68,8 @@ def _service(
 async def test_an_unused_replacement_heals_the_race_into_a_fresh_pair() -> None:
     """The lost-response and duplicate-refresh cases answer success.
 
-    The presented token was rotated, but its replacement was never used --
-    the state a lost Set-Cookie or the loser of a two-tab race leaves behind,
-    and exactly not the state an actively-ridden stolen chain leaves.
+    The presented token was rotated but its replacement never used: what a lost
+    Set-Cookie or a two-tab race leaves, not what a ridden stolen chain leaves.
     """
     presented = _token("old", revoked_at=NOW - timedelta(minutes=5), replaced_by="succ")
     successor = _token("succ", revoked_at=None, replaced_by=None)
@@ -88,9 +86,8 @@ async def test_an_unused_replacement_heals_the_race_into_a_fresh_pair() -> None:
 async def test_a_used_replacement_kills_the_descendant_chain() -> None:
     """Theft response survives the softening.
 
-    A replacement that was itself rotated means someone is actively using the
-    chain -- the one state healing must not reward. The walk follows
-    `replaced_by_token_id` to the live tip and revokes it.
+    A replacement that was itself rotated means the chain is in active use --
+    the one state healing must not reward.
     """
     presented = _token("a", revoked_at=NOW - timedelta(hours=2), replaced_by="b")
     middle = _token("b", revoked_at=NOW - timedelta(hours=1), replaced_by="c")
@@ -107,9 +104,8 @@ async def test_a_used_replacement_kills_the_descendant_chain() -> None:
 async def test_an_expired_presented_token_never_heals() -> None:
     """An expired credential is dead however it was revoked.
 
-    Rotation restarts the 30-day clock, so a predecessor can expire while
-    its unused replacement is still valid -- and until cleanup deletes the
-    row, that expired credential is still presentable.
+    Rotation restarts the 30-day clock, so a predecessor can expire while its
+    unused replacement is still valid, and stays presentable until cleanup.
     """
     presented = _token(
         "old",
@@ -129,9 +125,8 @@ async def test_an_expired_presented_token_never_heals() -> None:
 async def test_a_revoked_replacement_never_heals_a_logged_out_session() -> None:
     """Logout stays final; a pre-logout cookie must not resurrect.
 
-    Logout revokes every row the user has, including a replacement that was
-    never used -- otherwise exactly the state the heal rewards. The
-    `successor.revoked_at is None` clause is the only line separating them.
+    Logout revokes every row, including an unused replacement; only the
+    `successor.revoked_at is None` clause separates that from the heal.
     """
     presented = _token("old", revoked_at=NOW - timedelta(hours=1), replaced_by="succ")
     successor = _token("succ", revoked_at=NOW - timedelta(minutes=30), replaced_by=None)
@@ -146,9 +141,8 @@ async def test_a_revoked_replacement_never_heals_a_logged_out_session() -> None:
 async def test_a_token_with_no_replacement_refuses_without_wider_revocation() -> None:
     """One zombie cookie no longer signs the user out of every device.
 
-    A token revoked with no replacement recorded -- a logout, or a chain
-    already killed -- names no descendants, so the answer is to refuse and
-    touch nothing else: the family lock, the lookup, and no walk after them.
+    A token revoked with no replacement recorded names no descendants, so the
+    answer is to refuse and touch nothing else.
     """
     presented = _token("dead", revoked_at=NOW - timedelta(days=2), replaced_by=None)
     service, added, db = _service([_lookup(presented)])

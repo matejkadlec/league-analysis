@@ -97,9 +97,8 @@ beforeEach(() => {
 
 
 describe("the one button that does five different things", () => {
-  // `handleMainAction` is a cascade over four booleans, and the button is a
-  // single icon on an admin page that controls the live scheduler. Every arm
-  // sends a different request, and several of them are irreversible.
+  // `handleMainAction` is a cascade over four booleans behind one icon on the
+  // live scheduler; every arm sends a different request, several irreversible.
 
   it("triggers a run when the job is idle", async () => {
     const { result } = renderControls();
@@ -125,9 +124,8 @@ describe("the one button that does five different things", () => {
   });
 
   it("forces the stop only once a graceful stop is already in flight", async () => {
-    // `stopMutation.mutate(isAnyStopping)` is what makes the force the second
-    // press: pass `true` and one click kills a healthy job mid-write; pass
-    // `false` and a job wedged in its stopping state can never be forced.
+    // `stopMutation.mutate(isAnyStopping)` makes force the second press: `true`
+    // kills a healthy job mid-write, `false` leaves a wedged job unforceable.
     const { result } = renderControls({ is_running: true, is_stopping: true });
 
     act(() => result.current.handleMainAction());
@@ -141,9 +139,8 @@ describe("the one button that does five different things", () => {
   });
 
   it("stops the test run rather than the scheduled job when a test is running", async () => {
-    // Both can be true at once, and the test branch is checked first for a
-    // reason: hitting the regular endpoint here stops production work the
-    // admin never touched, and leaves the test running.
+    // Both can be true at once, and the test branch is checked first: the
+    // regular endpoint stops production work and leaves the test running.
     const { result } = renderControls({
       is_running: true,
       is_test_running: true,
@@ -174,9 +171,8 @@ describe("the one button that does five different things", () => {
   });
 
   it("sees a paused test run even while the scheduled job reports unpaused", async () => {
-    // Pause is per run: `is_paused` belongs to the scheduled run and
-    // `is_test_paused` to the test run. Deriving the card's paused state from
-    // `is_paused` alone leaves a paused test run looking active.
+    // Pause is per run, so deriving the card's paused state from `is_paused`
+    // alone leaves a paused test run looking active.
     const { result } = renderControls({
       is_test_running: true,
       is_test_paused: true,
@@ -190,8 +186,7 @@ describe("the one button that does five different things", () => {
   });
 
   // handleMainAction's paused branch delegates to handlePauseResume, so these
-  // cases and the main-action resume cases above pin that one shared path
-  // still reaches from each button.
+  // cases pin that one shared path still reaches from each button.
   it.each([
     ["pauses", "the scheduled job", { is_running: true }, "/jobs/7/pause"],
     [
@@ -213,9 +208,8 @@ describe("the one button that does five different things", () => {
       "/jobs/7/test/resume",
     ],
     [
-      // A paused scheduled run stays reachable while an unpaused test run
-      // is live — routing by isTestRunning alone sent this to /test/resume
-      // and left the scheduled run parked behind every test run.
+      // Routing by isTestRunning alone sends this to /test/resume and parks
+      // the paused scheduled run behind every test run.
       "resumes",
       "the paused scheduled run behind a live test run",
       { is_running: true, is_paused: true, is_test_running: true },
@@ -229,9 +223,8 @@ describe("the one button that does five different things", () => {
     await waitFor(() => expect(requestedPaths()).toEqual([path]));
   });
 
-  // Each control has three endings and only success changes the card, because
-  // the job flags come from a refetch. On either failure the card is unchanged,
-  // so the toast is the only thing that says the press did nothing.
+  // Only success changes the card -- the job flags come from a refetch -- so on
+  // failure the toast is the only thing saying the press did nothing.
   const FAILURES: [string, ApiResponse<unknown>][] = [
     [
       "refused by the server",
@@ -295,9 +288,8 @@ describe("the one button that does five different things", () => {
   );
 
   it("tells an admin the job was already running rather than that the trigger failed", async () => {
-    // A trigger the server declines because a run is already in flight is not
-    // an error, and the action is to wait. Collapsing it into the failure
-    // branch sends the admin looking for a fault that is not there.
+    // A trigger declined because a run is already in flight is not an error;
+    // the failure branch would send the admin hunting a fault that is not there.
     validatedPost.mockResolvedValue({
       success: true,
       data: { success: false, message: "already running", execution_id: null },
@@ -315,9 +307,8 @@ describe("the one button that does five different things", () => {
   });
 
   it("does not report a job as paused when nothing is running", async () => {
-    // `is_paused` on a job with no run in flight describes the schedule, not
-    // a run. Reading it alone turns the main button into "Resume" for a job
-    // that has nothing to resume.
+    // `is_paused` with no run in flight describes the schedule, not a run, so
+    // reading it alone offers "Resume" with nothing to resume.
     const { result } = renderControls({ is_paused: true });
 
     expect(result.current.isAnyPaused).toBe(false);
@@ -330,9 +321,8 @@ describe("the one button that does five different things", () => {
     ["End the job early", { is_running: true }],
     ["Trigger job now", {}],
   ])("labels the button %s", (title, flags) => {
-    // The label is the only warning before the press, and the cascade order
-    // is what keeps it honest: a stopping job that is also paused must read
-    // "Resume", not "Force stop".
+    // The label is the only warning before the press: a stopping job that is
+    // also paused must read "Resume", not "Force stop".
     const { result } = renderControls(flags);
 
     expect(result.current.mainButtonTitle).toBe(title);
@@ -340,9 +330,8 @@ describe("the one button that does five different things", () => {
 });
 
 describe("the manually triggered run's finishing notice", () => {
-  // These use `rerender` with new props rather than a fresh render: the whole
-  // mechanism lives in refs set by the trigger's `onSuccess`, so a second
-  // `renderHook` starts with `awaitingManualRun` false and asserts nothing.
+  // `rerender`, not a fresh render: the mechanism lives in refs set by the
+  // trigger's `onSuccess`, so a second `renderHook` would assert nothing.
   async function triggerThenReport(executions: JobExecution[]) {
     const { result, rerender } = renderHookWithQueryClient(
       ({ recent }: { recent: JobExecution[] }) =>
@@ -368,9 +357,8 @@ describe("the manually triggered run's finishing notice", () => {
   it.each(["PENDING", "RUNNING", "PAUSED"] as const)(
     "stays quiet while the run is still %s",
     async (status) => {
-      // All three mean "not finished". Fall through them and the toast claims
-      // the job completed the moment it starts, which is when it is least
-      // true.
+      // All three mean "not finished"; fall through them and the toast claims
+      // the job completed the moment it starts.
       const toasts = await triggerThenReport([execution({ id: 100, status })]);
 
       expect(toasts).toEqual([]);
@@ -378,9 +366,8 @@ describe("the manually triggered run's finishing notice", () => {
   );
 
   it("ignores a scheduled run that finishes while a manual one is awaited", async () => {
-    // The list holds every recent execution, and on a 15-minute schedule a
-    // scheduled run finishing first is the normal case. Without the
-    // `triggered_by` filter the manual run is reported while still queued.
+    // A scheduled run finishing first is normal on a 15-minute schedule; without
+    // the `triggered_by` filter the manual run is reported while still queued.
     const toasts = await triggerThenReport([
       execution({ id: 101, triggered_by: "system" }),
     ]);
@@ -389,9 +376,8 @@ describe("the manually triggered run's finishing notice", () => {
   });
 
   it("ignores an execution that predates the trigger", async () => {
-    // `manualRunBaselineIdRef` is the id of the newest execution at the moment
-    // of the press, and `> baselineId` is what stops the *previous* manual run,
-    // still in the list, being reported as this one.
+    // `manualRunBaselineIdRef` is the newest execution id at the press, so
+    // `> baselineId` stops the previous manual run being reported as this one.
     const toasts = await triggerThenReport([execution({ id: 99 })]);
 
     expect(toasts).toEqual([]);
@@ -405,9 +391,8 @@ describe("the manually triggered run's finishing notice", () => {
   ] as const)(
     "reports a %s run as its own outcome",
     async (status, title, variant) => {
-      // Four endings that need four different actions from the admin: nothing,
-      // wait for Riot, notice someone stopped it, go read the log. Collapsing
-      // any pair into one message loses the action.
+      // Four endings needing four different actions: nothing, wait for Riot,
+      // notice someone stopped it, read the log. Collapsing a pair loses one.
       const toasts = await triggerThenReport([execution({ id: 100, status })]);
 
       expect(toasts).toHaveLength(1);

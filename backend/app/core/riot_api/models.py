@@ -176,17 +176,14 @@ class MatchInfoDTO(RiotDTO):
     game_version: str = Field(...)
     game_mode: str = Field(...)
     game_type: str = Field(...)
-    # Required, because `core.matches.game_end_timestamp` is NOT NULL and this
-    # value is written straight into it. Optional here only moved the refusal
-    # from the trust boundary to a NOT NULL violation at flush.
+    # Required: `core.matches.game_end_timestamp` is NOT NULL; making this
+    # Optional only defers the refusal to a NOT NULL violation at flush.
     game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
-    # `min_length=1`: a participant-less match would otherwise be stored as fact
-    # and marked `fully_analyzed`. The refusal is per-match and recoverable --
-    # `sync_queue_match` logs it and the run continues.
+    # `min_length=1`: an empty match would otherwise be stored as fact and
+    # marked `fully_analyzed`; the refusal is per-match, caught by `sync_queue_match`.
     participants: list[ParticipantDTO] = Field(..., min_length=1)
-    # `min_length=1`, so an empty `platformId` is refused rather than standing
-    # in for a real one: a substituted platform pins the player row to the wrong
+    # `min_length=1`: a substituted platform pins the player row to the wrong
     # region, and every later Riot call for them is misrouted forever.
     platform: str = Field(..., alias="platformId", min_length=1)
 
@@ -221,9 +218,8 @@ class LeagueEntryDTO(RiotDTO):
     league_points: int = Field(...)
     wins: int
     losses: int
-    # leagueId, veteran, inactive, freshBlood and hotStreak are deliberately
-    # absent: nothing reads them, and requiring them would fail the whole league
-    # sync when a response omits one (the by-PUUID route omits leagueId).
+    # leagueId, veteran, inactive, freshBlood and hotStreak are absent: nothing
+    # reads them, and requiring them fails the sync when a response omits one.
 
     @property
     def win_rate(self) -> float:
@@ -238,9 +234,8 @@ class LeagueEntryDTO(RiotDTO):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
-# Match-V5 timeline mirroring `tests/data/riot_match_v5_timeline_schema.json`
-# (refresh with `tests/data/refresh_timeline_schema.py`). Only the structural
-# spine is required -- Riot's spec marks leaves required in error.
+# Mirrors `tests/data/riot_match_v5_timeline_schema.json` (refresh with
+# `tests/data/refresh_timeline_schema.py`); Riot marks leaves required in error.
 class MatchTimelinePositionDTO(RiotDTO):
     """A map coordinate."""
 

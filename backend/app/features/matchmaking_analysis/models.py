@@ -56,17 +56,15 @@ class MatchmakingRankFreshnessJSON(TypedDict):
 class MatchmakingAnalysisResultsJSON(TypedDict):
     """Shape of the ``results`` JSONB payload written on completion.
 
-    The keys are required, not optional: `_build_completion_results` is the
-    only writer of a non-NULL `results` and always emits them, and an optional
-    winrate let readers substitute a plausible `0` no schema bound could reject.
+    Required, not optional: an optional winrate lets a reader substitute a
+    plausible `0` that no schema bound could reject.
     """
 
     team_avg_winrate: float
     enemy_avg_winrate: float
     matches_analyzed: int
-    # Rank/duo extension keys. `NotRequired`, never defaulted to 0 by a
-    # reader: rows completed before the extension lack them, and a missing
-    # value must render as absent, not as Iron IV 0 LP or a 0% figure.
+    # `NotRequired`, never defaulted by a reader: older rows lack these, and a
+    # missing value must render as absent, not as Iron IV 0 LP or a 0% figure.
     matches_requested: NotRequired[int]
     spine_matches_found: NotRequired[int]
     ally_avg_rank_value: NotRequired[float | None]
@@ -98,9 +96,8 @@ class MatchmakingAnalysis(Base):
 
     created_at: Mapped[datetime] = created_at_column("When this analysis was created")
 
-    # Run parameters, read back by the resumed worker and the history Type
-    # column. The server default is the truthful legacy value: every run
-    # persisted before this column was a 10-match latest-window run.
+    # The server default is truthful, not a placeholder: every run persisted
+    # before this column existed was a 10-match latest-window run.
     params: Mapped[dict[str, object]] = mapped_column(
         JSONB,
         nullable=False,
@@ -177,9 +174,8 @@ class MatchmakingAnalysis(Base):
             values_in_sql("status", get_args(MatchmakingAnalysisStatus)),
             name="status_valid",
         ),
-        # Per account, not per player -- ownership itself is enforced by the
-        # WHERE clauses in the service; this only stops two accounts from
-        # contending for one active row.
+        # Per account, not per player: ownership is enforced by the service's
+        # WHERE clauses, and this only stops contention over one active row.
         Index(
             "uq_matchmaking_analyses_active_puuid",
             "user_id",
@@ -187,8 +183,7 @@ class MatchmakingAnalysis(Base):
             unique=True,
             postgresql_where=text(values_in_sql("status", ACTIVE_ANALYSIS_STATUSES)),
         ),
-        # No index on `puuid` alone -- it leads the primary key -- and none on
-        # `created_at`: every query that orders by it also filters on `puuid`,
-        # so the primary key serves them.
+        # No index on `puuid` (it leads the primary key) nor on `created_at`:
+        # every query ordering by it also filters on `puuid`.
         {"schema": "core"},
     )

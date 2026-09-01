@@ -12,9 +12,8 @@ def user_id_column(
 ) -> MappedColumn[int]:
     """A reference to `auth.users.id` that goes away with the user.
 
-    The part every caller has to remember is `ondelete="CASCADE"`: omit it and
-    nothing fails until someone deletes an account. `comment=None` is what
-    SQLAlchemy emits for an omitted comment, so callers without one match.
+    The part to remember is `ondelete="CASCADE"`: omit it and nothing fails until
+    someone deletes an account. `comment=None` matches an omitted comment.
     """
     return mapped_column(
         BigInteger,

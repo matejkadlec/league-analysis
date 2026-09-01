@@ -78,9 +78,8 @@ def test_current_account_and_summoner_contracts_allow_provider_optionality() -> 
 def test_empty_platform_id_is_rejected_not_defaulted() -> None:
     """A match with no region is a failure, not an EUN1 match.
 
-    `upsert_match` used to fall back to "EUN1", and that value is written onto
-    every participant's player row. A KR player first seen through that path
-    was routed to the wrong regional host by every later Riot call, forever.
+    `platform_id` is written onto every participant's player row, so a default
+    routes that player to the wrong regional host on every later Riot call.
     """
     payload = _match_payload("420")
     payload["info"]["platformId"] = ""
@@ -92,9 +91,8 @@ def test_empty_platform_id_is_rejected_not_defaulted() -> None:
 def test_match_without_participants_is_rejected_not_stored() -> None:
     """Riot answers some match IDs with the envelope and nothing in it.
 
-    Production stored `EUN1_3990695865` on 2026-08-16 from exactly this shape,
-    writing every zero as fact. A match with no participants renders nothing
-    and filters by no queue, so it can only ever need excluding again.
+    Stored, every zero reads as fact: such a match renders nothing and filters by
+    no queue, so it can only ever need excluding again.
     """
     payload = _match_payload("420")
     payload["info"]["participants"] = []
@@ -189,9 +187,8 @@ def test_atakhan_is_historical_and_unknown_current_objectives_are_retained() -> 
     )
     current_row = build_match_timeline_rows(current, current_timeline)[0]
     current_events = current_row["objective_events"]
-    # Atakhan is not an objective in a current-patch match, so it is retained
-    # as an unrecognized epic monster rather than credited as one -- and the
-    # monster type survives in `m`, which is what makes the retention useful.
+    # Atakhan is retained as an unrecognized epic monster rather than credited as
+    # an objective; the monster type survives in `m`, which is the point.
     assert [event["o"] for event in current_events] == [
         "other_epic_monster",
         "other_epic_monster",

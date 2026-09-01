@@ -9,9 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SmurfBoostStatus = Literal["pending", "in_progress", "completed", "failed"]
 
-# The statuses the one-active-run interlock holds over; the partial unique
-# index on `smurf_boost_analyses` is rendered from this tuple, so extending
-# it is a schema change, not just a query change.
+# The one-active-run interlock's statuses; the partial unique index on
+# `smurf_boost_analyses` renders from this tuple, so extending it is DDL.
 ACTIVE_STATUSES: tuple[SmurfBoostStatus, ...] = ("pending", "in_progress")
 
 SmurfBoostBand = Literal[
@@ -59,9 +58,8 @@ class SignalPayload(BaseModel):
 class FamilyPayload(BaseModel):
     """One indicator family's band and its contributing signals.
 
-    The internal weighted sum that produced the band is deliberately absent.
-    The specification forbids showing a per-family number, so it is never put
-    on the wire and never stored where a client could read it.
+    The weighted sum that produced the band is deliberately absent: the
+    specification forbids showing a per-family number.
     """
 
     family: str

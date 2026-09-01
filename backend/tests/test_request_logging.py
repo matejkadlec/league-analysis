@@ -76,9 +76,8 @@ def _build_app() -> FastAPI:
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     """The middleware under a real ASGI stack, with no lifespan driven.
 
-    `ASGITransport`, not starlette's TestClient: the latter is annotated
-    against httpx2, which this environment does not install, and it warns at
-    import time in a suite that treats warnings as errors.
+    `ASGITransport`, not TestClient: the latter's types assume the httpx2 this
+    environment lacks, so it warns at import in a warnings-as-errors suite.
     """
     transport = httpx.ASGITransport(app=_build_app())
     async with httpx.AsyncClient(
@@ -192,9 +191,8 @@ async def test_downstream_logs_carry_request_context(
 async def test_non_http_scope_passes_through_without_request_logging() -> None:
     """The lifespan scope must reach the app untouched and log nothing.
 
-    `ASGITransport` never sends a non-http scope at all, so the middleware is
-    called directly here; a round-trip version would go green while covering
-    nothing.
+    `ASGITransport` never sends a non-http scope, so the middleware is called
+    directly; a round-trip version would go green while covering nothing.
     """
     middleware = RequestLoggingMiddleware(_silent_app)
 

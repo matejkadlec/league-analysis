@@ -20,22 +20,19 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, MappedColumn, mapped_column
 
-# The type every JSONB column whose `None` means "there is no document" is
-# declared with. SQLAlchemy's default stores `'null'::jsonb` for a written
-# `None`, which reads back as `None` but is not the SQL NULL `IS NULL` finds.
+# Without this, SQLAlchemy writes `None` as `'null'::jsonb`, which reads back as
+# `None` but is not the SQL NULL that `IS NULL` finds.
 ABSENT_AS_NULL_JSONB = JSONB(none_as_null=True)
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes
 convention = {
-    # `%(column_0_label)s` renders the schema too (`ix_auth_users_email`), which
-    # no index in the database is named after. `%(table_name)s_%(column_0_name)s`
-    # is the spelling the migrations actually created.
+    # `%(column_0_label)s` would render the schema too (`ix_auth_users_email`),
+    # which is not the spelling the migrations created.
     "ix": "ix_%(table_name)s_%(column_0_name)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
-    # Note the `%(constraint_name)s` token: an explicit `name=` on a
-    # CheckConstraint is substituted *into* this template, so spell those bare
-    # or they come out as `ck_<table>_ck_<table>_...`.
+    # An explicit `name=` on a CheckConstraint is substituted *into* this
+    # template, so spell those bare or they come out `ck_<table>_ck_<table>_...`.
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
@@ -87,9 +84,8 @@ def created_at_column(comment: str | None = None) -> MappedColumn[datetime]:
 def updated_at_column(comment: str | None = None) -> MappedColumn[datetime]:
     """The row's last-modified stamp, advanced by the database on UPDATE.
 
-    `onupdate` is the only thing separating this from `created_at_column`, and
-    it is a SQLAlchemy-side default: it fires on ORM and Core updates, not on a
-    hand-written `UPDATE` run against the database directly.
+    `onupdate` is SQLAlchemy-side: it fires on ORM and Core updates, never on an
+    `UPDATE` run against the database directly.
     """
     return mapped_column(
         SQLDateTime(timezone=True),
@@ -112,8 +108,7 @@ class Base(DeclarativeBase):
     def __repr__(self) -> str:
         """Identify the row by class and primary key, without touching a column.
 
-        `InstanceState.identity` reads the already-loaded identity key, so this
-        never emits a lazy load the way a repr spelling out mapped attributes
-        would. Unflushed rows have no identity yet and read as `transient`.
+        `InstanceState.identity` never emits a lazy load; unflushed rows have no
+        identity yet and read as `transient`.
         """
         return f"<{type(self).__name__} {inspect(self).identity or 'transient'}>"

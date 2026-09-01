@@ -12,9 +12,8 @@ from .models import ExecutionType, JobConfiguration, JobType
 RIOT_MAINTENANCE_MODE_KEY = "riot_maintenance_mode"
 RIOT_WRITER_JOB_TYPES = frozenset({JobType.MATCH_FETCHER, JobType.PLAYER_UPDATER})
 
-# Keep the order shared with the cleanup command. Direct player-add writers can
-# subsequently change these gameplay tables, so acquiring compatible table
-# locks in the same order prevents a cleanup/write lock inversion.
+# Order is shared with the cleanup command: locking these tables in the same
+# sequence everywhere is what prevents a cleanup/write lock inversion.
 RIOT_WRITER_TABLES = (
     "auth.user_tracked_players",
     "core.match_timelines",

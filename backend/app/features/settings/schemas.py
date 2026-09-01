@@ -56,17 +56,14 @@ def _validate_smurf_boost_cross_fields(
 ) -> None:
     """Reject a detection set whose novel-champion gate can never be met.
 
-    A minimum above the recent window size would make A3 permanently
-    unavailable rather than merely strict, which is a configuration error and
-    not a valid preference.
+    A minimum above the recent window size makes A3 permanently unavailable.
     """
     if minimum_novel_games > recent_window_size:
         raise ValueError("a3MinimumNovelGames must not exceed recentWindowSize")
 
 
-# Each card declares its fields once, on the write model; the read model below is
-# that same model with the policy relaxed, so a bound cannot be tightened for
-# writers and forgotten for readers.
+# Each card declares its fields once on the write model; the read model relaxes
+# only policy, so a bound cannot be tightened for writers and missed for readers.
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract for the approved version 1 Top Champions card."""
 
@@ -107,9 +104,8 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
 class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only smurf and boost detection thresholds, version 1.
 
-    Defaults are the Conservative preset. Every bound sits strictly below the
-    matching signal saturation constant, so the magnitude ramp in
-    `smurf-boost/v1` can never divide by zero or by a negative number.
+    Defaults are the Conservative preset; every bound sits strictly below the
+    saturation constant, so the ramp's denominator is never zero or negative.
     """
 
     model_config = ConfigDict(strict=True)
@@ -169,9 +165,8 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         return self
 
 
-# The read contract is the write contract with two rules dropped: a stored value
-# may be spelled with the canonical field name, and it may need coercing. Bounds
-# and validators are inherited, so one that no longer fits is still refused.
+# The read contract drops two write rules: a stored value may use the canonical
+# field name, and it may need coercing. Bounds and validators still apply.
 _READ_POLICY = ConfigDict(validate_by_name=True, validate_by_alias=True, strict=False)
 
 
@@ -196,9 +191,8 @@ class SmurfBoostDetectionMutableSettingsV1(SmurfBoostDetectionMutableSettingsWri
 def _require_json_integer(value: object) -> int:
     """Reject coerced values for the one field the model's `strict` cannot cover.
 
-    `strict=True` on the model is the same policy, but `version` is a
-    `Literal[1]`: Pydantic raises `RuntimeError: Unable to apply constraint
-    'strict' to schema of type 'literal'`, and would not reject `True` anyway.
+    `version` is a `Literal[1]`, and Pydantic refuses to apply `strict` to a
+    literal schema -- nor would it reject `True` there.
     """
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("must be an integer")
@@ -247,9 +241,8 @@ _CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
     CardId.SMURF_BOOST_DETECTION: {"queue_id": RANKED_SOLO_QUEUE_ID},
 }
 
-# This map is intentionally explicit even while v1 has no renamed fields. A
-# future contract revision must add a reviewed mapping before it changes a
-# persisted name, so legacy values are never silently repurposed.
+# Explicit even while v1 has no renamed fields: a future revision must add a
+# reviewed mapping before it changes a persisted name.
 _LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
     CardId.TOP_CHAMPIONS: {},
     CardId.RECENT_PERFORMANCE: {},
@@ -260,9 +253,8 @@ _LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
 def _write_fields_annotated(annotation: type) -> frozenset[str]:
     """Every write-contract field declared with exactly this scalar type.
 
-    Listing these by hand meant a new threshold had to be remembered in two
-    places, and the one that gets forgotten is this one — a missed name here
-    is not a validation error, it is a legacy value that silently passes.
+    Derived, not listed: a name missed here is not a validation error but a
+    stored value that passes unchecked.
     """
     return frozenset(
         name

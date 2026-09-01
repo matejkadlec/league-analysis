@@ -20,9 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// The run card leads, full width: starting an analysis is what people come
-// here for. The result and the history it is picked from sit together below,
-// and the flowchart waits at the very bottom as reference.
+// The run card leads full width: starting an analysis is why people come here.
 function AnalysisLayout({
   start,
   results,

@@ -16,9 +16,8 @@ import { useManualRunOutcome } from "./use-manual-run-outcome";
 
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
-// The six control endpoints answer the same shape and want the same toast
-// handling. The mutationFn stays at each call site because the backend's
-// test_frontend_api_paths.py reads the validatedPost URL literal there.
+// The mutationFn stays at each call site because the backend's
+// test_frontend_api_paths.py reads the `validatedPost` URL literal there.
 function useControlMutation<TArg = void>(
   request: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
   success: {
@@ -98,9 +97,8 @@ export function useJobCardControls(
     void invalidateJobsData(queryClient);
   };
 
-  // Every mutationFn unwraps, so a failed request rejects and `onError` (plus
-  // the global `MutationCache.onError` reporting) runs; an HTTP 200 that
-  // declines -- `data.success === false` -- stays in `onSuccess`.
+  // Every mutationFn unwraps, so a failed request rejects into `onError`; an
+  // HTTP 200 that declines (`data.success === false`) stays in `onSuccess`.
   const triggerMutation = useMutation({
     mutationFn: async () =>
       unwrap(
@@ -288,9 +286,8 @@ export function useJobCardControls(
 
   const handlePauseResume = () => {
     if (isAnyPaused) {
-      // Resume the run whose own flag is set — routing by isTestRunning
-      // alone would resume the (unpaused) test run and leave a paused
-      // scheduled run unreachable for as long as any test run exists.
+      // Resume the run whose own flag is set: routing by isTestRunning alone
+      // leaves a paused scheduled run unreachable while a test run exists.
       if (isTestRunning && job.is_test_paused) {
         testResumeMutation.mutate();
       } else {

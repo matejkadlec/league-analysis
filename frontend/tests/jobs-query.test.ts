@@ -67,9 +67,8 @@ describe("the jobs surface's four caches", () => {
     const options = jobsQueryOptions();
     const queryClient = retryFreeClient();
 
-    // The cadence itself, not just agreement with the constant: every
-    // `refetchInterval` below is built from this import, so identity alone
-    // survives the interval dropping to two seconds.
+    // The cadence itself, not just agreement with the constant: identity
+    // alone survives the interval dropping to two seconds.
     expect(JOBS_REFRESH_INTERVAL_MS).toBe(15_000);
     expect(options.refetchInterval).toBe(JOBS_REFRESH_INTERVAL_MS);
     await queryClient.fetchQuery(options);

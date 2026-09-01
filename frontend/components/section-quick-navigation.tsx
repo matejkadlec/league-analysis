@@ -36,9 +36,8 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
   const navigationId = useId();
   const isExpanded = isHovered || isPinned;
 
-  // The DOM is the registry: a hard-coded item list drifts out of step with
-  // what a page conditionally renders. Measuring only while the panel is open
-  // is enough -- that is the only state in which an item can be clicked.
+  // The DOM is the registry: a hard-coded list drifts from what a page
+  // conditionally renders. Open is the only state an item can be clicked in.
   useEffect(() => {
     if (!isExpanded) return;
     const measure = () => setRenderedAnchors(renderedAnchorsOf(items));
@@ -59,9 +58,8 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
   };
 
   return (
-    // Hidden below `sm`: the collapsed tab is a fixed 40px, which is ~10% of a
-    // 390px viewport that it never gives back. It is a shortcut to sections
-    // the page already scrolls to, so a phone loses no reach.
+    // Hidden below `sm`: the collapsed tab costs a fixed 40px, ~10% of a 390px
+    // viewport, for sections the page already scrolls to.
     <div
       className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 sm:block"
       data-testid="section-quick-navigation"
@@ -69,9 +67,8 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
       onMouseLeave={() => setIsHovered(false)}
       onBlurCapture={handleBlur}
     >
-      {/* The rail's height belongs to the tab, not the panel: the tab is the
-          grab target and must not resize as sections mount, so `items-center`
-          lets the panel take its own content height against it. */}
+      {/* The rail's height belongs to the tab: it is the grab target and must
+          not resize as sections mount, so the panel sizes itself. */}
       <div className="flex h-[242px] items-center">
         <div className="vertical-gradient flex h-full w-10 items-center justify-center rounded-l-lg border-l border-y border-r-0 border-[#2f3640]">
           <button

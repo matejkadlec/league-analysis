@@ -8,9 +8,8 @@ import {
 } from "@/lib/core/schemas";
 
 /**
- * The two aggregate reads behind the profile cards, owned by the feature the
- * way `playerStatsQueryOptions` already owns the recent-performance read —
- * the overview route composes cards, it does not decide what they fetch.
+ * The feature owns the profile cards' reads; the route composes cards, it does
+ * not decide what they fetch.
  */
 export function championStatsQueryOptions(puuid: string) {
   return queryOptions({

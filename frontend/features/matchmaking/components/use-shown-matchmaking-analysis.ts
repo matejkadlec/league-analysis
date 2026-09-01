@@ -10,9 +10,8 @@ import {
 import { matchmakingResultsQueryKey } from "../matchmaking-query";
 
 /**
- * The run on screen: the one picked out of the history, or the latest
- * completed when nothing is picked. The history card reads this too, and the
- * shared cache entry is what keeps the two from naming different runs.
+ * The run on screen: the one picked out of the history, else the latest
+ * completed. The history card shares this cache entry, so the two agree.
  */
 export function useShownMatchmakingAnalysis(
   puuid: string,

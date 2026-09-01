@@ -1,8 +1,7 @@
 """Argon2 must not run on the event loop.
 
-The parameters this repo configures measure ~42ms per call, and the API runs
-one worker per container, so an inline hash stalls every other request in
-flight -- including the dummy-hash branch a failed login takes.
+The configured parameters cost ~42ms per call and the API runs one worker per
+container, so an inline hash stalls every other request in flight.
 """
 
 import asyncio

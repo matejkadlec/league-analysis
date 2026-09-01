@@ -1,8 +1,7 @@
 """A skippable player error must not end the run.
 
-`handle_player_error` rolls the session back, and `AsyncSession.rollback`
-expires every instance the session holds -- so a row the loop still holds
-answers its next read with a lazy refresh that raises under asyncio.
+`AsyncSession.rollback` expires every instance it holds, so a row the loop
+still reads triggers a lazy refresh that raises under asyncio.
 """
 
 from types import SimpleNamespace
@@ -39,9 +38,8 @@ class _FakeRiotClient:
 class _ExpiringSession:
     """Hands out rows and expires every one of them on rollback.
 
-    That is what `Session.rollback` does; expiring through
-    `instance_state` rather than a hand-written flag is what makes reading an
-    expired row here fail the same way it fails in production.
+    Expiring through `instance_state` rather than a hand-written flag is what
+    makes an expired read fail the same way it does in production.
     """
 
     def __init__(self) -> None:
@@ -170,8 +168,7 @@ async def test_match_fetcher_survives_a_rollback_inside_the_match_sync(
 ) -> None:
     """A skipped match rolls back mid-iteration, then reports itself.
 
-    `sync_queue_match` swallows a row-level IntegrityError and calls
-    the job's `on_failure` after the writer has rolled the session back, so an
+    `sync_queue_match` calls `on_failure` after rolling the session back, so an
     `on_failure` that reads the expired `Player` turns a skip into a dead run.
     """
     session = _ExpiringSession()

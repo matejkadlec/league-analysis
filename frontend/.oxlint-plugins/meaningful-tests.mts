@@ -1,14 +1,8 @@
-// Two test shapes that stay green while the behaviour they name is broken: a
-// test whose every assertion is a mock-call check, and `toThrow()` with no
-// argument, which any TypeError satisfies as well as the error it claims to pin.
+// Two shapes that stay green while the behaviour breaks: every assertion a
+// mock-call check, and a bare `toThrow()` any TypeError satisfies.
 
-// Flagged: an `it`/`test` body whose every `expect` matcher is a call matcher;
-// a bare `toThrow()` / `toThrowError()`. Accepted: call assertions next to an
-// outcome assertion; `not.toThrow()`, which has nothing to name; hooks.
-
-// The boundary: syntax cannot tell an assertion from a tautology. A test
-// asserting a mocked return value reads as fine here, and one with no
-// assertions at all is left to the suite's own "0 assertions" report.
+// The boundary: syntax cannot tell an assertion from a tautology, so a test
+// with no assertions is left to the suite's own "0 assertions" report.
 
 type Node = {
   type: string;
@@ -38,9 +32,8 @@ const CALL_MATCHERS = new Set([
 const THROW_MATCHERS = new Set(["toThrow", "toThrowError"]);
 const TEST_FNS = new Set(["it", "test"]);
 
-// `test.beforeEach`, `test.describe` and `test.setTimeout` are calls on the
-// same object in the Playwright specs, and assert nothing themselves. Only the
-// members that still produce a test count.
+// Only members that still produce a test count: `test.beforeEach`, `.describe`
+// and `.setTimeout` are calls on the same object but assert nothing.
 const TEST_MODIFIERS = new Set([
   "each",
   "for",

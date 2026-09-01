@@ -8,16 +8,14 @@ import {
 } from "@/lib/session/token-manager";
 
 /**
- * The two ways a session can end that nothing was watching -- both found by
- * mutating `token-manager.ts`, with 342 tests green through each. Node
- * environment on purpose: the second test needs `window` genuinely absent.
+ * Node environment on purpose: the second test needs `window` genuinely
+ * absent.
  */
 
 describe("a refusal has to be readable to count", () => {
   it("does not end the session on a JSON content-type it cannot parse", async () => {
-    // The shape that gets here: an edge or proxy answers 401 labelled JSON and
-    // serves something that is not. `return true` in the catch would sign the
-    // visitor out on an unparseable body -- the stranded session to prevent.
+    // An edge answering 401 labelled JSON with something else: `return true`
+    // in the catch would strand the visitor signed out on an unparseable body.
     const unreadable = new Response("<html>challenge</html>", {
       status: 401,
       headers: { "content-type": "application/json" },
@@ -40,9 +38,8 @@ describe("a refusal has to be readable to count", () => {
 
 describe("refreshing where there is no browser", () => {
   it("reports nothing learned rather than a refusal", async () => {
-    // Server-side render: there are no cookies to send, so the server can only
-    // fail to answer about a session it was never asked about. Returning
-    // `refused` would have every SSR pass conclude the session is over.
+    // A server-side render sends no cookies, so returning `refused` would have
+    // every SSR pass conclude the session is over.
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     expect(await refreshAccessToken()).toEqual({ outcome: "unreachable" });

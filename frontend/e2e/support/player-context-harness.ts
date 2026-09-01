@@ -5,9 +5,8 @@ import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
- * Six tracked players, one of them untracked, and one player who exists only
- * as an analysis suggestion. Enough rows that the dialog's list scrolls, which
- * is what the scroll-region assertions need.
+ * Six tracked players, one untracked, one who exists only as a suggestion:
+ * enough rows that the dialog's list scrolls, which the assertions need.
  */
 
 const NOW = "2026-08-09T10:00:00.000Z";
@@ -29,9 +28,8 @@ const player = (
 
 const players = {
   [CURRENT_PUUID]: player(CURRENT_PUUID, "Current", "ONE"),
-  // The one untracked player, which is what the toggle's "Untracked" state is
-  // asserted against. It carries the flag itself now that the button reads
-  // `is_tracked` from the player read instead of a second endpoint.
+  // The one untracked player, which the toggle's "Untracked" state is asserted
+  // against; the button reads `is_tracked` off the player row itself.
   [RECENT_PUUID]: {
     ...player(RECENT_PUUID, "Recent", "TWO", "euw1"),
     is_tracked: false,
@@ -62,8 +60,7 @@ export interface PlayerContextState {
 
 /**
  * Routes every API call these pages make. Returns the mutable state the specs
- * assert on, because a route handler runs in the driver and cannot hand a
- * value back through the page.
+ * assert on: a route handler runs in the driver and cannot hand a value back.
  */
 // Module-private: every spec goes through `startAtPlayerOverview`, which is
 // the install plus the viewport, the visit and the consent click.

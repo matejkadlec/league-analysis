@@ -40,9 +40,8 @@ function jobExecutionsInfiniteQueryKey() {
 const EXECUTIONS_PAGE_SIZE = 20;
 
 /**
- * Every job's executions, newest first, infinitely scrolled. Fixed-size
- * pages, because the backend caps `size` at 100. The failure envelope is
- * re-thrown on purpose: returned as data it truncates the list to page 1.
+ * Fixed-size pages, because the backend caps `size` at 100; the failure
+ * envelope is re-thrown, since returned as data it truncates to page 1.
  */
 export function jobExecutionsInfiniteQueryOptions() {
   return infiniteQueryOptions({
@@ -121,9 +120,8 @@ export function jobRecentExecutionsQueryOptions(jobId: number) {
 }
 
 /**
- * Refresh everything a job control action changes, awaiting every
- * invalidation the way `invalidateMatchmakingRun` does. No trailing
- * `refetchQueries`: `invalidateQueries` already refetches active queries.
+ * No trailing `refetchQueries`: `invalidateQueries` already refetches the
+ * active ones, and every invalidation is awaited.
  */
 export async function invalidateJobsData(
   queryClient: QueryClient,

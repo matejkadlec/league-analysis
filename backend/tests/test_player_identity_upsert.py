@@ -1,8 +1,7 @@
 """The skeletal player row a match write creates, and what it must not clobber.
 
-Every participant of every stored match becomes a `core.players` row so the
-participant FK resolves. The Match Fetcher and the matchmaking worker create
-the same bystander rows at once, so the statement settles the collision.
+Every participant becomes a `core.players` row so the FK resolves, and two
+writers create the same bystander rows at once, so the statement must settle it.
 """
 
 import json
@@ -37,9 +36,8 @@ def _compiled(participant: ParticipantDTO) -> str:
 def test_a_colliding_participant_updates_instead_of_raising() -> None:
     """A select-then-insert made one PK collision fail the whole job run.
 
-    A bystander participant created by another writer used to skip every
-    remaining tracked player in the pass. Settling the collision in the
-    conflict clause writes the row rather than skipping it.
+    A bystander created by another writer would otherwise skip every remaining
+    tracked player in the pass.
     """
     compiled = _compiled(_participant())
 

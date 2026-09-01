@@ -1,8 +1,7 @@
 """The email-change orchestration: request a code, verify it, apply it.
 
-One pending request per user, hashed one-time codes, the attempt lockout,
-and the SMTP handoff. `AuthService` composes the mixin; `_EmailChangeHost`
-declares the user-row surface it leans on.
+`AuthService` composes the mixin; `_EmailChangeHost` declares the user-row
+surface it leans on.
 """
 
 import hashlib
@@ -83,9 +82,8 @@ class EmailChangeMixin(_EmailChangeHost):
         code: str,
     ) -> None:
         """Send email-change verification code."""
-        # Same guard as `join_us.send_contact_email`: logging the code and
-        # returning as if the mail had gone out makes an unconfigured deployment
-        # indistinguishable from a working one, with the code on disk.
+        # Refuse rather than log the code: an unconfigured deployment must not
+        # look like a working one, with the code left on disk.
         if not smtp_configured():
             raise EmailChangeEmailNotConfiguredError
 

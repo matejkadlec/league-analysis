@@ -131,9 +131,8 @@ class JobExecutionApiCall(BaseModel):
 class JobExecutionDetailedLogs(BaseModel):
     """The two keys `base.py:record_execution_completion` writes, each only when non-empty.
 
-    Empty rather than absent, on purpose: a missing key and an empty list mean
-    the same thing to the dialog that reads them, and `| None` would put a
-    `null` on the wire for every execution that has one of the two but not both.
+    Empty rather than absent, on purpose: `| None` would put a `null` on the wire
+    for every execution carrying one key but not the other.
     """
 
     logs: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])

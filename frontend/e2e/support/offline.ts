@@ -1,14 +1,11 @@
 import type { Page } from "@playwright/test";
 
 /**
- * Keep the suite off the public internet: icon requests go to Riot's CDN, and
- * the two cards without `unoptimized` route through `/_next/image` server-side.
- * Aborting rather than serving a placeholder pixel leaves `onError` exercised.
+ * Keep the suite off the public internet, `/_next/image` fetches included.
+ * Abort rather than serve a placeholder pixel so `onError` stays exercised.
  */
 export async function blockUpstreamRequests(page: Page): Promise<void> {
-  // The production beacon POSTs here so docker logs can see client failures.
-  // Stubbed rather than left on the real origin: a spec should not depend on
-  // an outbound request, and a failing one retries.
+  // Stub the error beacon: a failing outbound POST retries and stalls the spec.
   await page.route("**/client-error-report", (route) =>
     route.fulfill({ status: 204, body: "" }),
   );

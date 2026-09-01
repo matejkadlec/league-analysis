@@ -151,9 +151,8 @@ def test_b4_needs_two_games_before_calling_a_drop_sustained() -> None:
 def test_b4_requires_the_whole_window_below_the_baseline_not_just_the_average() -> None:
     """A recovered newer half defeats `sustained` despite a 50% overall drop.
 
-    The window is newest first, so a collapse followed by a recovery carries
-    the same average as one that never let up -- only the halves tell them
-    apart.
+    The window is newest first, so a collapse followed by a recovery carries the
+    same average as one that never let up -- only the halves tell them apart.
     """
     thresholds = {"b4_high_rate_floor": 0.5, "b4_drop_threshold": 0.2}
     baseline = [_match(i, win=True) for i in range(10)]
@@ -187,9 +186,8 @@ BASE_THRESHOLDS = {
     key: float(value) for key, value in PRESETS[PRESET_CONSERVATIVE].items()
 }
 
-# Every one of these compares `value >= threshold` against a single key. The
-# compound signals gate on a second threshold too, so each has its own
-# boundary test below rather than a row here.
+# Every one of these compares `value >= threshold` against a single key; the
+# compound signals gate on a second, so each has its own boundary test below.
 SignalEvaluator = Callable[[SignalInputs], SignalResult]
 
 BOUNDARY_SIGNALS: tuple[tuple[SignalEvaluator, str], ...] = (
@@ -368,9 +366,8 @@ def test_b4_triggers_with_the_baseline_at_its_floor_and_the_drop_at_its_threshol
 def _b4_sustained_inputs(newer_wins: int) -> SignalInputs:
     """A 40-game window whose older half sits exactly at the sustained cut.
 
-    Twenty games a half is the smallest window where a half rate of 0.95 is
-    reachable at all, and 0.95 is exactly `baseline_rate - 0.05` when the
-    baseline is a clean sweep.
+    Twenty games a half is the smallest window where 0.95 is reachable, and 0.95
+    is exactly `baseline_rate - 0.05` when the baseline is a clean sweep.
     """
     newer = [_match(index, win=index < newer_wins) for index in range(20)]
     older = [_match(20 + index, win=index < 19) for index in range(20)]

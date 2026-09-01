@@ -21,9 +21,8 @@ const FORBIDDEN = [
 ];
 
 /**
- * `innerText` reads only laid-out text, so a hidden panel or closed dialog
- * escapes it; callers run this once per visible state. `textContent` would see
- * them but also script payloads, where "clean" matches "cleanup".
+ * `innerText` misses hidden panels, so callers run this once per visible state;
+ * `textContent` would also match script payloads, where "clean" hits "cleanup".
  */
 async function expectNoForbiddenWording(page: Page, stage: string) {
   const text = (await page.locator("body").innerText()).toLowerCase();
@@ -44,9 +43,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await page.goto("/player-overview");
   await acceptCookieBanner(page);
 
-  // The sidebar entry carries no player, unlike the other player pages: this
-  // page's `?puuid=` is a local analysis target, and a link that handed it the
-  // account's current player would make every visit overwrite that target.
+  // This page's `?puuid=` is a local analysis target, so the sidebar link must not
+  // hand it the account's current player and overwrite that target.
   const navigationLink = page.getByRole("link", { name: "Rank Manipulation" });
   await expect(navigationLink).toHaveAttribute("href", "/rank-manipulation");
   await navigationLink.click();
@@ -139,9 +137,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     quickNavigation.getByRole("button", { name: "Result" }),
   ).toHaveCount(0);
 
-  // The panel is sized by its entries, while the tab that opens it keeps the
-  // fixed rail height. Measured rather than asserted on a class, so a future
-  // height lands here rather than passing silently.
+  // The panel is sized by its entries, not by the rail's fixed height; measured
+  // rather than asserted on a class so a regression cannot pass silently.
   const panel = quickNavigation.getByRole("navigation", {
     name: "Page sections",
   });
@@ -149,16 +146,14 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   // Scoped to the panel: the rail's own open/close control is a button too,
   // and counting it would loosen the bound below by a whole entry.
   const entryCount = await panel.getByRole("button").count();
-  // Measured: three entries render 132px, against the 242px the fixed rail
-  // height used to force. ~40px an entry plus the nav's `py-2`, loose enough
-  // to survive a font change, tight enough that a return to 242px lands here.
+  // ~40px an entry plus the nav's `py-2`: loose enough to survive a font change,
+  // tight enough that a return to the 242px rail height fails.
   expect(panelBox!.height).toBeLessThanOrEqual(entryCount * 40 + 16 + 8);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
 
-  // The click fetches this player's games from Riot before comparing them,
-  // so a player the scheduled Match Fetcher has not reached yet is not
-  // compared on a stale history. The comparison waits for the fetch.
+  // The comparison waits on a fresh Riot fetch, so a player the scheduled Match
+  // Fetcher has not reached yet is never compared on a stale history.
   await expect(
     page.getByText("Fetching this player's games from Riot", { exact: false }),
   ).toBeVisible();
@@ -174,9 +169,8 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     quickNavigation.getByRole("button", { name: "Result" }),
   ).toBeVisible();
 
-  // Each family carries its own band, worded on its tab so both verdicts
-  // stay visible whichever tab is chosen -- and neither is a number. The
-  // accessible name pairs the family with its own reading.
+  // Each family's band is worded into its own tab name, so both verdicts stay
+  // visible whichever tab is chosen.
   await expect(
     result.getByRole("tab", {
       name: "Rapid Improvement Pattern Notable indicators",
@@ -253,9 +247,8 @@ test("renders the page at the sizes the layout was specified in", async ({
     .getByRole("button", { name: "Detection Settings", exact: true })
     .click();
 
-  // Muted helper copy was 12px against a dark background. Measured rather
-  // than asserted as class names: a utility that stops resolving still leaves
-  // the class in the markup.
+  // Measured, not asserted on class names: a utility that stops resolving still
+  // leaves its class in the markup.
   const helper = page.locator("#smurf-boost-recentWindowSize-help");
   await expect(helper).toBeVisible();
   await expect(helper).toHaveCSS("font-size", "14px");
@@ -275,9 +268,8 @@ test("renders the page at the sizes the layout was specified in", async ({
     await expect(section, heading).toHaveCSS("font-size", "16px");
   }
 
-  // Counting the resolved template catches a breakpoint that never applies,
-  // which a class-name check cannot. Each threshold group sizes its own grid so
-  // every tab fits without scrolling the dialog.
+  // Counting the resolved template catches a breakpoint that never applies, which
+  // a class-name check cannot.
   const columnsOf = (testId: string) =>
     page
       .getByTestId(testId)
@@ -291,9 +283,8 @@ test("renders the page at the sizes the layout was specified in", async ({
   await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
   await expect.poll(() => columnsOf("smurf-boost-thresholds-pattern")).toBe(4);
 
-  // The point of the grouped layout: with its tallest tab open, the dialog
-  // holds everything at desktop size without scrolling itself. Measured on
-  // the scroll container, not asserted from a class.
+  // The point of the grouped layout: at desktop size the tallest tab still fits
+  // without the dialog scrolling itself.
   const dialogScroll = await page
     .locator("#smurf-boost-settings")
     .evaluate((element) => ({
@@ -304,16 +295,14 @@ test("renders the page at the sizes the layout was specified in", async ({
     dialogScroll.clientHeight,
   );
 
-  // And that height is the same on every tab: all three groups occupy one
-  // grid cell, so a shorter group must not shrink the dialog and move the
-  // tab row out from under the pointer between clicks.
+  // All three groups share one grid cell, so a shorter tab must not shrink the
+  // dialog and move the tab row out from under the pointer.
   const dialogHeight = async () =>
     (await page.locator("#smurf-boost-settings").boundingBox())!.height;
   const tallestTabHeight = await dialogHeight();
   await page.getByRole("tab", { name: "Games Compared" }).click();
-  // Polled, not read once: `click()` awaits actionability but not React's
-  // commit or the layout that follows, so a single read measures whichever
-  // height happened to be current.
+  // Polled: `click()` awaits actionability but not React's commit or the layout
+  // that follows.
   await expect.poll(dialogHeight).toBe(tallestTabHeight);
 
   await page.keyboard.press("Escape");
@@ -346,9 +335,8 @@ test("renders the page at the sizes the layout was specified in", async ({
 });
 
 /**
- * The reason the page has a search of its own: analysing somebody who is not
- * the account's player, without becoming them. The other spec asserts only
- * that the control is on screen.
+ * Why the page has a search of its own: analysing somebody who is not the
+ * account's player, without becoming them.
  */
 test("compares a player the account has never tracked, and stays itself", async ({
   page,
@@ -391,9 +379,8 @@ test("compares a player the account has never tracked, and stays itself", async 
   // this player in as the current one; picking in the card must not.
   await expect(currentPlayer).toHaveText("Comparison#ONE");
 
-  // The same control also lives in the 240px sidebar, where the readability
-  // pass raised its suggestions from 12px. Two lines is the ceiling there --
-  // a third would push the list past the fold on the shortest laptop.
+  // Two lines is the ceiling for a suggestion in the 240px sidebar; a third pushes
+  // the list past the fold on the shortest laptop.
   const sidebarSearch = page.getByLabel("Search for player");
   await sidebarSearch.fill("Stranger");
   const suggestion = page.getByRole("option", { name: /Stranger#TWO/ });
@@ -420,9 +407,8 @@ test("does not carry one player's fetch report onto another", async ({
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
   await expect(runCard).toContainText("The last fetch");
 
-  // The card holds that sentence in its own state, where no query key can
-  // invalidate it, so the `key` on this card is the whole mechanism: without it
-  // React keeps the instance and the stranger inherits a fetch nobody ran.
+  // The fetch report lives in card state that no query key invalidates, so only
+  // the card's `key` stops a stranger inheriting a fetch nobody ran.
   const search = runCard.getByLabel("Choose player for comparison");
   await search.fill("Stranger");
   await page.getByRole("option", { name: /Stranger#TWO/ }).click();
@@ -439,9 +425,8 @@ test("seeds the card's search with the first player an empty account picks", asy
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  // The account that has never chosen a player: the one state where the card's
-  // `key` does real work. `PlayerSelector` starts with an empty
-  // `initialSearchValue` here, so only the remount re-seeds the box.
+  // With no current player `PlayerSelector` starts with an empty
+  // `initialSearchValue`, so only the remount can re-seed the box.
   await installSmurfBoostMocks(page, { currentPlayer: null });
 
   await page.goto("/rank-manipulation");
@@ -462,9 +447,8 @@ test("seeds the card's search with the first player an empty account picks", asy
 });
 
 /**
- * `accessibility.spec.ts` scans the three routes the populated-player harness
- * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.
- * The result card is included on purpose -- a scan of an unrun page misses it.
+ * Rank Manipulation runs on its own fixtures, so its scan lives here rather than
+ * in `accessibility.spec.ts`; an unrun page would miss the result card.
  */
 test("has no WCAG A/AA violations, before or after a comparison", async ({
   page,
@@ -509,16 +493,14 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
 
-  // The success toast is scanned once it has finished fading in: axe measures
-  // whatever opacity it finds, and the exclusion this replaces was hiding a
-  // `color-contrast` failure recorded at opacity 0.03 mid-animation.
+  // Wait out the toast's fade: axe measures whatever opacity it finds and reports
+  // `color-contrast` against a mid-animation one.
   await expect(page.locator("[data-sonner-toast]")).toHaveCSS("opacity", "1");
 
   await scan("with a result on screen");
 
-  // The second family's measurements only exist for axe once their tab is
-  // active. Scanned after the toast has left, so a mid-fade toast cannot
-  // record a contrast reading at partial opacity.
+  // The second family's measurements exist for axe only once their tab is active;
+  // scanned after the toast has left so no partial opacity is measured.
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, {
     timeout: 15_000,
   });

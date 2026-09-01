@@ -26,9 +26,8 @@ type ConsentReconciliation =
   | { outcome: "keep" };
 
 /**
- * Decide what the signed-in account's record means for the cookie already in
- * the browser. The jar is shared, so a second account inherits the first's
- * choice, which must not be recorded as `consent_source: "banner"`.
+ * The cookie jar is shared, so a second account inherits the first's choice --
+ * which must never be recorded as `consent_source: "banner"`.
  */
 async function reconcileConsentForAccount(
   userId: number,
@@ -46,18 +45,16 @@ async function reconcileConsentForAccount(
   if (isCancelled()) {
     return { outcome: "keep" };
   }
-  // A failed read is not evidence of anything. Leaving the browser state
-  // alone beats both alternatives: re-asking someone who already decided,
-  // and silently keeping a choice that may not be theirs.
+  // A failed read is not evidence: re-asking someone who already decided is as
+  // wrong as keeping a choice that may not be theirs.
   if (!result.success) {
     return { outcome: "keep" };
   }
 
   const stored = result.data;
   if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
-    // This account has decided before, so its record is the answer whatever
-    // the browser is carrying. `writeCookieConsent` restamps the cookie's
-    // timestamp; the true `consented_at` lives on the record.
+    // The record wins over whatever the browser carries; `writeCookieConsent`
+    // restamps the cookie, so the true `consented_at` lives on the record.
     const adopted = writeCookieConsent(stored.consent_level);
     if (stored.consent_level !== "all") {
       clearOptionalBrowserStorage();
@@ -82,23 +79,20 @@ async function reconcileConsentForAccount(
     return { outcome: "keep" };
   }
 
-  // Ask, rather than inherit. Nothing is written to this account's audit
-  // trail until it answers, and the optional storage the previous consent
-  // permitted is cleared in the meantime.
+  // Ask rather than inherit: nothing reaches this account's audit trail until it
+  // answers, and the previous consent's optional storage is cleared meanwhile.
   clearOptionalBrowserStorage();
   return { outcome: "ask" };
 }
 
 /**
- * The consent decision itself: what the browser carries, what the signed-in
- * account has on record, and how a new answer is persisted. Owns no markup,
- * so the banner's interaction policy can change without touching any of it.
+ * Owns the consent decision and no markup, so the banner's interaction policy can
+ * change without touching any of it.
  */
 export function useCookieConsent() {
   const { isAuthenticated, user } = useAuth();
-  // Lifecycle only. `isSaving` stays its own flag because it is orthogonal:
-  // the dialog can be closed and a PUT still in flight, and the footer link
-  // can reopen it in that window -- which is what the guard below is for.
+  // `isSaving` stays a separate flag: the dialog can be closed with a PUT still in
+  // flight, and the footer link can reopen it in that window.
   const [status, setStatus] = useState<"loading" | "hidden" | "open">(
     "loading",
   );
@@ -106,9 +100,8 @@ export function useCookieConsent() {
   const [isSaving, setIsSaving] = useState(false);
 
   const lastSyncedKeyRef = useRef<string | null>(null);
-  // Who answered the banner in this page session: the account id at the time,
-  // or `null` for a visitor. This hook is never remounted across a sign-out,
-  // so a bare boolean would write A's level into B's audit trail.
+  // The hook is never remounted across a sign-out, so a bare boolean here would
+  // write A's level into B's audit trail.
   const choiceOwnerRef = useRef<{ userId: number | null } | null>(null);
 
   const syncConsentForUser = useCallback(
@@ -219,8 +212,7 @@ export function useCookieConsent() {
       setStatus("hidden");
 
       if (isAuthenticated && user?.id) {
-        // Deliberately best-effort: the browser already holds the choice, and
-        // `lastSyncedKeyRef` stays unset, so the next sign-in reconcile
+        // Best-effort: `lastSyncedKeyRef` stays unset, so the next sign-in reconcile
         // retries the audit write.
         await syncConsentForUser(user.id, nextConsent).catch(() => {});
       }

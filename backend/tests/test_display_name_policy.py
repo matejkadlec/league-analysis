@@ -53,8 +53,7 @@ def test_omitting_the_field_still_means_no_change() -> None:
 
 def test_responses_do_not_re_impose_the_rule_on_stored_rows() -> None:
     # FastAPI validates response models on the way out, so inheriting the
-    # constraint would turn a row written before the rule into a 500 on
-    # `GET /auth/me` -- the page you would use to fix the name.
+    # constraint would turn a stored row into a 500 on `GET /auth/me`.
     from datetime import UTC, datetime
 
     now = datetime.now(UTC)

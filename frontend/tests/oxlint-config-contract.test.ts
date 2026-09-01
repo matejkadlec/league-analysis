@@ -14,15 +14,13 @@ import {
 } from "../.oxlint-plugins/restricted-syntax.mts";
 
 /**
- * An oxlint `overrides` entry replaces a rule's whole configuration for the
- * files it matches; it does not merge. A block that sets
- * `no-restricted-imports` and forgets the shared lists exempts that file.
+ * An oxlint `overrides` entry replaces a rule's whole configuration rather than
+ * merging, so a block that forgets the shared lists exempts its files.
  */
 
 /**
- * The lists below are the oracle, deliberately duplicated from the config: a
- * test that derives its expectation from its subject checks spelling, not
- * intent.
+ * The lists below are the oracle, duplicated from the config on purpose: a test
+ * deriving its expectation from its subject checks spelling, not intent.
  */
 
 /** Every group the shared import rule must ban, spelled out here on purpose. */
@@ -51,24 +49,20 @@ const EXPECTED_ALLOWED_NAMES = [
 const EXPECTED_BARREL_GROUPS = ["@/features/*/*", "@/features/*/*/**"];
 
 /**
- * A count is a blunt oracle and deliberately so: it fails on a deletion
- * without freezing the spelling of regexes that get refined as new spellings
- * of the same effect turn up.
+ * A count fails on a deletion without freezing the spelling of regexes that
+ * get refined as new spellings of the same effect turn up.
  */
 const EXPECTED_TEARDOWN_SELECTOR_COUNT = 11;
 const EXPECTED_EDGE_SELECTOR_COUNT = 4;
 
 /**
- * Blocks that set `no-restricted-imports` without the barrel list, each a
- * named decision: the five hint-reading pages and the edge's own allowlist.
- * A third must be argued.
+ * Blocks that set `no-restricted-imports` without the barrel list; a third one
+ * must be argued.
  */
 const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 2;
 
 /**
- * Every opt-out, spelled out: the two directories that build the scenarios
- * they assert on, the two files that own cookie writes, the two that own the
- * refused-versus-unreachable distinction, and the plugin sources.
+ * Every opt-out spelled out, so an added one has to be argued here first.
  */
 const EXPECTED_EXEMPTIONS: Record<string, string[][]> = {
   "house/session-teardown-syntax": [
@@ -94,9 +88,8 @@ type Pattern = { group?: string[]; allowImportNames?: string[] };
 const overrides = (oxlintConfig.overrides ?? []) as Override[];
 
 /**
- * Blocks whose value is an array, i.e. a severity plus options. A `"off"`
- * string is a deliberate exemption and is checked by name below rather than
- * skipped: an audit widened one of those to `**` and nothing noticed.
+ * Blocks whose value is an array, i.e. a severity plus options; an `"off"`
+ * string is an exemption and is checked by name below rather than skipped.
  */
 const blocksSetting = (rule: string): Override[] =>
   overrides.filter((block) => Array.isArray(block.rules?.[rule]));
@@ -124,9 +117,8 @@ describe("the oxlint config's shared teardown rules", () => {
         for (const pattern of shared.group) {
           expect(groups, label).toContain(pattern);
         }
-        // The allowlist itself, not just the paths it applies to: a block
-        // carrying the right patterns with `clearAuthStateCookie` added to
-        // the allowed names permits the teardown while looking identical.
+        // The allowlist itself, not just the paths: a block with the right
+        // patterns but an extra allowed name looks identical and permits it.
         const applied = (options.patterns ?? []).find((pattern) =>
           (pattern.group ?? []).some((entry) => shared.group.includes(entry)),
         );
@@ -167,9 +159,8 @@ describe("the oxlint config's shared teardown rules", () => {
   it("keeps every selector it is supposed to keep", () => {
     const teardown = SESSION_TEARDOWN_SYNTAX.map((rule) => rule.selector);
     expect(teardown.length).toBe(EXPECTED_TEARDOWN_SELECTOR_COUNT);
-    // The four effects, whatever their spelling: a cookie written by hand, a
-    // Set-Cookie or Clear-Site-Data header, and the hint's own name appearing
-    // where something is being deleted.
+    // The four effects, whatever their spelling, so a refined regex still has
+    // to cover each one.
     expect(
       teardown.some((selector) => selector.includes("property.name='cookie'")),
     ).toBe(true);
@@ -206,9 +197,8 @@ describe("the oxlint config's shared teardown rules", () => {
   });
 
   it("never excludes application code from the session guards", () => {
-    // `tests/` and `e2e/` are the only directories these rules skip, plus the
-    // five hint-reading pages and the plugin sources. Anything wider silently
-    // stops the guard applying to the code it exists for.
+    // An exclusion wider than the named ones silently stops the guard applying
+    // to the code it exists for.
     const guarded = new Set([
       "no-restricted-imports",
       "house/session-teardown-syntax",
@@ -232,8 +222,7 @@ describe("the oxlint config's shared teardown rules", () => {
 
   it("keeps the flags the config's rules are inert without", () => {
     // Neither flag is expressible in the config file, and both buy silence when
-    // absent: a type-aware rule without `--type-aware` reports nothing, and a
-    // regressed fixture passes on its now-pointless suppression.
+    // absent rather than an error.
     const lint = (packageJson as { scripts: Record<string, string> }).scripts
       .lint;
     expect(lint).toContain("--type-aware");
@@ -248,9 +237,8 @@ describe("the oxlint config's shared teardown rules", () => {
   });
 
   it("runs the session guards on application code at all", () => {
-    // The rules above are all about scope. This one is about existence: a
-    // config that enables neither reports nothing and passes every check
-    // above, because every list it fails to carry is a list it never sets.
+    // Existence, not scope: a config that enables neither rule reports nothing
+    // and still passes every scope check above.
     expect(oxlintConfig.rules?.["house/session-teardown-syntax"]).toBe("error");
     expect(oxlintConfig.jsPlugins).toContain("./.oxlint-plugins/index.mts");
 
@@ -258,9 +246,8 @@ describe("the oxlint config's shared teardown rules", () => {
       (block) => block.rules?.["house/edge-isolation-syntax"] === "error",
     );
     expect(edgeBlock?.files).toContain("proxy.ts");
-    // Next takes the LAST discovery match, so a `proxy.tsx` beside `proxy.ts`
-    // silently becomes the edge -- and `middleware.*` is the name Next also
-    // accepts, which an audit used to put the probe outside every rule.
+    // Next takes the LAST discovery match, so a `proxy.tsx` or `middleware.ts`
+    // beside `proxy.ts` silently becomes the edge.
     expect(edgeBlock?.files).toContain("proxy.tsx");
     expect(edgeBlock?.files).toContain("middleware.ts");
   });

@@ -23,9 +23,8 @@ export interface ApiError {
 }
 
 /**
- * A rejected request carrying the normalized error rather than only its text:
- * a plain `Error` would be re-normalized to `kind: "unexpected"` by the cache
- * handlers. `options.cause` keeps the original exception out of serialization.
+ * Carries the normalized error, not only its text: a plain `Error` would be
+ * re-normalized to `kind: "unexpected"` by the cache handlers.
  */
 export class ApiRequestError extends Error {
   readonly apiError: ApiError;
@@ -48,9 +47,8 @@ const TECHNICAL_MESSAGE_PATTERN =
   /(?:internal server|failed to fetch|network error|err_[a-z_]+|traceback|stack trace|sql(?:alchemy)?|postgres|axios|https?:\/\/|\/api\/|riotapierror|\bat\s+[A-Za-z_$][\w$]*\s*\(|rgapi-[A-Za-z0-9-]+)/i;
 
 /**
- * FastAPI's structured `detail`, read defensively. Per-field
- * `.catch(undefined)` makes a wrong type read as absent; the object-level
- * `.catch({})` covers the 422 shape, where `detail` is an array.
+ * FastAPI's structured `detail`: per-field `.catch(undefined)` makes a wrong
+ * type read as absent, and `.catch({})` covers the array-shaped 422 detail.
  */
 const StructuredErrorDetailSchema = z
   .object({
@@ -65,9 +63,8 @@ const StructuredErrorDetailSchema = z
 export type StructuredErrorDetail = z.infer<typeof StructuredErrorDetailSchema>;
 
 function readStructuredDetail(value: unknown): StructuredErrorDetail | null {
-  // The guard is load-bearing, not vestigial: `.catch({})` would turn a plain
-  // string `detail` into a truthy `{}` and attach an empty `details`, where
-  // today it falls through to `stringDetail` below.
+  // Load-bearing guard: `.catch({})` would turn a string `detail` into a
+  // truthy `{}` instead of falling through to `stringDetail` below.
   return typeof value === "object" && value !== null
     ? StructuredErrorDetailSchema.parse(value)
     : null;
@@ -268,9 +265,8 @@ export function normalizeApiError(error: unknown): ApiError {
       };
     }
 
-    // A reachability failure may point at this application's own backend, and
-    // never at the user's internet connection. The browser reached this code,
-    // so blaming their connection sends people to reboot a router.
+    // The browser reached this code, so the unreachable end is this app's own
+    // backend; blaming the user's connection sends them to reboot a router.
     return {
       kind: "network",
       code: "NETWORK_ERROR",

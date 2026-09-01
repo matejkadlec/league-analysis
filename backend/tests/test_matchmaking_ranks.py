@@ -11,8 +11,7 @@ from app.features.matchmaking_analysis.ranks import (
 from app.features.matchmaking_analysis.service import theoretical_max_requests
 
 # Shared with the frontend formatter test (rank-display.test.ts): the same
-# triples must produce the same values and display strings on both sides, or
-# the two implementations of the scale drift apart silently.
+# triples must produce the same values and display strings on both sides.
 SCALE_FIXTURES = [
     ("IRON", "IV", 0, 0, "Iron IV · 0 LP"),
     ("IRON", "IV", 99, 99, "Iron IV · 99 LP"),

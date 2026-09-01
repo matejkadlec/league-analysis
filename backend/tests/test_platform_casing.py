@@ -1,8 +1,7 @@
 """`platform` has exactly one stored spelling.
 
-The database holds the invariant (`ck_players_platform_is_lowercase`), so these
-tests cover the half a check constraint cannot: that the values the application
-*sends* are already canonical, and that lookups compare against that spelling.
+The check constraint holds the stored half; these cover the half it cannot:
+that the values sent, and the values compared against, are already canonical.
 """
 
 from __future__ import annotations
@@ -44,9 +43,8 @@ def test_normalize_platform_is_canonical(raw: str | Platform, expected: str) -> 
 def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> None:
     """An unknown region is refused here or it becomes a row nobody can read.
 
-    The column is `varchar(4)` under a lowercase check constraint, so a new
-    Riot platform stores cleanly -- and then fails `PlayerResponse`, whose
-    field is the enum: a 500 on the player routes and in the writer jobs.
+    A new Riot platform stores cleanly under the check constraint and then fails
+    `PlayerResponse`, whose field is the enum: a 500 on the player routes.
     """
     with pytest.raises(ValueError, match="is not a valid Platform"):
         normalize_platform(unknown)
@@ -55,9 +53,8 @@ def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> No
 def test_platform_enum_values_are_already_canonical() -> None:
     """The enum is the definition of canonical, so it must satisfy it.
 
-    If a member were ever added in upper case, `normalize_platform` and the
-    check constraint would disagree with the enum and every lookup built from
-    it would silently miss.
+    A member added in upper case would disagree with `normalize_platform` and
+    the check constraint, and every lookup built from it would silently miss.
     """
     assert [member.value for member in Platform] == [
         normalize_platform(member) for member in Platform
@@ -67,9 +64,8 @@ def test_platform_enum_values_are_already_canonical() -> None:
 def test_the_player_lookup_compares_against_canonical_casing() -> None:
     """The one remaining platform-filtered lookup binds the stored spelling.
 
-    The column is lowercase by check constraint and the parameter is the enum,
-    so an equality comparison is both correct and index-usable -- but only
-    while the value being bound is the enum's own.
+    Equality is correct and index-usable only while the bound value is the
+    enum's own, matching the column's lowercase check constraint.
     """
     statement = build_player_search_query(Platform.EUN1, "name", "faker", "faker", None)
 

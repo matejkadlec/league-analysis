@@ -120,9 +120,8 @@ const MATCH: MatchWithPlayerData = {
       champ("Elise", "r5"),
     ],
   },
-  // Different kill totals on purpose: each of the four ways the stat blocks
-  // could be wired gives a distinct percentage. 10 of blue's 20 = 50%, 8 of
-  // red's 40 = 20%; crossed reads 25% and 40%.
+  // Different totals on purpose, so each wiring gives a distinct percentage:
+  // 10 of blue's 20 = 50%, 8 of red's 40 = 20%; crossed reads 25% and 40%.
   team_stats: {
     blue_team: { ...TEAM_STATS, kills: 20 },
     red_team: { ...TEAM_STATS, kills: 40 },
@@ -149,9 +148,8 @@ afterEach(() => {
 
 describe("a match history row", () => {
   it("measures kill participation against the player's own team, not the enemy's", () => {
-    // `playerTeamStats` picks blue or red off `participant.team_id` and the
-    // opponent's block reads the mirror. Crossed, both numbers stay plausible
-    // percentages and nothing else on the row contradicts them.
+    // Crossed, both numbers stay plausible percentages and nothing else on the
+    // row contradicts them.
     renderRow();
 
     expect(screen.getByText("50%")).toBeTruthy();
@@ -159,9 +157,8 @@ describe("a match history row", () => {
   });
 
   it("shows a dash rather than Infinity when the team recorded no kills", () => {
-    // A team that got shut out is a real scoreline, not a corrupt row, and
-    // `kills` is the denominator. Without the `> 0` guard the row prints
-    // "Infinity%" as a kill participation.
+    // A shut-out team is a real scoreline and `kills` is the denominator:
+    // without the `> 0` guard the row prints "Infinity%".
     renderRow({
       team_stats: {
         blue_team: { ...TEAM_STATS, kills: 0 },
@@ -171,15 +168,13 @@ describe("a match history row", () => {
 
     expect(screen.getByText("—")).toBeTruthy();
     expect(screen.queryByText(/Infinity/)).toBeNull();
-    // The opponent's side still has a denominator, so exactly one of the two
-    // blocks falls back. Pinning the count is what stops this passing because
-    // both went blank.
+    // Only one side loses its denominator; pinning the count stops this passing
+    // when both blocks go blank.
     expect(screen.getByText("20%")).toBeTruthy();
   });
 
-  // A Tailwind class is asserted because the tint carries the outcome for
-  // sighted players, and `getMatchOutcome` derives it and the label from one
-  // branch -- so a row whose tint and label disagree cannot pass.
+  // The tint carries the outcome for sighted players, and `getMatchOutcome`
+  // derives it and the label from one branch, so they cannot disagree.
   const tint = (container: HTMLElement) =>
     container.firstElementChild?.className ?? "";
 
@@ -215,9 +210,8 @@ describe("a match history row", () => {
   });
 
   it("tints a won remake as a remake, not as a victory", () => {
-    // `remake` is checked before `win`, and the order is the whole point: a
-    // remake is annulled, so the winning side did not win anything. Read the
-    // other way round the row puts a victory colour behind a voided game.
+    // `remake` is checked before `win`: a remake is annulled, so the winning
+    // side did not win anything.
     const { container } = renderRow({
       player_participant: { ...PARTICIPANT, win: true, remake: true },
     });
@@ -227,9 +221,8 @@ describe("a match history row", () => {
   });
 
   it("treats an early surrender as a remake even when the participant flag is not set", () => {
-    // The two flags come from different places — `remake` off the
-    // participant, `early_surrender` off the match — and either one alone
-    // means the game was voided.
+    // `remake` comes off the participant, `early_surrender` off the match, and
+    // either one alone means the game was voided.
     const { container } = renderRow({
       early_surrender: true,
       player_participant: { ...PARTICIPANT, win: false, remake: false },
@@ -240,9 +233,8 @@ describe("a match history row", () => {
   });
 
   it("falls back to a neutral tint when the player is not in the match", () => {
-    // A row with no `player_participant` is a data gap, not a loss. Without
-    // the guard the cascade falls through to the defeat colour and the row
-    // reads as a game the player lost — in the tint and in text.
+    // No `player_participant` is a data gap, not a loss; without the guard the
+    // cascade falls through to the defeat colour.
     const { container } = renderRow({ player_participant: null });
 
     expect(tint(container)).toContain("bg-muted/30");
@@ -251,9 +243,8 @@ describe("a match history row", () => {
   });
 
   it("shows the game length but never a per-match LP number", () => {
-    // Per-match LP is not reliably obtainable under a Riot developer key, so
-    // the column is hidden rather than guessed -- `lp_change` still arrives
-    // and must not reach the screen. The outcome word is the non-colour signal.
+    // Per-match LP is not obtainable under a Riot developer key, so `lp_change`
+    // still arrives but must not reach the screen.
     const { container } = renderRow({ lp_change: 18 });
 
     expect(container.textContent).not.toContain("LP");
@@ -262,9 +253,8 @@ describe("a match history row", () => {
   });
 
   it("shows a zero KDA as 0.00, not as a perfect game", () => {
-    // `kda` is a generated column: 0 kills and 0 assists is 0.00, and 1,715
-    // production rows are exactly that. The row used to read it as falsey and
-    // print "Perfect" -- the best possible game -- on the worst ones.
+    // `kda` is a generated column: 0 kills and 0 assists is 0.00, so reading it
+    // as falsey prints "Perfect" on the worst games.
     renderRow({ player_participant: { ...PARTICIPANT, kda: 0 } });
 
     expect(
@@ -273,18 +263,16 @@ describe("a match history row", () => {
     expect(screen.queryByText("Perfect")).toBeNull();
   });
 
-  // Both lineups are rendered through the same helper but from two separate
-  // call sites, so the comparison that finds the viewer exists twice. A test
-  // that only ever puts the player on blue leaves the red call site unwatched.
+  // Both lineups render through one helper from two call sites, so a test that
+  // only ever puts the player on blue leaves the red one unwatched.
   it.each([
     ["blue", PLAYER_PUUID, "b1", "Ahri"],
     ["red", "b1", PLAYER_PUUID, "Zed"],
   ])(
     "rings exactly one champion as the player when they are on %s",
     (_side, bluePuuid, redPuuid, expectedChampion) => {
-      // Ten icons, and the only thing saying which one is the viewer is the
-      // yellow ring. Compare the wrong field and either nobody is highlighted
-      // or — worse — the ring lands on a stranger.
+      // Ten icons, and only the yellow ring says which is the viewer: compare
+      // the wrong field and the ring lands on a stranger.
       const { container } = renderRow({
         team_compositions: {
           blue_team: [
@@ -300,15 +288,13 @@ describe("a match history row", () => {
 
       const ringed = container.querySelectorAll(".ring-yellow-400");
       expect(ringed).toHaveLength(1);
-      // The champion travels on the image's `alt` rather than a `title` on
-      // the wrapper: these icons carry a Riot ID tooltip, so it would
-      // otherwise be readable by neither sighted nor screen-reader users.
+      // The champion travels on the image's `alt`: these icons carry a Riot ID
+      // tooltip, so a wrapper `title` would reach neither kind of reader.
       expect(ringed[0]?.querySelector("img")?.getAttribute("alt")).toBe(
         expectedChampion,
       );
-      // The count above is only meaningful next to the total: without this, a
-      // mutation that renders one icon per lineup instead of five would still
-      // leave exactly one ringed.
+      // Without the total, a mutation rendering one icon per lineup instead of
+      // five would still leave exactly one ringed.
       expect(container.querySelectorAll("[class*='ring-']")).toHaveLength(10);
       // And exactly the viewer's own is inert; the other nine switch player.
       expect(container.querySelectorAll("button[class*='ring-']")).toHaveLength(
@@ -318,9 +304,8 @@ describe("a match history row", () => {
   );
 
   it("draws a dash instead of a lineup when the match has no team compositions", () => {
-    // Older rows predate composition capture. Without the guard the two
-    // `.map` calls run on `undefined` and the whole row throws, taking the
-    // rest of the match list down with it.
+    // Older rows predate composition capture; without the guard the two `.map`
+    // calls run on `undefined` and take the whole match list down.
     const { container } = renderRow({ team_compositions: null });
 
     expect(container.querySelectorAll("[title][class*='ring-']")).toHaveLength(
@@ -329,9 +314,8 @@ describe("a match history row", () => {
   });
 
   it("writes the date, the clock and the duration the way a human reads them", () => {
-    // Three hand-rolled formatters, each with the fix everyone forgets:
-    // `2:07` not `2:7`, and `21:05` not `21:5`. The duration is seconds from
-    // Riot, so 1265 is twenty-one minutes and five seconds.
+    // Hand-rolled formatters: `2:07` not `2:7`, `21:05` not `21:5`. The
+    // duration is Riot seconds, so 1265 is twenty-one minutes and five.
     renderRow();
 
     expect(screen.getByText("4.3.2026 2:07 PM")).toBeTruthy();
@@ -339,9 +323,8 @@ describe("a match history row", () => {
   });
 
   it.each([
-    // Midnight is the one hour `hours % 12` turns into 0, and noon is the
-    // only hour where `>= 12` and `> 12` disagree. Every other hour reads
-    // correctly with either line deleted.
+    // Midnight is the one hour `hours % 12` turns into 0, and noon the only
+    // hour where `>= 12` and `> 12` disagree.
     [new Date(2026, 2, 4, 0, 0), "4.3.2026 12:00 AM"],
     [new Date(2026, 2, 4, 12, 0), "4.3.2026 12:00 PM"],
     [new Date(2026, 2, 4, 23, 59), "4.3.2026 11:59 PM"],
@@ -373,8 +356,7 @@ describe("a match history row", () => {
     "puts a game played at %s in the band its own date is in",
     (playedAt, expected) => {
       // Counting elapsed 24-hour blocks from 10:00 makes last night's 23:00
-      // game "Today" under a printed date reading the 9th. The label and that
-      // date are one instant, so they change over at the same local midnight.
+      // game "Today" under a printed date reading the 9th.
       vi.useFakeTimers();
       vi.setSystemTime(new Date(2026, 2, 10, 10, 0));
       renderRow({ game_start_timestamp: playedAt.getTime() });
@@ -384,8 +366,7 @@ describe("a match history row", () => {
   );
 
   it("shortens the game version to the patch it was played on", () => {
-    // Riot sends a four-part build string. Players compare patches, not
-    // builds, so the row keeps two parts — take one and every game in a
+    // Riot sends a four-part build string; keep two parts or every game in a
     // season collapses onto "Patch 15".
     renderRow({ game_version: "15.16.1.2345" });
 
@@ -398,8 +379,7 @@ describe("a match history row", () => {
     expect(screen.getByText("Ranked Solo/Duo")).toBeTruthy();
   });
 
-  // The stat spans in document order: the player's block is rendered before
-  // the opponent's, so index 0 is the player's reading. `selector` keeps the
+  // Spans in document order, so index 0 is the player's. `selector` keeps the
   // ancestor `div` -- whose text also ends in "Kill Particip." -- out.
   const statClasses = (pattern: RegExp) =>
     screen
@@ -407,9 +387,8 @@ describe("a match history row", () => {
       .map((span) => span.className);
 
   it("colours the better side of each stat and neither side of a tie", () => {
-    // The comparison has to see both sides at once: derived from one side
-    // alone it would highlight whatever the player happened to have, and a
-    // tie -- both laners on 210 CS here -- would light up both blocks.
+    // The comparison must see both sides: derived from one it would highlight
+    // whatever the player had, and a tie would light up both blocks.
     renderRow({
       lane_opponent: { ...OPPONENT, total_cs: PARTICIPANT.total_cs },
     });
@@ -432,8 +411,7 @@ describe("a match history row", () => {
 
   it("labels the rune icons with the keystone and the secondary tree", () => {
     // The primary icon is the keystone, so labelling it with its tree puts
-    // "Sorcery" on a Summon Aery icon -- a name for a rune the player did not
-    // take. The secondary icon really is a tree and must keep saying so.
+    // "Sorcery" on a Summon Aery icon; the secondary icon really is a tree.
     renderRow();
 
     expect(screen.getByAltText("Summon Aery")).toBeTruthy();
@@ -449,18 +427,16 @@ describe("a match history row", () => {
   });
 
   it("offers one keyboard stop per rune or spell group, not per icon", () => {
-    // Nine non-interactive stops per row made tabbing mostly decoration, but
-    // the names must stay keyboard-reachable: each side's rune pair and spell
-    // pair is one focusable group, so 2 sides x 2 groups and nothing else.
+    // The names must stay keyboard-reachable without a stop per icon: each
+    // side's rune pair and spell pair is one group, so 2 sides x 2 groups.
     const { container } = renderRow();
 
     expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);
   });
 
   it("falls back to the tree when the keystone is one we have no name for", () => {
-    // The tooltip and the icon read the same keystone table, so an unknown
-    // keystone has to drop both back to the tree together -- a label naming a
-    // rune the icon beside it does not show is worse than a vaguer one.
+    // Tooltip and icon read the same keystone table, so an unknown one must
+    // drop both to the tree rather than name a rune the icon does not show.
     renderRow({
       player_participant: {
         ...PARTICIPANT,
@@ -511,9 +487,8 @@ describe("a match history row", () => {
     const user = userEvent.setup();
     renderRow({}, onSelectPlayer);
 
-    // The team-composition icon for the player whose page this is: it carries
-    // the Riot ID like every other, but switching to the player already
-    // current is a redundant refresh, so it is not a control at all.
+    // The viewer's own icon carries the Riot ID like every other, but switching
+    // to the current player is a redundant refresh, so it is not a control.
     expect(
       screen.queryByRole("button", { name: /view Ahri#EUN1/ }),
     ).toBeNull();

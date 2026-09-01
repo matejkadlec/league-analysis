@@ -1,6 +1,5 @@
-// Regression fixture for `house/require-cn-for-classname-composition`. Each
-// directive suppresses a shape the rule MUST flag; accepted cases carry none.
-// A selector that stops matching or over-matches fails the run either way.
+// Regression fixture for `house/require-cn-for-classname-composition`: every
+// directive suppresses a shape the rule must flag, accepted cases carry none.
 
 declare function cn(...values: unknown[]): string;
 declare const isActive: boolean;

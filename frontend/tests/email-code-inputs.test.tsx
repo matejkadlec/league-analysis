@@ -46,9 +46,8 @@ describe("the six-slot email verification code", () => {
   });
 
   it("takes a code pasted with the words around it", () => {
-    // People paste from the mail, and what comes with it is "Your code is
-    // 123 456" or a trailing newline. Stripping to digits is the difference
-    // between the field filling in and it silently refusing the paste.
+    // People paste from the mail with the words around it, so stripping to
+    // digits is the difference between filling in and silently refusing.
     const { slots } = renderInputs();
 
     fireEvent.paste(slots[0]!, {
@@ -59,9 +58,8 @@ describe("the six-slot email verification code", () => {
   });
 
   it("replaces a previous code on paste instead of merging into it", () => {
-    // Paste the wrong code, then the right one: building on the old digits
-    // would leave whatever the shorter new code did not overwrite, and submit
-    // a six-digit number that was never in either mail.
+    // Building on the old digits leaves whatever the shorter new code did not
+    // overwrite, submitting a number that was in neither mail.
     const { slots } = renderInputs();
 
     fireEvent.paste(slots[0]!, {
@@ -97,9 +95,8 @@ describe("the six-slot email verification code", () => {
   });
 
   it("steps back when backspace lands on an already-empty slot", () => {
-    // Without this, deleting a wrong digit leaves the caret on a slot that is
-    // already empty and the next backspace does nothing -- the field looks
-    // stuck partway through a code.
+    // Without this the caret sits on an already-empty slot and the next
+    // backspace does nothing: the field looks stuck partway through.
     const { slots } = renderInputs();
 
     fireEvent.change(slots[0]!, { target: { value: "1" } });
@@ -109,9 +106,8 @@ describe("the six-slot email verification code", () => {
   });
 
   it("will not write past the last slot when digits arrive mid-code", () => {
-    // A multi-digit paste into slot five writes past the last index, lengthening
-    // the array rather than overflowing anything visible, so the dialog would
-    // refuse a code under six boxes that look correctly filled.
+    // Writing past the last index lengthens the array invisibly, so the dialog
+    // would refuse a code under six boxes that look correctly filled.
     const { slots, onDigits } = renderInputs();
 
     fireEvent.change(slots[4]!, { target: { value: "789" } });

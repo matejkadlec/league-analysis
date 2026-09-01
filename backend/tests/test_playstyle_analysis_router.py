@@ -1,8 +1,7 @@
 """What the two playstyle-analysis routes answer, per service outcome.
 
-Both routes are thin: one wraps the service call in the shared failure
-answer, the other turns a missing analysis into a 404. Called directly, with
-the service doubled, that is all there is to check.
+Both routes are thin: one wraps the service call in the shared failure answer,
+the other turns a missing analysis into a 404.
 """
 
 from types import SimpleNamespace

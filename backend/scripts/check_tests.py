@@ -1,9 +1,7 @@
 """Test meaningfulness for pytest, mirroring the frontend's `meaningful-tests`.
 
-Nothing else in the backend gate asks whether a test can fail. Every rule
-states its whole reasoning in its own report message.
-
-Run from `backend/`: `python scripts/check_tests.py [path]`.
+Every rule states its whole reasoning in its own report message. Run from
+`backend/`: `python scripts/check_tests.py [path]`.
 """
 
 from __future__ import annotations
@@ -14,9 +12,8 @@ from pathlib import Path
 
 DEFAULT_PATHS = ("tests",)
 
-# A call whose name says it asserts. `_assert_the_session_was_installed` is the
-# established shape here: a shared helper holding the assertions for several
-# tests, so counting bare `ast.Assert` nodes would report its callers.
+# A call whose name says it asserts: counting bare `ast.Assert` nodes would
+# instead report callers of shared helpers like `_assert_the_session_was_installed`.
 ASSERT_HELPER_MARKER = "assert"
 
 # Mock introspection: present, these prove the wiring was called. Absent an
@@ -39,11 +36,9 @@ CALL_ASSERTIONS = frozenset(
 )
 
 # The negative forms are outcome assertions, not wiring checks: when the claim
-# is that nothing happened -- no row added, no commit issued -- the missing
-# call is the observable outcome, and no value is left to inspect instead.
+# is that nothing happened, the missing call is the observable outcome.
 ABSENCE_ASSERTIONS = frozenset(("assert_not_called", "assert_not_awaited"))
 
-# What an `assert` reads when it inspects a mock rather than a result.
 # `assert mock.called` is a call assertion wearing a statement's clothes, so it
 # must not rescue a test from the rule below.
 CALL_ATTRIBUTES = frozenset(
@@ -102,9 +97,8 @@ def _mentions_call_attribute(node: ast.AST) -> bool:
 def _raises_context(node: ast.AST) -> bool:
     """Whether a `with` item is `pytest.raises`/`pytest.warns`.
 
-    Those are assertions: the block fails if nothing raises. A test whose only
-    assertion is one of them is making a real claim, so it is exempt from the
-    zero-assertion rule.
+    Those are assertions -- the block fails if nothing raises -- so they exempt
+    a test from the zero-assertion rule.
     """
     if not isinstance(node, ast.With | ast.AsyncWith):
         return False
@@ -118,9 +112,8 @@ def _raises_context(node: ast.AST) -> bool:
 def _classify(function: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[int, int, int]:
     """Count `(assertions, call assertions, outcome assertions)` in one test.
 
-    Assertions in a nested function count: the `httpx.MockTransport` handlers
-    assert on the request they are handed, so skipping callback bodies would
-    report this suite's most thorough tests as asserting nothing.
+    Assertions in a nested function count: `httpx.MockTransport` handlers
+    assert on the request they are handed.
     """
     assertions = call_assertions = outcome = 0
     for node in ast.walk(function):

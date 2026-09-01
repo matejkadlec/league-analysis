@@ -1,10 +1,8 @@
 // Regression fixture for `house/no-compat-shims`.
 
-// Every `oxlint-disable-next-line` below sits above a shape the rule MUST
-// report. An accepted case carries no directive, so a rule that widens into
-// string literals or non-declarations fails the run.
+// Every directive below sits above a shape the rule MUST report and accepted
+// cases carry none, so widening into string literals fails the run too.
 
-// MUST flag: the marker that announces a second way to do the same thing.
 // oxlint-disable-next-line house/no-compat-shims
 // @deprecated use fetchSummoner instead
 export const summonerAlias = 1;
@@ -21,7 +19,6 @@ export const rankedView = 3;
 // for old clients that send a string id
 export const stringId = 4;
 
-// MUST flag: the tolerant reader, described rather than migrated.
 // oxlint-disable-next-line house/no-compat-shims
 // supports the old shape too
 export const tolerantReader = 5;

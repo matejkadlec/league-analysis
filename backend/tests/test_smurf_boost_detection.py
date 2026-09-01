@@ -1,8 +1,7 @@
 """Regression coverage for the `smurf-boost/v1` detection model.
 
-Fixture construction relies on one property: when every composite metric is
-`base * (1 + 0.5 * level)`, each z-score reduces to `level / sd(levels)`, so a
-match's standardized composite `C` is a direct function of its level.
+Fixtures set every composite metric to `base * (1 + 0.5 * level)`, so each
+z-score reduces to `level / sd(levels)` and `C` follows directly from the level.
 """
 
 from __future__ import annotations
@@ -200,9 +199,7 @@ def _family(result: Any, family: str) -> Any:
     return next(item for item in result.families if item.family == family)
 
 
-# ---------------------------------------------------------------------------
-# Exact statistics, pinned so a library swap cannot change a threshold's meaning
-# ---------------------------------------------------------------------------
+# === Exact statistics, pinned so a library swap cannot change a threshold's meaning ===
 
 
 @pytest.mark.parametrize(
@@ -235,9 +232,8 @@ def test_undefined_statistics_report_none_instead_of_raising() -> None:
 def test_the_two_variance_denominators_stay_apart() -> None:
     """`n` and `n - 1` are both used here, deliberately and in different places.
 
-    The module aliases both denominators to `statistics`, one line apart, so
-    swapping which name points at which changes no shape and no type. On eight
-    games the two differ by 14 percent, which is the width of a band.
+    Swapping the two aliases changes no shape and no type, yet on eight games
+    they differ by 14 percent -- the width of a band.
     """
     values = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]
 
@@ -248,9 +244,8 @@ def test_the_two_variance_denominators_stay_apart() -> None:
 def test_hedges_g_keeps_its_small_sample_correction() -> None:
     """The correction is the whole difference between Hedges' g and Cohen's d.
 
-    Drop it and the function still returns a plausible effect size, larger
-    than the real one -- by 13 percent on the eight-game windows this model
-    actually sees, enough to carry a player across a calibrated threshold.
+    Dropped, the result stays plausible but runs 13 percent high on eight-game
+    windows -- enough to carry a player across a calibrated threshold.
     """
     recent = [10.0, 12.0, 14.0, 16.0]
     baseline = [2.0, 4.0, 6.0, 8.0]
@@ -267,9 +262,8 @@ def test_hedges_g_keeps_its_small_sample_correction() -> None:
 def test_windows_too_small_to_have_spread_report_zero_or_none() -> None:
     """One observation carries no dispersion, and the model must not invent it.
 
-    A player with a single recent game reaches these helpers the same way as
-    one with fifty. Dividing by `n - 1` would raise on the first, and there is
-    no interval to compute on a player with no games at all.
+    A single-game player reaches these helpers like any other, and dividing by
+    `n - 1` would raise there.
     """
     assert sample_variance([7.0]) == 0.0
     assert sample_variance([]) == 0.0
@@ -277,9 +271,7 @@ def test_windows_too_small_to_have_spread_report_zero_or_none() -> None:
     assert hedges_g([1.0], [2.0]) is None
 
 
-# ---------------------------------------------------------------------------
-# Composite construction
-# ---------------------------------------------------------------------------
+# === Composite construction ===
 
 
 def test_composite_is_standardized_against_the_baseline_window() -> None:
@@ -314,9 +306,7 @@ def test_a_role_seen_only_in_the_recent_window_still_has_a_baseline() -> None:
     assert _family(result, FAMILY_A).band != BAND_NOT_ENOUGH_DATA
 
 
-# ---------------------------------------------------------------------------
-# Sample floor and the first-class insufficient-data outcome
-# ---------------------------------------------------------------------------
+# === Sample floor and the first-class insufficient-data outcome ===
 
 
 def test_below_floor_reports_not_enough_data_for_both_families() -> None:
@@ -353,9 +343,7 @@ def test_flat_baseline_triggers_nothing_under_every_preset() -> None:
             assert not any(signal.triggered for signal in family.signals)
 
 
-# ---------------------------------------------------------------------------
-# Family A
-# ---------------------------------------------------------------------------
+# === Family A ===
 
 
 def test_step_change_triggers_a1() -> None:
@@ -497,9 +485,7 @@ def test_unknown_account_level_makes_a4_unavailable() -> None:
     assert "summoner_level_unknown" in a4.notes
 
 
-# ---------------------------------------------------------------------------
-# Family B
-# ---------------------------------------------------------------------------
+# === Family B ===
 
 
 def test_win_rate_surge_without_performance_triggers_b1() -> None:
@@ -615,9 +601,7 @@ def test_unsustained_reversal_does_not_trigger_b4() -> None:
     assert not b4.triggered
 
 
-# ---------------------------------------------------------------------------
-# Degenerate baseline
-# ---------------------------------------------------------------------------
+# === Degenerate baseline ===
 
 
 def test_degenerate_baseline_makes_composite_signals_unavailable() -> None:
@@ -639,9 +623,7 @@ def test_degenerate_baseline_makes_composite_signals_unavailable() -> None:
     assert _signal(result, FAMILY_B, "B4").available
 
 
-# ---------------------------------------------------------------------------
-# Bands and the distinct-evidence guard
-# ---------------------------------------------------------------------------
+# === Bands and the distinct-evidence guard ===
 
 
 def test_one_evidence_group_is_capped_at_weak_indicators() -> None:
@@ -674,9 +656,8 @@ def test_three_evidence_groups_reach_strong_indicators() -> None:
 
     family = _family(result, FAMILY_A)
     triggered = {signal.signal_id for signal in family.signals if signal.triggered}
-    # A4 is deliberately gated off by the account level, so the three evidence
-    # groups have to come from three genuinely different statistics rather than
-    # from a second reading of the same one.
+    # A4 is gated off by account level, so the three evidence groups must come
+    # from three genuinely different statistics, not one read twice.
     assert triggered == {"A1", "A2", "A3"}
     assert family.distinct_evidence == 3
     assert family.score == pytest.approx(0.80, abs=1e-6)
@@ -694,9 +675,7 @@ def test_notable_requires_two_evidence_groups() -> None:
     assert family.band == BAND_NOTABLE
 
 
-# ---------------------------------------------------------------------------
-# Confidence
-# ---------------------------------------------------------------------------
+# === Confidence ===
 
 
 def test_disjoint_patches_reduce_confidence() -> None:
@@ -732,9 +711,8 @@ def test_missing_rank_history_is_neutral() -> None:
 def test_short_rank_span_barely_moves_confidence() -> None:
     """A three-day rank history is low corroboration, not a free full mark.
 
-    The baseline is deliberately half-filled so the bonus is measured before
-    the clamp. Against a full window the product saturates at 1.0 and any
-    bonus, however wrong, would look correct.
+    The baseline is half-filled so the bonus is measured before the clamp; a full
+    window saturates at 1.0 and would make any bonus look correct.
     """
     recent = _window(20, wins=10)
     baseline = _window(30, wins=15, start_index=20)
@@ -758,9 +736,7 @@ def test_partial_window_coverage_lowers_confidence() -> None:
     assert result.confidence_band == "medium"
 
 
-# ---------------------------------------------------------------------------
-# Model invariants
-# ---------------------------------------------------------------------------
+# === Model invariants ===
 
 
 def test_every_bounded_range_stays_below_its_saturation() -> None:
@@ -804,9 +780,8 @@ def test_conservative_is_the_shipped_default() -> None:
 def test_schema_defaults_are_the_default_preset() -> None:
     """A fresh account starts exactly on the preset the dropdown calls default.
 
-    The settings write schema repeats the fifteen threshold numbers as field
-    defaults; nothing else ties the two copies together, so a `config.py` tweak
-    without the matching schema edit splits what "Conservative" means.
+    Nothing ties the write schema's field defaults to `config.py`, so editing one
+    without the other splits what "Conservative" means.
     """
     from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
 
@@ -833,17 +808,14 @@ def test_the_disclaimer_never_reads_as_an_accusation() -> None:
     assert "Do not use it to accuse anyone." in DISCLAIMER
 
 
-# ---------------------------------------------------------------------------
-# Catalog registration
-# ---------------------------------------------------------------------------
+# === Catalog registration ===
 
 
 def test_the_detection_card_is_in_the_approved_catalog() -> None:
     """The engine reads thresholds through the existing viewer-scoped catalog.
 
-    Every one of these maps is keyed by card, and a card missing from any of
-    them is a `KeyError` on the read or write path rather than a card that
-    merely lacks settings.
+    A card missing from any of these maps is a `KeyError` on the read or write
+    path, not a card that merely lacks settings.
     """
     card = CardId.SMURF_BOOST_DETECTION
 
@@ -854,8 +826,7 @@ def test_the_detection_card_is_in_the_approved_catalog() -> None:
 
 
 #: Every threshold the detection card accepts, spelled the one way the write
-#: contract allows. Tests that care about a single threshold override it here
-#: rather than restating the other fourteen.
+#: contract allows; single-threshold cases override one key rather than restate it.
 _VALID_DETECTION_PAYLOAD: dict[str, Any] = {
     "recentWindowSize": 20,
     "baselineWindowSize": 60,
@@ -882,9 +853,8 @@ def test_detection_settings_accept_only_canonical_camel_case_names() -> None:
     )
     assert stored["recent_window_size"] == 20
 
-    # Named, because "rejected" is not the claim -- "rejected *for being
-    # snake_case*" is: a model that dropped `recent_window_size` would fail
-    # this on a missing-field error and read as the strictness still holding.
+    # Matched by name: a model that dropped `recent_window_size` would fail on a
+    # missing-field error and still read as the strictness holding.
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         validate_card_preference_update(
             CardId.SMURF_BOOST_DETECTION,
@@ -906,9 +876,7 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
         validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
 
 
-# Service orchestration. The engine above is pure, but the defects that reach a
-# viewer live in how the service loads history, claims a run and shapes its
-# output. These cases drive the service directly with a stub session.
+# === Service orchestration, driven directly with a stub session ===
 
 
 def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:

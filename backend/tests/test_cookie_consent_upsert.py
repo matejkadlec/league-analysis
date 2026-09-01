@@ -41,9 +41,8 @@ class _Session:
 async def test_repeat_consent_upserts_instead_of_racing_the_primary_key() -> None:
     """A second consent updates the row rather than inserting a duplicate.
 
-    Selecting first and branching on the result let two concurrent requests
-    both miss the row and both insert, so the loser raised a 500 from
-    ``user_cookie_consents_pkey``.
+    Select-then-branch lets two concurrent requests both miss the row and both
+    insert, so the loser raises a 500 from ``user_cookie_consents_pkey``.
     """
     session = _Session(
         SimpleNamespace(
@@ -74,9 +73,8 @@ async def test_repeat_consent_upserts_instead_of_racing_the_primary_key() -> Non
 async def test_repeat_consent_moves_both_timestamps() -> None:
     """The conflict branch sets `updated_at` itself.
 
-    `updated_at` carries an ORM-level `onupdate`, which a Core ON CONFLICT
-    never fires, so an upsert that leaves it to the model silently freezes the
-    column at the value the first insert wrote.
+    `updated_at` carries an ORM-level `onupdate` that a Core ON CONFLICT never
+    fires, so leaving it to the model freezes the column at the first insert.
     """
     session = _Session(
         SimpleNamespace(
@@ -101,9 +99,8 @@ async def test_repeat_consent_moves_both_timestamps() -> None:
 async def test_missing_user_settings_are_inserted_on_conflict_do_nothing() -> None:
     """Two tabs on a fresh account both load the shell and both miss the row.
 
-    `user_id` is the primary key, so select-then-`add` made the loser raise
-    IntegrityError out of a plain GET -- a 500 on the app-shell path, which
-    renders the error boundary instead of the player selector.
+    `user_id` is the primary key, so select-then-`add` makes the loser raise
+    IntegrityError out of a plain GET -- a 500 on the app-shell path.
     """
 
     class _SettingsSession:

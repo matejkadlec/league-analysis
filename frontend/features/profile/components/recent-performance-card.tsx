@@ -21,9 +21,8 @@ interface RecentPerformanceCardProps {
   lastUpdated?: string | null | undefined;
 }
 
-// A performance trend indicator. `threshold` defaults to 5% of the overall
-// value, because CS counted in the hundreds and a 0-1 win rate cannot share a
-// fixed band. `higherIsBetter` has no default: a silent one would be wrong.
+// `threshold` defaults to 5% of the overall value: CS counted in the hundreds
+// and a 0-1 win rate cannot share a fixed band. `higherIsBetter` has no default.
 function getTrendIndicator(
   recent: number,
   overall: number,
@@ -55,9 +54,8 @@ function getTrendIndicator(
   };
 }
 
-// One decimal at most; Intl drops a trailing ".0" natively, so the
-// hand-rolled strip this replaced is gone. Grouping off keeps the swap
-// exact if a four-digit stat ever lands here (no "1,234.6").
+// Intl drops a trailing ".0" natively. Grouping is off so a four-digit stat
+// renders "1234.6" rather than "1,234.6".
 const oneDecimalFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
   useGrouping: false,

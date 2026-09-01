@@ -1,8 +1,7 @@
 """Every declared job type is wired all the way to a runnable implementation.
 
-Adding a `JobType` member is the easy half; registering it so the scheduler can
-actually run it is the half that gets forgotten. A half-registered type is
-silent — configurations save, the row looks healthy, and the job never executes.
+A half-registered type is silent: configurations save, the row looks healthy,
+and the job never executes.
 """
 
 from collections.abc import Callable
@@ -52,9 +51,8 @@ def test_the_router_can_construct_every_job_type(
 ) -> None:
     """Both router factories can build every declared type.
 
-    The run factory reads `job_registry`, so the check above covers which types
-    it knows. The test factory reads `test_job_registry` -- a type missing from
-    it schedules fine and then answers the request to run it with a 501.
+    The test factory reads `test_job_registry`: a type missing from it schedules
+    fine and then answers the request to run it with a 501.
     """
     try:
         instance = factory(_job_row(job_type))

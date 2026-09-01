@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Cleanse verified local Riot data and normalize the LGA-11 QA accounts.
 
-Fail-closed: read-only by default, and it only mutates a database after an
-explicit ``--apply`` plus a verified backup. For the local development
-database only; it must never be used for a production or shared database.
+Fail-closed: read-only by default, and it mutates only after an explicit
+``--apply`` plus a verified backup. Never point it at a shared database.
 """
 
 from __future__ import annotations
@@ -54,9 +53,8 @@ RIOT_DATA_TABLES = (
     ("core", "players"),
 )
 
-# These records represent application configuration or audit state and are
-# preserved. User counts can increase by one only when the client fixture is
-# first created.
+# Configuration and audit state, preserved. User counts can rise by one only
+# when the client fixture is first created.
 PRESERVED_TABLES = (
     ("auth", "users"),
     ("auth", "user_settings"),
@@ -440,9 +438,8 @@ def delete_riot_data(connection: Connection) -> dict[str, int]:
 
 def normalize_qa_accounts(connection: Connection, target: Preflight) -> bool:
     """Reset the retained admin and create or normalize the non-admin client."""
-    # `pwd_context` rather than `AuthService`: the service's wrappers are
-    # async because the API path must not block on Argon2, and this script
-    # is synchronous throughout.
+    # `pwd_context` rather than `AuthService`: the service's wrappers are async
+    # so the API path does not block on Argon2, and this script is synchronous.
     admin_hash = pwd_context.hash(ADMIN_PASSWORD)
     client_hash = pwd_context.hash(CLIENT_PASSWORD)
     common_values = {
@@ -650,9 +647,8 @@ def main(argv: list[str] | None = None) -> int:
         backup_path = validated_backup_path(arguments.backup_path)
 
         with engine.begin() as connection:
-            # Repeat identity checks and block writers before taking the backup.
-            # The lock stays held through cleanup, so its backup covers every row
-            # the transaction can delete or update.
+            # Block writers before the backup: the lock is held through cleanup,
+            # so the backup covers every row the transaction can touch.
             preflight_result = preflight(connection, settings, arguments.database)
             lock_cleanup_tables(connection)
             refuse_active_regular_riot_writers(connection)

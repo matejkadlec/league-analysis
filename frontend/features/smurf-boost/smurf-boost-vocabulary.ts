@@ -4,9 +4,8 @@ import type {
 } from "@/lib/core/schemas";
 
 /**
- * The wording the model fixes -- band vocabulary, family titles, confidence
- * labels, note readings, disclaimer -- and the colour each band wears, in
- * their only frontend copy, so nothing drifts from the specification.
+ * The only frontend copy of the model's fixed wording and band colours, so
+ * nothing drifts from the specification.
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
@@ -22,9 +21,8 @@ export const FAMILY_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
- * An unknown family is rendered as its own identifier rather than dropped, for
- * the same reason an unknown note is: a result computed under a later model
- * version must still be readable instead of failing the whole page.
+ * An unknown family renders as its own identifier so a result from a later
+ * model version stays readable instead of failing the page.
  */
 export function familyTitle(family: string): string {
   return FAMILY_TITLES[family] ?? family;
@@ -43,9 +41,8 @@ export const BAND_LABELS: Record<SmurfBoostBand, string> = {
 };
 
 /**
- * What each band means, in the specification's own words. A band name alone
- * is a finding word: "Weak indicators" without "likely ordinary variance"
- * beside it reads as a small accusation rather than the caution it is.
+ * A band name alone reads as an accusation; the specification's own meaning
+ * has to travel beside it.
  */
 export const BAND_MEANINGS: Record<SmurfBoostBand, string> = {
   not_enough_data: "Fewer eligible ranked games than the model requires",
@@ -61,9 +58,8 @@ export function bandMeaning(band: SmurfBoostBand): string {
 }
 
 /**
- * One colour ladder for the result card's band word, its family edge and the
- * explanation card's dot, so the two cards cannot drift. Colour never carries
- * a reading alone; classes are whole literals because Tailwind scans strings.
+ * One ladder shared by both cards so they cannot drift; classes stay whole
+ * literals because Tailwind scans strings.
  */
 export const BAND_STYLES: Record<
   SmurfBoostBand,
@@ -103,9 +99,8 @@ export const CONFIDENCE_LABELS: Record<SmurfBoostConfidenceBand, string> = {
 };
 
 /**
- * Plain-language readings of the identifiers the backend emits. An
- * unrecognised identifier is rendered as itself rather than hidden, because
- * the specification requires every data-quality limit to stay visible.
+ * An unrecognised identifier renders as itself rather than hidden: the
+ * specification requires every data-quality limit to stay visible.
  */
 export const NOTE_LABELS: Record<string, string> = {
   patch_disjoint_windows:

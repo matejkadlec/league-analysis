@@ -51,9 +51,8 @@ from app.features.jobs.service import JobService
 def _job_configuration_double(**attributes: object) -> JobConfiguration:
     """Return a structural stand-in for a `job_configurations` row.
 
-    Constructing the mapped class would configure SQLAlchemy's entire mapper
-    registry, and this file imports only the jobs models, so a real instance
-    fails to initialize.
+    Constructing the mapped class would configure SQLAlchemy's whole mapper
+    registry, which this file deliberately does not import.
     """
     return cast(JobConfiguration, SimpleNamespace(**attributes))
 
@@ -135,9 +134,7 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
 ) -> None:
     """Stopping the test run must not resume a paused concurrent scheduled run.
 
-    This held in neither direction while the flag was a shared DB column:
-    each stop had to guess which run owned it. Per-key flags make the
-    question disappear.
+    The pause flag is per runtime key, so a stop never has to guess its owner.
     """
     from app.features.jobs import control as control_module
     from app.features.jobs import router as jobs_router
@@ -229,8 +226,7 @@ def test_a_job_that_has_never_run_is_overdue_from_the_start() -> None:
     """No execution row means catch-up, not "on schedule".
 
     A configuration activated between restarts has nothing to measure an
-    interval from, and reading that as up to date leaves it waiting for a
-    tick that only fires after its first run.
+    interval from, and reading that as up to date leaves it waiting forever.
     """
     started = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
 
@@ -364,9 +360,6 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
 
     assert constructed == [(7, "system")]
     assert len(scheduled) == 1
-    # `func` and `run_date` used to be read out of the entry and compared to
-    # themselves, so the catch-up could have been queued a year out -- or
-    # pointed at another job -- with this test still green.
     assert scheduled[0]["func"] == instances[0].run
     run_date = scheduled[0]["run_date"]
     assert isinstance(run_date, datetime)
@@ -382,9 +375,8 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
 
 
 def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
-    # The frontend keys its API-call rows by the endpoint alone
-    # (job-execution-api-calls.tsx), so regrouping by anything finer — region,
-    # batch, time window — collides those React keys.
+    # The frontend keys its API-call rows by endpoint alone
+    # (job-execution-api-calls.tsx), so anything finer collides those React keys.
     calls = [
         APICallRecord(
             endpoint="/lol/match/v5/matches/{matchId}",
@@ -669,9 +661,8 @@ async def test_two_runs_of_one_configuration_cannot_both_start(
 ) -> None:
     """The runtime key is claimed before the first await, so only one run wins.
 
-    Two background player syncs for different PUUIDs both drive the Match
-    Fetcher and share a configuration id, so a registry written after the
-    start-up queries lets both pass the check.
+    Two player syncs for different PUUIDs share a configuration id, so a
+    registry written after the start-up queries would let both pass.
     """
     from app.features.jobs import control as control_module
 
@@ -831,9 +822,8 @@ class _WriterInterlockSession:
 
 
 async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() -> None:
-    # The refusal only works if the lock comes *before* the read — read first
-    # and the answer can be stale by the time the writer proceeds. Compiling the
-    # Select below configures every mapper, so import the registry first.
+    # The lock must come *before* the read, or the answer can be stale. Compiling
+    # the Select below configures every mapper, so import the registry first.
     from app.model_registry import import_all_models
 
     import_all_models()
@@ -863,11 +853,10 @@ async def test_writer_proceeds_when_no_interlock_is_set() -> None:
 
 
 def test_detailed_logs_accepts_every_shape_production_stores() -> None:
-    """The three shapes measured in `jobs.job_executions` on 2026-08-21.
+    """The three object shapes `jobs.job_executions` holds in production.
 
-    2,620 rows hold an object: 1,806 `{api_calls, logs}`, 811 `{logs}`, and 3
-    a legacy `{message}`. Naming the shape is only safe while that last one
-    still parses -- a strict model would 500 the executions dialog.
+    `{api_calls, logs}`, `{logs}` and the rare `{message}` must all parse; a
+    strict model would 500 the executions dialog on the last one.
     """
     grouped = JobExecutionDetailedLogs.model_validate(
         {

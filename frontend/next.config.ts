@@ -4,16 +4,14 @@ const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const internalApiUrl = process.env.API_INTERNAL_URL || publicApiUrl;
 
 /**
- * Documents and RSC must not be stored at the edge or in the browser: HTML
- * names the hashed chunk filenames, so a document cached across a deploy asks
- * for chunks the new origin no longer has.
+ * HTML names the hashed chunk filenames, so a document cached across a deploy
+ * asks for chunks the new origin no longer has.
  */
 export const DOCUMENT_CACHE_CONTROL =
   "private, no-cache, no-store, max-age=0, must-revalidate";
 
-/** Content-addressed webpack/turbopack output. The query `?dpl=` from
- * `deploymentId` still cache-busts when a filename happens to stay the same
- * across two images (the turbopack runtime did). */
+/** Content-addressed build output; the `?dpl=` query from `deploymentId` still
+ * cache-busts when a filename happens to repeat across two images. */
 export const HASHED_STATIC_CACHE_CONTROL =
   "public, max-age=31536000, immutable";
 

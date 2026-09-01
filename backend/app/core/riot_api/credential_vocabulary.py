@@ -1,8 +1,7 @@
 """Credential-health vocabulary, kept free of dependencies on purpose.
 
-`client.py` and `credential_health.py` each need the other, and breaking that
-cycle with a `TYPE_CHECKING` import turns runtime reflection over
-`create_tracked_riot_api_client` into a PEP 649 `NameError`.
+`client.py` and `credential_health.py` need each other; breaking the cycle with
+a `TYPE_CHECKING` import turns runtime reflection into a PEP 649 `NameError`.
 """
 
 from __future__ import annotations

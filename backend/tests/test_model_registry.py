@@ -1,8 +1,7 @@
 """Prove `import_all_models()` names every module that maps a table.
 
-`alembic/env.py` builds `Base.metadata` from `import_all_models()`, so a model
-module missing from that list is invisible to Alembic and to the database. The
-walk lives here, in subprocesses, and compares reachable *tables*, not entries.
+`alembic/env.py` builds `Base.metadata` from `import_all_models()`, so a module
+missing from that list is invisible to Alembic and to the database.
 """
 
 from __future__ import annotations
@@ -21,9 +20,8 @@ import_all_models()
 print("\\n".join(sorted(Base.metadata.tables)))
 """
 
-# `onerror` is passed explicitly because `pkgutil.walk_packages` defaults to
-# swallowing import errors. A model module that raises on import would then be
-# skipped in silence, which is the exact failure this test exists to catch.
+# `pkgutil.walk_packages` swallows import errors unless `onerror` is passed, so a
+# model module that raises would be skipped in silence.
 _WALKED_TABLES = """
 import importlib
 import pkgutil
@@ -66,9 +64,8 @@ def test_registry_lists_every_mapped_model() -> None:
         "app/model_registry.py does not import the module defining them, "
         "so Alembic cannot see them: " + ", ".join(sorted(missing))
     )
-    # The comparison above is only as good as the walk: if it stops finding
-    # models -- a renamed package, a changed `app.__path__` -- it yields nothing
-    # and the assertion passes while checking nothing.
+    # The comparison above is only as good as the walk: a walk that finds nothing
+    # makes the assertion pass while checking nothing.
     unreachable = registered - walked
     assert not unreachable, (
         "the package walk did not find tables the registry did, so the walk is "

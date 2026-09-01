@@ -1,6 +1,5 @@
-// Regression fixture for `house/no-fire-event-click`. Every directive below
-// suppresses a shape the rule MUST flag; accepted cases carry none. An unused
-// directive means a detection stopped matching, a report here means it grew.
+// Regression fixture for `house/no-fire-event-click`: an unused directive
+// means a detection stopped matching, a report means the rule grew.
 
 type FireEvent = {
   click: (element: unknown) => void;
@@ -48,9 +47,8 @@ it("filters as the player types", () => {
   fireEvent.keyPress(input, { key: "Enter" });
 });
 
-// Accepted: user-event has no equivalent for these. `change` sets a value
-// without the keystrokes, `paste` and `error` model events no pointer
-// produces, and `keyDown`/`blur` are single events a test raises on purpose.
+// Accepted: user-event has no equivalent for these -- `change`/`paste`/`error`
+// model events no pointer produces; `keyDown`/`blur` are deliberate singles.
 it("recovers from a broken icon", () => {
   fireEvent.change(input, { target: { value: "25" } });
   fireEvent.paste(input, { clipboardData: { getData: () => "Faker#KR1" } });

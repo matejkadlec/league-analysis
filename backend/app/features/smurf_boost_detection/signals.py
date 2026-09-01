@@ -1,7 +1,6 @@
 """The eight `smurf-boost/v1` signals.
 
-Each signal is a pure function of one `SignalInputs` bundle. A signal either
-produces a result or reports itself unavailable with a reason; an unavailable
+Each signal is a pure function of one `SignalInputs` bundle. An unavailable
 signal never triggers, never scores, and never counts as evidence.
 """
 
@@ -341,9 +340,8 @@ def _b3_unavailable(inputs: SignalInputs) -> SignalResult | None:
             sample_size=total,
         )
     if bimodality_coefficient(inputs.composite_recent) is None:
-        # The specification separates a recent window with no spread at all,
-        # which is a sample problem, from an estimator that is undefined for
-        # some other reason.
+        # The specification separates no-spread (a sample problem) from an
+        # estimator undefined for any other reason.
         no_spread = population_variance(inputs.composite_recent) <= EPSILON
         return _unavailable(
             "B3",

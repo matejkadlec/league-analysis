@@ -1,8 +1,7 @@
 """Role-normalized composite performance score for `smurf-boost/v1`.
 
-The composite is the single per-match performance number every location, spread
-and shape signal reads. It is standardized against the baseline window so that
-`mean(C_B) = 0` and `sd(C_B) = 1` exactly, making sd thresholds literally true.
+The one per-match number every signal reads, standardized against the baseline
+window so `mean(C_B) = 0` and `sd(C_B) = 1` exactly and sd thresholds are true.
 """
 
 from __future__ import annotations

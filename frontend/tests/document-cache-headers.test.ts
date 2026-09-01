@@ -10,9 +10,8 @@ import {
 } from "../next.config";
 
 /**
- * A cached HTML document after a deploy still names the previous image's
- * `/_next/static` hashes, so the browser asks for an asset the origin 404s and
- * React mounts `undefined`. Hashed assets stay immutable; documents may not.
+ * A cached HTML document names the previous image's `/_next/static` hashes, so
+ * after a deploy the browser asks for an asset the origin 404s.
  */
 describe("document cache headers", () => {
   it("forbids storing HTML and reaffirms immutable hashed assets, in that order", async () => {
@@ -20,9 +19,8 @@ describe("document cache headers", () => {
     const { default: nextConfig } = await import("../next.config");
     const rules = await nextConfig.headers?.();
 
-    // Spelled out rather than read back from `DOCUMENT_CACHE_CONTROL`: a header
-    // asserted to equal the constant it is built from cannot disagree with it,
-    // so `public, max-age=31536000, immutable` would pass just as happily.
+    // Spelled out rather than read from `DOCUMENT_CACHE_CONTROL`: a header
+    // asserted against the constant it is built from cannot disagree with it.
     const documents = "private, no-cache, no-store, max-age=0, must-revalidate";
     expect(DOCUMENT_CACHE_CONTROL).toBe(documents);
 
@@ -74,8 +72,7 @@ describe("the production image passes the commit as the deployment id", () => {
       /: "\$\{NEXT_DEPLOYMENT_ID:\?must be passed as a build arg\}"/,
     );
     // The runtime stage re-declares the ARG; a builder-only ARG dies at FROM.
-    // Found by stage name, not by base image: a pinned Node version here fails
-    // on every bump, and -1 from indexOf silently sliced the whole file away.
+    // Found by stage name, not indexOf: an unchecked -1 would slice the file away.
     const runtimeStageStart = dockerfile.search(/^FROM \S+ AS runtime$/m);
     expect(runtimeStageStart).toBeGreaterThan(-1);
     const runtimeStage = dockerfile.slice(runtimeStageStart);

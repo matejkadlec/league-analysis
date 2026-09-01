@@ -7,9 +7,8 @@ import { allSourceFiles } from "./support/source-scan-support";
 const GLOBAL_STYLESHEET = "app/globals.css";
 
 /**
- * The branded classes that carry a product decision about what an element
- * means. Renaming one without updating its callers leaves them styled by
- * nothing at all, which typechecks, lints, and renders as an unstyled element.
+ * The branded classes that carry a product decision. Renaming one without its
+ * callers leaves them styled by nothing, which typechecks, lints and renders.
  */
 const BRANDED_CLASSES = [
   "gold-gradient",
@@ -20,9 +19,8 @@ const BRANDED_CLASSES = [
 ];
 
 /**
- * Every file allowed to hand-roll a gradient, and why it is not a branded
- * surface. A gradient outside this list is the failure the branded classes
- * exist to prevent: an action styled to look primary or destructive inline.
+ * Every file allowed to hand-roll a gradient, and why it is not branded. One
+ * outside this list is an action styled to look primary or destructive inline.
  */
 const HAND_ROLLED_GRADIENTS = new Map([
   ["components/ui/skeleton.tsx", "shadcn primitive's loading shimmer sweep"],
@@ -75,9 +73,8 @@ describe("branded style contract", () => {
   });
 
   /**
-   * `globals.css` paints `#header-card` with `background: ... !important`, so a
-   * `bg-*` utility on that element renders nothing -- measured in Chrome. Three
-   * pages carried a hand-copied hex pair doing nothing on any of them.
+   * `globals.css` paints `#header-card` with `background: ... !important`, so
+   * a `bg-*` utility on that element renders nothing.
    */
   it("leaves the header card's background to the stylesheet that owns it", () => {
     const background =
@@ -85,9 +82,8 @@ describe("branded style contract", () => {
     const headerCards = allSourceFiles().filter((path) =>
       code(path).includes('id="header-card"'),
     );
-    // Signal first: a scan that stopped finding header cards would pass by
-    // finding nothing wrong with them. Two surfaces still spell the card
-    // themselves, so pin all three and converting one has to come here.
+    // Signal first: an empty scan would pass by finding nothing wrong. Two of
+    // the three still spell the card by hand, so converting one edits this list too.
     expect(
       headerCards.map((path) => relative(process.cwd(), path)).sort(),
     ).toEqual([
@@ -112,14 +108,12 @@ describe("branded style contract", () => {
   });
 
   /**
-   * The header card names its own text colour. Without `text-white` the shadcn
-   * `Card`'s `text-card-foreground` wins, which is `oklch(98% 0 0)` rather than
-   * `#ffffff` -- two adjacent cards, two whites, measured in Chromium.
+   * Without `text-white` the shadcn `Card`'s `text-card-foreground` wins, which
+   * is `oklch(98% 0 0)` and not `#ffffff` -- two adjacent cards, two whites.
    */
   it("gives every header card its own white", () => {
     // The element, not a window around it: a slice of surrounding characters
-    // is satisfied by a `text-white` on the parent or the heading inside, and
-    // neither colours the card. The tag match also checks every header card.
+    // is satisfied by a `text-white` on the parent, which colours no card.
     const openingTag = /<[A-Za-z][^>]*\bid="header-card"[^>]*>/g;
     const missing = allSourceFiles()
       .filter((path) =>
@@ -134,14 +128,12 @@ describe("branded style contract", () => {
 
   /**
    * The branded classes are defined under `.dark` and nowhere else, so the
-   * document has to carry that class unconditionally. Chosen at runtime it gave
-   * a light-OS viewer white cards on the dark splash, and nothing failed.
+   * document must carry that class unconditionally, not by OS preference.
    */
   it("forces the theme the branded classes are written for", () => {
     const stylesheet = readFileSync(GLOBAL_STYLESHEET, "utf8");
-    // Signal first: if a branded class ever gains an unscoped definition this
-    // coupling is no longer load-bearing, and the assertion below is checking
-    // a convention rather than a contract.
+    // Signal first: an unscoped definition of a branded class would make the
+    // assertion below a convention rather than a contract.
     const darkOnly = BRANDED_CLASSES.filter(
       (name) =>
         stylesheet.includes(`.dark .${name}`) &&
@@ -149,9 +141,8 @@ describe("branded style contract", () => {
     );
     expect(darkOnly.length).toBeGreaterThanOrEqual(3);
 
-    // Native widgets read `color-scheme` and nothing else, and next-themes
-    // used to set it on the element for us. Nothing in the gate renders UA
-    // chrome, so a light scrollbar on a #00091a page fails no other check.
+    // Native widgets read `color-scheme` and nothing else, and nothing in the
+    // gate renders UA chrome, so a light scrollbar fails no other check.
     expect(stylesheet).toMatch(/^\s*color-scheme:\s*dark;/m);
 
     const layout = readFileSync("app/layout.tsx", "utf8");
@@ -163,9 +154,8 @@ describe("branded style contract", () => {
   });
 
   /**
-   * A class from a plugin that is not installed styles nothing.
-   * `@tailwindcss/typography` is not a dependency. Either half is fine on its
-   * own; the classes without the plugin are not.
+   * A class from a plugin that is not installed styles nothing, and
+   * `@tailwindcss/typography` is not a dependency.
    */
   it("does not use plugin classes the build cannot generate", () => {
     const manifest = readFileSync("package.json", "utf8");

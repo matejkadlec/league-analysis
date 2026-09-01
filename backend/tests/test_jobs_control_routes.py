@@ -1,8 +1,7 @@
 """What the pause/resume/stop routes answer, per outcome of the service call.
 
-The six control routes -- the regular trio and the test-run trio -- share one
-shape: ask the service and turn its answer into a 404/409/200. "Does not
-exist" and "refused" are the one distinction the Jobs page acts on.
+All six routes share one shape: ask the service and turn its answer into a
+404/409/200 -- "does not exist" vs "refused" is what the Jobs page acts on.
 """
 
 from collections.abc import Awaitable, Callable
@@ -121,9 +120,8 @@ async def test_refusal_is_409_carrying_the_service_message(
 async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> None:
     """The route neither swallows the failure nor turns it into a 404 or 409.
 
-    The client sees the app-level handler's one client-safe body, pinned by
-    `test_unhandled_error_response.py`. What matters here is that the route
-    lets it reach the handler -- a bare `except Exception` would hide outages.
+    The failure must reach the app-level handler; a bare `except Exception`
+    here would hide outages.
     """
     with pytest.raises(RuntimeError, match="connection reset"):
         await route(_service(RuntimeError("connection reset")))

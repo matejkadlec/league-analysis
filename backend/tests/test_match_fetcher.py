@@ -138,9 +138,8 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
     [
         ("16.15.1", 1),
         ("15.24.1", 0),
-        # A future Riot major must keep syncing. The queue-done bool means
-        # "everything below this is older", so answering False for 17.x stops
-        # ingestion for every player and every queue on the day Riot ships it.
+        # The queue-done bool means "everything below is older", so answering
+        # False for a future major stops ingestion the day Riot ships it.
         ("17.1.1", 1),
         ("100.1.1", 1),
         # Unparseable is current: storing one extra match beats stopping.
@@ -385,9 +384,8 @@ def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -
 def _wrap_a_malformed_league_entry() -> None:
     """Reproduce the one wrapping production performs, outside the raises block.
 
-    The fixture omits `queueType` on purpose, which is what produces the
-    wrapped ValidationError under test. `raise ... from` is the only wrapping
-    production performs, now that `ServiceException`'s second chain is gone.
+    The fixture omits `queueType` on purpose: that is what produces the wrapped
+    ValidationError under test.
     """
     try:
         LeagueEntryDTO.model_validate(
@@ -425,9 +423,8 @@ def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
 async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() -> None:
     """The handler's boolean is the whole stop-vs-continue decision.
 
-    `_process_tracked_players` breaks on True and carries on otherwise, so
-    these three cases are the job's entire policy for a failing player and
-    were previously asserted nowhere.
+    `_process_tracked_players` breaks on True and carries on otherwise, so these
+    cases are the job's entire policy for a failing player.
     """
     job = MatchFetcherJob(job_config_id=7)
     db = SimpleNamespace(rollback=AsyncMock())
@@ -475,8 +472,7 @@ async def test_player_error_handler_reraises_a_database_error_without_recording(
 async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
     """The inner league handler records first and re-raises into this one.
 
-    Without the short-circuit the same rejected key is written to the
-    execution log twice for one player, which is how a single expired key
+    Without the short-circuit one rejected key is logged twice per player, which
     reads as a run full of distinct failures.
     """
     job = MatchFetcherJob(job_config_id=7)
@@ -499,8 +495,7 @@ async def test_every_id_page_is_bounded_to_a_release_window_in_epoch_seconds() -
     """Riot's own filter, so a release we would reject is never even listed.
 
     Asserted as a date, not against the constant: read as milliseconds the same
-    integer asks for the year ~57000 and Riot answers with nothing, which the
-    client's validator does not catch -- it only rejects negatives.
+    integer asks for the year ~57000 and no validator rejects it.
     """
     client = _CapturingQueueSyncClient("16.15.1")
     service = MatchService(cast(AsyncSession, _QueueSyncSession()))
@@ -517,7 +512,6 @@ async def test_every_id_page_is_bounded_to_a_release_window_in_epoch_seconds() -
     start_time = client.id_page_calls[0]["start_time"]
     assert isinstance(start_time, int)
     floor = datetime.fromtimestamp(start_time, UTC)
-    # Patch 16.1 landed 2026-01-08 and 15.x ran to 2026-01-03. Below that
-    # window the floor filters nothing and restores the full walk; above it,
-    # current matches are dropped in silence.
+    # Patch 16.1 landed 2026-01-08, 15.x ran to 2026-01-03: below the window the
+    # floor filters nothing, above it current matches are dropped in silence.
     assert datetime(2025, 12, 1, tzinfo=UTC) < floor < datetime(2026, 1, 8, tzinfo=UTC)

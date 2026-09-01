@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Create or reconcile one administrator in the verified local database.
 
-The password is accepted only through a hidden prompt or standard input. It is
-hashed with the application's normal Argon2id configuration and is never
-printed or accepted as a command-line argument.
+The password is accepted only through a hidden prompt or standard input, never
+as a command-line argument, and is never printed.
 """
 
 from __future__ import annotations
@@ -142,9 +141,8 @@ async def reconcile_admin(
     normalized_email = email.strip().lower()
     if not normalized_email or "@" not in normalized_email:
         raise AdminReconciliationRefusal("a valid administrator email is required")
-    # Through the API's own type, not a second hand-rolled rule: this writes the
-    # ORM directly, so a name that only passes here is one `PATCH /auth/me`
-    # would refuse -- an admin who cannot re-save their own profile.
+    # Validate through the API's own type: this writes the ORM directly, and a
+    # name only accepted here yields an admin `PATCH /auth/me` would refuse.
     try:
         normalized_display_name = _DISPLAY_NAME_ADAPTER.validate_python(display_name)
     except ValidationError as error:

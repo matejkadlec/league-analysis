@@ -5,17 +5,15 @@ import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
- * A player with enough stored data that every table, row and stat block
- * actually renders. Against an empty database the wide descendants never mount
- * and the page measures exactly the viewport, hiding the overflow.
+ * A player with enough stored data that every table and stat block renders:
+ * against an empty database the page measures exactly the viewport.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
 const PUUID = "populated-player-puuid";
 
-// Riot's own champion keys, which is what the backend stores and what the
-// Data Dragon image URL is built from; a display spelling would 404 the icon
-// and quietly change the width being measured.
+// Riot's own champion keys, which the backend stores and the Data Dragon URL
+// is built from; a display spelling 404s the icon and changes the width.
 const CHAMPIONS = [
   ["AurelionSol", 136],
   ["Kaisa", 145],
@@ -31,8 +29,7 @@ const player = {
   ...trackedPlayer(NOW, {
     puuid: PUUID,
     // Riot IDs run to 16 characters, and a long one is what pushes a name
-    // column out; a short fixture name would hide the very thing being
-    // measured.
+    // column out; a short fixture name would hide what is being measured.
     game_name: "Longest Name Here",
     tag_line: "EUNE1",
     analyzed_matches: 126,
@@ -161,9 +158,8 @@ function match(index: number) {
       total_damage_dealt_to_champions: 34_812,
       summoner1_id: 4,
       summoner2_id: 14,
-      // Both rune branches: even rows carry a keystone this build has art for, odd
-      // rows one it does not, which is the fallback path. Without these the block
-      // renders placeholders with no tooltip trigger for the axe scan to grade.
+      // Even rows carry a keystone this build has art for, odd rows one it does
+      // not; without both, the block renders placeholders with no tooltip.
       runes:
         index % 2 === 0
           ? { primary_style: 8000, sub_style: 8400, keystone: 8010 }
@@ -361,16 +357,14 @@ const SKELETON = '[data-slot="skeleton"]';
 
 /**
  * The three data-rich player routes, each with a `ready` selector only its
- * populated content renders. Gate on content, never on a loading marker
- * disappearing: the skeletons are textless.
+ * populated content renders. Never gate on a loading marker: it is textless.
  */
 export const POPULATED_ROUTES = [
   {
     name: "player overview",
     route: `/player-overview?puuid=${PUUID}`,
-    // The rank badge from the league fixture, rendered verbatim by PlayerCard:
-    // it mounts only once the league query has resolved, well past the page
-    // skeleton. Champion names are display-transformed, so not safe anchors.
+    // The rank badge mounts only once the league query resolves, well past the
+    // page skeleton. Champion names are display-transformed, so not anchors.
     ready: "text=Emerald II",
     reflowSurfaces: [],
   },
@@ -401,8 +395,7 @@ export async function gotoPopulatedRoute(
   // Attached rather than visible: the matchmaking gate element is the
   // stacked mobile list, present in the DOM at every viewport.
   await expect(page.locator(route.ready).first()).toBeAttached();
-  // Every other gated card, so a scan or a measurement cannot land on one
-  // still showing its placeholder. Not `networkidle`: the shell polls on
-  // timers, making network quiet a property of the clock, not of the page.
+  // Every other gated card, so a measurement cannot land on a placeholder. Not
+  // `networkidle`: the shell polls on timers, so quiet tracks the clock.
   await expect(page.locator(SKELETON)).toHaveCount(0);
 }

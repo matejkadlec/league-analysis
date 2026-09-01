@@ -1,8 +1,7 @@
 """Two endpoints answering with the same player answer with the same player.
 
-`GET /players/{puuid}` and the `current_player` on `GET /players/context` both
-return a `PlayerResponse` for one row of `core.players`, and callers cannot
-tell which one produced the object they hold, so the shapes are pinned here.
+`GET /players/{puuid}` and `current_player` on `GET /players/context` both
+return a `PlayerResponse`, and callers cannot tell which produced theirs.
 """
 
 from datetime import UTC, datetime
@@ -46,9 +45,8 @@ def _player_row() -> SimpleNamespace:
 def _service(player: SimpleNamespace) -> PlayerService:
     """A service whose every DB touch answers for this one player.
 
-    The counts are stubbed rather than queried: what is under test is which
-    code path assigns them, not the two `SELECT count(*)` statements, and a
-    mocked session cannot run those anyway.
+    The counts are stubbed because what is under test is which code path
+    assigns them, not the two `SELECT count(*)` statements.
     """
     db = SimpleNamespace(
         execute=AsyncMock(

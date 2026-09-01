@@ -1,8 +1,7 @@
 """What an `ON CONFLICT` does once a real unique index is behind it.
 
-`index_elements` naming columns no unique index covers compiles cleanly and
-raises `InvalidColumnReference` when PostgreSQL plans the statement, so every
-test here drives the real writer and reads the row back.
+`index_elements` naming columns no unique index covers compiles cleanly and only
+raises when PostgreSQL plans the statement, so these drive the real writer.
 """
 
 from __future__ import annotations
@@ -197,9 +196,8 @@ async def test_a_new_account_gets_its_settings_row_from_a_database_trigger(
 ) -> None:
     """`trg_create_user_settings_after_user_insert` writes the row, not Python.
 
-    `ensure_user_settings` therefore reads a hit on every ordinary account,
-    and its `ON CONFLICT DO NOTHING` insert is reached only once the row is
-    gone -- which is the path this drives, so the target is still checked.
+    Its `ON CONFLICT DO NOTHING` insert is reached only once the row is gone,
+    so deleting it first is what exercises the conflict target.
     """
     written_by_the_trigger = await database_session.scalar(
         select(UserSettings.user_id).where(UserSettings.user_id == stored_user.id)

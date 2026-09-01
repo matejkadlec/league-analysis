@@ -1,8 +1,7 @@
 """Refresh the vendored Match-V5 timeline schema from Riot's published spec.
 
-Vendored rather than fetched at test time because the suite is offline by
-construction (`--disable-socket`). Source, regenerated daily from the Riot API
-Reference: https://github.com/MingweiSamuel/riotapi-schema, `gh-pages` branch.
+Vendored rather than fetched because the suite is offline (`--disable-socket`).
+Source: https://github.com/MingweiSamuel/riotapi-schema, `gh-pages` branch.
 
 Example:
     curl -sSfL https://raw.githubusercontent.com/MingweiSamuel/riotapi-schema/gh-pages/openapi-3.0.0.json \
@@ -15,9 +14,8 @@ import json
 import sys
 from pathlib import Path
 
-# An OpenAPI document is arbitrary JSON, and this is what "arbitrary JSON"
-# honestly is. Spelling it out keeps the traversal below checkable, where a
-# bare `Any` would silently accept anything it walked into.
+# An OpenAPI document is arbitrary JSON; spelling the shape out keeps the
+# traversal below checkable, where a bare `Any` would accept anything.
 type JsonValue = (
     dict[str, "JsonValue"] | list["JsonValue"] | str | int | float | bool | None
 )

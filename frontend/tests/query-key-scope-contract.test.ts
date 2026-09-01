@@ -6,9 +6,8 @@ import { allSourceFiles } from "./support/source-scan-support";
 import { PLAYER_DERIVED_SYNC_ROOTS } from "@/features/players/components/use-player-sync-run";
 
 /**
- * Query keys that are genuinely global: the same for every player. Anything
- * not here is player-derived and must carry the exact PUUID everywhere,
- * because a prefix invalidation without it refetches every cached player.
+ * Query keys that are genuinely global. Anything not here is player-derived
+ * and must carry the PUUID, or a prefix invalidation refetches every player.
  */
 const PLAYER_INDEPENDENT_KEYS = new Set([
   "job-executions",
@@ -20,9 +19,7 @@ const PLAYER_INDEPENDENT_KEYS = new Set([
   "service-status",
   "settings",
   "tracked-players",
-  // The signed-in account, not a League player: `USER_QUERY_KEY` in
-  // `settings-helpers.ts`. It was outside this contract entirely until the
-  // scan below learned to read key factories.
+  // The signed-in account, not a League player: `USER_QUERY_KEY`.
   "user",
 ]);
 
@@ -40,9 +37,8 @@ interface QueryKeyUse {
 }
 
 /**
- * Every key array this codebase writes, with its leading namespace string.
- * Both spellings count -- inline `queryKey: [...]` and the array a factory
- * returns -- or a call site could move into a factory and escape this contract.
+ * Every key array this codebase writes. Both spellings count -- inline
+ * `queryKey: [...]` and a factory's return -- or a call site could escape.
  */
 const KEY_ARRAY_PATTERNS = [
   // [^\]] already spans newlines, so no dotall flag is needed.
@@ -59,9 +55,8 @@ function queryKeyUses(): QueryKeyUse[] {
     for (const match of KEY_ARRAY_PATTERNS.flatMap((pattern) => [
       ...source.matchAll(pattern),
     ])) {
-      // A comment inside the array must not be read as a key element — it
-      // would let `["matches", otherId /* puuid */]` pass as scoped.
-      // The single capture group always participates in a successful match.
+      // A comment inside the array must not be read as a key element -- it
+      // would let `/* puuid */` pass as scoped; `?? ""` is only for the type.
       const body = (match[1] ?? "")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/.*/g, "");

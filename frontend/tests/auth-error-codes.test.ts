@@ -4,9 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Every error code this UI branches on must be one the API can actually send:
- * the auth and settings flows switch on `detail.code`, so a code renamed on
- * the backend leaves the branch permanently dead with nothing failing.
+ * Every error code this UI branches on must be one the API can send: a code
+ * renamed on the backend leaves the branch dead with nothing failing.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,9 +47,8 @@ function branchedCodes(): { code: string; where: string }[] {
   return BRANCHING_FILES.flatMap((file) => {
     const source = readFileSync(join(here, "..", file), "utf8");
     const found: { code: string; where: string }[] = [];
-    // Only the shapes that decide behaviour: a switch arm, a comparison
-    // against `.code`, and a key in a code-to-message table (an entry for a
-    // code the API stopped sending is just as dead as a stale branch).
+    // Only the shapes that decide behaviour: a switch arm, a `.code`
+    // comparison, and a key in a code-to-message table.
     for (const pattern of [
       /case\s+"([A-Z_]+)"/g,
       /\.code\s*===\s*"([A-Z_]+)"/g,

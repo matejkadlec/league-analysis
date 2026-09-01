@@ -9,9 +9,8 @@ import {
 } from "@/lib/session/auth-state-cookie";
 
 /**
- * One refresh per tab, however many 401s arrive at once. Without the shared
- * promise each parallel 401 replays the same refresh cookie; the server heals
- * the first replay and reads the second as reuse, revoking the chain.
+ * Without the shared promise each parallel 401 replays the same refresh cookie,
+ * and the server reads the second replay as reuse and revokes the chain.
  */
 
 beforeEach(() => {
@@ -55,9 +54,8 @@ describe("concurrent refreshes in one tab", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
   it("sends the session cookies it exists to rotate", async () => {
-    // The refresh token lives in an HttpOnly cookie, so the browser attaches
-    // it only for `credentials: "include"`. Omitted, every refresh reaches the
-    // server bare and 401s, and each tab quietly dies at token expiry.
+    // The refresh token is HttpOnly, so without `credentials: "include"` every
+    // refresh reaches the server bare and each tab dies at token expiry.
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("{}", { status: 200 }));

@@ -8,9 +8,8 @@ import { ProfileCardEmptyState } from "@/features/profile/components/profile-car
 
 describe("the profile card empty state", () => {
   it("anchors an empty section where the page navigation can find it", () => {
-    // `SectionQuickNavigation` registers a section by finding its anchor by
-    // id; a card that drops the id silently disappears from the page's quick
-    // navigation while still being rendered.
+    // `SectionQuickNavigation` finds a section by its anchor id, so a card that
+    // drops the id vanishes from the navigation while still rendering.
     const { container } = render(
       <ProfileCardEmptyState
         icon={Swords}

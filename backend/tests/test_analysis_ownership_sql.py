@@ -1,8 +1,7 @@
 """Which account a stored analysis answers to, asserted by running the query.
 
 A mocked `db.execute` cannot see a predicate, so these run the real statements
-against SQLite in memory with `core` and `auth` attached as schemas. Two
-accounts, one Riot player: the negative assertion is the point of the file.
+against in-memory SQLite; two accounts share one Riot player throughout.
 """
 
 from collections.abc import Iterator
@@ -23,9 +22,8 @@ from app.features.smurf_boost_detection.models import SmurfBoostAnalysis
 from app.features.smurf_boost_detection.service import SmurfBoostDetectionService
 from app.model_registry import import_all_models
 
-# Both tables carry a foreign key to `auth.users`, and SQLAlchemy resolves a key
-# by looking the target up in the metadata. Without every model imported,
-# creating the two tables under test fails on the reference.
+# SQLAlchemy resolves the `auth.users` foreign keys through the metadata, so
+# creating the two tables under test fails unless every model is imported.
 import_all_models()
 
 
@@ -48,9 +46,8 @@ MINE = 9
 OTHER = 10
 
 PUUID = "p" * 78
-# A second player, for the one test that needs two rows under the same
-# account: SQLite ignores `postgresql_where`, so the partial unique index on
-# active runs is created here as an unconditional one.
+# A second player is needed for two rows under one account: SQLite ignores
+# `postgresql_where`, so the partial unique index is unconditional here.
 OTHER_PUUID = "q" * 78
 
 
@@ -85,9 +82,8 @@ def session() -> Iterator[Session]:
         dbapi_connection.execute("ATTACH DATABASE ':memory:' AS auth")
 
     event.listen(engine, "connect", _attach_schemas)
-    # The player FK on `matchmaking_analyses` and the user FK on both are not
-    # created here: SQLite does not enforce a foreign key into an absent table
-    # unless asked to, and the subject under test is the WHERE clause.
+    # The FK target tables are left uncreated: SQLite does not enforce a key
+    # into an absent table unless asked, and the WHERE clause is the subject.
     cast(Table, SmurfBoostAnalysis.__table__).create(engine)
     cast(Table, MatchmakingAnalysis.__table__).create(engine)
     with Session(engine) as open_session:
@@ -97,9 +93,8 @@ def session() -> Iterator[Session]:
 
 def _smurf_service(session: Session, user_id: int) -> SmurfBoostDetectionService:
     service = SmurfBoostDetectionService(cast(Any, _SyncSessionShim(session)), user_id)
-    # `get_latest` also computes a staleness flag, which reads the match
-    # tables. Those carry column types SQLite will not render, and staleness
-    # is not what any test here is about.
+    # `get_latest`'s staleness flag reads match tables whose column types
+    # SQLite will not render, and staleness is not under test here.
     service._newest_eligible_match_id = _no_newest_match  # type: ignore[method-assign]
     return service
 
@@ -171,17 +166,14 @@ def _store_matchmaking(
     return created_at
 
 
-# ------------------------------------------------------------------
-# Rank Manipulation
-# ------------------------------------------------------------------
+# --- Rank Manipulation ---
 
 
 async def test_the_newest_run_read_back_is_the_callers_own(session: Session) -> None:
     """The defect, stated as a test.
 
-    A Rank Manipulation run is scored against thresholds resolved per account
-    from `auth.user_card_preferences`, and the row carries them back to be
-    rendered. The other account's newer run is somebody else's settings.
+    A run carries back the per-account thresholds it was scored against, so
+    the other account's newer run renders somebody else's settings.
     """
     now = datetime.now(UTC)
     mine = _store_smurf(
@@ -223,9 +215,8 @@ async def test_expiring_abandoned_runs_leaves_another_account_running(
 ) -> None:
     """Reading is a write here, and the write was unowned too.
 
-    `get_latest` terminalizes an active row older than the lease. Unowned,
-    that made a *read* by one account able to fail another account's
-    in-flight run.
+    `get_latest` terminalizes an active row older than the lease, so unowned
+    that write lets one account's read fail another's in-flight run.
     """
     stale = datetime.now(UTC) - timedelta(hours=2)
     session.add(
@@ -249,9 +240,7 @@ async def test_expiring_abandoned_runs_leaves_another_account_running(
     assert survived.status == "in_progress"
 
 
-# ------------------------------------------------------------------
-# Matchmaking Analysis
-# ------------------------------------------------------------------
+# --- Matchmaking Analysis ---
 
 
 async def test_another_accounts_running_analysis_cannot_be_cancelled(

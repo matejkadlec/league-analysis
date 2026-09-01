@@ -1,7 +1,6 @@
 /**
- * Server-side observability for the standalone production process. Next's
- * `logging` config is development-only, so this is the supported production
- * hook; browser errors arrive through `instrumentation-client.ts`.
+ * Next's `logging` config is development-only, so this is the supported
+ * production hook; browser errors arrive via `instrumentation-client.ts`.
  */
 export function onRequestError(
   error: unknown,

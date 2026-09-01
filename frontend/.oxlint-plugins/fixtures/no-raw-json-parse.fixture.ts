@@ -1,6 +1,5 @@
-// Regression fixture for `house/no-raw-json-parse`. Each directive suppresses
-// a shape the rule MUST flag; accepted cases carry none. A stale selector
-// leaves an unused directive; an over-broad one reports on an accept.
+// Regression fixture for `house/no-raw-json-parse`: each directive flags a
+// MUST-catch shape; a stale one goes unused, an over-broad one flags an accept.
 
 declare const raw: string;
 declare const stored: { parse: (value: string) => unknown };

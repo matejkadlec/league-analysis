@@ -1,8 +1,7 @@
 """Fuzzy player search: parsing, query building, scoring and ranking.
 
-Pure algorithm, no session: everything here works on a query string and
-`Player` rows the caller already holds. `PlayerService.fuzzy_search_players`
-owns the database round trip and the per-user tracking flags.
+Pure algorithm, no session: `PlayerService.fuzzy_search_players` owns the
+database round trip and the per-user tracking flags.
 """
 
 from collections.abc import Sequence
@@ -88,9 +87,8 @@ def build_player_search_query(
     tag_line: str | None,
 ) -> Select[tuple[Player]]:
     """Build SQLAlchemy query based on search type."""
-    # `platform` arrives as the enum, whose values are the one spelling the
-    # column is allowed to hold (`ck_players_platform_is_lowercase`), so an
-    # equality compare is enough.
+    # `ck_players_platform_is_lowercase` means the enum values are the only
+    # spelling the column can hold, so equality is enough.
     platform_filter = [Player.platform == platform.value] if platform else []
 
     if search_type == "full_id" and game_name and tag_line:
@@ -160,9 +158,8 @@ def _closest_field_distance(
 ) -> int | None:
     """Smallest edit distance over the fields this search type compares.
 
-    None when the search type compares nothing on this player. The field
-    sets are deliberately different: a tag search only ever looks at the
-    tag, and a game-name search sees the tag only inside the full Riot ID.
+    None when the search type compares nothing on this player; a tag search
+    looks only at the tag, a game-name search sees it only inside the full Riot ID.
     """
     composite = (
         f"{player.game_name}#{player.tag_line}".lower()

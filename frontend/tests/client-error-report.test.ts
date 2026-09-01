@@ -103,9 +103,8 @@ describe("the client-error beacon", () => {
 
 describe("the proxy and the reporter agree on the path", () => {
   it("lets the beacon through without a session instead of redirecting it", () => {
-    // The beacon fires precisely when the app is broken, which includes being
-    // signed out. Run through the real `proxy` rather than read out of its
-    // source: the path only has to be reachable, not spelled any one way.
+    // Run through the real `proxy` rather than read out of its source: the path
+    // only has to be reachable, not spelled any one way.
     const response = proxy(
       new NextRequest(
         new URL(CLIENT_ERROR_REPORT_PATH, "http://localhost:3000"),

@@ -1,8 +1,7 @@
 """The token lifecycle: minting, rotation, revocation, and identity.
 
-Access JWTs and refresh-token families, including the reuse alarm and the
-logout stamp taken under the owner's lock. `AuthService` composes the mixin;
-`_TokenLifecycleHost` declares the plumbing it leans on.
+Access JWTs and refresh-token families, including the reuse alarm and the logout
+stamp taken under the owner's lock. `AuthService` composes the mixin.
 """
 
 import hashlib
@@ -112,9 +111,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
     ) -> tuple[RefreshToken, str]:
         """Stage one `refresh_tokens` row and hand back its raw secret.
 
-        Deliberately does not commit. A rotation has to revoke the old row and
-        insert its replacement in one transaction; calling `create_refresh_token`
-        would split it, leaving the caller revoked with no replacement written.
+        Deliberately does not commit: a rotation revokes the old row and inserts
+        its replacement in one transaction, and committing here would split it.
         """
         raw_token = secrets.token_urlsafe(64)
         record = RefreshToken(
@@ -151,8 +149,7 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
             remote_ip=remote_ip,
             user_agent=user_agent,
         )
-        # Read before the commit so this does not rely on the session factory's
-        # `expire_on_commit=False`; a refreshed attribute here would be a lazy
+        # Read before the commit: a refreshed attribute here would be a lazy
         # load on an async session.
         token_id = record.token_id
         await self.db.commit()
@@ -188,8 +185,7 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         """Rotate refresh token and return the owner with a new token pair.
 
         `None` means the server refused: no such token, reuse, expiry, or an
-        unknown user, never "something went wrong". The router answers `None`
-        with 401 and the browser ends the session, so let real errors raise.
+        unknown user, never "something went wrong" -- let real errors raise.
         """
         token_hash = self._hash_refresh_token(raw_refresh_token)
         # The owner first, and before the row below: a logout takes the same
@@ -201,9 +197,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
             return None
         await self._lock_token_family(owner_id)
 
-        # `FOR UPDATE`: this reads `revoked_at` and then writes it, so two
-        # requests carrying one cookie both read NULL and both rotate, forking
-        # one token into two valid families with the reuse alarm skipped.
+        # `FOR UPDATE`: this reads `revoked_at` then writes it, so two requests
+        # carrying one cookie would both rotate, forking the family unalarmed.
         result = await self.db.execute(
             select(RefreshToken)
             .where(RefreshToken.token_hash == token_hash)
@@ -295,9 +290,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
     async def _lock_token_family(self, user_id: int) -> None:
         """Serialise everyone who writes one user's refresh tokens.
 
-        Logout stamps the whole set in one statement, and a row committed
-        after that statement began is below its snapshot however it waited.
-        Taking the owner first is what stops a rotation inserting under it.
+        Logout stamps the whole set in one statement; a row committed after it
+        began misses it regardless. Locking the owner first stops a rotation racing.
         """
         await self.db.execute(
             select(User.id).where(User.id == user_id).with_for_update()
@@ -317,9 +311,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
     ) -> bool:
         """A reuse is healable when the replacement was never used.
 
-        The presented credential must be live on its own terms too: an
-        expired token is dead however it was revoked, and only survives in
-        the table until cleanup deletes it.
+        The presented credential must be live on its own terms too: an expired
+        token is dead however it was revoked.
         """
         return (
             cls._successor_is_unused(successor)
@@ -337,9 +330,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
     ) -> RefreshRotation | None:
         """Decide what a request presenting an already-revoked token gets.
 
-        Heal when the presented token is unexpired and its replacement was
-        never used: revoke that replacement, mint a fresh one, answer success.
-        Otherwise revoke only the presented token's descendants, and refuse.
+        Heal when the presented token is unexpired and its replacement was never
+        used; otherwise revoke the presented token's descendants and refuse.
         """
         successor = None
         if token_record.replaced_by_token_id is not None:
@@ -407,8 +399,7 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         """Revoke every refresh token a user holds, under the owner's lock.
 
         Without the lock a rotation commits a replacement this statement's
-        snapshot cannot see, and logout answers "Successfully logged out"
-        with that fresh token live.
+        snapshot cannot see, leaving a fresh token live after logout.
         """
         await self._lock_token_family(user_id)
         await self.db.execute(
@@ -430,9 +421,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
     ) -> int | None:
         """Identify the owner of a refresh token without rotating it.
 
-        Logout needs this because it must work when the access token has
-        already expired -- the common case, since access lives 30 minutes and
-        the refresh cookie 30 days.
+        Logout needs this when the access token has already expired -- the
+        common case: access lives 30 minutes, the refresh cookie 30 days.
         """
         result = await self.db.execute(
             select(RefreshToken).where(
@@ -442,18 +432,16 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         token_record = result.scalar_one_or_none()
         if token_record is None:
             return None
-        # An expired cookie carries no session, so there is nothing here for
-        # it to end -- and honouring one would let a stale copy revoke every
-        # device its owner still holds.
+        # An expired cookie carries no session to end, and honouring one would
+        # let a stale copy revoke every device its owner still holds.
         now = datetime.now(UTC)
         if token_record.expires_at <= now:
             return None
         if token_record.revoked_at is None:
             return token_record.user_id
 
-        # A revoked token authorises this only in the case the route exists
-        # for: the Sign Out that raced the refresh superseding it, so the
-        # replacement is the one this server has just issued and nobody used.
+        # A revoked token authorises this only for the race the route exists
+        # for: a Sign Out overtaken by a refresh whose replacement went unused.
         if token_record.replaced_by_token_id is None:
             return None
         successor = await self._get_refresh_token_by_token_id(
@@ -499,9 +487,8 @@ class TokenLifecycleMixin(_TokenLifecycleHost):
         if expires_at <= datetime.now(UTC):
             return
 
-        # Two logouts can carry the same token -- two tabs, or the context's
-        # logout racing the one token-manager sends after a rotation. `token_id`
-        # is unique, so let the database settle it.
+        # Two logouts can carry the same token (two tabs, or a racing rotation);
+        # `token_id` is unique, so let the database settle it.
         await self.db.execute(
             insert(RevokedAccessToken)
             .values(

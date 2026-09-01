@@ -393,9 +393,8 @@ def _met_criteria_result(config: TagConfig, value: float) -> TagResult:
 def _compare_aggregate_to_thresholds(
     config: TagConfig, aggregate_value: float
 ) -> TagResult | None:
-    # A generic tag carries exactly one `min_`/`max_` threshold key, so first
-    # match is the only match; `min_play_rate`/`max_percentage_matches` are
-    # selection keys, not thresholds.
+    # A generic tag carries exactly one threshold key, so first match is the only
+    # match; `min_play_rate`/`max_percentage_matches` select, not threshold.
     for key, threshold in config.items():
         if not isinstance(threshold, int | float):
             continue

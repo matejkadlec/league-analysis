@@ -1,8 +1,7 @@
 """Every annotation in `app/` must still resolve at runtime.
 
-Under PEP 649 an annotation is lazy, so a name imported only under
-`if TYPE_CHECKING:` raises `NameError` whenever something evaluates it — and
-neither Ruff nor Pyright reports that, so this walks the whole package.
+Under PEP 649 a name imported only under `if TYPE_CHECKING:` raises `NameError`
+when evaluated, and neither Ruff nor Pyright reports it.
 """
 
 from __future__ import annotations
@@ -29,9 +28,8 @@ def test_module_annotations_resolve_at_runtime(module_name: str) -> None:
 
     unresolvable: list[str] = []
     for name, value in vars(module).items():
-        # Only what this module defines: a re-exported third-party helper is
-        # its author's problem, and SQLAlchemy in particular re-exports
-        # functions whose own annotations are TYPE_CHECKING-only.
+        # Only what this module defines: SQLAlchemy re-exports functions whose
+        # own annotations are TYPE_CHECKING-only.
         if not (inspect.isfunction(value) or inspect.iscoroutinefunction(value)):
             continue
         if getattr(value, "__module__", None) != module_name:

@@ -1,8 +1,7 @@
 """Error-chain walking and classification shared across features.
 
-`__cause__` chains are the one exception lineage the language carries, so the
-predicates here read them once for every caller: jobs classify per-player
-failures with them, and the matches sync pipeline asks the same questions.
+`__cause__` is the one exception lineage the language carries; jobs and the
+matches sync pipeline both classify failures through these predicates.
 """
 
 from collections.abc import Iterator
@@ -25,9 +24,6 @@ def iter_error_chain(error: Exception) -> Iterator[Exception]:
         seen.add(id(current))
         yield current
 
-        # `__cause__` only: `ServiceException` used to carry a second,
-        # hand-rolled `original_error` chain that no production site ever
-        # populated -- `raise ... from` is the one the language already has.
         current = (
             current.__cause__ if isinstance(current.__cause__, Exception) else None
         )

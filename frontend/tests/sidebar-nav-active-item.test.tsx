@@ -6,9 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthContextType } from "@/features/auth/types";
 
 /**
- * Which sidebar entry is marked current. Every path starts with "/", so Home
- * needs an exact match: a prefix test alone highlights it on every page at
- * once and the sidebar stops saying where the visitor is.
+ * Every path starts with "/", so Home needs an exact match: a prefix test alone
+ * highlights it on every page at once.
  */
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;

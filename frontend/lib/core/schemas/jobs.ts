@@ -23,9 +23,8 @@ export const JobConfigurationSchema = z.object({
   name: z.string(),
   description: z.string().nullable().optional(),
   schedule: z.string(),
-  // Resolved server-side (config_json overrides schedule). Null means the
-  // stored row cannot name its interval; optional so a not-yet-redeployed
-  // backend degrades to the schedule fallback instead of failing validation.
+  // Resolved server-side (`config_json` overrides `schedule`). Null means the
+  // row cannot name it; optional so an older backend degrades to the schedule fallback.
   interval_seconds: z.number().int().nullable().optional(),
   is_active: z.boolean(),
   is_paused: z.boolean().default(false),

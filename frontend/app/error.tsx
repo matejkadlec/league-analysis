@@ -5,9 +5,8 @@ import { useEffect } from "react";
 import { reportClientError } from "@/lib/core/http/client-error-report";
 
 /**
- * Rendered for signed-out visitors too: gating it on authentication made a
- * render error on /sign-in an absorbing state, since the reset button lived
- * inside the thing that would not render. The layout itself: `global-error.tsx`.
+ * Never gate this on authentication: the reset button would sit inside the
+ * thing that failed to render. The layout itself: `global-error.tsx`.
  */
 export default function Error({
   error,

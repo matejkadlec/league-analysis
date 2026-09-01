@@ -13,9 +13,8 @@ import {
   AUTH_STATE_COOKIE_VALUE,
 } from "@/lib/session/auth-state-cookie";
 
-// The edge may route on the hint and may never retract it: only a request to
-// the API tells a refusal from an outage, and the edge cannot make one. So it
-// asks nothing, asserted here as whole response envelopes.
+// The edge may route on the hint but never retract it: only a request to the API
+// tells a refusal from an outage, and the edge cannot make one.
 
 function hintedRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`), {
@@ -25,9 +24,8 @@ function hintedRequest(pathname: string): NextRequest {
   });
 }
 
-// Read from `app/` rather than listed by hand: every enumerated version of
-// this table was walked past by picking a route nobody had added to it. A
-// route that exists is a route this asserts about.
+// Read from `app/` rather than listed by hand, so a route that exists is a route
+// this asserts about.
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "app");
 
 function discoverRoutes(): string[] {
@@ -38,9 +36,7 @@ function discoverRoutes(): string[] {
         routes.push(prefix === "" ? "/" : prefix);
       }
       if (entry.isDirectory() && !entry.name.startsWith("_")) {
-        // A route group contributes no URL segment, so recurse without
-        // appending it -- skipping the directory outright hid every route
-        // inside it, which is the same hole in a different costume.
+        // A route group contributes no URL segment, so recurse without appending it.
         const segment = entry.name.startsWith("(") ? "" : `/${entry.name}`;
         walk(join(dir, entry.name), `${prefix}${segment}`);
       }
@@ -62,9 +58,8 @@ function plainRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`));
 }
 
-// The headers a browser actually sends on a click. A request shape is as much
-// a case as a path is: a teardown gated on `sec-fetch-dest: document` passes a
-// table of bare requests without ever running.
+// A request shape is as much a case as a path is: a teardown gated on
+// `sec-fetch-dest: document` passes a table of bare requests without ever running.
 function navigationRequest(pathname: string, hint: boolean): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`), {
     headers: {
@@ -85,9 +80,8 @@ afterEach(() => {
 });
 
 describe("the edge and the session hint", () => {
-  // Every routing case the edge has, compared against its complete header
-  // set. Sampling one response, one path or one channel is not enough to
-  // watch the decision the edge actually made.
+  // Compared against the complete header set: sampling one header cannot see the
+  // decision the edge actually made.
   const cases: {
     what: string;
     path: string;
@@ -133,9 +127,8 @@ describe("the edge and the session hint", () => {
       headers: [["location", "http://localhost:3000/"]],
     },
     {
-      // The first branch in the function, and the one taken most often: the
-      // matcher only excludes `_next/static`, `_next/image` and the favicon,
-      // so every dotted path lands here.
+      // The matcher excludes only `_next/static`, `_next/image` and the favicon, so
+      // every other dotted path lands in this branch.
       what: "a hinted visitor loading a static asset",
       path: "/background.jpg",
       hint: true,
@@ -143,9 +136,8 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
-      // The row that makes `isStaticOrInternal` load-bearing: delete it and
-      // this asset answers a 307 on every signed-out page load. The hinted
-      // rows cannot see that, because a hint passes through either way.
+      // The row that makes `isStaticOrInternal` load-bearing; the hinted rows cannot
+      // see it, because a hint passes through either way.
       what: "a visitor with no hint loading a static asset",
       path: "/background.jpg",
       hint: false,
@@ -160,9 +152,8 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
-      // The client-error beacon is not a page. Without this branch a signed-
-      // out crash on /sign-in would 307 the report to /sign-in and the
-      // frontend container would never see it.
+      // The client-error beacon is not a page: without this branch a signed-out crash
+      // 307s the report away and the frontend container never sees it.
       what: "a visitor with no hint posting a client error report",
       path: "/client-error-report",
       hint: false,
@@ -191,9 +182,8 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
-      // The edge compares the value, not just the name. A name-only check
-      // admits a visitor the browser reports as signed out -- the `/` <->
-      // `/sign-in` bounce -- and nothing else ever sends a wrong value.
+      // The edge compares the value, not just the name: a name-only check admits a
+      // signed-out visitor and bounces them between `/` and `/sign-in`.
       what: "a visitor carrying a hint cookie with some other value",
       path: "/player-overview",
       hint: false,
@@ -272,13 +262,11 @@ describe("the edge and the session hint", () => {
   });
 
   it("has no other edge entrypoint to hide in", () => {
-    // Next accepts `proxy`, `middleware`, `src/proxy` and `src/middleware`,
-    // and runs whichever exists. Everything asserted here is about `@/proxy`
-    // alone, so a second entrypoint would be an edge with no coverage at all.
+    // Next runs whichever of `proxy`/`middleware`, root or `src/`, exists; this file
+    // asserts about `@/proxy` alone, so a second entrypoint would be uncovered.
     const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-    // Every name Next can resolve, matching the lint block's file list. A
-    // `proxy.tsx` beside `proxy.ts` wins the discovery loop, so the edge Next
-    // runs stops being the source this file imports through Vite.
+    // Matches `EDGE_FILES` in oxlint.config.mts; a `proxy.tsx` beside `proxy.ts`
+    // wins Next's discovery loop, so the edge Next runs stops being this import.
     const names = ["proxy", "middleware"];
     const extensions = ["ts", "tsx", "js", "jsx"];
     const candidates = names.flatMap((name) =>
@@ -294,9 +282,8 @@ describe("the edge and the session hint", () => {
   });
 
   it("never asks the API whether a session is still good", () => {
-    // Weaker than the table above and cheaper: it only sees `globalThis.fetch`
-    // at call time, so an imported client walks past it. An edge that probes
-    // cannot tell a refusal from an outage.
+    // Weaker than the table above: the spy sees only `globalThis.fetch` at call
+    // time, so an imported client would walk past it.
     const fetchSpy = vi.fn<typeof fetch>(() =>
       Promise.reject(new Error("ECONNREFUSED")),
     );

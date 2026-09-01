@@ -13,13 +13,11 @@ export interface ScopeAggregates {
 }
 
 /**
- * Recompute the two headline averages for one duo scope from the persisted
- * per-match breakdown. The "All" scope must NOT go through this: the card
- * shows the stored aggregates for it, so the figure never drifts from history.
+ * The "All" scope must NOT be recomputed here: the card shows its stored
+ * aggregates, so that figure never drifts from history.
  */
 /**
- * The scope the card may actually render: a selection whose aggregates are
- * gone (player switch, new run, deletion) snaps back to "all", so the Select
+ * A selection whose aggregates are gone snaps back to "all", so the Select
  * and captions can never label the stored All-scope figures as a slice.
  */
 export function effectiveScope(
@@ -33,9 +31,8 @@ export function effectiveScope(
 }
 
 /**
- * Mean with 10% trimmed from each end (floor'd count, so under ten values
- * nothing is trimmed). Mirrors `trimmed_mean` in the backend service; the
- * fixtures duplicated across both test suites must stay identical.
+ * Mean with 10% trimmed from each end. Mirrors the backend's `trimmed_mean`,
+ * down to the fixtures duplicated across both test suites.
  */
 export function trimmedMean(values: number[]): number {
   const k = Math.floor(values.length * 0.1);
@@ -106,9 +103,8 @@ export function duoPartnerPuuids(
 }
 
 /**
- * Rank averages and tier buckets over one scope's unique matchmade players
- * (analyzed player and duo partners excluded, mirroring the backend). Null
- * when the run predates the per-match puuid lists.
+ * Over one scope's unique matchmade players, excluding the analyzed player
+ * and duo partners as the backend does. Null before per-match puuid lists.
  */
 export function rankAggregates(
   perMatch: MatchmakingPerMatch[],
@@ -173,8 +169,7 @@ export interface LobbyGap {
 }
 
 /**
- * Average rank of every other unique player in one scope's lobbies (both
- * sides, analyzed player excluded) against the analyzed player's own rank.
+ * Both sides' other unique players against the analyzed player's own rank.
  * Null when the run lacks per-match puuids, or either figure is unrankable.
  */
 export function lobbyGap(
@@ -240,9 +235,8 @@ export interface PerformanceAggregates {
 }
 
 /**
- * Per-side trailing-form aggregates for one scope, each metric averaged over
- * only the matches that carry it -- a null (or legacy-absent) value never
- * drags a side to NaN, and a scope with no metric anywhere returns null.
+ * Each metric averages only the matches that carry it, so a null or
+ * legacy-absent value never drags a side to NaN.
  */
 export function performanceAggregates(
   perMatch: MatchmakingPerMatch[],

@@ -24,9 +24,8 @@ vi.mock("@/features/auth", () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-// The four cards the chosen-player branch mounts, stubbed because each opens
-// its own analysis queries. `MatchmakingAnalysis` still has to render the
-// selector handed to it -- that is where the control lives.
+// Stubbed because each card opens its own analysis queries; `MatchmakingAnalysis`
+// still renders the selector handed to it, where the control lives.
 vi.mock("@/features/matchmaking", () => ({
   MatchmakingAnalysis: ({ playerSelector }: { playerSelector: React.ReactNode }) => (
     <div>{playerSelector}</div>
@@ -76,9 +75,8 @@ it("carries the chosen player's name into the search box", async () => {
   const emptyBox = await screen.findByLabelText("Choose player for analysis");
   expect((emptyBox as HTMLInputElement).value).toBe("");
 
-  // Choosing a player swaps the whole branch and the selector is mounted
-  // afresh inside it, so `initialSearchValue` is the only thing that puts the
-  // name into the new instance.
+  // Choosing a player swaps the branch and mounts the selector afresh, so
+  // `initialSearchValue` is the only thing that seeds the new instance.
   useAnalyzedPlayer.mockReturnValue({
     analyzedPlayer: player,
     isLoading: false,

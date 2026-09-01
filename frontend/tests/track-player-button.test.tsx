@@ -85,9 +85,8 @@ describe("TrackPlayerButton", () => {
   });
 
   it("invalidates the player query so the card it reads its state from refetches", async () => {
-    // The button no longer owns the tracked flag: it renders what the player
-    // read handed it, so this invalidation is the whole mechanism by which the
-    // toggle changes appearance after a successful mutation.
+    // The button renders what the player read handed it, so this invalidation
+    // is the whole mechanism by which the toggle changes appearance.
     const { queryClient } = renderButton(false);
     queryClient.setQueryData(["player", "player-1"], { puuid: "player-1" });
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");

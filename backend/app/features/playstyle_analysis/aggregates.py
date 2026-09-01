@@ -234,9 +234,8 @@ def _average_kill_participation(
     )
 
 
-# Ten tags below read a metric out of the `advanced_stats` blob. Resolution is
-# by name, so a metric with neither a column nor an entry here does not raise --
-# it scores 0.0 for everyone, and `test_playstyle_tag_config.py` refuses it.
+# Resolution is by name: a metric with neither a column nor an entry here scores
+# 0.0 for everyone instead of raising, so `test_playstyle_tag_config.py` bans it.
 _CHALLENGE_KEYS: Final[dict[str, str]] = {
     "roam_kills": "killsOnOtherLanesEarlyJungleAsLaner",
     "enemy_jungle_monster_kills": "enemyJungleMonsterKills",

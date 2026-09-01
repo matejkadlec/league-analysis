@@ -41,9 +41,8 @@ export type ApiResponse<T> =
     };
 
 /**
- * Unwrap an `ApiResponse` inside a query or mutation function. The `validated*`
- * helpers resolve rather than reject, so a caller reading only `.data` renders
- * a failure as a silent empty state and never reaches the `QueryCache` toast.
+ * The `validated*` helpers resolve rather than reject, so a caller reading
+ * `.data` alone renders failure as an empty state and never toasts.
  */
 export function unwrap<T>(result: ApiResponse<T>): T {
   if (!result.success) {
@@ -53,9 +52,8 @@ export function unwrap<T>(result: ApiResponse<T>): T {
 }
 
 /**
- * `unwrap`, except a 404 is an ordinary empty state: several resources exist
- * only once something has happened, so their absence is what the surface
- * renders. Every other status still throws and reaches the `QueryCache` toast.
+ * `unwrap`, except a 404 is an ordinary empty state for resources that exist
+ * only once something has happened. Every other status still throws.
  */
 export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
   if (!result.success && result.error.status === 404) {
@@ -111,9 +109,8 @@ api.interceptors.response.use(
     originalRequest._retry = true;
     const refresh = await refreshAccessToken();
     if (refresh.outcome !== "refreshed") {
-      // No teardown here, and no reuse of the original 401: only the refresh
-      // call can tell a rejected session from an unreachable server. Forward
-      // what the refresh reported, verbatim.
+      // Only the refresh call can tell a rejected session from an unreachable
+      // server, so forward what it reported rather than the original 401.
       if (refresh.outcome === "refused") {
         return Promise.reject(error);
       }
@@ -181,9 +178,8 @@ function validateResponse<T>(
   return { success: true, data: parsed.data };
 }
 
-/** A failure result with the original exception attached as `cause`. Defined
- * non-enumerable: an Axios/Zod error can hold circular internals, so anything
- * that serializes the result still sees only the sanitized `error`. */
+/** `cause` is non-enumerable: an Axios/Zod error holds circular internals, so
+ * anything serializing the result sees only the sanitized `error`. */
 function failureResult(error: ApiError, cause: unknown): ApiResponse<never> {
   const result: ApiResponse<never> = { success: false, error };
   Object.defineProperty(result, "cause", {
@@ -196,16 +192,14 @@ function failureResult(error: ApiError, cause: unknown): ApiResponse<never> {
 }
 
 /**
- * What can go in a query string. Scalars only, never `unknown`: an undeclared
- * query name is dropped in silence and its default used, so the call succeeds
- * and answers the wrong question.
+ * Scalars only, never `unknown`: an undeclared query name is dropped in
+ * silence and its default used, so the call answers the wrong question.
  */
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
 /**
- * The trailing slot of every `validated*` helper, so no verb needs a positional
- * `undefined` to reach the argument after it. `signal` is TanStack Query's own:
- * without it a page left mid-fetch holds its connection to completion.
+ * `signal` is TanStack Query's own: without it a page left mid-fetch holds its
+ * connection to completion.
  */
 export type RequestOptions = {
   // Explicitly `| undefined`: under `exactOptionalPropertyTypes` a caller

@@ -50,9 +50,8 @@ describe("player sync start refusal", () => {
   });
 
   it("reports a SYNC_BUSY refusal as information naming the running player", async () => {
-    // The 409 is a refusal, not a failure: no run was created, the click
-    // still lands on the target player's stored data, and the backend's
-    // sentence says whose update is in the way.
+    // The 409 is a refusal, not a failure: no run was created, and the
+    // backend's sentence says whose update is in the way.
     validatedPost.mockResolvedValue({
       success: false,
       error: {
@@ -112,9 +111,8 @@ describe("player sync failure reporting", () => {
   });
 
   it("quotes the run's own failure sentence instead of a generic retry prompt", async () => {
-    // `_failure_from_job` writes the reviewed client-safe reason onto the
-    // run. "Another data update is already running" answers the click that
-    // collided with the scheduled fetcher; "Please try again later" hid it.
+    // `_failure_from_job` writes a reviewed client-safe reason onto the run;
+    // a generic retry prompt hides which collision caused it.
     const errorMessage =
       "Another data update is already running. Please try again later.";
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {

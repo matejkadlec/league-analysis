@@ -32,23 +32,20 @@ logger = structlog.get_logger(__name__)
 OnFailure = Callable[[str, Exception, dict[str, Any]], None] | None
 OnMatchStored = Callable[[int, str], None] | None
 
-# The oldest release still synced. Deliberately not shared with
-# `timeline._uses_historical_atakhan_contract`, which happens to test the same
-# number today but records a permanent fact rather than a movable policy.
+# Deliberately not shared with `timeline._uses_historical_atakhan_contract`: that
+# records a permanent fact, this is movable policy that happens to match today.
 OLDEST_SYNCED_GAME_MAJOR = 16
 
-# Bounds every id page with Riot's own filter, so a release older than
-# `OLDEST_SYNCED_GAME_MAJOR` is never listed, fetched, paged past -- or
-# timeline-repaired. Err early: too late drops current matches in silence.
+# Bounds every id page with Riot's own filter, so nothing older than
+# `OLDEST_SYNCED_GAME_MAJOR` is listed. Err early: too late drops current matches.
 OLDEST_SYNCED_MATCH_START_TIME = 1767225600  # 2026-01-01T00:00:00Z
 
 
 def is_current_game_version(game_version: str) -> bool:
     """Whether a Riot match belongs to a release still worth syncing.
 
-    A `>=` on the major, not a prefix match: the caller reads False as "the
-    rest of this queue is older, stop paging", so a prefix form would stop
-    ingestion at the first Riot major bump. An unparseable version is current.
+    A `>=` on the major, not a prefix match: the caller reads False as "stop
+    paging", so a prefix form would halt ingestion at Riot's next major bump.
     """
     try:
         return int(game_version.split(".", 1)[0]) >= OLDEST_SYNCED_GAME_MAJOR
@@ -68,9 +65,8 @@ class ReprocessMatch(Protocol):
 def must_abort_writer_sync(error: Exception) -> bool:
     """Return whether a lower-level sync error must reach the owning job.
 
-    `is_database_error` asks whether continuing would reuse a failed or
-    unavailable session. An `IntegrityError` is the exception: it is about the
-    one row, both writers roll back before re-raising, and the caller moves on.
+    True means continuing would reuse a failed or unavailable session.
+    `IntegrityError` is excluded: both writers roll back before re-raising it.
     """
     if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
         return False
@@ -79,9 +75,8 @@ def must_abort_writer_sync(error: Exception) -> bool:
     )
 
 
-# The Riot errors that must reach the owning job without per-match recovery:
-# an expired key or an exhausted rate budget ends the run, and the job layer
-# owns both signals. Every `except` on this seam spells only this tuple.
+# Must reach the owning job without per-match recovery: an expired key or an
+# exhausted rate budget ends the run, and the job layer owns both signals.
 RIOT_FATAL_ERRORS: tuple[type[Exception], ...] = (
     AuthenticationError,
     ForbiddenError,
@@ -292,9 +287,8 @@ async def backfill_timeline_only_match(context: QueueSyncContext, match_id: str)
     await ensure_riot_writer_maintenance_is_inactive(context.session)
     timeline_rows = 0
     try:
-        # Inside the try because `replace_match_timeline_rows` flushes, so it
-        # is a second place this path can leave the session holding a failed
-        # transaction -- the exact thing the handler below exists to prevent.
+        # Inside the try because `replace_match_timeline_rows` flushes, so it too
+        # can leave the session holding a failed transaction.
         timeline_rows = await replace_match_timeline_rows(
             context.session,
             build_synthetic_match_dto(match_id, participants, game_version),
@@ -304,9 +298,8 @@ async def backfill_timeline_only_match(context: QueueSyncContext, match_id: str)
             return 0
         await context.session.commit()
     except Exception as error:
-        # Without this the session is left holding a failed transaction and
-        # every later match in the run fails on it, so the run's first error
-        # would be the only true one.
+        # Without this the session holds a failed transaction and every later
+        # match in the run fails on it.
         logger.error(
             "Failed to store a timeline-only backfill",
             match_id=match_id,

@@ -4,9 +4,8 @@ from urllib.parse import quote, urlencode
 
 from .constants import MatchType, Platform, QueueType, Region, enum_str
 
-# One spelling per Riot path. The builders below format these into a URL and
-# the client hands the same string to `_record_api_call`, so an endpoint that
-# moves cannot leave the job log reporting where it used to be.
+# One spelling per Riot path: the client hands the same string to
+# `_record_api_call`, so a moved endpoint cannot mislabel the job log.
 ACCOUNT_BY_RIOT_ID = "/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}"
 ACCOUNT_BY_PUUID = "/riot/account/v1/accounts/by-puuid/{puuid}"
 SUMMONER_BY_PUUID = "/lol/summoner/v4/summoners/by-puuid/{puuid}"

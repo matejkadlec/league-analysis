@@ -17,9 +17,8 @@ ENV_FILE = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=ENV_FILE)
 
 
-# A present-but-blank variable is a missing one, not an empty value. `env_ignore_empty`
-# covers `""` model-wide, including the int `postgres_port`; `pattern` covers
-# whitespace-only, and pydantic's `pattern` searches rather than matches in full.
+# A present-but-blank variable is a missing one: `env_ignore_empty` covers `""`
+# model-wide, and `pattern` (which searches, not fullmatch) covers whitespace-only.
 RequiredEnvStr = Annotated[str, Field(pattern=r"\S")]
 
 
@@ -54,9 +53,8 @@ class Settings(BaseSettings):
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
         ]
 
-    # Declared above `jwt_secret_key` on purpose: pydantic validates fields in
-    # declaration order, and `validate_jwt_secret` reads this one out of
-    # `info.data`. No default -- an absent ENVIRONMENT would read as "dev".
+    # Must precede `jwt_secret_key`: pydantic validates in declaration order and
+    # `validate_jwt_secret` reads it from `info.data`. Defaulting would hide absence.
     environment: Literal["dev", "test", "production"]
 
     # JWT Authentication Configuration
@@ -137,9 +135,8 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If secret is weak and environment is production
         """
-        # `.get`, not `[...]`: pydantic only publishes fields that validated,
-        # so an ENVIRONMENT of "staging" must stay its own error rather than
-        # becoming a KeyError raised from inside this validator.
+        # `.get`, not `[...]`: pydantic omits fields that failed to validate, so an
+        # invalid ENVIRONMENT must stay its own error, not a KeyError from here.
         is_production = info.data.get("environment") == "production"
 
         # Check for default/placeholder secrets
@@ -194,9 +191,7 @@ class Settings(BaseSettings):
 def get_global_settings() -> Settings:
     """Get the process-wide settings instance, built on first use.
 
-    The five postgres fields have no defaults, so pydantic-settings itself
-    raises on any missing one — and reports all of them at once, where the
-    old per-field helper stopped at the first.
+    Postgres fields have no defaults, so pydantic-settings reports all missing ones.
     """
     # The five postgres fields arrive via env/env_file; pyright only sees the
     # generated __init__ signature.

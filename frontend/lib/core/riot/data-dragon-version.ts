@@ -5,16 +5,14 @@ const VERSION_MANIFEST_URL =
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 /**
- * Resolve the Data Dragon version every asset URL is built from. Prerendered
- * routes bake the answer in at build time, so the `revalidate` below governs
- * only the routes that stay dynamic -- fine, since old versions stay served.
+ * Prerendered routes bake the answer in at build time, so the `revalidate`
+ * below governs only dynamic routes -- fine, since old versions stay served.
  */
 export async function resolveDDragonVersion(
   fetchVersionManifest: typeof fetch = fetch,
 ): Promise<string> {
-  // An explicit pin skips the network entirely: it holds back a bad upstream
-  // release without a deploy, and keeps Riot's CDN out of the e2e gate. A
-  // malformed value is ignored, so a typo cannot point at a missing version.
+  // An explicit pin skips the network, holding back a bad release without a
+  // deploy and keeping Riot's CDN out of the e2e gate; a malformed value is ignored.
   const pinned = process.env.DDRAGON_VERSION;
   if (pinned && VERSION_PATTERN.test(pinned)) {
     return pinned;

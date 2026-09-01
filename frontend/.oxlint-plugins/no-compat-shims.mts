@@ -1,10 +1,8 @@
-// This is an application, not a library: every caller lives in this repo, so
-// there is no "backward" to stay compatible with. A rename updates its call
-// sites in the same change, and the superseded path is deleted.
+// This is an application, not a library: every caller lives in this repo, so a
+// rename updates its call sites and the superseded path is deleted.
 
-// Two checks, one rule: the comment markers in the first pattern below, and a
-// declared identifier that names itself superseded. The same words as data are
-// fine -- a string literal is never scanned, and only declarations are visited.
+// Two checks, one rule: compat markers in comments, and a declaration naming
+// itself superseded. The same words as data are fine -- literals aren't scanned.
 
 type CommentContext = {
   sourceCode: {

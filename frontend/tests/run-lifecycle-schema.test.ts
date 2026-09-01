@@ -6,9 +6,8 @@ import {
 } from "@/lib/core/schemas";
 
 /**
- * A run poll answers 200 whatever the outcome, so the lifecycle field is the
- * only thing separating a result from a failure. Only the `completed` variant
- * carries `results`; what is asserted here is the runtime half of that split.
+ * A run poll answers 200 whatever the outcome, so the lifecycle field alone
+ * separates a result from a failure; only `completed` carries `results`.
  */
 
 const matchmakingResults = {
@@ -80,9 +79,8 @@ describe("matchmaking run lifecycle split", () => {
   });
 
   it("strips results a run in flight should never have carried", () => {
-    // The type cannot express this one: a card holding a run typed as
-    // in-flight has no `results` key to read, so only the runtime split can
-    // say what happens when a row carries partial averages anyway.
+    // The type cannot express this: an in-flight run has no `results` key, so
+    // only the runtime split says what a row carrying them does.
     const run = MatchmakingAnalysisResponseSchema.parse(
       matchmakingPayload({ status: "in_progress", results: matchmakingResults }),
     );
@@ -152,9 +150,8 @@ describe("smurf and boost run lifecycle split", () => {
   });
 
   it("replaces a stale error message along with the code", () => {
-    // The smurf card renders `error_message` verbatim for any failed run, so
-    // keeping a legacy row's message would describe a different failure than
-    // the code names.
+    // The card renders `error_message` verbatim, so a legacy row's message
+    // would describe a different failure than the code names.
     const run = SmurfBoostAnalysisResponseSchema.parse(
       smurfPayload({
         results: null,

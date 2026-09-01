@@ -247,9 +247,8 @@ describe("AuthProvider logout", () => {
     vi.useRealTimers();
   });
 
-  // Signed in first, because "changes nothing" and "tore the session down"
-  // are the same set of un-called mocks otherwise: only a rendered account
-  // tells them apart.
+  // Signed in first: otherwise "changes nothing" and "tore the session down"
+  // are the same set of un-called mocks.
   async function renderSignedIn(answerLogout: () => Promise<Response>) {
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.stubGlobal(
@@ -295,9 +294,8 @@ describe("AuthProvider logout", () => {
   }
 
   it("changes nothing when an automatic logout cannot reach the server", async () => {
-    // Why the unconditional teardown is opt-in: calling `logout()` on a timer
-    // whenever a refresh failed strands a live 30-day refresh token behind a
-    // cleared hint.
+    // Why the teardown is opt-in: tearing down whenever a refresh failed
+    // strands a live 30-day refresh token behind a cleared hint.
     const logout = await renderSignedIn(() =>
       Promise.reject(new Error("offline")),
     );
@@ -317,8 +315,7 @@ describe("AuthProvider logout", () => {
 
   it("changes nothing when a beacon is queued instead of a request answered", async () => {
     // `sendBeacon` returns true for *queued*, even against a refused
-    // connection, so counting it as answered makes the opt-in above dead
-    // code. jsdom has no `sendBeacon`, so the test supplies one.
+    // connection, so counting it as answered revokes nothing.
     const sendBeacon = vi.fn<typeof navigator.sendBeacon>(() => true);
     Object.defineProperty(navigator, "sendBeacon", {
       value: sendBeacon,
@@ -360,9 +357,8 @@ describe("AuthProvider logout", () => {
   });
 
   it("changes nothing when an edge answers 401 for an automatic logout", async () => {
-    // `/auth/logout` has no auth dependency and cannot answer 401, so a 401
-    // was minted by the maintenance Worker in front of it and nothing was
-    // revoked. Reading it as "already signed out" strands a live token.
+    // `/auth/logout` cannot answer 401, so one came from the Worker in front
+    // of it: reading it as "already signed out" strands a live token.
     const logout = await renderSignedIn(() =>
       Promise.resolve({ ok: false, status: 401 } as Response),
     );
@@ -377,9 +373,8 @@ describe("AuthProvider logout", () => {
   });
 
   it("still signs the visitor out when they asked and the server is down", async () => {
-    // The other half: for a person who just pressed the button, being left
-    // staring at an account they asked to leave is the worse failure. Both
-    // call sites that pass this flag are a control under someone's finger.
+    // For someone who just pressed the button, being left staring at the
+    // account they asked to leave is the worse failure.
     const logout = await renderSignedIn(() =>
       Promise.reject(new Error("offline")),
     );
@@ -394,9 +389,8 @@ describe("AuthProvider logout", () => {
   });
 
   it("waits for the server before reporting the session over", async () => {
-    // Only the server can revoke; clearing cookies here hides the credential.
-    // Fire-and-forget says "signed out" while a 30-day token is still
-    // spendable, and settles the promise the Sign Out spinners wait on.
+    // Only the server can revoke, so fire-and-forget says "signed out" while
+    // a 30-day token is still spendable.
     vi.useFakeTimers();
     endLocalSession.mockReset();
     routerPush.mockReset();
@@ -431,9 +425,8 @@ describe("AuthProvider logout", () => {
       },
     );
 
-    // A real wait, pinned to the request's own deadline rather than a round
-    // number: a test that waited one microtask, or a fixed 2.1s, would wave
-    // through giving up on the server early.
+    // Pinned to the request's own deadline: a fixed number would wave through
+    // giving up on the server early.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
     });
@@ -454,9 +447,8 @@ describe("AuthProvider logout", () => {
     // GET -- 405, nothing revoked -- and every assertion above still holds.
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("/auth/logout"),
-      // The mock ignores its arguments, so without these the request could be
-      // a GET (405, nothing revoked) or carry no cookies (the server resolves
-      // nobody, nothing revoked) and every assertion above still holds.
+      // The mock ignores its arguments, so without these a GET or a
+      // cookie-less request revokes nothing and every assertion still holds.
       expect.objectContaining({
         method: "POST",
         credentials: "include",

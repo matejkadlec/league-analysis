@@ -105,9 +105,8 @@ async def test_an_unchanged_entry_does_not_add_a_second_snapshot(
 def test_a_challenger_snapshot_survives_the_response_model() -> None:
     """Master and above have no divisions, so their LP has no ceiling.
 
-    `PlayerLeagueResponse.league_points` must carry no upper bound: it is a
-    response model, so one would answer 500 for every player above Diamond, and
-    the writer stores Riot's own value with no clamp to keep it under.
+    `PlayerLeagueResponse.league_points` must carry no upper bound: one would
+    answer 500 for every player above Diamond.
     """
     snapshot = PlayerLeagueResponse(
         puuid="sanitized-puuid",

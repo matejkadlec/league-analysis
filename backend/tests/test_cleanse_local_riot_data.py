@@ -166,8 +166,7 @@ def test_validate_configured_target_accepts_the_local_target_and_no_other(
     """The pre-connection guard permits only the documented local configuration.
 
     The guard returns nothing, so "it accepts" is only a claim next to a
-    configuration it refuses: a guard that raised at every target, or at none,
-    would otherwise satisfy half of this test.
+    configuration it refuses.
     """
     monkeypatch.setenv("ENVIRONMENT", "dev")
     settings = SimpleNamespace(

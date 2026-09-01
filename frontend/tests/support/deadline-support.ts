@@ -1,9 +1,8 @@
 import { vi } from "vitest";
 
 /**
- * A request deadline a test can actually drive: fake timers move `setTimeout`
- * but not `AbortSignal.timeout`, so a deadline built on the latter can be
- * deleted outright with every test still green.
+ * Fake timers move `setTimeout` but not `AbortSignal.timeout`, so a deadline
+ * built on the latter can be deleted outright with every test still green.
  */
 export function installDrivableAbortDeadlines(): () => void {
   const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {

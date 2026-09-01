@@ -99,9 +99,8 @@ async def login(
 ) -> Token:
     """Authenticate user credentials and issue an access token.
 
-    Includes brute-force protections:
-    - temporary account lockout after repeated failed attempts
-    - adaptive CAPTCHA requirement once failure threshold is reached
+    Brute-force protections apply: temporary lockout after repeated failures,
+    and an adaptive CAPTCHA requirement once the failure threshold is reached.
     """
     try:
         user = await auth_service.authenticate_user(
@@ -237,13 +236,11 @@ async def refresh_access_token(
     )
 
 
-# Deliberately not rate limited: `get_remote_address` keys on
-# `request.client.host` and browser traffic arrives through the Next.js
-# rewrite, so one shared bucket would strand live 30-day tokens.
+# Deliberately not rate limited: browser traffic arrives through the Next.js
+# rewrite, so one shared IP bucket would strand live 30-day tokens.
 @router.post("/logout")
-# No body parameter: declaring one makes FastAPI validate the body, so a
-# `navigator.sendBeacon` logout (`text/plain`) becomes a 422 on a route
-# whose contract is that it cannot fail.
+# No body parameter: FastAPI would then validate the body, turning a
+# `navigator.sendBeacon` logout (`text/plain`) into a 422.
 async def logout(
     request: Request,
     response: Response,
@@ -251,13 +248,11 @@ async def logout(
 ) -> MessageResponse:
     """Revoke whatever session the request still carries, and always succeed.
 
-    Identity comes from the refresh cookie, never a valid access token, which
-    expires 30 minutes into a 30-day session; an unauthenticated call is
-    answered, not rejected. A database fault still propagates as a 500.
+    Identity comes from the refresh cookie, so an unauthenticated call is
+    answered rather than rejected; a database fault still propagates as a 500.
     """
-    # The Authorization header first, matching `get_request_access_token`, so
-    # a non-browser client holding only the pair `/login` returned still gets
-    # that token blacklisted. It is spent on itself and nothing more.
+    # Authorization header first, matching `get_request_access_token`, so a
+    # non-browser client holding only `/login`'s pair still gets it blacklisted.
     authorization = request.headers.get("authorization", "")
     bearer_token = (
         authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
@@ -265,25 +260,22 @@ async def logout(
     access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
 
-    # Only the refresh token names a user: naming one signs them out everywhere
-    # and this route is unauthenticated, so honouring an access token here --
-    # which lands in logs -- would be a replayable sign-out-everywhere button.
+    # Only the refresh token names a user: this route is unauthenticated, so
+    # honouring an access token (which lands in logs) would be replayable.
     user_id: int | None = None
     if refresh_token:
         user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
 
-    # Refresh tokens first. Each revocation commits on its own, so a failure
-    # between the two leaves the earlier one done: losing the 30-day credential
-    # and keeping the 30-minute one is the survivable half of that.
+    # Refresh tokens first: each revocation commits on its own, so a failure
+    # between the two must leave the 30-day credential the one already gone.
     if user_id is not None:
         await auth_service.revoke_all_refresh_tokens_for_user(user_id)
     if access_token:
         await auth_service.revoke_access_token(access_token, reason="logout")
 
     if user_id is not None:
-        # Only for a caller that proved it holds a credential. This issues
-        # table-wide DELETEs and a COMMIT on an unauthenticated endpoint, so
-        # running it unconditionally hands anonymous requests a write loop.
+        # Gated on a proven credential: table-wide DELETEs plus a COMMIT on an
+        # unauthenticated endpoint would hand anonymous requests a write loop.
         await auth_service.cleanup_expired_token_state()
     if user_id is not None:
         logger.info("logout_succeeded", user_id=user_id)
@@ -291,9 +283,8 @@ async def logout(
         # Not `info`: this route is unauthenticated and unrate-limited, so an
         # anonymous POST loop would otherwise be a free way to fill the logs.
         logger.debug("logout_succeeded_without_a_session")
-    # Only for a request that actually carried something. A deletion Set-Cookie
-    # applies in first-party contexts where SameSite=Lax withheld the cookies,
-    # so it would revoke nothing while stranding the live refresh row.
+    # Only when the request carried something: a deletion Set-Cookie applies in
+    # contexts where SameSite=Lax withheld the cookies, stranding the live row.
     if any((access_token, refresh_token, request.cookies.get(AUTH_STATE_COOKIE_NAME))):
         clear_auth_cookies(response)
     return MessageResponse(message="Successfully logged out")

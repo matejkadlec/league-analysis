@@ -1,8 +1,7 @@
 """SMTP transport for the auth feature.
 
-Owns the one question both mail flows ask -- is delivery configured? -- and
-the one blocking send they must offload to a thread. The envelope sender is
-transport configuration, so it is stamped here, not at each call site.
+Whether delivery is configured, and the envelope sender, are transport
+concerns owned here; the blocking send is offloaded to a thread.
 """
 
 import asyncio

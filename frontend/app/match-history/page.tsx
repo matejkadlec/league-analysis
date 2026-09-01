@@ -25,9 +25,8 @@ export default function MatchHistoryPage() {
           {isLoading ? (
             <MatchHistoryLoadingCard />
           ) : currentPlayer ? (
-            // Keyed by PUUID: a switch remounts the card, so the previous
-            // player's rows, page number and in-flight query cannot survive
-            // into the new player's history.
+            // Keyed by PUUID: a switch remounts the card, so no rows, page
+            // number or in-flight query survives into the new player.
             <MatchHistory
               key={currentPlayer.puuid}
               puuid={currentPlayer.puuid}

@@ -26,9 +26,8 @@ async def fully_analyzed_match_ids(
 ) -> set[str]:
     """Which of `match_ids` are already stored with `fully_analyzed=True`.
 
-    The one read both sync planning and the matchmaking analysis make of the
-    invariant `upsert_match` writes; keeping it beside the writer keeps the
-    two sides of the contract in one file.
+    Lives beside `upsert_match` so both sides of the `fully_analyzed` contract
+    stay in one file.
     """
     ids_list = list(match_ids)
     if not ids_list:
@@ -122,9 +121,7 @@ async def upsert_match(
 ) -> None:
     """Upsert a match and its participants with fully_analyzed=True.
 
-    Uses SQLAlchemy merge (upsert) to handle both insert and update cases.
-    Creates skeletal Player records for FK satisfaction if missing and stores
-    objective timeline aggregates when timeline payload is available.
+    Skeletal Player rows are created when missing, so participant FKs resolve.
     """
     platform_id = match_dto.info.platform
     match_id = match_dto.metadata.match_id

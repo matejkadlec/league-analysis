@@ -7,9 +7,8 @@ export function smurfBoostQueryKey(puuid: string | null) {
   return ["smurf-boost-detection", puuid] as const;
 }
 
-// Nullable, because the card outlives its player: the page renders it with no
-// analysed player so the local search stays reachable. `skipToken` rather than
-// `enabled`, an ordinary option a spreading caller can drop.
+// Nullable: the page renders this card with no analysed player so the local
+// search stays reachable. `skipToken`, not `enabled` -- a spreading caller can drop that.
 export function smurfBoostQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: smurfBoostQueryKey(puuid),

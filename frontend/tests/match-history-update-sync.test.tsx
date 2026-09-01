@@ -137,9 +137,7 @@ describe("Match History update", () => {
 
     await user.click(await screen.findByRole("button", { name: /update/i }));
 
-    // The previous implementation refetched behind `setTimeout(..., 5000)` and
-    // never read the run at all, so this request is the whole point of the
-    // change: with no timers advanced, the run must already be under way.
+    // With no timers advanced, the run must already be under way.
     await waitFor(() => expect(syncPaths().length).toBeGreaterThan(0));
     expect(syncPaths()[0]).toBe("/players/player-puuid/sync/7");
   });
@@ -156,9 +154,7 @@ describe("Match History update", () => {
   });
 
   it("adopts an in-flight run after a reload instead of losing it", async () => {
-    // Before the shared usePlayerSyncRun hook, this surface kept the run id
-    // in local state only, so a reload mid-sync re-enabled the button with
-    // the run still going.
+    // A run id kept in local state only re-enables the button after a mid-sync reload.
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
       if (path.endsWith("/sync/active")) {
         return {

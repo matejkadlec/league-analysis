@@ -58,9 +58,8 @@ from .rate_limiter import RateLimiter
 
 logger = structlog.get_logger(__name__)
 
-# Any value a Riot JSON response can hold. Declaring a local as `JSONValue`
-# before an `isinstance` chain keeps each narrowing step a *known* type, which
-# `Any` does not (narrowing `Any` yields `dict[Unknown, Unknown]`).
+# Annotating a local with this before an `isinstance` chain keeps each narrowing
+# step a known type; narrowing `Any` yields `dict[Unknown, Unknown]`.
 type JSONValue = (
     dict[str, JSONValue] | list[JSONValue] | str | int | float | bool | None
 )
@@ -317,9 +316,7 @@ class RiotAPIClient:
     ) -> dict[str, Any] | list[Any]:
         """Execute a single HTTP request, raising mapped errors for bad statuses.
 
-        On success the return is Riot's decoded body, which is always a JSON
-        object or array. An unmapped non-200 status keeps its long-standing
-        behaviour of returning the decoded body rather than raising.
+        An unmapped non-200 status returns the decoded body rather than raising.
         """
         if self.session is None:
             raise RiotAPIError("Session not initialized")
@@ -344,9 +341,8 @@ class RiotAPIClient:
 
             response_data = response.json()
             if response_data is None:
-                # Letting None through returns it to callers typed
-                # `dict | list`, which then crash on a subscript far from the
-                # HTTP layer.
+                # Callers are typed `dict | list`; a None here would crash them on
+                # a subscript far from the HTTP layer.
                 raise NullResponseBodyError("Request failed: response body was null")
             return response_data
         finally:
@@ -402,9 +398,8 @@ class RiotAPIClient:
                 error=str(error),
             )
         elif isinstance(error, RiotAPIError):
-            # The logged wait is read off the retryer itself (set before
-            # before_sleep fires), so the backoff policy lives in exactly one
-            # place — _transient_wait — and this line cannot drift from it.
+            # Read the wait off the retryer, never recompute it: the backoff
+            # policy must live only in `_transient_wait`.
             next_action = retry_state.next_action
             logger.warning(
                 "riot_api_retrying_server_error",
@@ -466,9 +461,8 @@ class RiotAPIClient:
             )
             raise RiotAPIError(f"Request failed: {error!s}") from error
         except RiotAPIError as error:
-            # Exhausted 5xx and null bodies keep their terminal log; a 429
-            # raises bare, and the immediately-raised client errors were
-            # never logged here.
+            # Only exhausted 5xx and null bodies get a terminal log; 429s and
+            # client errors raise bare.
             if (error.status_code or 0) >= 500 or isinstance(
                 error, NullResponseBodyError
             ):
@@ -484,9 +478,8 @@ class RiotAPIClient:
     async def probe_credentials(self, url: str) -> object:
         """Send one un-retried GET purely to observe whether Riot accepts the key.
 
-        Credential validation cares only about the status Riot answers with, so
-        retrying would turn an expired key into three pointless calls against a
-        limit the rest of the app is sharing.
+        Retrying would turn an expired key into three pointless calls against a
+        limit the rest of the app shares.
         """
         return await self._make_request(url, method="GET", retry_on_failure=False)
 
@@ -504,9 +497,8 @@ class RiotAPIClient:
     ) -> dict[str, Any]:
         """Assert that a single-entity endpoint answered with a JSON object.
 
-        Riot returns an array only for list endpoints, so an array here is a
-        broken contract rather than data: fail with the client's own error
-        type instead of letting `Model(**response)` raise a bare `TypeError`.
+        An array here is a broken contract, so fail with the client's own error
+        type rather than letting `Model(**response)` raise a bare `TypeError`.
         """
         if not isinstance(response, dict):
             raise RiotAPIError(
@@ -664,16 +656,14 @@ class RiotAPIClient:
     ) -> list[LeagueEntryDTO]:
         """Parse the by-PUUID entries, dropping unreadable foreign ladders.
 
-        An entry naming a queue this product does not store is dropped; an
-        unreadable `RANKED_SOLO_5x5` or `RANKED_FLEX_SR` entry, or one naming
-        no queue at all, still raises.
+        An entry naming an unstored queue is dropped; an unreadable
+        `RANKED_SOLO_5x5`/`RANKED_FLEX_SR`, or one naming no queue, still raises.
 
         Raises:
             ValidationError: a stored ladder's entry does not parse.
         """
-        # The route answers for every ladder the account plays, and Riot keeps
-        # adding ones with their own vocabulary: `JADE_RANKED_SOLO_5x5` returns
-        # tier `SALT`. Parsed eagerly, that sibling failed the whole list.
+        # Riot keeps adding ladders with their own vocabulary (`JADE_RANKED_SOLO_5x5`
+        # returns tier `SALT`), so one sibling must not fail the whole list.
         stored_queues = {queue.value for queue in LeagueQueueType}
         parsed: list[LeagueEntryDTO] = []
         for entry in entries:

@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import localFont from "next/font/local";
-// Montserrat comes from npm, not `next/font/google`: that loader fetches from
-// fonts.googleapis.com during `next build` with no offline fallback, so one
-// lost request failed the whole production build once (#266, #267).
+// Montserrat comes from npm, not `next/font/google`: that loader fetches at
+// build time with no offline fallback, failing the build (#266, #267).
 import "@fontsource-variable/montserrat";
 import "@fontsource-variable/montserrat/wght-italic.css";
 import "./globals.css";
@@ -56,9 +55,8 @@ export default async function RootLayout({
 }>) {
   const ddragonVersion = await resolveDDragonVersion();
 
-  // `dark` is written on the element, not chosen at runtime: there is no light
-  // design. The splash, the sidebar's `#0a1428` and every branded gradient are
-  // defined only under `.dark`.
+  // `dark` is written on the element, not chosen at runtime: the splash, the
+  // sidebar and every branded gradient are defined only under `.dark`.
   return (
     <html lang="en" className="dark">
       <body
@@ -70,9 +68,8 @@ export default async function RootLayout({
             <Suspense fallback={null}>
               <SidebarNav />
             </Suspense>
-            {/* `min-w-0` because a flex item defaults to `min-width: auto`
-                  and so refuses to shrink below its content. Without it, one
-                  wide child stretches the document and `overflow-x-auto` is inert. */}
+            {/* `min-w-0` because a flex item defaults to `min-width: auto` and
+                  refuses to shrink, letting a wide child stretch the document. */}
             <main id="content" className="min-w-0 flex-1 bg-background">
               {children}
             </main>

@@ -1,8 +1,7 @@
 """Join Us contact submissions.
 
-Owns the public contact form except the CAPTCHA decision: per-subject sequence
-counters, per-IP rate limiting, anti-spam accounting, and message delivery.
-Orchestration stays on `AuthService`, which owns the CAPTCHA vocabulary.
+Owns the public contact form except the CAPTCHA decision, which stays on
+`AuthService` along with the CAPTCHA vocabulary.
 """
 
 import smtplib

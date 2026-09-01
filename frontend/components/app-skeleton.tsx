@@ -1,9 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * The page-shaped placeholder shown whenever there is nothing to draw yet.
- * Rendered signed-out too: the gate's redirect waits on the session probe.
- * Lives here, not in `app/loading.tsx`, because `providers.tsx` needs it too.
+ * Lives here, not in `app/loading.tsx`, because `providers.tsx` needs it too,
+ * and it renders signed-out while the gate waits on the session probe.
  */
 export function AppSkeleton() {
   return (

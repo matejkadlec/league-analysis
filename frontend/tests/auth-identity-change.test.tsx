@@ -112,9 +112,8 @@ describe("the cache when the signed-in account changes", () => {
   });
 
   it("drops the previous account's data when a different account answers", async () => {
-    // Cookies are jar-wide, so signing in as somebody else in a second tab
-    // changes who this tab is without `login` or `logout` running here -- and
-    // the cached answers carry no account in their key.
+    // Cookies are jar-wide, so a second tab can change who this tab is with no
+    // `login` or `logout` here, and cached keys carry no account.
     const { queryClient, recheck } = await mountAs([1, 2]);
     queryClient.setQueryData(ACCOUNT_SCOPED_KEY, "account one's thresholds");
 
@@ -126,9 +125,8 @@ describe("the cache when the signed-in account changes", () => {
   });
 
   it("keeps it when the same account answers again", async () => {
-    // The half that makes the first assertion mean something: clearing on
-    // every re-check would pass that test too, and would throw the whole cache
-    // away each time the settings page saves a display name.
+    // Clearing on every re-check would pass the test above too, and would empty
+    // the cache each time the settings page saves a display name.
     const { queryClient, recheck } = await mountAs([3]);
     queryClient.setQueryData(ACCOUNT_SCOPED_KEY, "account three's thresholds");
 

@@ -5,8 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Asserted against server markup because the layout's root is `<html>`, which
- * jsdom will not nest (see `app-shell-boundaries.test.tsx`). Every heavy
- * child is stubbed with a marker; the layout's own wiring is under test.
+ * jsdom will not nest (see `app-shell-boundaries.test.tsx`).
  */
 
 vi.mock("next/font/google", () => ({

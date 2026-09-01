@@ -1,8 +1,7 @@
 """Print the FastAPI OpenAPI document, for the contract check in the frontend.
 
 `frontend/tests/api-contract-alignment.test.ts` compares this against the JSON
-Schema of every exported zod schema. It lives here rather than in that test
-because only this side can import the app.
+Schema of every exported zod schema; only this side can import the app.
 """
 
 import json

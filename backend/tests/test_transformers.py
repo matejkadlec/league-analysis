@@ -34,9 +34,8 @@ def test_name_sanitization_is_stable() -> None:
 
 
 def test_extracted_participant_fits_the_row_it_becomes() -> None:
-    # This is the whole production path: `MatchParticipant(match_id=...,
-    # **extract_participant_data(dto))` in match_persistence. SQLAlchemy raises
-    # on an unknown kwarg, so one construction checks the entire ~75-key mapping.
+    # SQLAlchemy raises on an unknown kwarg, so this one construction checks the
+    # entire ~75-key mapping against the row.
     data = MatchDTOTransformer.extract_participant_data(participant())
     row = MatchParticipant(match_id="EUN1_1", **data)
 
@@ -46,9 +45,8 @@ def test_extracted_participant_fits_the_row_it_becomes() -> None:
 
 
 def test_remake_is_the_negation_of_progression_eligibility() -> None:
-    # Riot has no "remake" flag; the signal is eligibleForProgression, and
-    # the transformer inverts it. Inverted the wrong way, every real game is
-    # stored as a remake and excluded from every analysis.
+    # Riot has no remake flag, so the transformer inverts eligibleForProgression;
+    # inverted the wrong way, every real game is excluded from every analysis.
     assert MatchDTOTransformer.extract_participant_data(participant())["remake"] is (
         False
     )
@@ -57,9 +55,8 @@ def test_remake_is_the_negation_of_progression_eligibility() -> None:
 
 
 def test_display_name_falls_back_through_riot_id_then_summoner_name() -> None:
-    # Three generations of Riot naming in one field. The modern riotIdGameName
-    # wins; the legacy summonerName fills in when the riot id is empty string
-    # (which the API sends, not null); the column is NOT NULL, so a last resort.
+    # riotIdGameName wins, summonerName fills in when it is the empty string the
+    # API sends (not null), and the column is NOT NULL so there is a last resort.
     riot_id = participant(riotIdGameName="Faker", summonerName="OldName")
     assert MatchDTOTransformer.extract_participant_data(riot_id)["game_name"] == (
         "Faker"
@@ -93,9 +90,8 @@ def test_unrecognised_positions_are_stored_as_null() -> None:
 
 
 def test_challenge_stats_are_read_under_riots_own_names() -> None:
-    # The challenges dict is raw camelCase Riot vocabulary, and a typo in any key
-    # is silent -- .get(wrong, 0) writes a zero into every row forever. Only the
-    # six columns something still reads are copied; the rest stays in the blob.
+    # Raw camelCase Riot vocabulary, where a typo is silent: `.get(wrong, 0)`
+    # writes a zero into every row forever.
     payload = participant(
         challenges={
             "soloKills": 3,
@@ -122,9 +118,8 @@ def test_challenge_stats_are_read_under_riots_own_names() -> None:
 def test_the_challenges_blob_is_stored_whole() -> None:
     """The columns above are a projection; the object itself is the record.
 
-    Fifteen more columns used to copy one key each out of this blob and were
-    read by nothing, so revision 0027 dropped them. That is only safe while
-    the blob is still stored verbatim.
+    The per-key columns revision 0027 dropped are only safe to be gone while the
+    blob is stored verbatim.
     """
     challenges = {"skillshotsHit": 41, "buffsStolen": 1, "soloKills": 3}
     data = MatchDTOTransformer.extract_participant_data(

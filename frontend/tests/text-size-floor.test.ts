@@ -3,14 +3,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * LGA-101's size floor, for every analysis surface held to it. Source text
- * rather than a render: this has to hold for every line, not the handful a
- * browser test samples.
+ * LGA-101's size floor, read from source rather than a render: it has to hold
+ * for every line, not the handful a browser test samples.
  */
 /**
- * Every file that renders part of each surface. The component directories are
- * read rather than listed, since a hand-kept list goes stale.
- * `player-selector.tsx` is named explicitly, belonging to neither directory.
+ * Directories are read rather than listed, since a hand-kept list goes stale;
+ * `player-selector.tsx` belongs to neither and is named explicitly.
  */
 function componentsIn(directory: string): string[] {
   return readdirSync(directory)
@@ -38,9 +36,8 @@ function offendersIn(paths: readonly string[]): string[] {
   for (const path of paths) {
     const source = readFileSync(path, "utf8");
 
-    // `text-xs` is the only token below 14px, but an arbitrary value slips past a
-    // token ban: `text-[0.6875rem]` did exactly that on two surfaces in turn. So
-    // arbitrary sizes are read and compared, not pattern-matched.
+    // `text-xs` is the only token below 14px, but `text-[0.6875rem]` slips past
+    // a token ban, so arbitrary sizes are read and compared, not matched.
     if (/\btext-xs\b/.test(source)) {
       offenders.push(`${path}: text-xs`);
     }
@@ -60,9 +57,8 @@ function offendersIn(paths: readonly string[]): string[] {
 
 describe.each(Object.entries(SURFACES))("%s", (_surface, paths) => {
   it("scans the files it is written against", () => {
-    // Aimed at what is not derived: a page or shared control that was moved or
-    // renamed would otherwise drop out silently. The count guards the other
-    // direction -- an empty directory would pass every check below.
+    // A moved or renamed page would otherwise drop out silently, and the count
+    // guards the other way: an empty directory passes every check below.
     for (const path of paths) {
       expect(() => readFileSync(path, "utf8"), path).not.toThrow();
     }
@@ -70,9 +66,8 @@ describe.each(Object.entries(SURFACES))("%s", (_surface, paths) => {
   });
 
   it("has no text under 14px left anywhere on it", () => {
-    // LGA-101 asks for the whole page rather than the one example it names. A
-    // browser test can only measure the nodes it thinks to sample; this sees every
-    // line, including the ones a shared control brings with it.
+    // LGA-101 asks for the whole page, not the one example it names, and a
+    // browser test can only measure the nodes it thinks to sample.
     expect(offendersIn(paths)).toEqual([]);
   });
 });

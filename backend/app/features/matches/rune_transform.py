@@ -9,8 +9,7 @@ def transform_runes_payload(value: object) -> object:
     """Transform raw Riot API perks structure to flattened runes data.
 
     Anything that is not a Riot `styles` payload is handed back untouched for
-    Pydantic to validate, which is why the return type is `object`. Widen
-    `RunesData` and this function together if a view ever needs more perks.
+    Pydantic to validate (hence `object`); widen `RunesData` alongside this.
     """
     if not is_json_object(value):
         return value

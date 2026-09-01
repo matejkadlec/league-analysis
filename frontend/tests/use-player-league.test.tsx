@@ -85,9 +85,8 @@ describe("the player's current ranked-solo standing", () => {
   });
 
   it("keeps a just-read standing fresh for a minute", async () => {
-    // The card and the tracked-players list can both be on screen; without
-    // the staleTime each mount refetches a rank that moves per match, not
-    // per render.
+    // Two consumers can be on screen at once; without the staleTime each mount
+    // refetches a rank that moves per match, not per render.
     serveLeague(() => HttpResponse.json(LEAGUE_PAYLOAD));
     const { result } = renderLeague();
 

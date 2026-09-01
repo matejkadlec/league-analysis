@@ -123,9 +123,8 @@ describe("provider cache error reporting", () => {
       }),
     ).rejects.toThrow("Request failed with status code 401");
 
-    // Whether an authentication kind is worth recording is the reporter's
-    // call; the cache handler itself must always delegate the normalized error
-    // and never announce an auth failure the gate already redirects on.
+    // The cache handler always delegates the normalized error and never
+    // announces an auth failure the gate already redirects on.
     expect(reportApiError).toHaveBeenCalledTimes(1);
     expect(reportApiError.mock.calls[0]?.[0]).toMatchObject({
       kind: "authentication",

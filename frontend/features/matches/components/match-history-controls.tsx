@@ -58,9 +58,8 @@ interface MatchHistoryPaginationBarProps {
   recordRange: MatchHistoryRecordRange;
   apiTotalMatches: number;
   /**
-   * The stored total is not the final one: an update run is still writing
-   * matches, so a range read off it would be measured against a denominator
-   * that keeps climbing.
+   * A range read off the stored total while an update run is still writing
+   * would be measured against a denominator that keeps climbing.
    */
   isTotalPending: boolean;
   paginationItems: MatchHistoryPaginationItem[];
@@ -105,9 +104,8 @@ export function MatchHistoryLoadingCard() {
 }
 
 /**
- * The row that stands in for matches an update run has not stored yet. A row,
- * not a card-wide state: replacing the list hides matches already readable.
- * `role="status"` text never changes, so arrivals are not re-announced.
+ * A row, not a card-wide state: replacing the list would hide matches already
+ * readable. `role="status"` text never changes, so arrivals stay unannounced.
  */
 export function MatchHistoryLoadingRow() {
   return (
@@ -123,8 +121,7 @@ export function MatchHistoryLoadingRow() {
 }
 
 /**
- * The same slot as the loading row, for when the poll behind it is failing. A
- * card-wide error would throw away the matches already on screen over a blip.
+ * A card-wide error would throw away matches already on screen over a blip.
  * `match-history.tsx` silences the global toast because this row reports it.
  */
 export function MatchHistoryLoadFailedRow({
@@ -246,9 +243,8 @@ export function MatchHistoryHeader({
           <p id="match-history-queue-instructions" className="sr-only">
             Select one queue, or hold Shift while selecting to combine queues.
           </p>
-          {/* Below xl the strip wraps onto as many lines as the column
-              allows; the seven options measure ~770px. The per-option
-              `widthClass` stops the strip shifting when a label goes bold. */}
+          {/* Below xl the strip wraps freely; the per-option `widthClass`
+              stops it shifting when a label goes bold. */}
           <div className="flex flex-wrap items-center justify-center gap-y-1 text-sm xl:w-max xl:min-w-full xl:flex-nowrap xl:gap-y-0">
             {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
               const isSelected = activeQueueFilters.includes(queueOption.id);
@@ -273,9 +269,8 @@ export function MatchHistoryHeader({
                     {queueOption.label}
                   </button>
                   {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
-                    // Only on the single-line layout. Nothing can tell CSS
-                    // which option a wrapped line ends on, so below xl a
-                    // trailing bar would hang off the end of most lines.
+                    // Single-line layout only: nothing tells CSS which option
+                    // a wrapped line ends on, so bars would dangle below xl.
                     <span className="hidden text-muted-foreground xl:inline">
                       |
                     </span>
@@ -350,9 +345,8 @@ export function MatchHistoryPaginationBar({
     <div className="mt-3 grid items-center gap-3 border-t pt-3 text-sm text-muted-foreground md:grid-cols-[1fr_auto_1fr]">
       <div className="justify-self-start" aria-live="polite">
         {isTotalPending ? (
-          // Not a range with a moving denominator: while the run is storing
-          // matches every one of those three numbers is provisional, and a
-          // total that keeps climbing reads as a bug rather than as progress.
+          // No range while the run stores matches: every number in it is
+          // provisional, and a climbing total reads as a bug, not progress.
           "Loading matches count..."
         ) : (
           <>

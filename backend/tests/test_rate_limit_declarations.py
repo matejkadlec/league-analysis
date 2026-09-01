@@ -1,8 +1,7 @@
 """The rate limits themselves, which nothing exercised.
 
-Every route test strips the decorator (`route_helpers.undecorated`), which
-left the limits with no coverage: raising login's `5/minute` to `5000/minute`
-kept the suite green. This asserts the declarations, not slowapi's counting.
+Every route test strips the decorator (`route_helpers.undecorated`), so nothing
+else would notice login's `5/minute` becoming `5000/minute`.
 """
 
 from __future__ import annotations
@@ -62,9 +61,8 @@ def test_no_endpoint_gains_or_loses_its_limit_unnoticed() -> None:
 def test_the_limiter_is_wired_into_the_app() -> None:
     """A limit slowapi never consults is a comment.
 
-    The decorator records the limit whether or not the middleware and the
-    handler are installed, so the declarations above mean nothing on their
-    own.
+    The decorator records the limit whether or not the middleware and handler are
+    installed, so the declarations above mean nothing on their own.
     """
     from slowapi.errors import RateLimitExceeded
 

@@ -1,8 +1,7 @@
 """A job configuration that cannot name an interval must not be accepted.
 
 A present but unusable override such as `interval_seconds: 0` must not fall
-through to the schedule string, and a swallowed resolver failure must not let
-`PUT /api/v1/jobs/{id}` answer 200 while APScheduler keeps the old interval.
+through, and a swallowed resolver failure must not let the PUT answer 200.
 """
 
 from typing import Any, cast
@@ -50,9 +49,8 @@ def test_the_three_schedule_formats_the_scheduler_understands() -> None:
 def test_a_schedule_of_zero_is_floored_to_one_second() -> None:
     """`max(..., 1)` is what stops a stored zero becoming a hot loop.
 
-    The override path rejects a non-positive interval, but `schedule` is
-    parsed rather than validated, so zero arrives well-formed and only the
-    floor stands between it and a scheduler firing continuously.
+    `schedule` is parsed rather than validated, so zero arrives well-formed and
+    only the floor stands between it and a scheduler firing continuously.
     """
     for schedule in ("0", "0s", "interval:0"):
         assert (

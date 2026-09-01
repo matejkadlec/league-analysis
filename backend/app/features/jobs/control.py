@@ -80,9 +80,8 @@ def request_job_stop(job_config_id: int, force: bool = False) -> bool:
         return False
 
     control.stop_requested = True
-    # A stopping run is no longer paused: leaving the flag set makes the
-    # control snapshot report paused-and-stopping, and the job card's
-    # paused-first precedence would show "Resume" for a run already exiting.
+    # A stopping run is no longer paused: the job card's paused-first precedence
+    # would show "Resume" for a run already exiting.
     control.paused = False
     if force:
         control.force_stop_requested = True

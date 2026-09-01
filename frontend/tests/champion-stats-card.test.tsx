@@ -65,9 +65,8 @@ function visibleRanks(container: HTMLElement): string[] {
 
 describe("the top champions card", () => {
   it("returns to the first page when the data behind it changes", async () => {
-    // The page number lives in component state and the component is not remounted
-    // when the player changes, which is the only reason `dataSourceKey` is a prop.
-    // The second list must be longer than the page reached in the first.
+    // Page number is component state, not remounted on player change, hence
+    // `dataSourceKey`. The second list must be longer than the page reached.
     const user = userEvent.setup();
     const { container, rerender } = renderCard(twelve(), "player-a");
 
@@ -90,9 +89,8 @@ describe("the top champions card", () => {
   });
 
   it("numbers champions by their place in the whole list, not on the page", async () => {
-    // The rank is what makes this a ranking rather than five rows. Restart it
-    // per page and the second page opens with another "1", which reads as the
-    // best champion twice.
+    // Restarting the rank per page opens the second page with another "1",
+    // which reads as the best champion twice.
     const user = userEvent.setup();
     const { container } = renderCard(twelve());
 
@@ -103,8 +101,7 @@ describe("the top champions card", () => {
 
   it("stops at both ends", async () => {
     // Both buttons stay in the layout and only change state, so a wrong
-    // comparison is invisible until someone clicks past the end and the card
-    // empties.
+    // comparison is invisible until someone clicks past the end.
     const user = userEvent.setup();
     renderCard(twelve());
 
@@ -132,9 +129,8 @@ describe("the top champions card", () => {
   });
 
   it("colours a KDA by the thresholds it claims", () => {
-    // Three bands, and only the boundaries say where they are, so both `>=` are
-    // load-bearing. Each band needs a value just under its threshold too: without
-    // one between 2 and 3 this passed with the green threshold moved to 2.5.
+    // Each band needs a value just under its threshold, or a threshold moved
+    // into the gap between two bands still passes.
     const { container } = renderCard([
       champion("Green", { avg_kda: 3 }),
       champion("JustUnderGreen", { avg_kda: 2.99 }),

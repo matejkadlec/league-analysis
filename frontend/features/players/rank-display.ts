@@ -1,9 +1,8 @@
 import type { Division, Tier } from "@/lib/core/schemas";
 
 /**
- * Inverse of the backend's LP-equivalent rank scale (`ranks.py`): each tier
- * spans 400 points, MASTER+ shares the 2800 floor and renders as "Master+".
- * Shared fixtures in `rank-display.test.ts`/`test_matchmaking_ranks.py` guard drift.
+ * Inverse of the backend's LP-equivalent rank scale (`ranks.py`): 400 points a
+ * tier, MASTER+ sharing the 2800 floor. Shared fixtures guard the drift.
  */
 const TIERS_BELOW_MASTER: Tier[] = [
   "IRON",

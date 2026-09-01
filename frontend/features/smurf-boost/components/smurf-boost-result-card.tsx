@@ -44,9 +44,8 @@ function formatValue(value: number | null | undefined): string {
 }
 
 /**
- * The version half of a `module/version` model identifier. Only the version
- * says which formulas produced the numbers beside it, so the module name is
- * dropped. A value with no slash passes through unchanged.
+ * The version half of a `module/version` model identifier: only the version
+ * says which formulas produced these numbers. No slash means pass through.
  */
 function modelVersionLabel(modelVersion: string): string {
   const separator = modelVersion.lastIndexOf("/");
@@ -54,9 +53,8 @@ function modelVersionLabel(modelVersion: string): string {
 }
 
 /**
- * Why an available signal did not trigger. Four of the eight combine their
- * threshold with a separate condition, any of which can fail while the
- * measured value sits above the threshold printed beside it.
+ * Why an available signal did not trigger: four of the eight pair their
+ * threshold with a separate condition that can fail above the threshold.
  */
 function signalOutcome(signal: SmurfBoostSignal): string {
   const value = signal.raw_value;
@@ -88,9 +86,8 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
 }
 
 /**
- * The measured value drawn against its threshold. The marks sit at fixed
- * fractions of the track, and the bar grows from the zero notch, leftward for
- * a negative score. Decorative: the figures beside the bar are the reading.
+ * The bar grows from the zero notch, leftward for a negative score.
+ * Decorative: the figures beside the bar are the reading.
  */
 const METER_ZERO_PERCENT = 25;
 const METER_TICK_PERCENT = 70;
@@ -147,9 +144,8 @@ function SignalMeter({ signal }: { signal: SmurfBoostSignal }) {
 }
 
 /**
- * One measurement: what it asked, how it came out, and the value drawn
- * against its threshold. One layout at every width — the meter needs no
- * columns, so nothing has to hide behind a sideways gesture on a phone.
+ * One measurement, one layout at every width: nothing may hide behind a
+ * sideways gesture on a phone.
  */
 function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
   return (
@@ -173,9 +169,8 @@ function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
       {signal.available && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <SignalMeter signal={signal} />
-          {/* The visible figures lean on the meter and the footnote for
-              their meaning; a screen reader gets the words instead of two
-              bare numbers. */}
+          {/* The visible figures lean on the meter for their meaning; a
+              screen reader gets words instead of two bare numbers. */}
           <span className="sr-only">
             Measured {formatValue(signal.raw_value)} against threshold{" "}
             {formatValue(signal.threshold)}.
@@ -202,9 +197,8 @@ function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
 function SignalList({ family }: { family: SmurfBoostFamily }) {
   return (
     <div>
-      {/* Tailwind's reset removes the list marker, and WebKit then drops the
-          list role — which would leave this labelled group unannounced on the
-          one platform that ever sees it. `role="list"` puts the semantics back. */}
+      {/* Tailwind's reset removes the list marker and WebKit then drops the
+          list role, leaving this labelled group unannounced without it. */}
       <ul
         role="list"
         aria-label={`${familyTitle(family.family)} measurements`}
@@ -254,9 +248,8 @@ function FamilySection({
   const bandStyle = BAND_STYLES[family.band] ?? UNREADABLE_BAND_STYLE;
 
   return (
-    // Each family is read on its own and never combined, so each gets its own
-    // panel. The tint separates it from the run card holding it; the accent
-    // edge repeats the colour of the worded reading in the tab above.
+    // Families are read on their own and never combined, so each gets a panel;
+    // the accent edge repeats the colour of its tab's worded reading.
     <Card
       className={cn("border-l-4 bg-muted/20 shadow-none", bandStyle.accent)}
     >
@@ -335,18 +328,16 @@ export function SmurfBoostResultCard({
             How much this comparison can be relied on, separate from what it
             found.
           </span>
-          {/* The stored value is a namespaced slug (`smurf-boost/v1`) naming
-              the detection module. Only the version identifies what produced
-              this reading, so only the version is shown. */}
+          {/* The stored value is a namespaced slug (`smurf-boost/v1`); only
+              the version identifies what produced this reading. */}
           <span className="ml-auto font-mono text-sm text-muted-foreground">
             Model {modelVersionLabel(results.model_version)}
           </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* One tab per family. The trigger carries its family's worded band
-            in its own colour, so choosing a tab never hides a verdict, only
-            the measurements. Panels stay mounted; `hidden` switches them. */}
+        {/* Each trigger carries its family's worded band, so choosing a tab hides
+            measurements, never a verdict. Panels stay mounted; `hidden` switches them. */}
         {firstFamily && (
           <Tabs defaultValue={firstFamily.family}>
             <TabsList className="h-auto flex-wrap justify-start">
@@ -392,9 +383,8 @@ export function SmurfBoostResultCard({
           </p>
         )}
 
-        {/* Footnotes, not callouts. The specification wants both permanent
-            and plain -- never a tooltip, never collapsed -- so quiet means
-            small muted prose at the bottom. */}
+        {/* Footnotes, not callouts: the specification wants these permanent
+            and plain -- never a tooltip, never collapsed. */}
         <div className="space-y-2 border-t border-border/40 pt-3">
           {results.notes.length > 0 && (
             <p className="text-sm leading-snug text-muted-foreground">

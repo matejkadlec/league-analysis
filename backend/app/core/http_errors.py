@@ -1,8 +1,7 @@
 """Shared log-then-raise tail for feature routers.
 
-Keeps the shape (error string, traceback, context kwargs) from drifting
-between routers; each call site passes its own module logger so the log
-records where it came from.
+Centralized so the logged shape can't drift per router; each call site passes
+its own module logger so the record names its origin.
 """
 
 from typing import Any, NoReturn
@@ -10,9 +9,8 @@ from typing import Any, NoReturn
 import structlog
 from fastapi import HTTPException
 
-# One sentence for every unexpected server error. The frontend's
-# `normalizeApiError` only trusts a *structured* `{code, message}` detail, so
-# this string never reaches a viewer; the structured log tells routes apart.
+# The frontend's `normalizeApiError` only trusts a *structured* `{code, message}`
+# detail, so this string never reaches a viewer; the log tells routes apart.
 SERVICE_ERROR_DETAIL = (
     "The League Analysis service could not complete the request. "
     "Please try again later."

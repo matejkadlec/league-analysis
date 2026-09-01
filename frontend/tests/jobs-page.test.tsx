@@ -18,8 +18,7 @@ vi.mock("@/lib/core/http/api", async (importOriginal) => ({
 }));
 
 // The context module, not the `@/features/auth` barrel: `ProtectedRoute`
-// imports `useAuth` by relative path, so mocking the barrel leaves it reading
-// the real context and throwing "must be used within an AuthProvider".
+// imports `useAuth` by relative path and would keep reading the real context.
 vi.mock("@/features/auth/context/auth-context", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/features/auth/context/auth-context")
@@ -27,9 +26,8 @@ vi.mock("@/features/auth/context/auth-context", async (importOriginal) => ({
   useAuth,
 }));
 
-// The three children are stubbed because what is under test here is the page's
-// own wiring: which tab is showing, which job-list state is rendered, and
-// whether a click inside a job card reaches the other tab.
+// Children stubbed: under test is the page's own wiring -- which tab shows,
+// which job-list state renders, whether a card click reaches the other tab.
 vi.mock("@/features/jobs", async (importOriginal) => ({
   ...(await importOriginal()),
   JobCard: ({
@@ -110,9 +108,8 @@ beforeEach(() => {
 
 describe("the background jobs page", () => {
   it("shows nothing at all to an account that is not an admin", async () => {
-    // The page lists every player's sync state and the Riot key's health. The
-    // `requireAdmin` flag is asserted as source text elsewhere; this asserts
-    // what a non-admin actually sees, which is the refusal and none of it.
+    // The `requireAdmin` flag is asserted as source text elsewhere; this
+    // asserts what a non-admin sees -- the refusal and none of the page.
     useAuth.mockReturnValue(signedInAs({ id: 2, is_admin: false }));
     const { queryClient } = renderPage();
 
@@ -123,17 +120,15 @@ describe("the background jobs page", () => {
 
   it("carries a click inside a job card over to the executions tab", async () => {
     const user = userEvent.setup();
-    // The two tabs are siblings and the selected execution lives above both.
-    // Without the tab switch, clicking an execution in a job card selects it
-    // in a list nobody is looking at, and the click reads as broken.
+    // The selected execution lives above both sibling tabs, so without the tab
+    // switch the click selects a row in a list nobody is looking at.
     const { queryClient } = renderPage();
 
     await waitFor(() =>
       expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
     );
-    // The inactive panel must be absent, not merely hidden: a `TabsContent`
-    // that always rendered would stack both panels, which no assertion about
-    // the active tab can see.
+    // Absent, not merely hidden: an always-rendered `TabsContent` stacks both
+    // panels, which no assertion about the active tab can see.
     expect(screen.queryByText(/executions list/)).toBeNull();
 
     await user.click(screen.getByText(/job card Match Fetcher/));
@@ -145,9 +140,8 @@ describe("the background jobs page", () => {
   });
 
   it("tells a failed load apart from an empty one", async () => {
-    // Both leave `jobs` as `[]`, and they need opposite actions: one is
-    // someone to fix, the other is someone to add a job. Collapse them and
-    // an outage reads as a tidy, empty system.
+    // Both leave `jobs` as `[]` but need opposite actions; collapsed, an
+    // outage reads as a tidy, empty system.
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
         url === "/jobs/"
@@ -189,9 +183,8 @@ describe("the background jobs page", () => {
   });
 
   it("hands the status card nothing rather than a rejected payload", async () => {
-    // A response that fails schema validation is not a status. Passing
-    // `statusResult.data` through regardless would put unvalidated fields on
-    // the dashboard four cards wide.
+    // Passing `statusResult.data` through a failed validation would put
+    // unvalidated fields on the dashboard four cards wide.
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
         url === "/jobs/status/overview"
@@ -225,9 +218,8 @@ describe("the background jobs page", () => {
         expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
       );
 
-      // The window is wide because `shouldAdvanceTime` lets real elapsed time add to
-      // the mocked clock and the gate runs on a Pi that also runs deploys. Still
-      // narrow enough to fail on a countdown that does not move or has bottomed out.
+      // Wide because `shouldAdvanceTime` adds real elapsed time to the mocked
+      // clock; still narrow enough to fail a stuck or bottomed-out countdown.
       await vi.advanceTimersByTimeAsync(3000);
       await waitFor(() =>
         expect(

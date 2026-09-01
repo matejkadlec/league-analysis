@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `site-metadata.test.ts` pins the open/closed switch; this file pins the
- * document a crawler receives in each state. The policy is read at import
- * time, so each case stubs the environment and imports the route fresh.
+ * `site-metadata.test.ts` pins the open/closed switch; this pins the document
+ * per state, read at import time, so each case stubs the env and reimports.
  */
 
 async function loadRobots() {

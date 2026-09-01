@@ -1,8 +1,7 @@
 """The row a refresh token is written as, on both paths that write one.
 
-Two rules govern the rows: `user_agent` truncates at 255 characters, and a
-rotation must revoke the old row and insert its replacement in a single commit.
-Split across two commits, the visitor is signed out with nothing to refresh.
+`user_agent` truncates at 255 characters, and a rotation must revoke the old
+row and insert its replacement in one commit or the visitor is signed out.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -111,17 +110,15 @@ async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     assert record.revoked_at is not None
     assert len(added) == 1
     # The replaced-by link is written in that same commit; without it a
-    # superseded token is indistinguishable from one a logout revoked, so a
-    # Sign Out just after a refresh revokes nothing.
+    # superseded token is indistinguishable from one a logout revoked.
     assert record.replaced_by_token_id == added[0].token_id
 
 
 async def test_rotation_locks_the_owner_then_the_row_it_revokes() -> None:
     """Two locks, and the order between them is the deadlock-free one.
 
-    The check-then-write on `revoked_at` is only a check if the row is held
-    for the duration. The owner comes first because logout locks the owner
-    and then the same rows; taking them in opposite orders deadlocks.
+    The owner is locked first because logout locks the owner and then the same
+    rows; taking them in opposite orders deadlocks.
     """
     service, _added, db, _record = _rotating_service()
 

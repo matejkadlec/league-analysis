@@ -1,8 +1,7 @@
 """Riot credential rejections must surface the structured detail, not a 500.
 
-Development keys expire with a 403 (ForbiddenError), production revocations
-with a 401 (AuthenticationError). Both must map to the same structured
-RIOT_API_KEY_INVALID detail so the frontend can classify them.
+Development keys expire with a 403 and production revocations with a 401; both
+must map to the same RIOT_API_KEY_INVALID detail so the frontend can classify.
 """
 
 from typing import cast
@@ -103,9 +102,8 @@ async def test_missing_key_maps_to_structured_detail(
 ) -> None:
     """`get_riot_client` refuses with the structured detail, not a prose string.
 
-    A plain-sentence detail rendered on the frontend as the generic "try again
-    later", which misleads twice: retrying cannot help, and the actual remedy
-    (an administrator adding a key) went unsaid.
+    A plain-sentence detail renders as the generic "try again later", which
+    misleads: retrying cannot help, only an administrator adding a key can.
     """
     from app.core import dependencies
 

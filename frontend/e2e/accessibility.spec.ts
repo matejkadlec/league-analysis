@@ -23,9 +23,8 @@ const readableViolations = (
   );
 
 /**
- * axe over the data-rich player pages: against an empty database the rows and
- * tables never mount and the scan proves nothing. axe does NOT catch
- * use-of-color -- the win/loss tint is a known open finding.
+ * Against an empty database the rows and tables never mount and the scan proves
+ * nothing. axe does not catch use-of-color: the win/loss tint is a known finding.
  */
 
 test.describe("axe scan of the populated player pages", () => {
@@ -43,9 +42,8 @@ test.describe("axe scan of the populated player pages", () => {
 });
 
 /**
- * The populated scans above all run behind a session. `/sign-in` is the front
- * door and the only route with a real form -- labels, validation messaging and
- * a third-party widget -- so it is the page where a violation costs the most.
+ * The scans above all run behind a session; `/sign-in` is the only route with a
+ * real form, so it is scanned on its own.
  */
 test("the sign-in page has no WCAG A/AA violations", async ({ page }) => {
   await blockUpstreamRequests(page);

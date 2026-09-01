@@ -1,8 +1,7 @@
 """What the Join Us pipeline itself owns, behind `AuthService`.
 
-`AuthService` keeps the CAPTCHA vocabulary; this file pins the parts the
-`join_us` module owns: the per-subject sequence counters, the per-IP hourly
-budget, and the message that actually leaves for the mailbox.
+`AuthService` keeps the CAPTCHA vocabulary; pinned here are the sequence
+counters, the per-IP hourly budget, and the message that leaves for the mailbox.
 """
 
 import smtplib

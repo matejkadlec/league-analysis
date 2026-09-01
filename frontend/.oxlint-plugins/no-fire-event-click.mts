@@ -1,14 +1,11 @@
-// `fireEvent.click` dispatches one DOM event straight at the node. `user.click`
-// performs the pointer, focus and keyboard sequence a browser produces, and
-// checks on the way that the element can actually receive it.
+// `fireEvent.click` dispatches one DOM event at the node; `user.click` performs
+// the browser's pointer sequence and checks the element can receive it.
 
-// Flagged: the `fireEvent` members that model a user's own actions. Accepted:
-// the ones that model events a user cannot produce directly, which user-event
-// has no equivalent for.
+// Flagged: the `fireEvent` members that model a user's own actions. The rest
+// model events a user cannot produce directly, which user-event cannot express.
 
-// The boundary: this reads the callee name only, so an aliased `fireEvent` is
-// invisible -- as is the deeper version of the mistake, a test driving a
-// control production renders `hidden`.
+// Callee name only, so an aliased `fireEvent` is invisible -- as is the deeper
+// mistake of a test driving a control that production renders `hidden`.
 
 type Node = {
   type: string;

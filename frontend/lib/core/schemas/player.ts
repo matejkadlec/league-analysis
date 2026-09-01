@@ -67,9 +67,8 @@ export const PlayerLeagueSchema = z.object({
   wins: z.number().int(),
   losses: z.number().int(),
   created_at: z.string(),
-  // The API serves this one win rate as a percentage (PlayerLeague.win_rate
-  // multiplies by 100); every sibling win_rate field is a 0-1 fraction, so
-  // it is normalized here, at the boundary, and the app sees one unit.
+  // The API serves this one as a percentage while every sibling `win_rate` is
+  // a 0-1 fraction, so the boundary normalizes it to one unit.
   win_rate: z.number().transform((percent) => percent / 100),
   total_games: z.number().int(),
   display_rank: z.string(),

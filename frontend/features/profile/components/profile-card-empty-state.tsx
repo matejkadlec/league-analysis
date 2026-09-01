@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
- * What a profile card shows before there are enough matches to say anything.
  * `id` is not optional: `SectionQuickNavigation` registers a section by finding
  * its anchor, so dropping it hides the section from the page navigation.
  */

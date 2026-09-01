@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The sitemap is generated from `LEGAL_PAGES` plus the landing route. The
- * route list is pinned as literal URLs: a legal page that stops reaching the
- * sitemap should fail a test rather than move with the list that feeds it.
+ * The route list is pinned as literal URLs: a legal page that stops reaching
+ * the sitemap should fail here rather than move with the list that feeds it.
  */
 
 async function loadSitemap() {

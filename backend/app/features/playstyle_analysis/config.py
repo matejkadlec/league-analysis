@@ -12,9 +12,8 @@ from app.core.riot_api.constants import TeamId
 class TagConfig(TypedDict):
     """One tag's criteria and how the card renders it.
 
-    Every tag carries the three presentation keys; the rest select which
-    evaluator runs and what it compares against, which is why they are
-    `NotRequired`. Spelling them out makes a mistyped threshold a type error.
+    Every tag carries the three presentation keys; the rest are `NotRequired`
+    because they select which evaluator runs and what it compares against.
     """
 
     sentiment: Literal["positive", "negative", "neutral"]
@@ -102,9 +101,7 @@ class TagConfig(TypedDict):
 # Tag Configuration
 # Each tag has specific parameters used in its formula.
 TAG_CONFIG: dict[str, TagConfig] = {
-    # ----------------------------------------------------
     # Match-Based Condition Tags
-    # ----------------------------------------------------
     "aggresive_laner": {
         "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
@@ -344,9 +341,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Averages {value} epic monster steals.",
         "display_name": "Epic Thief",
     },
-    # ----------------------------------------------------
     # Comparison / Type Tags
-    # ----------------------------------------------------
     "warrior": {
         "type": "damage_type",
         "target_damage_type": "physical",
@@ -377,9 +372,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Higher winrate on Red Side ({value}%).",
         "display_name": "Prefers Red Side",
     },
-    # ----------------------------------------------------
     # Global / Special Tags
-    # ----------------------------------------------------
     "nolifer": {
         "type": "summoner_level",
         "min_summoner_level": 500,
@@ -422,9 +415,7 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Surrenders {value}% of games.",
         "display_name": "FF15",
     },
-    # ----------------------------------------------------
     # Negation / Complementary Tags
-    # ----------------------------------------------------
     "resourceless": {
         "max_gold_per_minute": 350,
         "sentiment": "negative",

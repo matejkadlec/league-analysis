@@ -205,8 +205,7 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     """A rejected key ends the run rather than being retried per player.
 
     The daily development key expires, and every remaining player would spend
-    another rejected call proving it. Nothing covered this branch, so the job
-    could have been made to carry on and the suite would have stayed green.
+    another rejected call proving it.
     """
     players = {
         p.puuid: p
@@ -256,8 +255,7 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     """A broken session cannot be reused, so the error leaves the loop.
 
     Recording it and continuing would run every later player against a session
-    that is already unusable, turning one failure into a whole failed run
-    reported as a list of unrelated ones.
+    that is already unusable.
     """
     players = {"sanitized-one": _player("sanitized-one")}
     db = SimpleNamespace(

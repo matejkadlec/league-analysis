@@ -3,9 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * The heading outline of Rank Manipulation, checked as source text because it
- * spans files no single render covers and axe's `heading-order` is outside the
- * tag set the e2e scan runs. The counterpart e2e measures the rendered result.
+ * Checked as source text: the outline spans files no single render covers,
+ * and axe's `heading-order` is outside the tag set the e2e scan runs.
  */
 
 /**
@@ -34,8 +33,6 @@ describe("the Rank Manipulation surface", () => {
 
   it("keeps every heading below the card title that holds it", () => {
     // `CardTitle` renders an `h3`, so a subsection inside a card is an `h4`.
-    // axe's `heading-order` is best-practice and not in the tag set the e2e scan
-    // runs, so nothing else catches an outline that reads h1, h3, h2.
 
     // The settings components render inside a dialog whose `DialogTitle` is an
     // `h2`, so their headings floor at `h3`; an `h4` would skip a level.

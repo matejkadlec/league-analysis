@@ -1,6 +1,5 @@
-// An override REPLACES this rule's whole configuration for the files it
-// matches, so a block that sets it and forgets these lists exempts those files
-// silently. `tests/oxlint-config-contract.test.ts` fails when one does.
+// An override REPLACES this rule's whole config; one that forgets these lists
+// silently exempts its files. `tests/oxlint-config-contract.test.ts` catches it.
 
 export type ImportRestriction = {
   group: string[];
@@ -8,9 +7,8 @@ export type ImportRestriction = {
   message: string;
 };
 
-// Only the refresh call can tell a rejected session (401/403) from a server it
-// could not reach. A teardown from anywhere else signs people out over a
-// redeploy, with a valid refresh cookie still in the jar.
+// Only the refresh call can tell a rejected session (401/403) from an
+// unreachable server; a teardown elsewhere signs people out over a redeploy.
 export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
   {
     // Trailing `*` because a specifier may carry an extension:
@@ -45,9 +43,8 @@ export const SESSION_TEARDOWN_IMPORTS: readonly ImportRestriction[] = [
   },
 ];
 
-// Cross-feature deep imports are how untracked package cycles happen. Code in
-// the same feature imports relatively, so an absolute two-segment-plus
-// specifier is always crossing a feature edge.
+// Cross-feature deep imports are how untracked cycles happen; same-feature code
+// imports relatively, so an absolute two-segment specifier crosses a feature edge.
 export const FEATURE_BARREL_IMPORTS: readonly ImportRestriction[] = [
   {
     group: ["@/features/*/*", "@/features/*/*/**"],
@@ -66,9 +63,8 @@ export const EDGE_CLIENT_IMPORTS: readonly ImportRestriction[] = [
   },
 ];
 
-// Server code that can write cookies. A sweep over `getAll()` takes the
-// HttpOnly refresh cookie with it, not just the hint, and scoping the ban by
-// path spells short: a Server Action is a `"use server"` directive, not a path.
+// A sweep over `getAll()` takes the HttpOnly refresh cookie, not just the hint;
+// scoping the ban by path misses Server Actions, which are a directive, not a path.
 export const SERVER_COOKIE_STORE_PATHS = [
   {
     name: "next/headers",

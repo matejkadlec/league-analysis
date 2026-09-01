@@ -1,14 +1,8 @@
-// Every `fetch` carries an abort signal. A backend that accepts the connection
-// and then never answers is not hypothetical on a small host, and without a
-// deadline the promise never settles.
+// Every `fetch` needs a deadline: a backend that accepts the connection and then
+// never answers leaves the promise unsettled.
 
-// Flagged: `fetch(url)` with no init, and an init object literal carrying no
-// `signal`. Accepted: any `signal` property, an init spread or an init held in
-// a variable, and `new Request(url, { signal })` passed as the input.
-
-// The boundary: this reads the call site only. A `Request` built elsewhere and
-// passed by name is treated as a plain input; the axios client in
-// `lib/core/http/api.ts` has its own 30s `timeout` and is not visible here.
+// Call sites only: a `Request` built elsewhere reads as a plain input, and the
+// axios client in `lib/core/http/api.ts` has its own 30s `timeout`.
 
 type Node = {
   type: string;

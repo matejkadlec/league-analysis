@@ -7,8 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * `not-found`, `loading`, `error` and `global-error` render with no provider
- * mounted at all, which is the assertion: none of them may consult session
- * state.
+ * mounted, which is the assertion: none of them may consult session state.
  */
 
 import ErrorBoundary from "@/app/error";
@@ -19,8 +18,7 @@ import NotFound from "@/app/not-found";
 const thrown = new Error("render failed");
 
 // `global-error.tsx` replaces the document, so its markup lands on
-// document.body rather than a container div. Without this the previous
-// test's "Try again" button is still there and the query finds two.
+// `document.body`, not a container div -- `render()` would leave the previous test's button behind.
 
 describe("the shells shown when there is no page to show", () => {
   beforeEach(() => {
@@ -76,9 +74,8 @@ describe("the shells shown when there is no page to show", () => {
   });
 
   it("brings its own document, because it replaces the one that threw", () => {
-    // Next renders `global-error.tsx` in place of the root layout, so what it
-    // returns *is* the document. jsdom will not nest an `html`, so this is
-    // asserted against server markup.
+    // What `global-error.tsx` returns is the document itself, and jsdom will
+    // not nest an `html`, so this is asserted against server markup.
     const markup = renderToStaticMarkup(
       <GlobalError error={thrown} reset={() => {}} />,
     );

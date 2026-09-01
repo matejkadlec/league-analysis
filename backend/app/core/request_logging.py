@@ -45,9 +45,8 @@ def _log_http_request_completed(
 class RequestLoggingMiddleware:
     """Bind request contextvars and log exactly one event per HTTP request.
 
-    Logs on the terminal response body message, not after the inner app
-    returns: Starlette awaits background tasks there, which would fold their
-    runtime into ``duration_ms``. Query strings, headers and bodies are unread.
+    Logs on the terminal response body message, not after the inner app returns:
+    Starlette awaits background tasks there, inflating ``duration_ms``.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -106,9 +105,8 @@ class RequestLoggingMiddleware:
                 )
                 raise
             if not completion_logged:
-                # Safety net: the inner app finished without a terminal body
-                # message, so the wrapper never fired; keep the one-event
-                # guarantee.
+                # No terminal body message, so the wrapper never fired; keep the
+                # one-event-per-request guarantee.
                 _log_http_request_completed(
                     method=method,
                     path=path,

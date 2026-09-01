@@ -16,9 +16,8 @@ import type {
 } from "@/lib/core/schemas";
 import { renderWithQueryClient } from "./support/render-support";
 
-// The component observes a sentinel div to page in more rows. jsdom never
-// intersects anything, so a no-op keeps the constructor from throwing without
-// pretending to exercise that path.
+// jsdom never intersects anything, so a no-op keeps the constructor from
+// throwing without pretending to exercise paging.
 class NoopIntersectionObserver {
   observe() {}
   unobserve() {}
@@ -72,9 +71,8 @@ const MATCH_FETCHER: JobConfiguration = {
 };
 
 /**
- * Answer the table's own request with one page, or refuse it. The component
- * owns that query, so the fixture goes on the wire rather than in as a prop --
- * taking both means two requests for the identical first page.
+ * The component owns that query, so the fixture goes on the wire rather than in
+ * as a prop -- taking both means two requests for the identical first page.
  */
 function serveExecutions(executions: JobExecutionListResponse | null) {
   server.use(
@@ -109,9 +107,8 @@ function renderExecutions(props: {
 
 describe("the executions table on the jobs page", () => {
   beforeEach(() => {
-    // Re-stubbed each time: `unstubGlobals` tears every stub down after a
-    // test, so a single module-scope stub leaves test two onwards without an
-    // `IntersectionObserver` at all.
+    // `unstubGlobals` tears every stub down after a test, so a module-scope
+    // stub leaves test two onwards without an `IntersectionObserver`.
     vi.stubGlobal("IntersectionObserver", NoopIntersectionObserver);
   });
 
@@ -120,9 +117,8 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("keeps the rows on screen when the 15-second poll fails", async () => {
-    // This query re-runs every 15 seconds behind a table someone is reading,
-    // and the queryFn re-throws rather than returning a failure envelope, so
-    // React Query keeps the pages it already has.
+    // The queryFn re-throws rather than returning a failure envelope, so React
+    // Query keeps the pages it already has.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 41 })]),
     });
@@ -139,9 +135,7 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("says the history could not be loaded rather than that nothing ran", async () => {
-    // The distinction the page could not make while a failed seed query left
-    // the infinite query disabled: an API that is down is not a scheduler
-    // that has never run.
+    // An API that is down is not a scheduler that has never run.
     const { queryClient } = renderExecutions({ executions: null });
 
     expect(
@@ -153,9 +147,8 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("names a job the page did not hand it by id rather than undefined", async () => {
-    // Executions and job configurations arrive from two different requests. A
-    // job removed, renamed, or simply not in this page's list still has rows
-    // here, and the fallback is what keeps the first column readable.
+    // Executions and job configurations arrive from two requests, so a row can
+    // name a job absent from this page's list.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 99 })]),
       jobs: [MATCH_FETCHER],
@@ -168,8 +161,7 @@ describe("the executions table on the jobs page", () => {
 
   it("opens the dialog for a deep link and stays shut for one that no longer resolves", async () => {
     // `selectedExecutionId` comes from the URL, so it can name an execution
-    // that is not in the loaded page. That has to resolve to a closed dialog
-    // rather than throwing on a missing row.
+    // outside the loaded page and must resolve to a closed dialog.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: 42,
@@ -192,9 +184,8 @@ describe("the executions table on the jobs page", () => {
 
   it("lets a later deep link close a dialog the click opened", async () => {
     const user = userEvent.setup();
-    // Clicking a row remembers it internally *and* reports it upwards, which is
-    // what puts the id in the URL. So once a `selectedExecutionId` arrives it is
-    // the answer, including when it resolves to nothing.
+    // A click both remembers the row and reports it upwards, so an arriving
+    // `selectedExecutionId` wins even when it resolves to nothing.
     const { queryClient, setSelectedExecutionId } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: null,

@@ -146,8 +146,7 @@ function results(overrides: Record<string, unknown> = {}) {
 
 /**
  * A stored run as the wire reports it, parsed through the real schema so the
- * fixture is split on its lifecycle exactly the way production splits it --
- * a hand-written literal would claim `results` on a failed run.
+ * fixture splits on its lifecycle: a literal would claim `results` on failure.
  */
 function analysis(
   overrides: Record<string, unknown> = {},
@@ -243,9 +242,8 @@ function syncRun(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Ranked solo games the stats endpoint reports as stored. Mutable so a test
- * can raise it between the render and the fetch, which is what a fetch that
- * finds new games looks like from this card.
+ * Ranked solo games the stats endpoint reports as stored. Mutable so a test can
+ * raise it between render and fetch, which is what new games look like here.
  */
 let storedRankedGames = 84;
 
@@ -310,9 +308,8 @@ describe("SmurfBoostDetection", () => {
     );
     expect(screen.getAllByText("Playing Pattern Change").length).toBe(2);
 
-    // A family reading is one of the five fixed words and nothing else: a digit
-    // here would mean the internal weighted sum had reached the screen. Checked
-    // on the band element alone, since a signal row may carry a percentage.
+    // A family reading is one of the five fixed words: a digit would mean the
+    // weighted sum reached the screen. Band elements only; signal rows differ.
     const bands = screen.getAllByTestId(/^smurf-boost-band-/);
     expect(bands.length).toBe(2);
     const labels = Object.values(BAND_LABELS);
@@ -338,8 +335,7 @@ describe("SmurfBoostDetection", () => {
       ),
     ).toBeTruthy();
     // The version identifies the formulas; the module name in front of it is
-    // the retired product name, and this was the last place it reached a
-    // reader on the page.
+    // the retired product name, which no reader should meet.
     expect(screen.getByText("Model v1")).toBeTruthy();
     expect(screen.queryByText(/smurf-boost/i)).toBeNull();
   });
@@ -376,9 +372,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("keeps the frontend disclaimer identical to the backend's", () => {
-    // Two copies of a string the specification calls fixed can drift apart and
-    // put two different "fixed" statements on one screen. This is the only
-    // check that would notice.
+    // Two copies of a string the specification calls fixed can drift and put
+    // two different "fixed" statements on one screen; nothing else notices.
     const here = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
       join(here, "../../backend/app/features/smurf_boost_detection/schemas.py"),
@@ -437,9 +432,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("never calls a value below a threshold it is above", async () => {
-    // A4, B1, B3 and B4 each combine their threshold with a second condition.
-    // A gate can fail while the measured value sits above the number printed
-    // beside it, and "Below threshold" on that row would simply be false.
+    // A4, B1, B3 and B4 each combine their threshold with a second condition,
+    // so a gate can fail while the value sits above the number printed beside.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis({
@@ -551,9 +545,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("reports a run that the backend recorded as failed", async () => {
-    // The backend answers a failed run with HTTP 200 and a stored, reviewed
-    // message. Treating that as a success would announce a result that does
-    // not exist.
+    // The backend answers a failed run with HTTP 200 and a stored message, so
+    // treating that as a success would announce a result that does not exist.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -691,9 +684,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("says nothing about a run whose card is already gone", async () => {
-    // A run can outlive the card that started it, and a mutation's options-level
-    // callbacks keep running after unmount, so a guard on the closure's player
-    // would match and announce over whoever the page is showing by then.
+    // A run can outlive its card and a mutation's options-level callbacks keep
+    // firing after unmount, so a guard on the closure's player still matches.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -730,8 +722,7 @@ describe("SmurfBoostDetection", () => {
 
   it("offers no run at all until a player is chosen", async () => {
     // The empty state renders this card rather than a "select a player" one,
-    // so the search inside it stays reachable. With no player there is
-    // nothing to read and nothing to run.
+    // so the search inside it stays reachable.
     renderCard(null);
 
     await waitFor(() => expect(runButton()).toBeTruthy());
@@ -766,9 +757,8 @@ describe("SmurfBoostDetection", () => {
       "/players/test-puuid/sync",
     );
     await waitFor(() => expect(startSmurfBoostDetection).toHaveBeenCalled());
-    // Before, not merely also: two calls in either order would satisfy a bare
-    // "both happened" assertion, and comparing in parallel with the fetch is
-    // exactly the stale reading this change exists to stop.
+    // Before, not merely also: two calls in either order satisfy a bare "both
+    // happened", and comparing in parallel with the fetch reads stale games.
     expect(validatedPost.mock.invocationCallOrder[0]).toBeLessThan(
       startSmurfBoostDetection.mock.invocationCallOrder[0]!,
     );
@@ -778,9 +768,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("compares on stored games when the fetch is refused outright", async () => {
-    // A 404 for a player the backend has not persisted, or the router's own
-    // 10/minute limit. No run exists, so nothing will ever poll terminal --
-    // the refused start is the only place the comparison can be released.
+    // No run exists behind a refused start, so nothing ever polls terminal --
+    // the refusal is the only place the comparison can be released.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -836,13 +825,11 @@ describe("SmurfBoostDetection", () => {
       expect(screen.getByText("Notable indicators")).toBeTruthy(),
     );
     expect(validatedPost).toHaveBeenCalled();
-    // The hook's own warning for this run stays silent: two accounts of one
-    // click contradict each other, and its wording is written for the Player
-    // Card. This card's inline notice is the account that survives.
+    // The hook's own warning stays silent: two accounts of one click would
+    // contradict each other, and its wording is written for the Player Card.
     expect(toast.warning).not.toHaveBeenCalled();
-    // Inline, not a toast that disappears: without it this reads exactly like a
-    // run on games fetched a second ago. In the backend's own words, since ours
-    // would promise a retry a stale player id or an expired key cannot honour.
+    // Inline, not a toast that disappears, and in the backend's own words:
+    // ours would promise a retry an expired key cannot honour.
     expect(
       screen.getByText(/The update reached Riot's rate limit\./),
     ).toBeTruthy();
@@ -852,9 +839,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("reports a fetch that failed even when nobody here started it", async () => {
-    // The card renders an adopted update and tells the viewer to run the
-    // comparison once it finishes. Saying nothing when it fails leaves them
-    // clicking Run believing they are reading freshly fetched history.
+    // The card renders an adopted update and says to run the comparison once
+    // it finishes, so silence on failure leaves Run reading stale history.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -891,9 +877,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("does not compare on a poll blip mid-fetch", async () => {
-    // A failing poll is not a finished fetch: it backs off and keeps going, so
-    // comparing here would use whatever was stored mid-fetch and then present that
-    // partial comparison as a fresh one.
+    // A failing poll is not a finished fetch -- it backs off and keeps going --
+    // so comparing here would present a mid-fetch reading as a fresh one.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -927,9 +912,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("runs no comparison for an update started somewhere else", async () => {
-    // The sync hook adopts whatever run is already in flight for the player
-    // -- the Player Card's own Update button starts one. Comparing on the
-    // back of that would announce a result for a click nobody made.
+    // The sync hook adopts whatever run is already in flight for the player,
+    // so comparing on the back of it announces a result for an unmade click.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -953,18 +937,16 @@ describe("SmurfBoostDetection", () => {
       ).toBe(true),
     );
     await waitFor(() => expect(runButton()).toBeTruthy());
-    // The comparison fires from behind four awaits in the hook's completion
-    // handling, all after the render that re-enables the button -- so draining
-    // the queue, not the button, is the anchor this negative needs.
+    // The comparison fires from behind four awaits, all after the render that
+    // re-enables the button, so draining the queue is this negative's anchor.
     await act(async () => {});
     expect(validatedPost).not.toHaveBeenCalled();
     expect(startSmurfBoostDetection).not.toHaveBeenCalled();
   });
 
   it("can be run a second time without a reload", async () => {
-    // The owed comparison has one path back to false. Lose it and the button
-    // stays disabled on "Comparing games..." for the life of the mount --
-    // which no test saw, because every other one runs the comparison once.
+    // The owed comparison has one path back to false; lose it and the button
+    // stays disabled on "Comparing games..." for the life of the mount.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1009,9 +991,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("keeps the button shut until the comparison it owes has started", async () => {
-    // The hook reports the run finished and only then awaits its cache refresh
-    // before calling back. A click landing in that gap would be answered by the
-    // *previous* fetch's callback, and its own fetch never compared.
+    // The hook reports the run finished and only then awaits its cache refresh,
+    // so a click in that gap is answered by the *previous* fetch's callback.
     let releaseRefetch = () => {};
     getLatestSmurfBoostDetection
       .mockResolvedValueOnce({
@@ -1034,9 +1015,8 @@ describe("SmurfBoostDetection", () => {
     await waitFor(() => expect(runButton()).toBeTruthy());
     await user.click(runButton());
 
-    // The run is terminal -- the fetch is over -- but the refresh behind it
-    // has not returned, so the callback that runs the comparison has not
-    // fired yet.
+    // The run is terminal but the refresh behind it has not returned, so the
+    // callback that runs the comparison has not fired yet.
     await waitFor(() =>
       expect(getLatestSmurfBoostDetection).toHaveBeenCalledTimes(2),
     );
@@ -1095,9 +1075,8 @@ describe("SmurfBoostDetection", () => {
     });
 
     it("quotes no count from a run that failed", async () => {
-      // A failed run writes no eligible-game total, so the column reads 0 --
-      // and "this player has 0 games stored" is simply false for a player
-      // with a full history.
+      // A failed run writes no eligible-game total, so the column reads 0, and
+      // "0 games stored" is false for a player with a full history.
       await fetchInProgress(
         analysis({
           status: "failed",
@@ -1140,9 +1119,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("reports what the fetch added once it has finished", async () => {
-    // The closest thing to progress this card can honestly show: how many
-    // games are missing is Riot's match list, which arrives only during the
-    // fetch, so what the fetch added afterwards is the only real number.
+    // How many games are missing is Riot's match list, which arrives only
+    // during the fetch, so what the fetch added is the only honest number.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1167,8 +1145,7 @@ describe("SmurfBoostDetection", () => {
 
   it("quotes no fetch total while the fetch is still running", async () => {
     // Mid-fetch the stored count is still the pre-fetch one, so an ungated
-    // reading of it announces "no new games" directly under an alert saying
-    // the games are being fetched right now.
+    // reading announces "no new games" under an alert saying it is fetching.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1187,9 +1164,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("claims no fetch total when the stored count could not be re-read", async () => {
-    // The hook refreshes this player's caches before handing the card back its
-    // callback, and swallows a refresh that fails. Subtracting the stale count
-    // would announce "no new games" for a fetch that added a dozen.
+    // The hook refreshes this player's caches before the callback and swallows
+    // a failed refresh, so a stale count would announce "no new games".
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1229,9 +1205,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("subtracts from no baseline when the count was unread at the click", async () => {
-    // Clicked before the stored count arrived -- a slow or briefly failing
-    // stats read -- there is nothing to subtract from. Treating the unknown as
-    // zero would credit the fetch with the player's entire ranked history.
+    // Clicked before the stored count arrived there is nothing to subtract
+    // from; treating the unknown as zero credits the fetch with all history.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1294,9 +1269,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("counts nothing fetched for a fetch that did not finish", async () => {
-    // A rate-limited update asked Riot for nothing it can account for.
-    // Reporting "no new games" for it would present a failed fetch as an
-    // up-to-date history.
+    // A rate-limited update asked Riot for nothing it can account for, so "no
+    // new games" would present a failed fetch as an up-to-date history.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),
@@ -1323,9 +1297,8 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("re-reads the stored count for a fetch that did not finish", async () => {
-    // A rate-limited run still stored whatever it got through first, and the
-    // hook refreshes this player's caches on a completed run only -- so the
-    // pool this card names would stay at the number from before the click.
+    // A rate-limited run still stored what it got, and the hook refreshes the
+    // caches on a completed run only, so this pool would stay pre-click.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: true,
       data: analysis(),

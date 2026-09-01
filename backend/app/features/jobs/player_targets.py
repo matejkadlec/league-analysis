@@ -33,9 +33,8 @@ class PlayerTargetsMixin:
     ) -> list[str]:
         """Load the global allowlist or the explicit target_puuids set.
 
-        Identifiers, not rows: `handle_player_error` rolls back a recoverable
-        failure, which expires every instance the session holds and turns the
-        next attribute read into a `MissingGreenlet`. A string cannot expire.
+        Identifiers, not rows: `handle_player_error` rolls back and expires the
+        session's instances, turning the next attribute read into `MissingGreenlet`.
         """
         if self.target_puuids is None:
             players = await PlayerService(db).get_globally_tracked_players()

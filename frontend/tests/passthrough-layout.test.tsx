@@ -7,9 +7,8 @@ import { PassthroughLayout } from "@/components/passthrough-layout";
 
 describe("PassthroughLayout", () => {
   it("mounts the route's children without wrapping them in anything", () => {
-    // The layout's whole job is to be nothing: it exists only so each client
-    // page can export `metadata` from a server parent. A wrapper div here --
-    // the tempting "fix" -- would break every direct-child selector under it.
+    // The layout exists only so a client page can export `metadata` from a
+    // server parent; a wrapper div breaks every direct-child selector under it.
     const { container } = render(
       <PassthroughLayout>
         <section>

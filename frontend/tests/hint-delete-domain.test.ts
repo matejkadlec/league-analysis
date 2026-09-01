@@ -10,9 +10,8 @@ import {
 } from "@/lib/session/auth-state-cookie";
 
 /**
- * The hint has to die under whatever domain it was born with. Domain is part
- * of a cookie's identity; the day the session is shared across hosts, a
- * host-only delete matches nothing and leaves the visitor stranded.
+ * Domain is part of a cookie's identity, so once the session is shared across
+ * hosts a host-only delete matches nothing and strands the visitor.
  */
 afterEach(() => {
   for (const entry of document.cookie.split("; ")) {

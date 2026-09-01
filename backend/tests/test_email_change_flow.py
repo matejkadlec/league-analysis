@@ -1,8 +1,7 @@
 """The email-change request/verify/apply flow, asserted by running it.
 
-The real statements run against SQLite in memory with `auth` attached as a
-schema, so the lockout and expiry predicates are exercised, not mocked.
-Only the SMTP transport is replaced, at the boundary the refusal test patches.
+Real statements run against in-memory SQLite with `auth` attached as a schema,
+so the lockout and expiry predicates are exercised; only SMTP is replaced.
 """
 
 import re
@@ -104,9 +103,8 @@ def sent_messages(
 ) -> list[EmailMessage]:
     """Configure SMTP at the settings reader and record each sent message.
 
-    `get_global_settings` is substituted in the mailer module, as the
-    SMTP-refusal test does, and the one blocking send is replaced where the
-    email-change service imported it.
+    `get_global_settings` is substituted in the mailer module, and the blocking
+    send where the email-change service imported it.
     """
     monkeypatch.setattr(
         mailer_module,

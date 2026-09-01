@@ -9,9 +9,8 @@ describe("Skeleton", () => {
   it("names itself, so the e2e harness can wait for gated cards to resolve", () => {
     const { container } = render(<Skeleton className="h-6 w-48" />);
 
-    // Upstream carries no `data-slot`, so re-adding `skeleton` from the
-    // shadcn CLI reverts this. `gotoPopulatedRoute` waits for zero of these,
-    // and an unnamed one makes a page of placeholders look ready.
+    // Upstream carries no `data-slot`, so a shadcn CLI re-add reverts this and
+    // `gotoPopulatedRoute` reads a page of placeholders as ready.
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
   });
 });

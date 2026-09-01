@@ -1,7 +1,6 @@
 /**
- * Every platform the API accepts, and what to call it on screen. The key order
- * IS the order of the server picker, so alphabetising would move EUNE out of
- * first place. `tests/api-contract-alignment.test.ts` pins the key set.
+ * Key order IS the server picker's order, so alphabetising moves EUNE out of first
+ * place; `tests/api-contract-alignment.test.ts` pins the key set.
  */
 export const PLATFORM_DISPLAY_NAMES = {
   eun1: "EUNE",
@@ -23,9 +22,8 @@ export const PLATFORM_DISPLAY_NAMES = {
 } as const satisfies Record<string, string>;
 
 /**
- * Every platform code the API accepts. `PlayerSchema` parses against these
- * keys, so a value that reached React is one of them -- which is why
- * `getPlatformDisplayName` needs neither a lowercasing pass nor a fallback.
+ * `PlayerSchema` parses against these keys, so `getPlatformDisplayName` needs
+ * neither a lowercasing pass nor a fallback.
  */
 export type Platform = keyof typeof PLATFORM_DISPLAY_NAMES;
 
@@ -35,9 +33,8 @@ export const PLATFORMS = Object.keys(PLATFORM_DISPLAY_NAMES) as [
 ];
 
 /**
- * Narrows a string to a platform code -- the one place a plain string still
- * becomes a `Platform`, because Radix types `Select`'s `onValueChange` as
- * `(value: string) => void`.
+ * The one place a plain string becomes a `Platform`: Radix types `onValueChange`
+ * as `(value: string) => void`.
  */
 export function isPlatform(value: string): value is Platform {
   return value in PLATFORM_DISPLAY_NAMES;

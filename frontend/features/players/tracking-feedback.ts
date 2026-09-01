@@ -20,9 +20,8 @@ export type PlayerTrackingFailureKind =
   | "unexpected";
 
 /**
- * Classify a failed player lookup from the already-normalized error.
- * `normalizeApiError` has read the status and the structured code, so this
- * only names the four outcomes the selector words differently.
+ * `normalizeApiError` has already read status and code; this only names the
+ * four outcomes the selector words differently.
  */
 export function playerTrackingFailureKind(
   error: ApiError,

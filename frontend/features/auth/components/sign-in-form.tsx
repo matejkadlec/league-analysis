@@ -21,9 +21,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PublicPageFooter } from "@/components/public-page-footer";
 import type { LoginCredentials } from "../types";
 
-// Both blocks below stay module-level in this file rather than becoming
-// siblings: each has exactly one consumer, and settings' PasswordInput cannot
-// serve here -- it wraps a plain Input, this needs react-hook-form's FormField.
+// Not shared with settings' PasswordInput: that one wraps a plain Input, this
+// needs react-hook-form's FormField.
 function PasswordField({
   control,
   isSubmitting,
@@ -86,9 +85,8 @@ function CaptchaSection({
 }) {
   return (
     <div className="space-y-2">
-      {/* A heading over the widget, not a form field: there is
-          no control to label, and a FormLabel would point
-          `htmlFor` at an id nothing renders. */}
+      {/* A heading, not a form field: there is no control to label, and a
+          FormLabel would point `htmlFor` at an id nothing renders. */}
       <p
         id="sign-in-captcha-heading"
         className="text-sm font-medium leading-none text-gray-700"

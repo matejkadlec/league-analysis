@@ -9,9 +9,8 @@ import {
 } from "./matchmaking-progress";
 
 /**
- * Player-slot expectation before the backend's progress keys exist: 10 slots
- * per spine match. Reads the run's own params (attach-safe: what is actually
- * running, not what the form last said), falling back to the 10-match default.
+ * Player-slot expectation before the backend's progress keys exist. Reads the
+ * run's own params, so it describes what is running, not what the form says.
  */
 export function expectedPlayersForRun(
   run: { params: { match_count: number } } | null | undefined,

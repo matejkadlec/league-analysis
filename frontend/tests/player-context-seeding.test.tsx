@@ -132,9 +132,8 @@ function mountPage() {
 
 describe("the current player the context already answered with", () => {
   it("is not fetched a second time to analyze them", async () => {
-    // `/players/context` returns the whole player, and the default analyzed
-    // player *is* that player, so `GET /players/{puuid}` asks the API for a
-    // row the page is already holding. Every visit paid for it.
+    // `/players/context` returns the whole player, so `GET /players/{puuid}`
+    // asks the API for a row the page is already holding.
     const { result } = mountPage();
 
     await waitFor(() =>
@@ -145,9 +144,8 @@ describe("the current player the context already answered with", () => {
   });
 
   it("is still fetched when the URL names somebody else", async () => {
-    // The positive control: seeding must not turn into serving the current
-    // player for a `?puuid=` that names a different one. Without this,
-    // never fetching at all would pass the test above.
+    // The positive control: seeding must not serve the current player for a
+    // `?puuid=` naming a different one, and never fetching would pass above.
     search.current = `puuid=${SOMEBODY_ELSE.puuid}`;
 
     const { result } = mountPage();

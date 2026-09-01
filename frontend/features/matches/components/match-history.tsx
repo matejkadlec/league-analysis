@@ -47,9 +47,8 @@ interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null | undefined;
   /**
-   * Make a participant of one of these matches the current player. Passed in
-   * rather than read from `usePlayerContext` so this card stays renderable
-   * without the provider, and so the two cannot disagree about who is chosen.
+   * Passed in rather than read from `usePlayerContext` so this card renders
+   * without the provider, and the two cannot disagree about who is chosen.
    */
   onSelectPlayer: (puuid: string) => void;
 }
@@ -68,13 +67,11 @@ export function MatchHistory({
     // Queries keyed by the PUUID are refreshed by the hook; the server
     // components behind this page need their own refresh.
     onCompleted: () => router.refresh(),
-    // A run that stopped early still stored whatever it got through, and the
-    // poll below ends the moment the status leaves `running`. Scoped to this
-    // card's own two caches: other cards decide what a failed fetch means.
+    // A run that stopped early still stored rows, and the poll below ends the
+    // moment the status leaves `running`. Scoped to this card's own caches.
     onSettled: (run) => {
-      // `null` is a run whose status could not be read — a poll that gave up
-      // part-way through the writing. That is the case with the most rows
-      // stranded, not the one to skip.
+      // `null` is a status that could not be read -- the case with the most
+      // rows stranded, so it must not be the one skipped.
       if (run?.status === "completed") {
         return;
       }
@@ -117,9 +114,8 @@ export function MatchHistory({
     // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
     // stats-only failure would otherwise show 0W/0L with nothing said.
     meta: { errorTitle: "Match statistics" },
-    // In step with the list below. These are the header's totals, wins, losses
-    // and win rate; leaving them unpolled while rows visibly arrive had the
-    // header claiming "3 total matches" over a list already showing more.
+    // In step with the list below: unpolled, the header claims "3 total
+    // matches" over a list already showing more.
     refetchInterval: isFetchingMatches ? 2000 : false,
   });
 
@@ -139,9 +135,8 @@ export function MatchHistory({
       pageSize,
     }),
     enabled: !!puuid && preferencesReady,
-    // Reported inline rather than by the global toast: MatchHistoryErrorCard
-    // when the failure left nothing to show, MatchHistoryLoadFailedRow when
-    // there are already rows worth keeping.
+    // Reported inline instead: MatchHistoryErrorCard when nothing is left to
+    // show, MatchHistoryLoadFailedRow when rows are worth keeping.
     meta: { silenceErrorToast: true },
     retry: (failureCount, error) =>
       normalizeApiError(error).kind === "network" ? false : failureCount < 2,
@@ -150,9 +145,8 @@ export function MatchHistory({
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
-    // While the player's own update run is storing matches, this is what makes
-    // them appear: it is the only query carrying the rows and the total. 2s
-    // rather than the 5s below because the list is visibly filling up.
+    // The only query carrying the rows and the total, so this is what makes a
+    // run's matches appear; 2s because the list is visibly filling up.
     refetchInterval: (query) =>
       isFetchingMatches
         ? 2000
@@ -208,24 +202,20 @@ export function MatchHistory({
     apiTotalMatches,
   );
   const hasActiveSearch = debouncedMatchSearch.length > 0;
-  // An update run is storing this player's matches, so the stored total is not
-  // the real one yet. The match half only: the Player Updater writes no
-  // matches, so counting it over-promises.
+  // The match half only: the Player Updater writes no matches, so counting it
+  // would over-promise a total still being stored.
   const isLoadingMoreMatches = isFetchingMatches;
-  // Only after the last record there is: earlier pages are complete and must
-  // not claim to be still filling. Not while the query behind it is failing
-  // either -- a spinner over a poll that just errored is the wrong half.
+  // Earlier pages are complete and must not claim to be still filling, and a
+  // spinner over a poll that just errored is the wrong half.
   const isLastPage = currentPage >= Math.max(1, totalPages);
   const showLoadingRow = isLoadingMoreMatches && isLastPage && !error;
-  // Gated on neither `isLoadingMoreMatches` nor `isLastPage`, unlike the
-  // loading row: the outage that fails this query also drops
-  // `isFetchingMatches`, and nothing else reports the failure.
+  // Ungated, unlike the loading row: the outage that fails this query also
+  // drops `isFetchingMatches`, and nothing else reports the failure.
   const showLoadFailedRow = !!error && !!data;
 
   useEffect(() => {
-    // Not on an error: a failed request carries no `data`, which reads here as
-    // a server total of zero and so as "the page you asked for is gone",
-    // silently putting the viewer back on page 1.
+    // Not on an error: a failed request carries no `data`, which reads as a
+    // server total of zero and silently sends the viewer back to page 1.
     if (isPlaceholderData || error) {
       return;
     }
@@ -240,9 +230,8 @@ export function MatchHistory({
     return <MatchHistoryLoadingCard />;
   }
 
-  // Only when there is nothing to fall back to. React Query keeps cached data
-  // through an error, and the 2s poll fails precisely when rows are on screen
-  // -- that case renders MatchHistoryLoadFailedRow in the list instead.
+  // Only with nothing to fall back to: the 2s poll fails precisely when rows
+  // are on screen, and that case renders MatchHistoryLoadFailedRow instead.
   if (!isFetching && error && !data) {
     const apiError = normalizeApiError(error);
 
@@ -272,24 +261,21 @@ export function MatchHistory({
       />
       <CardContent>
         {matches.length === 0 && !showLoadingRow && !showLoadFailedRow ? (
-          // Not while an update is running, and not when the list failed to
-          // load: "no matches" is a verdict, and neither a run still going nor
-          // a request that never answered has earned it.
+          // "No matches" is a verdict that neither a running update nor a
+          // request that never answered has earned.
           <MatchHistoryEmptyAlert
             hasActiveSearch={hasActiveSearch}
             debouncedMatchSearch={debouncedMatchSearch}
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          // Below `lg` a row reflows into stacked blocks; from `lg` up it is
-          // the fixed-width desktop layout, which still has to scroll inside
-          // this container. `min-w-0` because the flex chain refuses to shrink.
+          // From `lg` up the fixed-width desktop layout must scroll inside
+          // this container; `min-w-0` or the flex chain refuses to shrink.
           <div
             data-testid="match-list"
             className="min-w-0 rounded-md border lg:overflow-x-auto"
-            // A region that scrolls sideways must be reachable without a
-            // mouse, and a focusable region needs a name -- but only from
-            // `lg` up, the only width this container scrolls at.
+            // A sideways-scrolling region must be keyboard-reachable and
+            // named, but only from `lg` up -- the only width it scrolls at.
             {...(isDesktopLayout
               ? {
                   role: "region",

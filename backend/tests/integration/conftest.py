@@ -1,8 +1,7 @@
 """A migrated throwaway PostgreSQL for the claims a mock cannot answer.
 
-A compiled statement cannot show an ON CONFLICT target with no unique index
-behind it, JSONB NULL semantics, an enum member with no `ALTER TYPE`, or a
-server default. These fixtures hand those tests a real database.
+A compiled statement cannot show an unbacked ON CONFLICT target, JSONB NULL
+semantics, a missing `ALTER TYPE`, or a server default; these fixtures can.
 """
 
 from __future__ import annotations
@@ -31,9 +30,8 @@ MIGRATION_TIMEOUT_SECONDS = 600
 # stand-in fails validation rather than the behaviour under test.
 INTEGRATION_PUUID = "INTEGRATION-PUUID-".ljust(78, "0")
 
-# The naming discipline of `scripts/validate_migrations.py`: one private
-# namespace, and the same `fullmatch` guard before the name is interpolated
-# into DDL, which cannot take a bind parameter.
+# The name is interpolated into DDL, which cannot take a bind parameter, so it
+# must pass this `fullmatch` first.
 DATABASE_NAME_PATTERN = r"lga_integration_tests_[0-9a-f]{32}"
 
 NO_DATABASE_SKIP = (
@@ -111,9 +109,8 @@ def _drop_database(url: URL, database: str) -> None:
 def _run_migrations(database: str) -> None:
     """Build the schema from the revisions, which are its only authority.
 
-    A subprocess, as `scripts/validate_migrations.py` runs it: Alembic's
-    `env.py` calls `fileConfig`, which would reconfigure logging for every
-    other test in this process.
+    A subprocess because Alembic's `env.py` calls `fileConfig`, which would
+    reconfigure logging for every other test in this process.
     """
     environment = os.environ.copy()
     environment["POSTGRES_DB"] = database
@@ -151,7 +148,6 @@ def migrated_database() -> Iterator[str]:
 async def database_session(migrated_database: str) -> AsyncIterator[AsyncSession]:
     """A session inside an outer transaction that is always rolled back.
 
-    SQLAlchemy's "joining a Session into an external transaction" recipe:
     `create_savepoint` turns the application's own `commit()` into a savepoint
     release, so no test can see another test's writes.
     """

@@ -38,9 +38,8 @@ function manualRunToast(jobName: string, status: JobStatus) {
 }
 
 /**
- * Announce how a manually triggered run ended. The trigger response says only
- * that the run started, so the outcome has to be recognised in the execution
- * history that arrives later.
+ * The trigger response says only that the run started, so the outcome has to
+ * be recognised in the execution history that arrives later.
  */
 export function useManualRunOutcome(
   jobName: string,

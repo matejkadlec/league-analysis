@@ -26,9 +26,8 @@ async def test_an_unmapped_route_failure_answers_the_service_error_detail() -> N
     app.dependency_overrides[get_current_active_user] = lambda: cast(
         User, SimpleNamespace(id=1, is_active=True)
     )
-    # Debug is pinned off and the stack rebuilt: `ServerErrorMiddleware` is
-    # handed the flag's *value* when the stack is assembled, so setting
-    # `app.debug` alone only works when this test runs by itself.
+    # `ServerErrorMiddleware` is handed the flag's *value* when the stack is
+    # assembled, so debug must be pinned off and the stack rebuilt.
     was_debug = app.debug
     app.debug = False
     app.middleware_stack = app.build_middleware_stack()

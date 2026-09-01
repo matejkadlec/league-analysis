@@ -4,9 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Being refused has to say so: rendering `null` left a signed-in non-admin on
- * /jobs looking at an empty pane with nothing they could do about it. Both
- * returns could be replaced with `null` and every gate stayed green.
+ * Being refused has to say so: rendering `null` leaves a signed-in non-admin
+ * on an empty pane, and no other gate notices.
  */
 
 const auth = vi.hoisted(() => ({
@@ -86,9 +85,8 @@ describe("a page the visitor may not have", () => {
   });
 
   it("draws nothing while the session is still being checked", () => {
-    // Not a refusal: the answer is not in yet, and `AuthGate` owns what the
-    // visitor sees during a probe. Saying "no access" here would accuse
-    // everyone whose probe is slow.
+    // Not a refusal: the answer is not in yet and `AuthGate` owns the probe,
+    // so saying "no access" here would accuse everyone whose probe is slow.
     auth.isLoading = true;
 
     render(

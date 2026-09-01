@@ -7,9 +7,8 @@ import type { AuthContextType } from "@/features/auth/types";
 import { renderWithQueryClient } from "./support/render-support";
 
 /**
- * Whose decision the banner is recording. A second account signing in on the
- * same browser inherited the first one's choice, written to its record as
- * `consent_source: "banner"`. These assert the account's own stored record.
+ * Whose decision the banner records: a second account on the same browser can
+ * inherit the first one's choice, so these assert each account's own record.
  */
 
 const { validatedGet, validatedPut, useAuth } = vi.hoisted(() => ({
@@ -138,9 +137,8 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("writes nothing to the audit trail of an account that has not answered", async () => {
-    // The half that matters legally. Inheriting quietly would be bad; writing
-    // `consent_source: "banner"` for a banner this account never saw is a
-    // false record of consent.
+    // Writing `consent_source: "banner"` for a banner this account never saw is
+    // a false record of consent.
     putConsentCookieInTheJar("all");
     signedInAs(2);
     serverAnswers(null);
@@ -171,9 +169,8 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("leaves an account that has answered alone", async () => {
-    // The positive control, and the one that makes the first two mean
-    // something: prompting on every sign-in would pass those tests too, and
-    // would re-ask everybody who has already decided.
+    // The positive control: prompting on every sign-in would pass the first two
+    // tests while re-asking everybody who has already decided.
     putConsentCookieInTheJar("all");
     signedInAs(1);
     serverAnswers({
@@ -188,9 +185,8 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("records the choice of a visitor who answers and then signs in", async () => {
-    // The one branch that writes to an audit trail: nobody is signed in, the
-    // person answers the banner, then signs in. That choice is theirs, so
-    // re-asking at authentication would be the wrong kind of careful.
+    // The one branch that writes to an audit trail: the choice was made before
+    // sign-in and is still theirs, so re-asking afterwards is wrong.
     useAuth.mockReturnValue(authState(null));
     serverAnswers(null);
     const { rerender } = await mount();
@@ -219,9 +215,8 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("does not carry one account's choice through a sign-out into the next", async () => {
-    // This component lives in the root layout and `logout` is a `router.push`,
-    // so it is never remounted across a sign-out: a ref recording only *that* a
-    // choice was made would still be set when the next account signed in.
+    // Root layout plus a `router.push` logout means no remount across sign-out:
+    // a ref recording only *that* a choice was made stays set for the next one.
     signedInAs(4);
     serverAnswers(null);
     const { rerender } = await mount();

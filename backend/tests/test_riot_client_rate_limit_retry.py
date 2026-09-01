@@ -1,8 +1,7 @@
 """End-to-end 429 handling through `_make_request`.
 
-A 429 answered with ``Retry-After`` waits exactly that long and retries, and
-exhaustion raises a ``RateLimitError`` still carrying the header evidence.
-Driven over ``httpx.MockTransport``, so no waiting machinery is assumed.
+A 429 with ``Retry-After`` waits exactly that long, and exhaustion raises a
+``RateLimitError`` still carrying the header evidence.
 """
 
 from typing import Any

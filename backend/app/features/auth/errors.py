@@ -1,8 +1,7 @@
 """Authentication feature exceptions.
 
-One module so the router, the service, and the tests agree on where the
-vocabulary lives; every class here is part of the HTTP error contract the
-router translates.
+One module so router, service, and tests agree where the vocabulary lives;
+every class here is part of the HTTP error contract the router translates.
 """
 
 from datetime import datetime

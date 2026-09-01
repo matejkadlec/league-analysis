@@ -59,9 +59,8 @@ import { renderWithQueryClient } from "./support/render-support";
 const PUUID = "puuid-under-test";
 
 /**
- * Timestamps are written without a zone on purpose: `formatDateTime` reads
- * them back with `getHours()`, so a `Z`-suffixed fixture would render one
- * clock on a Prague laptop and another in the UTC gate container.
+ * Timestamps carry no zone on purpose: `formatDateTime` reads them back with
+ * `getHours()`, so a `Z`-suffixed fixture shifts in the UTC gate container.
  */
 const AHEAD = {
   created_at: "2026-03-04T14:07:00",
@@ -121,9 +120,8 @@ function renderHistory(selectedCreatedAt: string | null = null) {
 }
 
 /**
- * The table half of the card. Both layouts render in jsdom -- the stacked
- * blocks are hidden by a Tailwind breakpoint no stylesheet applies here -- so
- * every figure is on screen twice and the queries have to say which copy.
+ * Both layouts render in jsdom -- no stylesheet applies the breakpoint that
+ * hides the stacked blocks -- so every figure is on screen twice.
  */
 async function table() {
   return within(await screen.findByRole("table"));
@@ -155,8 +153,7 @@ describe("the matchmaking analysis history card", () => {
 
   it("reads a player with no analyses as empty, not as a failure", async () => {
     // A player's first visit is a 404, and letting it through turns the
-    // ordinary empty state into "could not be loaded". Rendered on the real
-    // provider client: what separates the branches is `queryCache.onError`.
+    // ordinary empty state into "could not be loaded".
     getMatchmakingAnalysisHistory.mockResolvedValue({
       success: false,
       error: {
@@ -211,9 +208,8 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("colours each win rate by which side the gap favoured", async () => {
-    // The gap is printed as an absolute value, so the colour is the only thing
-    // on screen saying which team it favoured -- swap the comparison and the card
-    // tells someone their team was outmatched in the game it was stronger in.
+    // The gap prints as an absolute value, so the colour is the only thing on
+    // screen saying which side it favoured.
     const queryClient = renderHistory();
 
     const rows = await table();
@@ -240,9 +236,8 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("reloads both sibling panels after a record is deleted", async () => {
-    // The results panel beside this card is a separate query keyed on the
-    // same player. Nothing else invalidates it, so without this the analysis
-    // someone just deleted stays on screen as the current result.
+    // The results panel beside this card is a separate query on the same
+    // player, and nothing else invalidates it after a delete.
     const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
@@ -307,9 +302,8 @@ describe("the matchmaking analysis history card", () => {
       { timeout: 2000 },
     );
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(2));
-    // The card above the table reads this key. Without it, deleting the run
-    // it is showing leaves it offering "Run New Analysis" for a record that
-    // no longer exists.
+    // The card above the table reads this key; without it, deleting the run it
+    // shows leaves it offering "Run New Analysis" for a missing record.
     await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("results 2")).toBeTruthy();
     expect(await screen.findByText("analysis 2")).toBeTruthy();
@@ -318,9 +312,8 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("says so when a delete did not happen", async () => {
-    // The row fades out the moment the button is clicked and comes back when
-    // the request fails. Without the message that is all the viewer sees: a
-    // row that flickered and stayed, with no sign the delete was refused.
+    // The row fades out on click and returns when the request fails, so
+    // without the message a viewer sees only a flicker and no refusal.
     const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
@@ -376,9 +369,8 @@ describe("the matchmaking analysis history card", () => {
   });
 
   it("marks the run the result card fell back to, with nothing picked", async () => {
-    // Choosing a player shows their latest completed run without any pick
-    // here. Highlighting only an explicit pick left that card and this one
-    // disagreeing about which run was on screen.
+    // Choosing a player shows their latest completed run with nothing picked
+    // here, so highlighting only explicit picks desyncs the two cards.
     const queryClient = renderHistory();
 
     const rows = await table();

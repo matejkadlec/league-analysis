@@ -63,9 +63,8 @@ class _RateWindow:
 class RateLimiter:
     """Track Riot application and method limits per routing scope.
 
-    Application windows are isolated by routing host, method windows by routing
-    host and normalized endpoint. Burst spacing lives on the class because the
-    requests-per-second ceiling belongs to the API key, not to one client.
+    Application windows key by host, method windows by host and endpoint. Burst
+    spacing lives on the class because the per-second ceiling belongs to the key.
     """
 
     _burst_lock = asyncio.Lock()
@@ -271,9 +270,8 @@ class RateLimiter:
     ) -> None:
         """Update routing-scoped application and method windows from a response.
 
-        `httpx.Headers` is already case-insensitive and already stores the
-        lower-cased key, so nothing lowercases these on the way in. The
-        `except` below is what covers a caller that hands over something else.
+        `httpx.Headers` is case-insensitive, so nothing lowercases these on the
+        way in; the `except` below covers a caller that hands over something else.
         """
         try:
             observed_at = time.monotonic()

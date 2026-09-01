@@ -6,9 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthContextType } from "@/features/auth/types";
 
 /**
- * Which PUUID the sidebar may carry onto a player link. `/matchmaking-analysis`
- * spells its analyzed player `?puuid=` too, but page-locally; unscoped, the
- * sidebar would hand it to `/player-overview`, which persists it.
+ * `/matchmaking-analysis` spells its analyzed player `?puuid=` too, but
+ * page-locally; unscoped, the sidebar leaks it to `/player-overview`.
  */
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;

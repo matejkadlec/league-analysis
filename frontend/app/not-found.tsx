@@ -3,9 +3,8 @@
 import Link from "next/link";
 
 /**
- * Rendered for signed-out visitors too: gating it would make every unmatched
- * path under a public prefix a blank page, and a 404 notice reveals nothing
- * worth gating.
+ * Ungated: a 404 notice reveals nothing, and gating would blank every
+ * unmatched path under a public prefix.
  */
 export default function NotFound() {
   return (

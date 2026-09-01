@@ -1,14 +1,11 @@
-// Every cache-touching call names its key through the factory that owns it.
 // `QueryKey` is `unknown[]`, so a hand-typed key compiles forever while the
 // factory moves underneath it, and the invalidation then matches nothing.
 
-// Flagged: an array literal as `queryKey:`, as the positional key of
-// `setQueryData`/`getQueryData`, or an inline `predicate` key comparison.
-// Accepted: `*QueryKey()`, `*_QUERY_KEY`, and a named predicate helper.
+// Flagged: an array literal as `queryKey:`, as a positional key, or inside an
+// inline `predicate`. Accepted: `*QueryKey()`, `*_QUERY_KEY`, named helpers.
 
-// The boundary: the cache is recognised by method name on any receiver, and a
-// key hoisted into a local `const` is not resolved. Anything that is not an
-// array literal reads as a factory, so `[...key(id), extra]` passes.
+// Boundary: cache methods match by name on any receiver, a key hoisted into a
+// local `const` is not resolved, and a non-array expression reads as a factory.
 
 type Node = {
   type: string;
@@ -29,9 +26,8 @@ type Node = {
   right?: Node;
 };
 
-// `invalidateQueries` is not the only one that goes stale: this repo also
-// refetches by key and reads one back with `getQueryData`, and a drifted key
-// there returns `undefined` instead of matching nothing.
+// Not just `invalidateQueries`: a drifted key passed to `getQueryData`
+// returns `undefined` rather than matching nothing.
 const CACHE_METHODS = new Set([
   "cancelQueries",
   "getQueryData",

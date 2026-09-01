@@ -4,9 +4,8 @@ import { toast as sonnerToast } from "sonner";
 
 import { apiErrorMessage, normalizeApiError } from "../http/api-error";
 
-// One source of truth for the variant names. Sonner exposes a method per
-// name and the toast-preview schema parses against this same tuple, so a
-// name added here cannot drift out of either.
+// Sonner exposes a method per name and the toast-preview schema parses against
+// this same tuple, so a name added here cannot drift out of either.
 export const TOAST_VARIANTS = ["success", "error", "warning", "info"] as const;
 
 export type ToastVariant = (typeof TOAST_VARIANTS)[number];
@@ -48,9 +47,8 @@ function showToast({
     ...(id !== undefined && { id }),
   };
 
-  // Sonner names one method per variant and `ToastVariant` is exactly that set
-  // of names. The second argument is withheld when there is nothing to put in
-  // it, which is what callers asserting a bare `(title)` expect.
+  // The second argument is withheld when empty: callers assert a bare
+  // `(title)` call.
   return Object.keys(options).length > 0
     ? sonnerToast[variant](title, options)
     : sonnerToast[variant](title);
@@ -83,9 +81,8 @@ export function useToast() {
 }
 
 /**
- * The complete vocabulary of a query's `meta`. A type alias, not an interface:
- * `QueryMeta` resolves to `Register["queryMeta"]` only when it extends
- * `Record<string, unknown>`, which an alias satisfies and an interface cannot.
+ * An alias, not an interface: `QueryMeta` resolves to `Register["queryMeta"]`
+ * only when it extends `Record<string, unknown>`, which an interface cannot.
  */
 type AppQueryMeta = {
   /** Some other surface reports this failure; say which in a comment. */
@@ -101,9 +98,8 @@ declare module "@tanstack/react-query" {
 }
 
 /**
- * Decide what a failed query should announce, or `null` to stay silent. Pure
- * and separate from the cache handler that calls it, so the silence rules are
- * testable without driving a real QueryClient and intercepting Sonner.
+ * What a failed query announces, or `null` to stay silent. Kept out of the
+ * cache handler so the silence rules are testable without a QueryClient.
  */
 export function queryErrorToast(
   error: unknown,

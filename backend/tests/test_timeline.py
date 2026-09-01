@@ -26,9 +26,8 @@ from app.features.matches.timeline import (
 
 
 def test_synthetic_dto_includes_stored_game_version() -> None:
-    # `build_synthetic_match_dto` reads only these three attributes, but its
-    # parameter is nominally typed, and a real mapped instance would drag the
-    # whole ORM registry into a unit test.
+    # `build_synthetic_match_dto` reads only these three attributes; a real
+    # mapped instance would drag the whole ORM registry into a unit test.
     participant = cast(
         MatchParticipant, SimpleNamespace(participant_id=1, team_id=100, puuid="p1")
     )
@@ -38,9 +37,8 @@ def test_synthetic_dto_includes_stored_game_version() -> None:
 
 
 def test_timeline_rows_tolerate_missing_game_version() -> None:
-    # A stored match with no recorded version reaches timeline replacement as a
-    # synthetic DTO whose `game_version` defaults to "" — the backfill path in
-    # `backfill_timeline_only_match` does exactly this.
+    # A match with no recorded version reaches timeline replacement as a
+    # synthetic DTO whose `game_version` defaults to "" — the backfill path.
     participant = cast(
         MatchParticipant, SimpleNamespace(participant_id=1, team_id=100, puuid="p1")
     )
@@ -80,9 +78,8 @@ class _Rows:
 class _CommitFailsSession:
     """A session whose commit fails, so the caller's recovery is observable.
 
-    A failed commit leaves the transaction aborted: every later statement on
-    the same session raises until something rolls it back, and the Match
-    Fetcher runs many matches on one session.
+    A failed commit leaves the transaction aborted until something rolls it
+    back, and the Match Fetcher runs many matches on one session.
     """
 
     def __init__(self, participants: list[object]) -> None:
@@ -144,8 +141,7 @@ def test_a_row_level_integrity_error_does_not_fail_the_whole_run() -> None:
     """One bad match is skipped; a broken session still stops the run.
 
     Both writers roll back before re-raising, so the session survives an
-    IntegrityError. A lost connection or an already-aborted transaction has no
-    such guarantee and must still reach the owning job.
+    IntegrityError; a lost connection has no such guarantee.
     """
     integrity = IntegrityError("insert", {}, ValueError("fk violation"))
 
@@ -160,9 +156,8 @@ def test_a_row_level_integrity_error_does_not_fail_the_whole_run() -> None:
 async def test_timeline_rows_are_staged_only_after_a_flush() -> None:
     """The order these rows depend on, asserted instead of inherited.
 
-    Both foreign keys on `core.match_timelines` point at rows the same
-    transaction still holds as pending ORM objects, with `autoflush=False`.
-    Across mappers only `relationship()` orders a flush -- DDL does not.
+    Both foreign keys point at rows the same transaction holds pending under
+    `autoflush=False`, and only `relationship()` orders a flush across mappers.
     """
     calls: list[str] = []
 

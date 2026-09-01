@@ -54,9 +54,8 @@ describe("LegalNotice", () => {
 
 describe("CookieSettingsTrigger", () => {
   it("announces the reopen request the consent manager listens for", async () => {
-    // The footer link is the only way back to the dialog once it is answered,
-    // and the manager hears it only as this window event. Unmocked on
-    // purpose: a mocked module would pass while the event name drifted.
+    // The manager hears the only way back to the dialog as this window event,
+    // and a mocked module would pass while the event name drifted.
     const user = userEvent.setup();
     const heard: string[] = [];
     const listen = () => heard.push(COOKIE_CONSENT_OPEN_PREFERENCES_EVENT);

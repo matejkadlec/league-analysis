@@ -116,9 +116,8 @@ describe("the job execution details dialog", () => {
   });
 
   it("shows the API call transcript, never the raw log lines, when detailed logs exist", () => {
-    // Both lists are always present when `detailed_logs` exists, so the
-    // dialog's own choice is between renderers: the grouped transcript, with
-    // the raw lines held back even though they arrived too.
+    // Both lists are present whenever `detailed_logs` exists, so the dialog's
+    // own choice is the grouped transcript over the raw lines that also came.
     render(
       <JobExecutionDetailsDialog
         execution={execution({

@@ -1,8 +1,7 @@
 """An unconfigured SMTP must refuse, not log the verification code.
 
-Without the guard a deployment with no SMTP answers 200 and leaves the
-one-time code in the container log. The sibling Join Us path raises on the
-same guard.
+Without the guard a deployment with no SMTP answers 200 and leaves the one-time
+code in the container log.
 """
 
 from types import SimpleNamespace
@@ -23,8 +22,7 @@ async def test_verification_code_is_not_sent_without_smtp(
     """Substitute the settings at the reader, not on the service instance.
 
     The guard is `mailer.smtp_configured()`, which reads the `@cache`d global
-    settings -- assigning to `service.settings` does not reach it. Patching
-    `get_global_settings` keeps the real predicate under test.
+    settings, so assigning to `service.settings` does not reach it.
     """
     monkeypatch.setattr(
         mailer_module,

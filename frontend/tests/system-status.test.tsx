@@ -53,9 +53,8 @@ afterEach(() => {
 
 describe("the jobs system status", () => {
   it("says nothing is known rather than drawing empty cards", () => {
-    // `null` here means the status request failed or has not answered. Four
-    // cards reading "Stopped", "0", "0" and "None" would be a specific and
-    // wrong claim about a system nobody has heard from.
+    // `null` means the request failed or has not answered, so cards reading
+    // "Stopped", "0", "0" and "None" would be a specific and wrong claim.
     render(<SystemStatus status={null} />);
 
     expect(screen.getByText("No status information available")).toBeTruthy();
@@ -78,9 +77,8 @@ describe("the jobs system status", () => {
   });
 
   it("distinguishes work in progress from an idle system", () => {
-    // Both are fine states, and telling them apart is what stops an admin
-    // waiting on a job that already finished -- or restarting one that is
-    // still running.
+    // Both are fine states; telling them apart stops an admin from restarting
+    // a job that is still running.
     render(<SystemStatus status={status({ running_executions: 2 })} />);
 
     expect(headline()).toBe("Jobs in Progress");
@@ -89,9 +87,8 @@ describe("the jobs system status", () => {
   });
 
   it("flags a failed last run without waiting for the next one", () => {
-    // A run that failed does not stop the scheduler, so every other card on
-    // this page still reads normally. The failure badge is the only thing
-    // that says the last thing the system did did not work.
+    // A failed run does not stop the scheduler, so every other card still
+    // reads normally and this badge is the only signal that something broke.
     render(
       <SystemStatus
         status={status({ last_execution: execution({ status: "FAILED" }) })}
@@ -103,9 +100,8 @@ describe("the jobs system status", () => {
   });
 
   it("does not flag a run that is merely still going", () => {
-    // `RUNNING` is not `FAILED`, and only one of the two is worth waking
-    // someone for. Widen the comparison and every ordinary run raises an
-    // alert.
+    // `RUNNING` is not `FAILED`: widen the comparison and every ordinary run
+    // raises an alert.
     render(
       <SystemStatus
         status={status({ last_execution: execution({ status: "RUNNING" }) })}
@@ -117,9 +113,8 @@ describe("the jobs system status", () => {
   });
 
   it("says when the last execution was, in the largest unit that fits", () => {
-    // Four bands over one timestamp, and each boundary is a place to be off
-    // by a factor of sixty. "45m ago" and "45h ago" are both plausible
-    // readings of a jobs page, which is why the unit has to be right.
+    // Each band boundary is a place to be off by a factor of sixty, and both
+    // "45m ago" and "45h ago" read as plausible on a jobs page.
     const ago = (minutes: number) =>
       new Date(NOW.getTime() - minutes * 60_000).toISOString();
 
@@ -147,9 +142,8 @@ describe("the jobs system status", () => {
   });
 
   it("reads a future next run as upcoming, not as the recent past", () => {
-    // next_run_time has its own future-facing clock; the past-only one renders
-    // a run scheduled ten minutes out as "Just now". An overdue schedule
-    // (negative lead) clamps to "Just now" rather than reading as history.
+    // next_run_time has its own future-facing clock; the past-only one reads a
+    // run ten minutes out as "Just now", where an overdue one belongs.
     const ahead = (minutes: number) =>
       new Date(NOW.getTime() + minutes * 60_000).toISOString();
 
@@ -193,9 +187,8 @@ describe("the jobs system status", () => {
   });
 
   it("leaves the active-jobs figure out of the summary when there are none", () => {
-    // "Active Jobs" appears twice when there is something to count, and the summary
-    // drops its copy at zero -- a "0" there reads as a fault. Counting the label is
-    // what separates the two; asserting it is simply absent finds the card.
+    // "Active Jobs" appears twice when there is something to count, and the
+    // summary drops its copy at zero, where a "0" would read as a fault.
     render(<SystemStatus status={status({ active_jobs: 0 })} />);
     expect(screen.getAllByText("Active Jobs")).toHaveLength(1);
     cleanup();

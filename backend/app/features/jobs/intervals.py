@@ -1,8 +1,7 @@
 """How a job configuration names its interval, for writers and the scheduler.
 
-Resolving here rather than in the scheduler lets
-`JobService.update_job_configuration` refuse an unusable interval before the
-commit, instead of committing a config the scheduler then ignores.
+Resolving here rather than in the scheduler lets writers refuse an unusable
+interval before the commit, instead of storing one the scheduler then ignores.
 """
 
 from collections.abc import Mapping
@@ -25,9 +24,8 @@ def _positive_seconds(value: object) -> int | None:
 def parse_interval_from_schedule(schedule: str) -> int | None:
     """Parse the `schedule` column, or None when it is not one of its formats.
 
-    The three the scheduler has ever understood: `"60"`, `"interval:60"` and
-    `"60s"`. Cron expressions are not among them, whatever the column comment
-    used to claim.
+    The scheduler understands `"60"`, `"interval:60"` and `"60s"`; cron
+    expressions are not among them.
     """
     schedule = schedule.strip().lower()
     if not schedule:
@@ -51,9 +49,10 @@ def resolve_interval_seconds(
     """Return the interval a job should run on.
 
     `config_json["interval_seconds"]` wins when set; a present but unusable
-    value -- `0`, `-1`, `"5m"` -- is a configuration error, and `null` is absent.
+    value (`0`, `-1`, `"5m"`) is an error, and `null` counts as absent.
 
-    :raises JobIntervalError: When neither source yields an interval.
+    Raises:
+        JobIntervalError: When neither source yields an interval.
     """
     override = (config_json or {}).get("interval_seconds")
     if override is not None:

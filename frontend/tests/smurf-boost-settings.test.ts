@@ -73,9 +73,8 @@ const LIVE_CATALOG = [
 ];
 
 /**
- * The backend owns every bound and exposes none of them over the API, so the
- * form carries its own copy. This reads the authority and fails on any drift,
- * so the form cannot accept a value the server will reject.
+ * The backend owns every bound and exposes none over the API, so the form keeps
+ * a copy; this reads the authority so the form cannot accept a rejected value.
  */
 function backendBounds(): Map<string, { min: number; max: number; integer: boolean }> {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -91,8 +90,7 @@ function backendBounds(): Map<string, { min: number; max: number; integer: boole
 
   const bounds = new Map<string, { min: number; max: number; integer: boolean }>();
   // Read the backend's declared wire name rather than recomputing camelCase, so
-  // this compares two contracts. A zero-size result below means the
-  // declarations changed shape, not that a bound moved.
+  // a zero-size result means the declarations changed shape, not a moved bound.
   expect(block?.[1] ?? "").toContain("model_config = ConfigDict(strict=True)");
 
   const line =
@@ -123,9 +121,8 @@ describe("smurf and boost threshold catalog", () => {
   });
 
   it("carries the backend's baseline floor, which is not on the wire", () => {
-    // "Not enough data" is the majority outcome on this database, so its
-    // arithmetic is the most-read sentence in the feature. The recent window
-    // comes from the run; this number does not.
+    // "Not enough data" is the majority outcome, and unlike the recent window
+    // its floor never travels on the wire.
     const here = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
       join(here, "../../backend/app/features/smurf_boost_detection/config.py"),

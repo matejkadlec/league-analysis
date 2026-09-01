@@ -7,9 +7,8 @@ import { renderToString } from "react-dom/server";
 import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/hooks/use-media-query";
 
 /**
- * `match-list-region.test.tsx` runs this hook with a stubbed `matchMedia` but
- * never changes the match, so neither the subscription nor the server
- * snapshot is asserted anywhere.
+ * `match-list-region.test.tsx` stubs `matchMedia` but never changes the match,
+ * so neither the subscription nor the server snapshot is covered there.
  */
 
 function stubMatchMedia(matches: boolean) {
@@ -64,9 +63,8 @@ describe("useMediaQuery", () => {
   });
 
   it("takes false as its server snapshot, so hydration cannot mismatch", () => {
-    // The one assertion no client-side render can make. `matchMedia` does not
-    // exist on the server, so a snapshot that consulted it would throw --
-    // and one that guessed `true` would swap the layout on hydration.
+    // `matchMedia` does not exist on the server, so a snapshot consulting it
+    // would throw, and one guessing `true` would swap the layout on hydration.
     vi.stubGlobal("matchMedia", undefined);
 
     function Probe() {

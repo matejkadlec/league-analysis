@@ -9,9 +9,8 @@ import {
 } from "@/features/auth/display-name";
 
 /**
- * The display-name rule exists on both sides, so something has to hold it
- * equal. Needs `OPENAPI_JSON`, which `test.sh` produces; without it the check
- * skips, kept honest by the convention check in `api-contract-alignment`.
+ * Needs `OPENAPI_JSON`, which `test.sh` produces; without it this skips, kept
+ * honest by the convention check in `api-contract-alignment`.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath
@@ -40,9 +39,8 @@ const spec = openapiPath
   : null;
 
 /**
- * `UserProfileUpdate.display_name` is optional, so its constraints sit inside
- * `anyOf` beside the null branch; `UserBase.display_name` is required and
- * carries them directly. Reading only the top level would compare nothing.
+ * An optional `display_name` keeps its constraints inside `anyOf` beside the
+ * null branch, so reading only the top level would compare nothing.
  */
 function displayNameConstraints(schemaName: string) {
   const property = spec?.components.schemas[schemaName]?.properties?.[
@@ -67,9 +65,8 @@ function displayNameConstraints(schemaName: string) {
 }
 
 describe.runIf(spec)("display name rules match the API", () => {
-  // The two write models: the settings form goes through `UserProfileUpdate`,
-  // registration through `UserCreate`. `UserResponse` is deliberately excluded
-  // -- see the comment on it in the backend schema.
+  // The two write models only; `UserResponse` is deliberately excluded -- see
+  // the comment on it in the backend schema.
   it.each(["UserCreate", "UserProfileUpdate"])(
     "%s declares the rule the form enforces",
     (schemaName) => {

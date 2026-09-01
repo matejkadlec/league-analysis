@@ -14,9 +14,8 @@ function testQueryClient() {
 }
 
 /**
- * Render a component under a fresh, retry-free `QueryClient`. Retries are
- * never what a unit test measures, and a client per render keeps one test's
- * cached answer from satisfying the next test's request.
+ * A fresh, retry-free `QueryClient` per render, so one test's cached answer
+ * cannot satisfy the next test's request.
  */
 export function renderWithQueryClient(ui: ReactNode) {
   const queryClient = testQueryClient();
@@ -26,9 +25,8 @@ export function renderWithQueryClient(ui: ReactNode) {
   return {
     ...result,
     queryClient,
-    // Re-wrapped, because `rerender` replaces the whole tree it was given --
-    // handed a bare element it would drop the provider and every hook under
-    // it would throw.
+    // `rerender` replaces the whole tree: handed a bare element it would drop
+    // the provider and every hook under it would throw.
     rerender: (next: ReactNode) =>
       result.rerender(
         <QueryClientProvider client={queryClient}>{next}</QueryClientProvider>,

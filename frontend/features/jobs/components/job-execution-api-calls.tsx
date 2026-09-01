@@ -21,9 +21,8 @@ export function JobExecutionApiCalls({
   completedAt,
   apiCalls,
 }: JobExecutionApiCallsProps) {
-  // The expansion keys are endpoints, unique only within one execution, so
-  // the state lives here and the dialog remounts this component per
-  // execution (`key={execution.id}`) — every dialog starts collapsed.
+  // Expansion keys are endpoints, unique only within one execution, so the
+  // dialog remounts this per execution (`key={execution.id}`) to reset them.
   const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
     new Set(),
   );
@@ -49,9 +48,8 @@ export function JobExecutionApiCalls({
           </div>
 
           {apiCalls.map((call) => {
-            // The backend groups api_calls by endpoint before storing them
-            // (_format_api_calls_for_storage), so the endpoint alone is
-            // unique within one execution.
+            // The backend groups api_calls by endpoint before storing them,
+            // so the endpoint alone is unique within one execution.
             const callKey = call.endpoint;
             const countText = call.count === 1 ? "once" : `${call.count} times`;
             const isExpanded = expandedApiCalls.has(callKey);

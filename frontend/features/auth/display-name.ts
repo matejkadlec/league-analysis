@@ -1,5 +1,4 @@
 /**
- * The display-name rule, in the one place the settings form reads it from.
  * The API declares the same three constraints, and
  * `tests/display-name-alignment.test.ts` is all that holds the copies equal.
  */

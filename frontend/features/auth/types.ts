@@ -1,9 +1,8 @@
 import type { UserResponse } from "@/lib/core/schemas";
 
 /**
- * The signed-in user record, as the API declares it. Hand-written fields here
- * left `GET /auth/me` the one response reaching React state without a zod
- * parse, so a renamed backend field landed as garbage in silence.
+ * The signed-in user record. Aliased to the schema type, never hand-written:
+ * that is what keeps `GET /auth/me` zod-parsed before it reaches React state.
  */
 export type User = UserResponse;
 
@@ -21,13 +20,11 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  // Awaited, not fire-and-forget: only the server can revoke, so callers that
-  // act on the result -- the "can't reach the server" escape hatch -- need to
-  // know when the request has actually come back.
+  // Awaited, not fire-and-forget: only the server can revoke, and the
+  // "can't reach the server" escape hatch needs to know when it answered.
   /**
-   * Ends the session. Without the flag this changes nothing locally when the
-   * server could not be reached -- the safe answer for anything automatic.
-   * Pass the flag only from a control a person just used.
+   * Ends the session. Without the flag an unreachable server leaves local
+   * state intact; pass it only from a control a person just used.
    */
   logout: (options?: {
     evenIfTheServerCannotBeReached?: boolean;

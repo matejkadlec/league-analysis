@@ -1,8 +1,7 @@
 """The shared rollback helper's one contract: never mask the original failure.
 
-Every writer path funnels its error cleanup through `rollback_quietly`, so a
-rollback that itself blows up must vanish instead of replacing the exception
-that prompted it.
+Every writer funnels error cleanup through `rollback_quietly`, so a rollback
+that itself blows up must vanish rather than replace the original exception.
 """
 
 from typing import cast

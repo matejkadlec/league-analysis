@@ -84,9 +84,8 @@ export function MatchmakingAnalysisSession({
       if (!watchingCreatedAt) {
         return null;
       }
-      // A 404 is the ordinary end of a watch -- the record was deleted, or
-      // the stored `watchingCreatedAt` outlived it -- so it resolves to
-      // "nothing to report". Every other failure throws through to the toast.
+      // A 404 is the ordinary end of a watch, so it resolves to "nothing to
+      // report"; every other failure throws through to the toast.
       const status = unwrapOr404(
         await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt, signal),
         null,
@@ -156,9 +155,8 @@ export function MatchmakingAnalysisSession({
     Boolean(state.analysisFailure),
     !state.sawInProgress || state.lastBackendProgress < 10,
   );
-  // Only the running projection reads this clock. With empty deps it ticked
-  // for the life of the page, re-rendering the whole session card once a
-  // second behind a completed result nobody is watching change.
+  // Only the running projection reads this clock; left always-on it re-renders
+  // the whole session card every second behind a finished result.
   const isProjecting = displayPhase === "running" || displayPhase === "starting";
 
 

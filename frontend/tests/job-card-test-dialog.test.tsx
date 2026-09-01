@@ -8,9 +8,8 @@ import { describe, expect, it, vi } from "vitest";
 import { JobCardTestDialog } from "@/features/jobs/components/job-card-test-dialog";
 
 /**
- * The dialog the way `JobCard` mounts it: open state owned above, and the
- * confirm handler closing it before firing the mutation -- the component
- * itself only reports; the parent decides.
+ * The dialog the way `JobCard` mounts it: the component only reports, and the
+ * parent owns open state and closes before firing the mutation.
  */
 function DialogHarness({
   onConfirm,
@@ -78,8 +77,7 @@ describe("JobCardTestDialog", () => {
     "answers the question with %s and is done asking",
     async (label, suspendRegular) => {
       // The boolean is the whole payload: it decides whether the scheduler
-      // keeps firing the regular run while the test overlaps it. Closing is
-      // the parent's move, mirrored the way `handleTestConfirm` makes it.
+      // keeps firing the regular run while the test overlaps it.
       const onConfirm = vi.fn<(suspendRegular: boolean) => void>();
       const user = userEvent.setup();
       render(<DialogHarness onConfirm={onConfirm} />);

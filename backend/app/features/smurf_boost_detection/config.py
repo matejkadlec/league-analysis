@@ -1,8 +1,6 @@
 """Fixed model constants for `smurf-boost/v1`.
 
-Everything in this module is part of the versioned model and is deliberately not
-user-configurable. This module is the authority for them; changing any
-value here requires a new model version.
+Nothing here is user-configurable: changing a value requires a new model version.
 """
 
 from __future__ import annotations
@@ -13,9 +11,8 @@ from app.core.riot_api.constants import TEAM_POSITIONS
 
 MODEL_VERSION: Final[str] = "smurf-boost/v1"
 
-# Eligibility. A match must be ranked solo/duo, not a remake, long enough to
-# carry performance information, and played in a recognized position. The queue
-# itself is the shared matches constant; only the thresholds here are versioned.
+# Eligibility: the queue itself is the shared matches constant, so only these
+# thresholds are versioned.
 MINIMUM_GAME_DURATION_SECONDS: Final[int] = 300
 RECOGNIZED_POSITIONS: Final[frozenset[str]] = TEAM_POSITIONS
 
@@ -82,9 +79,8 @@ NOTABLE_EVIDENCE: Final[int] = 2
 STRONG_SCORE: Final[float] = 0.65
 STRONG_EVIDENCE: Final[int] = 3
 
-# Bare `Final`, not `Final[SmurfBoostBand]`: pyright then pins each name to
-# its own literal, so a value that drifts out of the wire vocabulary is an
-# error at the `-> SmurfBoostBand` return in `engine._band_for`.
+# Bare `Final`, not `Final[SmurfBoostBand]`: pyright then pins each name to its
+# own literal, so drift out of the wire vocabulary fails at `engine._band_for`.
 BAND_NOT_ENOUGH_DATA: Final = "not_enough_data"
 BAND_NONE: Final = "no_unusual_pattern"
 BAND_WEAK: Final = "weak_indicators"
@@ -99,9 +95,8 @@ RANK_SPAN_TARGET_DAYS: Final[float] = 30.0
 CONFIDENCE_MEDIUM: Final[float] = 0.50
 CONFIDENCE_HIGH: Final[float] = 0.80
 
-# Threshold presets. Conservative is the shipped default. Every value sits
-# strictly below its signal's saturation, so the magnitude ramp never divides by
-# zero or by a negative number.
+# Every threshold must sit strictly below its signal's saturation, or the
+# magnitude ramp divides by zero or by a negative number.
 PRESET_CONSERVATIVE: Final[str] = "conservative"
 PRESET_BALANCED: Final[str] = "balanced"
 PRESET_SENSITIVE: Final[str] = "sensitive"

@@ -36,9 +36,8 @@ export function MatchSideStats({
   killParticipation: number | null;
   highlight: SideStatHighlight;
 }) {
-  // Yellow marks the better side of the matchup; the other side keeps the
-  // normal foreground. Nothing is encoded in the colour that the numbers
-  // themselves do not say (WCAG 1.4.1) — it is a scan aid, not a state.
+  // Yellow marks the better side, but encodes nothing the numbers do not
+  // already say (WCAG 1.4.1): a scan aid, not a state.
   const lead = (wins: boolean) => (wins ? " text-yellow-500" : "");
   return (
     <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
@@ -123,8 +122,7 @@ export function MatchSideColumn({
           </span>
         ) : emptyKdaFallback ? (
           // text-foreground/75 like the other row text: this fallback sits on
-          // the same win/loss tint that failed 4.5:1, it just never rendered
-          // under the axe fixtures, which always serve full participants.
+          // the same win/loss tint that failed 4.5:1 under muted-foreground.
           <span className="text-xs text-foreground/75">—</span>
         ) : null}
       </div>
@@ -161,8 +159,7 @@ export function MatchTeamCompositions({
             </div>
           </div>
           {/* text-foreground/75 like the rest of the row: muted-foreground
-              composites to 3.1-4.4:1 on the win/loss tints, under 4.5:1. axe
-              filed these under results.incomplete (alpha-stacked backgrounds). */}
+              composites to 3.1-4.4:1 on the win/loss tints, under 4.5:1. */}
           <div className="text-center text-xs text-foreground/75">Vs</div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">

@@ -10,9 +10,8 @@ export interface MatchSideParticipant {
   summoner1_id?: number | null | undefined;
   summoner2_id?: number | null | undefined;
   runes?: ParticipantRunes | null | undefined;
-  // Optional because the two shapes this stands in for differ: the API
-  // identifies the lane opponent but not the current player's own
-  // participant. An unidentified side is also an unswitchable one.
+  // Optional because the API identifies the lane opponent but not the current
+  // player's own participant; an unidentified side is an unswitchable one.
   puuid?: string | undefined;
   game_name?: string | undefined;
   tag_line?: string | undefined;
@@ -52,9 +51,8 @@ function startOfLocalDay(timestamp: number): number {
 }
 
 export function getDaysAgo(timestamp: number): string {
-  // Calendar days apart, not elapsed 24-hour blocks: the absolute date above
-  // is a local calendar day. Rounding rather than flooring keeps the 23- and
-  // 25-hour days either side of a DST change on whole numbers.
+  // Calendar days, not 24-hour blocks; rounding keeps the 23- and 25-hour DST
+  // days on whole numbers.
   const diffDays = Math.round(
     (startOfLocalDay(Date.now()) - startOfLocalDay(timestamp)) / 86_400_000,
   );
@@ -65,9 +63,8 @@ export function getDaysAgo(timestamp: number): string {
 }
 
 /**
- * How the game went, decided once for both signals the row shows: the tint
- * and the outcome word (WCAG 1.4.1 — colour is never the only carrier). A
- * remake is annulled; a missing participant is a data gap, so no verdict word.
+ * Decided once for both the tint and the outcome word, so colour is never the
+ * only carrier (WCAG 1.4.1).
  */
 export function getMatchOutcome(
   // Only the two fields the verdict actually reads, so the rules are unit
@@ -96,9 +93,8 @@ export interface SideStatHighlight {
 }
 
 /**
- * Whether this side wins one lane comparison. Compared on the canonical
- * numbers, never the rendered strings, so two values that round to the same
- * text still separate. A missing value or an exact tie leaves it unhighlighted.
+ * Compared on the canonical numbers, never the rendered strings, so two values
+ * that round to the same text still separate.
  */
 export function winsStat(
   mine: number | null | undefined,

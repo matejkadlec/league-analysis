@@ -19,7 +19,9 @@ const EDGE_SILENCE =
 
 // Only the refresh call may give up on a session. Each selector keys on the
 // cookie's own name, not the receiver: enumerating spellings goes one short.
-// `tests/auth-teardown-behaviour.test.tsx` owns the React-context teardown.
+
+// `tests/auth-teardown-behaviour.test.tsx` owns the React-context teardown;
+// no selector below restricts that path.
 export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
   // Any receiver, any spelling: `document.cookie`, `document["cookie"]`,
   // `globalThis.document.cookie`, or an alias held in a variable.
@@ -33,9 +35,8 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
       "AssignmentExpression[left.type='MemberExpression'][left.property.value='cookie']",
     message: COOKIE_WRITE,
   },
-  // Keyed on the cookie, not on what is holding it: a Server Action doing
-  // `const store = await cookies(); store.delete(NAME)` is the same act as
-  // `cookieStore.delete(NAME)`.
+  // Keyed on the cookie, not on what holds it: `store.delete(NAME)` after an
+  // `await cookies()` is the same act as `cookieStore.delete(NAME)`.
   {
     selector:
       "CallExpression[callee.property.name=/^(set|delete)$/] Identifier[name='AUTH_STATE_COOKIE_NAME']",
@@ -46,9 +47,8 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
       "CallExpression[callee.property.name=/^(set|delete)$/] Literal[value='league_analysis_auth_state']",
     message: HINT_MUTATION,
   },
-  // A cookie can also be retracted by writing the raw header, which spells
-  // neither `.delete` nor the cookie's own name. Keyed on the header rather
-  // than on the payload, so a `Set-Cookie` assembled from fragments is caught.
+  // A raw header retraction spells neither `.delete` nor the cookie's name.
+  // Keyed on the header, so a `Set-Cookie` built from fragments is caught.
   {
     selector:
       "CallExpression[callee.property.name=/^(set|append)$/][arguments.0.value=/^set-cookie$/i]",
@@ -88,9 +88,8 @@ export const SESSION_TEARDOWN_SYNTAX: readonly SyntaxRestriction[] = [
   { selector: "Property[key.value=/^clear-site-data$/i]", message: CLEAR_SITE_DATA },
 ];
 
-// The edge gets one answer or none and cannot retry with a refresh, so it
-// makes no requests at all. An allowlist rather than a banlist: banning
-// `fetch` and axios by name goes one spelling short of a probe in a helper.
+// The edge cannot retry with a refresh, so it makes no requests at all. An
+// allowlist: banning `fetch` and axios by name misses a probe in a helper.
 export const EDGE_ISOLATION_SYNTAX: readonly SyntaxRestriction[] = [
   {
     selector:

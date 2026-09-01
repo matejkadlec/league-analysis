@@ -3,14 +3,12 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 /**
- * Whether a CSS media query currently matches. `useSyncExternalStore` rather
- * than state-plus-effect: it subscribes and takes a server snapshot, so there
- * is no hydration mismatch. That snapshot is `false` -- match is enhancement.
+ * Whether a CSS media query currently matches. The server snapshot is
+ * `false`, so a match is enhancement and hydration cannot mismatch.
  */
 export function useMediaQuery(query: string): boolean {
-  // Memoised on the query: an inline subscribe would be a new function every
-  // render, and `useSyncExternalStore` tears the listener down and re-creates
-  // it whenever it changes identity.
+  // Memoised: `useSyncExternalStore` re-subscribes whenever this changes
+  // identity.
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       const list = window.matchMedia(query);
@@ -28,8 +26,7 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /**
- * Tailwind's `lg` breakpoint, where the fixed-width desktop layout starts.
- * `rem`, not `px`: Tailwind v4 compiles `lg:` to `@media (width >= 64rem)`, so
- * `1024px` agrees with the stylesheet only at a 16px root font size.
+ * Tailwind's `lg` breakpoint. `rem`, not `px`: Tailwind v4 emits `64rem`,
+ * which `1024px` agrees with only at a 16px root font size.
  */
 export const LG_BREAKPOINT_QUERY = "(min-width: 64rem)";

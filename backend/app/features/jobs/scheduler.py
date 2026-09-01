@@ -1,5 +1,4 @@
-# APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the rule is
-# "none" project-wide in `pyproject.toml`; the "strict" header above resets it.
+# APScheduler 3.x ships no stubs, and the "strict" header above resets "none".
 # pyright: reportMissingTypeStubs=false
 """Scheduler module for managing automated background jobs."""
 
@@ -37,8 +36,7 @@ class SchedulerLike(Protocol):
     """The slice of APScheduler's scheduler this module and the router drive.
 
     APScheduler is unannotated, so every call through the concrete class comes
-    back as `Unknown`. Naming the surface we actually use pins the argument
-    and return types at the boundary.
+    back as `Unknown`; naming the surface we use pins the boundary types.
     """
 
     @property
@@ -51,8 +49,7 @@ class SchedulerLike(Protocol):
     def resume(self) -> None: ...
 
     # APScheduler funnels trigger arguments through `**trigger_args`, where they
-    # collide with its own `jobstore`/`executor` keywords. Naming the two this
-    # module passes -- `seconds` and `run_date` -- keeps the boundary typed.
+    # collide with its own `jobstore`/`executor` keywords; naming ours types it.
     def add_job(
         self,
         func: Callable[..., object],
@@ -67,9 +64,7 @@ class SchedulerLike(Protocol):
 
     def get_jobs(self) -> list[ScheduledJobLike]: ...
 
-    # `jobstore` is deliberately absent from these four. APScheduler accepts it,
-    # but nothing here passes it, and a Protocol is meant to state what this
-    # module actually depends on rather than mirror the concrete class.
+    # `jobstore` is deliberately absent from these four: nothing here passes it.
     def remove_job(self, job_id: str) -> None: ...
 
     def remove_all_jobs(self) -> None: ...
@@ -90,9 +85,8 @@ _test_job_registry: (
 def job_registry() -> dict[JobType, type[BaseJob]]:
     """The one map from a declared job type to the class that runs it.
 
-    Built on first use so importing the scheduler does not drag in every
-    service an implementation touches. The router asks for it too, rather
-    than keeping a second copy that a new job type could be missing from.
+    Built on first use so importing the scheduler does not drag in every service
+    an implementation touches. The router asks for it rather than copying it.
     """
     global _job_registry
     if _job_registry is None:
@@ -112,9 +106,8 @@ def test_job_registry() -> dict[
 ]:
     """The map from a job type to the test runner that exercises its endpoints.
 
-    Mirrors `job_registry` so the router asks for it rather than keeping a
-    second literal a new runner could be missing from. Imported at module
-    scope, not lazily: the runners add no import `base` lacks.
+    Mirrors `job_registry` so the router asks for it rather than keeping a second
+    literal. Imported at module scope: the runners add no import `base` lacks.
     """
     global _test_job_registry
     if _test_job_registry is None:
@@ -150,18 +143,16 @@ def _resolve_interval_seconds(job_config: JobConfiguration) -> int:
 class StartupRecoveryError(RuntimeError):
     """A mandatory startup recovery step did not complete.
 
-    Serving after this would look healthy while leaving every active player
-    sync row stranded, so it must reach the application lifespan rather than
-    being logged and forgotten.
+    Serving after this would look healthy while leaving every active player sync
+    row stranded, so it must reach the application lifespan.
     """
 
 
 async def _run_startup_recovery() -> None:
     """Reclassify persisted state left behind by a previous process.
 
-    Every step runs before any failure is raised: a step's own fault, or one
-    while its session unwinds, may not skip the step that follows. Cancelling
-    orphaned player syncs is mandatory -- a stranded row polls `pending` forever.
+    Every step runs before any failure is raised, so one fault cannot skip the
+    next; a stranded player-sync row would poll `pending` forever.
 
     Raises:
         StartupRecoveryError: If a mandatory step failed.
@@ -198,9 +189,8 @@ async def _run_startup_recovery() -> None:
 async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
     """Close player sync runs whose in-process worker did not survive.
 
-    One active row per PUUID and `start_player_sync` hands an existing one
-    back, so an orphan blocks that player forever. `core.matchmaking_analyses`
-    is excluded -- `start_analysis` resumes its row, so cancelling loses work.
+    One active row per PUUID blocks an orphan forever; `core.matchmaking_analyses`
+    is excluded because cancelling would lose the work `start_analysis` resumes.
 
     Args:
         db: Database session for updating the player sync records.
@@ -248,9 +238,8 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
 async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
     """Mark jobs that are stuck in 'running' state as failed on startup.
 
-    This handles cases where jobs were running when the application was
-    shut down ungracefully. On startup, we mark ALL running jobs as failed
-    since no jobs should be running during application startup.
+    No job can be running during startup, so every `running` row is left over
+    from an ungraceful shutdown.
 
     Args:
         db: Database session for updating job records.
@@ -308,9 +297,7 @@ def _build_scheduler(settings: Settings) -> SchedulerLike:
     Returning the protocol rather than `AsyncIOScheduler` is what keeps the
     caller from inheriting the unannotated concrete class.
     """
-    # Construct synchronous database URL for APScheduler's SQLAlchemyJobStore
-    # APScheduler uses synchronous psycopg2, not async asyncpg
-    # Store APScheduler jobs in jobs schema
+    # APScheduler's job store is synchronous psycopg2, not async asyncpg.
     jobstore_url = f"postgresql+psycopg2://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 
     # Configure job stores (APScheduler stores job state in jobs.apscheduler_jobs)
@@ -343,9 +330,8 @@ def _build_scheduler(settings: Settings) -> SchedulerLike:
 async def start_scheduler() -> SchedulerLike:
     """Initialize and start the APScheduler instance.
 
-    Starts paused so persisted scheduler entries are replaced from the
-    authoritative job configurations and every overdue job is queued once
-    before dispatch resumes.
+    Starts paused so persisted entries are replaced from the authoritative job
+    configurations, and every overdue job queued once, before dispatch resumes.
 
     Returns:
         The initialized and started scheduler instance.
@@ -368,9 +354,8 @@ async def start_scheduler() -> SchedulerLike:
 
         await _run_startup_recovery()
 
-        # Open the persistent job store without allowing an overdue entry from
-        # the previous process to dispatch. Rebuild every regular schedule from
-        # the authoritative configurations before work is allowed to run.
+        # Paused, so an overdue entry from the previous process cannot dispatch
+        # before every schedule is rebuilt from the authoritative config.
         _scheduler.start(paused=True)
         _scheduler.remove_all_jobs()
 
@@ -420,9 +405,10 @@ def _schedule_job(
 ) -> None:
     """Schedule a single job with the scheduler.
 
-    :param job_config: Job configuration.
-    :param job_class: Job class to instantiate.
-    :param interval_seconds: Interval in seconds.
+    Args:
+        job_config: Job configuration.
+        job_class: Job class to instantiate.
+        interval_seconds: Interval in seconds.
     """
     job_instance = job_class(job_config.id)
 
@@ -588,9 +574,8 @@ def _queue_overdue_jobs(
 async def _check_and_run_overdue_jobs() -> None:
     """Check for overdue jobs and queue them once for immediate execution.
 
-    Overdue means never run, or last run longer ago than the interval. The
-    scheduler is still paused here, so one-shot entries dispatch only once
-    startup resumes it and readiness never waits on provider traffic.
+    Overdue means never run, or last run longer ago than the interval; these are
+    one-shot, firing only after resume, so readiness never waits on provider traffic.
     """
     try:
         logger.info("Checking for overdue jobs at startup")
@@ -651,9 +636,8 @@ async def _load_and_schedule_jobs() -> None:
 
         scheduled = 0
         for job_config in job_configs:
-            # Per row, like `_collect_overdue_jobs` already does. One
-            # unresolvable configuration used to abort the loop, so every job
-            # after it went unscheduled with a single log line as the trace.
+            # Per row, like `_collect_overdue_jobs`: one unresolvable
+            # configuration must not leave every job after it unscheduled.
             try:
                 job_class = _get_job_class(job_config.job_type, job_config, registry)
                 if not job_class:
@@ -691,9 +675,8 @@ def shutdown_scheduler() -> None:
     try:
         logger.info("Shutting down job scheduler")
 
-        # Never wait. A Riot execution can run for many minutes, and draining
-        # one would stall every deployment. Startup recovery owns whatever
-        # persisted state an interrupted run leaves behind.
+        # Never wait: a Riot execution runs for many minutes and draining one
+        # would stall every deployment. Startup recovery owns the leftovers.
         _scheduler.shutdown(wait=False)
 
         _scheduler = None

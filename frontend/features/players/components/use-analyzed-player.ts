@@ -10,9 +10,8 @@ import { usePlayerContext } from "../context/player-context";
 import { playerQueryKey, playerQueryOptions } from "../player-query";
 
 /**
- * A tab-local player scope for pages that analyze a player of their own
- * choosing without touching global context or tracking. Seed the URL through
- * `router.replace`; a raw `history.replaceState` hides it from other readers.
+ * A tab-local player scope that leaves global context untouched. Seed the URL
+ * through `router.replace`; `history.replaceState` hides it from readers.
  */
 export function useAnalyzedPlayer(): {
   analyzedPlayer: Player | null;

@@ -1,8 +1,7 @@
 """Every URL the frontend asks for must be a URL this app answers.
 
-The two halves deploy separately and agree on nothing but strings, and every
-frontend test that touches an API module mocks it, so a mistyped path stays
-green until it 404s in a browser. Request and response shapes are not checked.
+Frontend tests mock every API module, so a mistyped path stays green until it
+404s in a browser. Request and response shapes are not checked.
 """
 
 from __future__ import annotations
@@ -31,9 +30,8 @@ assert API_MODULE.is_file(), f"the validated client is not at {API_MODULE}"
 
 CALL = re.compile(r"validated(Get|Post|Put|Delete|Patch)\s*\(")
 
-# A floor under the call-site count. Without it, a regex that silently stops
-# matching -- a rename of the helpers, a formatter that splits the call across
-# lines differently -- turns this test into one that checks nothing and passes.
+# A floor under the call-site count: without it, a regex that silently stops
+# matching turns this into a test that checks nothing and passes.
 MINIMUM_CALL_SITES = 50
 
 # (file, line, method, path) -- `path` is None when it could not be read.
@@ -44,8 +42,10 @@ def _read_path(source: str, index: int) -> str | None:
     """The request path of the `validated*` call whose ``(`` ends at `index`.
 
     The signature is always ``(schema, url, ...)``, so the path is the second
-    argument. Returns ``None`` when the second argument is not a literal, which
-    the caller reports rather than skips.
+    argument.
+
+    Returns:
+        ``None`` when the second argument is not a literal.
     """
     skip_schema = re.match(r"\s*[^,]*?,\s*", source[index:])
     if skip_schema is None:
@@ -60,9 +60,8 @@ def _read_path(source: str, index: int) -> str | None:
     if quote != "`":
         return None
 
-    # A template literal. Interpolations are path parameters -- until one of
-    # them holds a `?`, at which point it is building a query string and the
-    # path has ended: `/jobs/${id}/stop${force ? "?force=true" : ""}`.
+    # In a template literal, interpolations are path parameters until one holds
+    # a `?`: `/jobs/${id}/stop${force ? "?force=true" : ""}` ends the path there.
     out: list[str] = []
     i = start + 1
     while source[i] != "`":

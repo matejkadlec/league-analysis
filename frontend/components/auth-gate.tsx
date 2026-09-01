@@ -11,8 +11,7 @@ import {
 import { isPublicRoute as pathnameIsPublic } from "@/features/auth/public-routes";
 
 /**
- * How long the screen may stay empty before it owes the visitor a word: long
- * enough that a healthy probe never reaches it, short enough that nobody
+ * Long enough that a healthy probe never reaches it, short enough that nobody
  * concludes the page is broken.
  */
 export const SLOW_PROBE_NOTICE_MS = 600;
@@ -22,9 +21,8 @@ interface AuthGateProps {
 }
 
 /**
- * Nothing at all for the first moment, then an explanation. The delay is the
- * point: the healthy probe answers well inside it, and a message flashed on
- * every page load would be worse than the silence it replaces.
+ * The delay is the point: the healthy probe answers well inside it, and a
+ * message flashed on every page load would be worse than the silence.
  */
 function SlowProbe() {
   const [visible, setVisible] = useState(false);
@@ -48,9 +46,8 @@ function SlowProbe() {
 }
 
 /**
- * Hint says signed in, the API could not be asked. This branch must render
- * something: redirecting bounces off `proxy.ts`, and rendering nothing is the
- * permanently blank page this component once shipped.
+ * Hint says signed in, the API could not be asked. Must render something:
+ * redirecting bounces off `proxy.ts`, and nothing is a permanently blank page.
  */
 function SessionUnverified({
   onRetry,
@@ -59,9 +56,8 @@ function SessionUnverified({
   onRetry: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
-  // Both actions regularly run the whole ten-second probe deadline without
-  // moving anything on screen, so without a pending state the visitor stacks
-  // a probe per impatient click.
+  // Both actions can run the full ten-second probe deadline with nothing
+  // moving on screen; without a pending state each impatient click stacks one.
   const [pending, setPending] = useState<"retry" | "signOut" | null>(null);
   const run = (which: "retry" | "signOut", action: () => Promise<void>) => {
     setPending(which);
@@ -88,8 +84,7 @@ function SessionUnverified({
             {pending === "retry" ? "Checking…" : "Try again"}
           </button>
           {/* The only way out of a permanent failure: retry takes the same
-              branch forever, and `proxy.ts` sends /sign-in back here while
-              the hint lives. */}
+              branch forever, and `proxy.ts` sends /sign-in back here. */}
           <button
             type="button"
             onClick={() => run("signOut", onSignOut)}
@@ -105,22 +100,19 @@ function SessionUnverified({
 }
 
 /**
- * Client render gate; route-level redirects live in `proxy.ts`. Every branch
- * below reads the hint cookie as well as React state, because the edge decides
- * on that cookie alone.
+ * Route-level redirects live in `proxy.ts`. Every branch below reads the hint
+ * cookie as well as React state, because the edge decides on that cookie.
  */
 export function AuthGate({ children }: AuthGateProps) {
   const { isAuthenticated, isLoading, checkAuth, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  // A re-check landing on the state already held changes nothing React can
-  // see. Forcing the cookie re-read is what lets a retry that discovers a
-  // dead session act on it instead of leaving this surface up for good.
+  // A re-check landing on the state already held changes nothing React sees;
+  // forcing the cookie re-read is what lets a retry escape this surface.
   const [recheckCount, forceRecheck] = useReducer((n: number) => n + 1, 0);
 
-  // Subscribed rather than read during render: the cookie changes without any
-  // React state changing, so reading it at render time keeps the signed-in
-  // shell drawn after the interceptor has given the session up.
+  // Subscribed, not read at render: the cookie changes with no React state
+  // changing, leaving the signed-in shell drawn after the session is given up.
   const hasSessionHint = useSyncExternalStore(
     subscribeToAuthStateCookie,
     hasAuthStateCookie,
@@ -130,14 +122,12 @@ export function AuthGate({ children }: AuthGateProps) {
   const isSignInRoute =
     pathname === "/sign-in" || pathname.startsWith("/sign-in/");
 
-  // Both halves must agree before protected content is drawn: the hint
-  // outlives its session, and React state goes stale when the axios
-  // interceptor tears a session down without the context hearing about it.
+  // Both halves must agree: the hint outlives its session, and React state
+  // goes stale when the axios interceptor tears one down unheard.
   const isSignedIn = isAuthenticated && hasSessionHint;
 
-  // Redirect only once the hint is gone. While it is set, `proxy.ts` sends
-  // /sign-in back to / on that same cookie, so redirecting now would bounce
-  // the visitor between the two forever.
+  // Only once the hint is gone: while it is set `proxy.ts` sends /sign-in back
+  // to / on that same cookie, bouncing the visitor between the two forever.
   const isSignedOutOnProtectedRoute =
     !isLoading && !hasSessionHint && !isPublicRoute && !isSignInRoute;
 
@@ -164,9 +154,8 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (isLoading || isSignedOutOnProtectedRoute) {
-    // Still resolving, or the effect above is navigating away. A backend that
-    // accepts and then hangs burns the full ten-second deadline, and this gate
-    // wraps the whole layout -- so time-box the silence rather than serve it.
+    // A backend that accepts and then hangs burns the full ten-second
+    // deadline, and this gate wraps the layout, so the silence is time-boxed.
     return <SlowProbe />;
   }
 

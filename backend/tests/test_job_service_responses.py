@@ -1,8 +1,7 @@
 """`JobService` decisions that shape what the jobs UI is told.
 
-The control responses drive a card's buttons and the config update decides
-what survives a partial edit, so a wrong answer here is silent: the page
-renders, it just describes a run that is not happening.
+Control responses drive a card's buttons, so a wrong answer here is silent: the
+page renders, it just describes a run that is not happening.
 """
 
 from datetime import UTC, datetime

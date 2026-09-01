@@ -1,10 +1,8 @@
-// Unbuilt work leaves no trace in the code: it is built in this change, or it
-// becomes an LGA ticket and the marker goes. A deferral recorded only in a
-// comment is a scope decision made where no owner will read it.
+// Unbuilt work is built in this change or filed as an LGA ticket: a deferral
+// living only in a comment defaults to permanent.
 
-// Accepted: the same letters in another sense. Word boundaries keep longer
-// words out, the deferring-verb anchor keeps a bare "later" out, and only
-// comments are read -- a marker held in a string literal is data.
+// Word boundaries and the deferring-verb anchor keep incidental uses out, and
+// only comments are read -- a marker in a string literal is data.
 
 type CommentContext = {
   sourceCode: {

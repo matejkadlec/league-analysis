@@ -4,9 +4,8 @@ import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
- * The hint cookie outlives the session it stands for, `proxy.ts` routes on the
- * hint alone, and the gate then rendered null. Every other spec mocks /auth/me
- * into a 200, which is why none of them cover this.
+ * The hint cookie outlives the session it stands for and `proxy.ts` routes on the
+ * hint alone; every other spec mocks /auth/me into a 200, so none covers this.
  */
 test.describe("a session the API no longer honours", () => {
   test.beforeEach(async ({ page }) => {
@@ -34,9 +33,8 @@ test.describe("a session the API no longer honours", () => {
     await page.goto("/");
 
     await expect(page).toHaveURL(/\/sign-in$/);
-    // The consent dialog opens over the page and, being modal, takes
-    // everything behind it out of the accessibility tree — so the form is
-    // present but unreachable by role until this is dismissed.
+    // The modal consent dialog takes everything behind it out of the accessibility
+    // tree, so the form is unreachable by role until it is dismissed.
     await acceptCookieBanner(page);
 
     await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
@@ -51,18 +49,15 @@ test.describe("a session the API no longer honours", () => {
   test("offers a way forward when the API cannot be reached at all", async ({
     page,
   }) => {
-    // Not a rejection -- the server is simply down. Redirecting here would
-    // fight `proxy.ts`, which sends /sign-in back to / while the hint is set,
-    // so the page has to say so instead of showing nothing.
+    // Not a rejection: redirecting would fight `proxy.ts`, which sends /sign-in
+    // back to / while the hint is set.
     await page.route("**/api/v1/auth/**", async (route) => {
       await route.abort("connectionrefused");
     });
 
     await page.goto("/");
 
-    // The heading, not just the button: both error boundaries render their
-    // own "Try again", so a button-only assertion cannot tell this surface
-    // apart from a crash page.
+    // The heading, not just the button: both error boundaries render "Try again".
     await expect(page.getByText("Can't reach the server")).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
@@ -72,9 +67,8 @@ test.describe("a session the API no longer honours", () => {
   test("says something rather than nothing while a hung backend is probed", async ({
     page,
   }) => {
-    // The variant closest to the original report: the server accepts the
-    // connection and then never answers, so the probe runs its full ten-second
-    // deadline. Every second of that used to be an empty white page.
+    // The server accepts the connection and never answers, so the probe runs its
+    // full ten-second deadline.
     await page.route("**/api/v1/auth/**", async () => {
       // Deliberately never fulfilled.
       await new Promise(() => {});

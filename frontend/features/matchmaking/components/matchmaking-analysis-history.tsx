@@ -44,14 +44,12 @@ interface MatchmakingAnalysisHistoryProps {
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * The three win-rate figures a history row shows, with the colour each is
- * drawn in. Both layouts read this rather than recomputing it, so the stacked
- * blocks cannot drift from the table on which side of a gap is good news.
+ * Both layouts read this rather than recomputing it, so the stacked blocks
+ * cannot drift from the table on which side of a gap is good news.
  */
 function historyFigures(item: MatchmakingAnalysisHistoryItem) {
-  // A zero threshold, so every gap is coloured: more visually pleasing here
-  // than the results card's three-point fairness band, which leaves a small
-  // gap grey. Both readings are deliberate; `gapVerdict` is where they differ.
+  // Zero threshold, so every gap is coloured, unlike the results card's
+  // three-point fairness band. Both readings are deliberate; see `gapVerdict`.
   const { ally: allyColor, enemy: enemyColor } = gapVerdict(item.gap, 0);
 
   return [
@@ -98,9 +96,8 @@ function DeleteAnalysisButton({
 }
 
 /**
- * The run's timestamp as the control that shows it. The surrounding row also
- * selects on click; this is what carries the affordance to a screen reader
- * and gives the keyboard a stop on every row.
+ * The surrounding row also selects on click; this is what carries the
+ * affordance to a screen reader and gives the keyboard a stop on every row.
  */
 function SelectAnalysisButton({
   createdAt,
@@ -128,9 +125,8 @@ function SelectAnalysisButton({
 }
 
 /**
- * One analysis stacked for a narrow screen. The table's six columns need
- * ~520px before the win-rate headings wrap, and scrolling sideways would put
- * the gap -- the number the whole card exists to show -- behind a gesture.
+ * The table's six columns need ~520px before headings wrap, and scrolling
+ * sideways would put the gap -- the card's whole point -- behind a gesture.
  */
 function AnalysisBlock({
   item,
@@ -195,9 +191,8 @@ export function MatchmakingAnalysisHistory({
   const queryClient = useQueryClient();
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
-  // Highlight what the result card is showing, not only what was clicked here.
-  // Landing on a player displays their latest completed run without any pick,
-  // and an unmarked history then hides which row that run is.
+  // Highlight what the result card shows, not only what was clicked: landing on
+  // a player displays their latest run with no pick, leaving every row unmarked.
   const { data: shownAnalysis } = useShownMatchmakingAnalysis(
     puuid,
     selectedCreatedAt,
@@ -283,16 +278,14 @@ export function MatchmakingAnalysisHistory({
         <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>
       <CardContent>
-        {/* Tailwind's reset removes the list marker, and WebKit then drops the
-            list role — which would leave this labelled group unannounced.
-            `role="list"` puts the semantics back. */}
+        {/* Tailwind's reset removes the list marker and WebKit then drops the
+            list role, leaving this labelled group unannounced. */}
         <ul
           role="list"
           aria-label="Analysis history"
           data-testid="matchmaking-analysis-history-stacked"
-          // No cap, unlike the table: a short scroll region nested inside a
-          // scrolling page is worse to use than a page that simply runs longer.
-          // The history is paged to `HISTORY_FETCH_LIMIT`, so the run is bounded.
+          // No cap, unlike the table: a short scroll region nested in a scrolling
+          // page reads worse, and `HISTORY_FETCH_LIMIT` already bounds the run.
           className="space-y-3 sm:hidden"
         >
           {data.items.map((item) => (
@@ -310,8 +303,7 @@ export function MatchmakingAnalysisHistory({
         <div
           className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[490px]"
           // Scrollable once history outgrows max-h; without a focus stop its
-          // content is unreachable by keyboard. The axe gate cannot see this:
-          // its fixture serves five rows, which fit without scrolling.
+          // content is unreachable by keyboard. The axe fixture never scrolls.
           role="region"
           aria-label="Analysis history"
           tabIndex={0}
@@ -343,9 +335,8 @@ export function MatchmakingAnalysisHistory({
                 return (
                   <TableRow
                     key={item.created_at}
-                    // Clicking anywhere but the delete button shows the run.
-                    // The date cell holds the button that says so, and the
-                    // keyboard reaches the row through it.
+                    // Clicking anywhere but delete shows the run; the date cell's
+                    // button says so and gives the keyboard its way in.
                     onClick={() => onSelect(item.created_at)}
                     data-state={isSelected ? "selected" : undefined}
                     // Height stated per branch it applies to, so the gap closes

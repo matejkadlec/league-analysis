@@ -36,9 +36,8 @@ const OVERALL: Stats = {
 };
 
 /**
- * The last ten games of a player who is doing better: winning more, dying
- * less, everything else up. Each figure is far enough from its baseline to
- * clear the 5% band on both sides.
+ * A player doing better: winning more, dying less. Each figure clears the 5%
+ * band on both sides of its baseline.
  */
 const IMPROVED: Stats = {
   total_matches: 10,
@@ -96,9 +95,8 @@ describe("the recent performance card", () => {
   });
 
   it("reads fewer deaths as improvement, not decline", async () => {
-    // Deaths are the one stat on this card where down is good, and the only call
-    // passing `higherIsBetter: false`. Lose it and the card tells a player who
-    // halved their deaths that they are declining -- backwards, not just missing.
+    // Deaths are the one stat where down is good, and the only call passing
+    // `higherIsBetter: false`; lose it and the card reads exactly backwards.
     const queryClient = renderCard();
 
     await waitFor(() => expect(verdictFor("Avg Deaths")).toBe("improving"));
@@ -107,9 +105,8 @@ describe("the recent performance card", () => {
   });
 
   it("reads every other stat the other way round", async () => {
-    // The mirror of the case above: with the same fixture, kills, assists,
-    // CS, vision, KDA and win rate all went up and all must read as
-    // improvement, which a blanket `higherIsBetter: false` would not give.
+    // The mirror of the case above: every other stat went up on this fixture,
+    // which a blanket `higherIsBetter: false` would read as decline.
     const queryClient = renderCard();
 
     await waitFor(() => expect(verdictFor("Win Rate")).toBe("improving"));
@@ -127,9 +124,8 @@ describe("the recent performance card", () => {
   });
 
   it("compares the last ten games against the whole history", async () => {
-    // The card's entire claim is a comparison, and the only thing making the
-    // two requests different is the `limit` on one of them. Drop it and every
-    // stat reads "stable" forever, with nothing on screen looking broken.
+    // The `limit` is the only difference between the two requests: drop it and
+    // every stat reads "stable" forever with nothing on screen looking broken.
     const queryClient = renderCard();
 
     await waitFor(() => expect(requests).toHaveLength(2));
@@ -140,9 +136,8 @@ describe("the recent performance card", () => {
   });
 
   it("calls a small wobble stable rather than a trend", async () => {
-    // Ten games is a small sample and the numbers move on their own. The
-    // bands exist so the card does not announce a direction every time
-    // someone plays an evening.
+    // Ten games is a small sample; the bands stop the card announcing a
+    // direction every time someone plays an evening.
     respondWith(
       {
         ...OVERALL,
@@ -175,9 +170,8 @@ describe("the recent performance card", () => {
   });
 
   it("scales the band to the stat rather than using one number for all of them", async () => {
-    // CS is counted in the hundreds and win rate in fractions of one, so a fixed
-    // threshold cannot serve both. Four CS up on an average of 180 is inside the
-    // 5% band; a fixed 0.05 would call it a trend.
+    // CS runs in the hundreds and win rate in fractions of one: four CS up on
+    // an average of 180 is inside the 5% band but past a fixed 0.05.
     respondWith({ ...OVERALL, total_matches: 10, avg_cs: 184 }, OVERALL);
     const queryClient = renderCard();
 
@@ -187,9 +181,8 @@ describe("the recent performance card", () => {
   });
 
   it("says there is not enough data instead of a card full of zeros", async () => {
-    // A player whose ranked history is empty gets stats back, all of them
-    // zero. Without the `total_matches` check the card renders in full: six
-    // "stable" verdicts and a badge announcing a comparison with 0 games.
+    // An empty ranked history still returns stats, all zero; without the
+    // `total_matches` check the card renders six "stable" verdicts over them.
     const empty: Stats = {
       total_matches: 0,
       win_rate: 0,

@@ -6,9 +6,8 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
 
 /**
- * The hook runs unmocked inside `match-list-region.test.tsx`, but nothing
- * there asserts the window itself. These are the edges that make it a
- * debounce rather than a delay.
+ * The edges that make this a debounce rather than a delay; no other suite
+ * asserts the window itself.
  */
 
 afterEach(() => {

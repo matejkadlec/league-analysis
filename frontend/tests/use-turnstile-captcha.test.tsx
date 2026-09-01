@@ -7,8 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { widgetReset } = vi.hoisted(() => ({ widgetReset: vi.fn<() => void>() }));
 
 // The real widget talks to Cloudflare. This stand-in exposes the three
-// callbacks the hook wires (solved, expired, failed) plus the config it must
-// pass through, and answers `reset` through the ref the hook keeps.
+// callbacks the hook wires, and answers `reset` through the ref it keeps.
 vi.mock("@marsidev/react-turnstile", () => ({
   Turnstile: ({
     ref,
@@ -157,9 +156,8 @@ describe("useTurnstileCaptcha", () => {
   });
 
   it("clears the token and asks the widget for a fresh challenge on reset", async () => {
-    // After a rejected submission the form resets the captcha: clearing only
-    // the token would leave the widget holding its solved state, and only
-    // resetting the widget would leave a stale token in the form.
+    // Clearing only the token leaves the widget holding its solved state;
+    // resetting only the widget leaves a stale token in the form.
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
     const user = userEvent.setup();
     renderCaptcha();

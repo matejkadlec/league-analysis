@@ -14,14 +14,12 @@ import {
 import { cn } from "@/lib/core/utils";
 
 /**
- * The always-visible explanation. The specification requires the disclaimer to
- * be plain and permanent, so it is never a tooltip and never collapsed, and the
- * readings wear the same colour ladder the result card uses.
+ * The specification requires the disclaimer plain and permanent: never a
+ * tooltip, never collapsed.
  */
 
-// The readings a comparison can produce, in escalation order. Each wears its
-// band's own dot from the shared ladder, so this scale and the result card
-// cannot colour the same band differently.
+// Escalation order. Each reading wears its band's dot from the shared ladder,
+// so this scale and the result card cannot colour a band differently.
 const READING_SCALE = [
   "no_unusual_pattern",
   "weak_indicators",
@@ -52,8 +50,7 @@ export function SmurfBoostExplanationCard() {
         {/* The whole idea in one glance: two windows of the same player's
             games, older set against newer set. */}
         {/* `muted-foreground` strokes, not the border token: these boxes sit
-            on the card surface the token is tuned against, so the token
-            itself all but disappears here. */}
+            on the card surface that token is tuned against, so it vanishes. */}
         <div className="rounded-lg border border-muted-foreground/35 bg-muted/20 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             <div className="space-y-1.5">

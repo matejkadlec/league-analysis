@@ -8,8 +8,7 @@ import { X, AlertTriangle, AlertOctagon, CircleCheck } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import { HEADER_MESSAGES_CLOSED_STORAGE_KEY } from "@/features/cookie-consent";
 import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
-// Not through the barrel: `tests/header-messages-credential-health.test.tsx`
-// factory-mocks `@/features/cookie-consent` down to the event name.
+// Not through the barrel: a test factory-mocks it down to the event name.
 // oxlint-disable-next-line no-restricted-imports -- see above: the test mocks the barrel
 import {
   readOptionalStorage,
@@ -57,8 +56,7 @@ const BANNER_TONES = {
 } as const;
 
 // The admin credential banners differ only by tone, icon and copy, so they
-// are data. A status with no entry -- "valid" -- renders nothing, which is
-// what the ladder these replaced did by falling through.
+// are data. A status with no entry -- "valid" -- renders nothing.
 const CREDENTIAL_BANNERS: Record<
   string,
   {

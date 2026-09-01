@@ -31,9 +31,8 @@ async def get_riot_client(
             "riot_api_key_not_configured",
             hint="Get your key from https://developer.riotgames.com",
         )
-        # The structured detail, not a prose string: the frontend's
-        # `normalizeApiError` only surfaces a 5xx message it can trust by code,
-        # and retrying cannot help until someone adds a key.
+        # Structured detail, not prose: `normalizeApiError` only surfaces a 5xx
+        # message it can trust by code.
         raise HTTPException(
             status_code=503,
             detail=RIOT_API_KEY_INVALID_DETAIL,

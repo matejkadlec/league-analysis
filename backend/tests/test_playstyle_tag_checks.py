@@ -1,8 +1,7 @@
 """The shared match lookups playstyle evaluators and aggregates read through.
 
-Every playstyle tag that needs a participant's team context funnels through
-these helpers, so their two edges -- a missing match, and a team whose total
-is zero -- decide what a tag sees, not just what it scores.
+Their two edges -- a missing match, and a team whose total is zero -- decide what
+every team-context tag sees, not just what it scores.
 """
 
 from dataclasses import dataclass

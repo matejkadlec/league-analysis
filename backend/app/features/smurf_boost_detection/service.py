@@ -53,9 +53,8 @@ RANKED_SOLO_QUEUE = RANKED_SOLO_QUEUE_TYPE
 # The engine never needs more than the largest configurable windows combined.
 MAX_WINDOW_MATCHES = 250
 
-# The computation runs inside its request, so an active row older than this
-# belongs to a worker that died. Without an expiry the partial unique index
-# would block every later run for that player forever.
+# An active row older than this belongs to a dead worker; without an expiry the
+# partial unique index blocks every later run for that player forever.
 ABANDONED_RUN_SECONDS = 600
 
 
@@ -67,9 +66,8 @@ def _to_float(value: Decimal | None) -> float:
 def _is_scorable(match: EligibleMatch) -> bool:
     """True when every metric this match contributes is a real number.
 
-    A stored `NaN` would survive standardization and then clamp to the positive
-    bound, which reads as maximum performance and pushes a band upward. A row
-    that cannot be scored honestly is dropped instead.
+    A stored `NaN` would survive standardization and clamp to the positive bound,
+    reading as maximum performance and pushing a band upward.
     """
     return all(math.isfinite(match.metric(name)) for name in sorted(COMPOSITE_WEIGHTS))
 
@@ -88,17 +86,15 @@ class SmurfBoostDetectionService:
 
     def __init__(self, db: AsyncSession, user_id: int) -> None:
         self.db = db
-        # The account every query in this service is answering for. Held on the
-        # instance rather than threaded through a dozen private signatures: the
-        # service is built per request, so one value serves its whole lifetime.
+        # The account every query here answers for; the service is built per
+        # request, so one value serves its whole lifetime.
         self.user_id = user_id
 
     async def viewer_thresholds(self) -> dict[str, float]:
         """Resolve the signed-in viewer's stored thresholds over the defaults.
 
-        Here rather than in the router: the route was declaring a second
-        `Depends(get_db)` beside this service purely to run this SELECT, and
-        reaching cross-feature into `auth.user_card_preference` to do it.
+        Here rather than in the router, so no route reaches cross-feature into
+        `auth.user_card_preference` for a second `Depends(get_db)`.
         """
         result = await self.db.execute(
             select(UserCardPreference.settings).where(
@@ -112,9 +108,8 @@ class SmurfBoostDetectionService:
     async def _load_eligible(self, puuid: str) -> list[EligibleMatch]:
         """The newest eligible ranked games for one player, newest first.
 
-        The cap is applied in SQL because the engine can never consume more than
-        the largest configurable windows combined, and the deepest stored
-        accounts hold several times that.
+        The cap is applied in SQL: the engine never consumes more than the largest
+        configurable windows combined, and stored accounts run far deeper.
         """
         result = await self.db.execute(
             select(MatchParticipant, Match)
@@ -213,9 +208,8 @@ class SmurfBoostDetectionService:
     ) -> dict[int, int]:
         """Champion counts over every eligible game outside the recent window.
 
-        Deliberately reads the whole eligible history rather than the capped
-        window the engine scores: a champion is novel only when almost nothing
-        of it is stored. The window is excluded by identifier, not by offset.
+        Reads the whole eligible history, not the capped window the engine scores:
+        a champion is novel only when almost nothing of it is stored.
         """
         result = await self.db.execute(
             select(MatchParticipant.champion_id, func.count())
@@ -276,9 +270,8 @@ class SmurfBoostDetectionService:
     async def _expire_abandoned(self, puuid: str) -> None:
         """Terminalize an active run whose worker is gone.
 
-        The run executes inside its request, so an active row older than the
-        lease cannot still be computing. Leaving it would let one interrupted
-        request block the feature for that player permanently.
+        The run executes inside its request, so a row older than the lease cannot
+        still be computing; leaving it blocks the feature for that player.
         """
         cutoff = datetime.now(UTC) - timedelta(seconds=ABANDONED_RUN_SECONDS)
         result = await self.db.execute(
@@ -311,9 +304,8 @@ class SmurfBoostDetectionService:
     ) -> bool:
         """True when an existing run was computed the way this caller asked for.
 
-        An account's thresholds can change between two in-flight requests, so
-        the comparison is exact on both the model version and every threshold
-        value.
+        Thresholds can change between two in-flight requests, so the comparison
+        is exact on the model version and every threshold value.
         """
         if run.model_version != MODEL_VERSION:
             return False
@@ -348,9 +340,8 @@ class SmurfBoostDetectionService:
         )
         conflict = await commit_new_run(self.db, run)
         if conflict is not None:
-            # The winner of the race may already have finished, in which case
-            # there is no active row left to attach to and its completed result
-            # is the honest answer to this identical request.
+            # The race winner may already have finished, leaving no active row to
+            # attach to; its completed result answers this identical request.
             concurrent = await self._active_run(puuid) or await self._newest_run(puuid)
             if not concurrent:
                 logger.error(
@@ -484,9 +475,8 @@ class SmurfBoostDetectionService:
     async def get_latest(self, puuid: str) -> SmurfBoostAnalysisResponse | None:
         """The newest run for a player, with a computed staleness flag.
 
-        A client polling after an interrupted request would otherwise be told a
-        comparison is still running forever, because the page offers no way to
-        start a new one while a run looks active.
+        Expires abandoned runs first: the page offers no way to start a new run
+        while one looks active, so a client would poll forever.
         """
         await self._expire_abandoned(puuid)
         run = await self._newest_run(puuid)
@@ -497,9 +487,8 @@ class SmurfBoostDetectionService:
     async def _is_stale(self, run: SmurfBoostAnalysis) -> bool:
         """True when a newer eligible game exists than the run considered.
 
-        Comparing match identifiers rather than counts keeps the check correct
-        when the loaded history is capped. A stored identifier of `None` takes
-        part in the comparison like any other value.
+        Compares match identifiers rather than counts, which stays correct when
+        the loaded history is capped.
         """
         if run.status != "completed":
             return False
@@ -517,9 +506,8 @@ class SmurfBoostDetectionService:
 def _serialize(result: DetectionResult) -> SmurfBoostResults:
     """Convert the engine result into the stored and wire-validated model.
 
-    The conversion goes through `SmurfBoostResults` rather than `asdict`, so the
-    stored document and the HTTP response are the same validated shape and the
-    internal family score is dropped in exactly one place.
+    Goes through `SmurfBoostResults` rather than `asdict`, so stored document and
+    HTTP response share one validated shape that drops the internal family score.
     """
     return SmurfBoostResults(
         model_version=result.model_version,
@@ -555,9 +543,8 @@ def _serialize(result: DetectionResult) -> SmurfBoostResults:
 def resolve_thresholds(settings: dict[str, Any] | None) -> dict[str, float]:
     """Recover a valid threshold set from whatever the viewer has stored.
 
-    Delegating to the card catalog keeps one authority for ranges and
-    cross-field rules, so a stored row written under an older contract can never
-    hand the model a value its magnitude ramp cannot divide by.
+    Delegates to the card catalog, the one authority for ranges, so no stored row
+    can hand the model a value its magnitude ramp cannot divide by.
     """
     normalized, _ignored = normalize_stored_card_preference(
         CardId.SMURF_BOOST_DETECTION, settings if isinstance(settings, dict) else {}

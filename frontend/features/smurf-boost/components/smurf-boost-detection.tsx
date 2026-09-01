@@ -25,14 +25,12 @@ import { gameShortfall } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
 import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-dialog";
 
-// The two statuses for a run that has not reached a terminal state. A run is
-// owned by the account that asked for it, so a start returns one of these only
-// when this account already has one in flight, and attaches to it.
+// A run belongs to the account that asked for it, so a start returns one of
+// these only when this account already has one in flight, and attaches to it.
 const ACTIVE_STATUSES = ["pending", "in_progress"];
 
-// How often an active run is re-read. The computation finishes inside its own
-// request, so an active row seen here belongs to this account's other in-flight
-// request and resolves within seconds.
+// The computation finishes inside its own request, so an active row here is
+// another in-flight request of this account and resolves within seconds.
 const ACTIVE_POLL_MS = 3000;
 
 function isActive(analysis: SmurfBoostAnalysisResponse | null): boolean {
@@ -41,20 +39,17 @@ function isActive(analysis: SmurfBoostAnalysisResponse | null): boolean {
 
 interface SmurfBoostDetectionProps {
   /**
-   * The player being compared, or `null` when none is chosen yet. Nullable so
-   * the card -- and the search inside it -- render before there is a target;
-   * a separate empty-state card meant a second copy of the approved wording.
+   * Nullable so the card and its search render before a target is chosen; a
+   * separate empty-state card would duplicate the approved wording.
    */
   puuid: string | null;
   /**
-   * The analyzed player's `Name#Tag`, or `null` while there is none. This
-   * card is remounted per player, so the page's analyzed player is the
-   * result's player by construction, and a stored reading says who it is for.
+   * The card is remounted per player, so the page's analyzed player is the
+   * result's player by construction.
    */
   playerName: string | null;
   /**
-   * The page's local player search, label and all, rendered inside this card.
-   * The label comes with it because the page owns the control's `id`, and a
+   * The label comes with the control because the page owns its `id`; a
    * `htmlFor` hardcoded here would orphan itself.
    */
   playerSelector: ReactNode;
@@ -95,14 +90,12 @@ export function SmurfBoostDetection({
       isActive(query.state.data ?? null) ? ACTIVE_POLL_MS : false,
   });
 
-  // The pool the comparison draws from, and the only count that exists before
-  // a first run. Not the player row's `total_matches`: that counts all six
-  // synced queues, far more than a ranked-solo-only comparison can read.
+  // Not the player row's `total_matches`: that counts all six synced queues,
+  // far more than a ranked-solo-only comparison can read.
   const { data: rankedStats, dataUpdatedAt: rankedStatsReadAt } = useQuery({
     ...playerStatsQueryOptions(puuid ?? ""),
-    // Required, not decorative: unlike `playerQueryOptions` this one has no
-    // `skipToken` guard, and `/matches/player//stats` is a 404 the global
-    // query-error toast would report on every player-less mount.
+    // No `skipToken` guard here, so a player-less mount would GET
+    // `/matches/player//stats` and toast the 404.
     enabled: puuid !== null,
   });
 
@@ -118,9 +111,8 @@ export function SmurfBoostDetection({
         queryKey: smurfBoostQueryKey(targetPuuid),
       });
     },
-    // Cache only. Anything the viewer sees belongs to the `mutate` call below:
-    // these options-level callbacks live on the mutation, so they still run
-    // after this component unmounts, against a stale closure's player.
+    // Cache only: options-level callbacks outlive this component's unmount, so
+    // anything the viewer sees belongs to the `mutate` call below.
     onSuccess: (data) => {
       // The response is stored under the player it describes, never under
       // whichever player happens to be selected when it arrives.
@@ -128,15 +120,13 @@ export function SmurfBoostDetection({
     },
   });
 
-  // Feedback for the run this card started, skipped by react-query once the
-  // card is gone. A run whose player was switched away from still lands in the
-  // cache above, so switching back shows its outcome.
+  // Feedback for the run this card started; react-query skips it once the card
+  // is gone, and the cache write above still shows the outcome on return.
   const runComparison = (targetPuuid: string) => {
     runMutation.mutate(targetPuuid, {
       onSuccess: (data) => {
-        // Compared against the player this run asked about, not the card's
-        // current one: these callbacks stop firing once the card is gone, so
-        // what is left to catch is a server answering about somebody else.
+        // Catches a server answering about somebody else; a switched-away card
+        // has already stopped firing these.
         if (data.puuid !== targetPuuid) {
           return;
         }
@@ -161,9 +151,8 @@ export function SmurfBoostDetection({
         });
       },
       onError: (mutationError: Error) => {
-        // Presentation lives here, not in the mutationFn: the rejection
-        // carries the structured ApiError, and the sentence is chosen only
-        // for this surface.
+        // The rejection carries the structured ApiError; the sentence is
+        // chosen for this surface, so the mutationFn stays presentation-free.
         const message = apiErrorMessage(
           normalizeApiError(mutationError),
           "The comparison could not be run. Please try again.",
@@ -174,35 +163,29 @@ export function SmurfBoostDetection({
     });
   };
 
-  // A comparison this card still owes for a fetch it asked for itself: the
-  // sync hook adopts whatever update is already in flight. State, not a ref,
-  // because it also disables the button across the callback gap.
+  // The sync hook adopts any update already in flight, so this marks the fetch
+  // as ours. State, not a ref: it also disables the button across the gap.
   const [comparisonOwed, setComparisonOwed] = useState(false);
-  // Why a fetch did not finish, in the backend's own reviewed words: a
-  // sentence of our own would promise a retry that a stale player id or an
-  // expired key cannot honour.
+  // The backend's own words: a sentence of ours would promise a retry that a
+  // stale player id or an expired key cannot honour.
   const [staleFetch, setStaleFetch] = useState<string | null>(null);
-  // Stored ranked games as they stood when this card asked for a fetch, so the
-  // line below can say what the fetch added. With the reading's own timestamp,
-  // because the count alone cannot say whether it has been re-read since.
+  // Carries the reading's own timestamp because the count alone cannot say
+  // whether it has been re-read since the fetch.
   const [fetchBaseline, setFetchBaseline] = useState<{
     games: number;
     readAt: number;
   } | null>(null);
-  // The click fetches this player's games from Riot before comparing them, so
-  // a player the scheduled Match Fetcher has not reached yet is compared on
-  // what Riot holds now instead of on whatever happened to be stored.
+  // The click fetches from Riot first, so a player the scheduled Match Fetcher
+  // has not reached yet is still compared on current history.
   const { isUpdating: isFetchingGames, startSync } = usePlayerSyncRun(
     puuid ?? "",
     {
-      // Everything about the fetch is on this card already -- the button, the
-      // alert below it, and the stale-fetch notice. The hook's own wording is
-      // written for the Player Card and would contradict it here.
+      // This card already reports the fetch; the hook's wording is written for
+      // the Player Card and would contradict it here.
       quiet: true,
       onSettled: (run) => {
-        // Reported before the gate, not after it: this card renders the fetch
-        // whoever started it. Staying silent when a fetch failed would leave
-        // the viewer comparing stored games believing they are fresh.
+        // Before the gate: this card renders the fetch whoever started it, and
+        // silence would let the viewer read stored games as fresh.
         setStaleFetch(
           run?.status === "completed"
             ? null
@@ -210,9 +193,8 @@ export function SmurfBoostDetection({
                 "This player's newest games could not be fetched."),
         );
         if (run?.status !== "completed") {
-          // The hook refreshes this player's caches on a completed run only,
-          // so a run that stopped early leaves the stored count below reading
-          // the number from before the click, minus whatever it did store.
+          // The hook refreshes caches on a completed run only, so an early
+          // stop leaves the stored count below reading from before the click.
           setFetchBaseline(null);
           if (run && puuid) {
             void queryClient.refetchQueries({
@@ -236,9 +218,8 @@ export function SmurfBoostDetection({
 
   const running = runMutation.isPending || isActive(latest ?? null);
   const results = latest?.status === "completed" ? latest.results : null;
-  // As of the last run, the only count anything has measured: no eligible-game
-  // total exists for a player never compared. A failed run stores none, and the
-  // column defaults to zero, which reads as a player with no games.
+  // A failed run stores no eligible-game total and the column defaults to
+  // zero, which would read as a player with no games.
   const shortfallReading =
     latest && latest.status === "completed"
       ? gameShortfall(
@@ -254,9 +235,8 @@ export function SmurfBoostDetection({
       ? shortfallReading.sentence
       : null;
   const storedRankedGames = rankedStats?.total_matches ?? null;
-  // Only against a count re-read since the click, never against `isUpdating`:
-  // that goes false a render and a round trip before the hook refreshes this
-  // query, so a fetch that added games would announce "no new ones" first.
+  // Never gate on `isUpdating`: it goes false a render before the hook
+  // refreshes this query, so the line would announce "no new ones" first.
   const fetchedGames =
     fetchBaseline !== null &&
     storedRankedGames !== null &&
@@ -271,9 +251,8 @@ export function SmurfBoostDetection({
 
   return (
     <div className="space-y-6">
-      {/* Half the content width on desktop, with the second column left empty
-          on purpose -- the comparison is one button and a search, and filling
-          the space would mean inventing a card nobody asked for. */}
+      {/* The second column is empty on purpose: filling it would mean
+          inventing a card nobody asked for. */}
       <div
         id="smurf-boost-comparison-row"
         className="grid grid-cols-1 gap-6 lg:grid-cols-2"
@@ -286,8 +265,7 @@ export function SmurfBoostDetection({
                 Games Comparison
               </CardTitle>
               {/* The settings tune the thresholds this run applies, so their
-                  trigger lives on the run card rather than floating on the
-                  page. */}
+                  trigger lives on the run card. */}
               <div className="ml-auto flex items-center gap-2">
                 {latest?.is_stale && (
                   <Badge variant="outline">
@@ -336,9 +314,8 @@ export function SmurfBoostDetection({
                 <AlertDescription className="space-y-1">
                   <p>
                     Fetching this player&apos;s games from Riot.{" "}
-                    {/* An update started elsewhere -- the Player Card's own
-                        button -- shows here too, and promising a comparison
-                        for it would be a promise this card never keeps. */}
+                    {/* An update started elsewhere shows here too, and this
+                        card never keeps a comparison promised for it. */}
                     {comparisonOwed
                       ? "The comparison runs on its own as soon as the fetch finishes."
                       : "Run the comparison once it has finished to read the new games."}{" "}
@@ -371,8 +348,7 @@ export function SmurfBoostDetection({
               </Alert>
             )}
 
-            {/* What there is to compare, before anything has been compared.
-                A label and a number rather than a sentence: zero reads
+            {/* A label and a number rather than a sentence: zero reads
                 correctly here without a plural branch of its own. */}
             {storedRankedGames !== null && (
               <p className="text-sm text-muted-foreground">
@@ -415,9 +391,8 @@ export function SmurfBoostDetection({
               )}
             </Button>
 
-            {/* Motion for a wait nothing can measure: `Progress` needs a
-                denominator and there is none until the fetch ends. Hidden
-                from assistive tech because the button already names it. */}
+            {/* `Progress` needs a denominator and there is none until the
+                fetch ends. Hidden: the button already names the wait. */}
             {(isFetchingGames || comparisonOwed || running) && (
               <div
                 aria-hidden="true"

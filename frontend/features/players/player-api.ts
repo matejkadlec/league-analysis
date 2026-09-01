@@ -23,9 +23,8 @@ export async function untrackPlayer(
 
 export interface SearchSuggestionsParams {
   q: string;
-  // `Platform`, not `string`: both routes validate the query parameter
-  // against the backend enum, so these two functions are the last place a
-  // "EUW" or a display name can enter the request.
+  // `Platform`, not `string`: the backend validates against its enum, so this
+  // is the last place a "EUW" or a display name can enter the request.
   platform?: Platform;
   limit?: number;
 }
@@ -51,9 +50,8 @@ export type DiscoverPlayerParams = Record<"game_name" | "tag_line", string> & {
 export async function discoverPlayer(
   params: DiscoverPlayerParams,
 ): Promise<ApiResponse<Player>> {
-  // The endpoint reads its arguments from the query string, not a body. Named
-  // one by one rather than spread: the contract test reads the names off this
-  // literal, and a `{ params }` shorthand hides all three from it.
+  // Query string args, not a body -- hence `undefined` here. Named one by one,
+  // not spread: a `{ params }` shorthand would hide all three from the contract test.
   return validatedPost(PlayerSchema, "/players/discover", undefined, {
     params: {
       game_name: params.game_name,

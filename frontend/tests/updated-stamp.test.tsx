@@ -3,9 +3,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-// The clock arithmetic lives in tests/relative-time.test.tsx; here only the
-// wiring is under test -- which timestamp the stamp asks about, and what it
-// does with the answer -- so the hook is pinned to a fixed reading.
+// Only the wiring is under test -- the clock arithmetic lives in
+// tests/relative-time.test.tsx -- so the hook is pinned to a fixed reading.
 const { useRelativeTime } = vi.hoisted(() => ({
   useRelativeTime: vi.fn<typeof import("@/lib/core/hooks/use-relative-time").useRelativeTime>(),
 }));

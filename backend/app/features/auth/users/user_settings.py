@@ -43,9 +43,8 @@ class UserSettings(Base):
 async def ensure_user_settings(db: AsyncSession, user_id: int) -> UserSettings:
     """Return this user's settings row, inserting it when the read misses.
 
-    The insert is `ON CONFLICT DO NOTHING` because `user_id` is the primary
-    key and two requests for one brand-new account do reach here together --
-    select-then-`add` makes the loser raise IntegrityError out of a plain GET.
+    The insert is `ON CONFLICT DO NOTHING` because two requests for one new
+    account race here, and select-then-`add` raises IntegrityError from a GET.
     """
     settings = await db.scalar(
         select(UserSettings).where(UserSettings.user_id == user_id)

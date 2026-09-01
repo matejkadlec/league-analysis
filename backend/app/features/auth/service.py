@@ -67,12 +67,7 @@ logger = structlog.get_logger(__name__)
 
 
 class AuthService(EmailChangeMixin, TokenLifecycleMixin):
-    """Service for authentication operations.
-
-    Composes `TokenLifecycleMixin` and `EmailChangeMixin`, so token minting,
-    rotation, revocation, and the email-change flow all run under the shared
-    policies from their domain packages.
-    """
+    """Service for authentication operations."""
 
     def __init__(self, db: AsyncSession):
         """Initialize auth service."""
@@ -187,9 +182,8 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
     ) -> bool:
         """Verify a Cloudflare Turnstile token using server-side validation.
 
-        Every failure mode collapses to False -- no configured secret, a
-        transport or HTTP failure, and a rejected token alike -- so callers
-        cannot distinguish them and must treat False as "retry the challenge".
+        Every failure mode -- no secret, transport error, rejected token --
+        collapses to False, which callers must read as "retry the challenge".
         """
         if not self.settings.turnstile_secret_key:
             return False
@@ -264,9 +258,11 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
     ) -> User | None:
         """Authenticate a user with email and password.
 
-        Returns None for an unknown email or a wrong password; raises the
-        lockout/CAPTCHA errors when policy refuses first. Constant-time
-        either way, so timing reveals no email's existence.
+        Constant-time whether or not the email exists, so timing reveals
+        nothing; lockout/CAPTCHA errors raise when policy refuses first.
+
+        Returns:
+            The user, or None for an unknown email or a wrong password.
         """
         user = await self.get_user_by_email_case_insensitive(email)
 
@@ -366,8 +362,7 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
         )
 
     # Not a FastAPI dependency: `dependencies.get_current_user` is, and it
-    # passes the token in. The `Depends(oauth2_scheme)` default this used to
-    # carry was never resolved by anything.
+    # passes the token in.
     async def get_current_user(self, token: str) -> User:
         """Get the current authenticated user from JWT token."""
         credentials_exception = self._unauthenticated_credentials_error()

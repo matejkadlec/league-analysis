@@ -7,9 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthContextType } from "@/features/auth/types";
 
 /**
- * Sign Out is one of exactly two callers allowed to pass
- * `evenIfTheServerCannotBeReached`. It arrives by React context, so no lint
- * rule sees it and only this file holds the flag on.
+ * One of exactly two callers allowed to pass `evenIfTheServerCannotBeReached`;
+ * it arrives by React context, so no lint rule sees it.
  */
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
@@ -84,9 +83,8 @@ describe("the sidebar Sign Out button", () => {
 
   it("goes dead while the request is in flight", async () => {
     const user = userEvent.setup();
-    // Sign Out waits for the server, because only the server can revoke.
-    // Against a backend that hangs that is the full ten-second deadline, so
-    // without the pending state every further click stacks another request.
+    // Only the server can revoke, so a hung backend means the full ten-second
+    // deadline; without the pending state each click stacks another request.
     let releaseServer: (() => void) | undefined;
     auth.logout.mockImplementation(
       () =>

@@ -1,14 +1,11 @@
-// Composed class names enter through `cn` from `lib/core/utils.ts`. It is
-// `twMerge(clsx(...))`, so it drops the loser when two Tailwind utilities
-// collide; a template literal concatenates and stylesheet order decides.
+// `cn` is `twMerge(clsx(...))`: it drops the loser when two Tailwind
+// utilities collide, where concatenation leaves stylesheet order to decide.
 
-// Flagged: a `className` (or `*ClassName`) attribute whose value is, at the
-// top level, an interpolated template, a ternary, a `&&`/`??`, or a `+`.
-// Accepted: anything else, and any of the above wrapped in `cn(...)`.
+// Flagged: a `*className` attribute whose top-level value is an interpolated
+// template, a ternary, a `&&`/`??`, or a `+`; wrapping it in `cn(...)` passes.
 
-// The boundary: only the attribute's own top-level expression is read, and
-// `cn` is recognised by being the call in that position rather than by its
-// import, so a same-named local would satisfy the rule.
+// `cn` is recognised by position, not by import, so a same-named local
+// satisfies the rule.
 
 type Node = { type: string; expressions?: readonly unknown[] };
 

@@ -1,5 +1,4 @@
-# APScheduler 3.x ships neither stubs nor a `py.typed` marker. The rule is off
-# project-wide in `pyproject.toml`; `strict` resets it, so restore it here.
+# APScheduler 3.x ships no stubs, and `strict` resets the project-wide opt-out.
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
@@ -43,9 +42,8 @@ router = APIRouter(
 def _raise_job_not_found(job_id: int) -> NoReturn:
     """The one 404 this router has, raised from six places.
 
-    `NoReturn` is what lets the call sites keep narrowing: after
-    `if not job: _raise_job_not_found(job_id)` the type checker still knows
-    `job` is not None on the next line, exactly as the inline `raise` did.
+    `NoReturn` is what lets call sites keep narrowing `job` to non-None after
+    the call, exactly as an inline `raise` did.
     """
     raise HTTPException(
         status_code=404,
@@ -202,11 +200,10 @@ async def trigger_job(
     job_service: JobServiceDep,
     current_user: AdminUserDep,
 ) -> JobTriggerResponse:
-    """
-    Manually trigger a job execution, bypassing the normal schedule.
+    """Manually trigger a job execution, bypassing the normal schedule.
 
-    An already-running job is refused with HTTP 200 and success=False -- the
-    contract `use-job-card-controls.ts` reads as refusal, not transport error.
+    An already-running job is refused with HTTP 200 and success=False, which
+    `use-job-card-controls.ts` reads as refusal rather than transport error.
 
     Raises:
         404: Job configuration not found.
@@ -378,9 +375,8 @@ async def trigger_test_run(
 ) -> JobTriggerResponse:
     """Start a test run for a job.
 
-    The test run calls all Riot API endpoints the real job uses once per
-    minute.  It never writes data to the database (except the execution
-    record itself).  Runs for up to 1 hour or until stopped.
+    Calls every Riot endpoint the real job uses once per minute for up to an
+    hour, writing nothing but its own execution record.
     """
     job = await job_service.get_job_configuration(job_id)
     if not job:

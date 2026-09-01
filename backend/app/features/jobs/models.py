@@ -247,9 +247,8 @@ class JobExecution(Base):
     )
 
 
-# The CHECK constraint, the one-active-run partial unique index below, and
-# `PlayerSyncRunResponse`'s status field all render from this Literal -- so
-# extending it is a schema change and cannot leave the API contract stale.
+# The CHECK constraint, the one-active-run partial unique index below and
+# `PlayerSyncRunResponse` all render from this Literal: extending it is DDL.
 PlayerSyncStatus = Literal[
     "pending",
     "running",

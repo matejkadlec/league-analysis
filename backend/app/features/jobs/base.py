@@ -22,9 +22,8 @@ from structlog import contextvars as structlog_contextvars
 
 from app.core.database import db_manager
 
-# Imported at runtime, not under TYPE_CHECKING: these names appear in
-# annotations, and anything that evaluates them (inspect.signature,
-# get_type_hints) would raise NameError under PEP 649 lazy annotations.
+# Runtime imports, not TYPE_CHECKING: these names appear in annotations, and
+# evaluating them (get_type_hints) would raise NameError under PEP 649.
 from app.core.db_session import rollback_quietly
 from app.core.error_chains import (
     diagnostic_error,
@@ -70,8 +69,9 @@ class RateLimitSignal(Exception):
 
     NOT a failure - the job should stop gracefully with a RATE_LIMITED status.
 
-    :param retry_after: Seconds to wait before retrying (from Riot API)
-    :param message: Optional message describing the rate limit
+    Args:
+        retry_after: Seconds to wait before retrying (from Riot API).
+        message: Optional message describing the rate limit.
     """
 
     def __init__(
@@ -90,9 +90,8 @@ class RateLimitSignal(Exception):
 class StoredAPICall(TypedDict):
     """One endpoint's grouped calls, as the jobs UI reads them back out of JSONB.
 
-    `frontend/lib/core/schemas/jobs.ts:JobExecutionApiCallSchema` is the other
-    half of this shape; keep the two in step. A single call keeps its whole
-    params dict, a group keeps only the key that varied and its first/last.
+    `frontend/lib/core/schemas/jobs.ts:JobExecutionApiCallSchema` is the other half
+    of this shape; keep the two in step.
     """
 
     endpoint: str
@@ -124,9 +123,8 @@ def _format_api_calls_for_storage(
         endpoint = call.endpoint
         group = grouped[endpoint]
         group["count"] += 1
-        # A dict as an ordered set: match jobs genuinely fan one endpoint
-        # across regions, and the label must not pin the whole group on
-        # whichever region happened to come first or last.
+        # A dict as an ordered set: one endpoint fans across regions, and the
+        # label must not pin the group on whichever region came first.
         group["regions"][call.region] = None
         group["params_list"].append(call.params)
 
@@ -147,9 +145,8 @@ def _format_api_calls_for_storage(
         if data["count"] == 1:
             entry["params"] = data["params_list"][0]
         else:
-            # A group labels itself by the parameter its calls varied: every
-            # `_record_api_call` site puts that parameter first (`matchId`,
-            # `puuid`, `gameName`), so the first key of the first call is it.
+            # Every `_record_api_call` site puts the varying parameter first, so
+            # the first key of the first call is the one to label the group by.
             first_params = data["params_list"][0]
             param_key = next(iter(first_params)) if first_params else None
             if param_key:
@@ -251,15 +248,13 @@ class BaseJob(ABC):
     def _reset_run_state(self) -> None:
         """Zero every per-run accumulator.
 
-        The scheduler builds one instance per job and re-runs it on an
-        interval, so run() must call this or metrics, diagnostics and API-call
-        records carry over into the next execution row.
+        The scheduler re-runs one instance per job, so run() must call this or
+        metrics and diagnostics carry over into the next execution row.
         """
         self.job_config: JobConfiguration | None = None
         self.job_execution: JobExecution | None = None
-        # Plain copies of the identity and start time: a rollback expires every
-        # ORM attribute, and reloading one outside the async greenlet raises
-        # MissingGreenlet.
+        # Plain copies: a rollback expires every ORM attribute, and reloading one
+        # outside the async greenlet raises MissingGreenlet.
         self.job_execution_id: int | None = None
         self.job_execution_started_at: datetime | None = None
         self.job_execution_status: JobStatus | None = None
@@ -279,9 +274,8 @@ class BaseJob(ABC):
         self._has_api_key_error: bool = False
         self._has_puuid_binding_error: bool = False
         self._completion_logged: bool = False
-        # A run skipped because the same job is already active never creates an
-        # execution row. It must stay distinguishable from a run whose start
-        # failed, which also leaves no execution id but is a genuine failure.
+        # A skipped-as-already-running run creates no execution row, and must stay
+        # distinguishable from a start failure, which also leaves no execution id.
         self.skipped_as_already_running: bool = False
         # Track API call records for detailed logging
         self._api_call_records: list[APICallRecord] = []
@@ -307,10 +301,6 @@ class BaseJob(ABC):
     async def execute(self, db: AsyncSession) -> None:
         """Execute the job logic.
 
-        This method must be implemented by subclasses.
-        It should contain the main job logic and use self.metrics
-        to track execution statistics.
-
         Args:
             db: Database session for job execution.
 
@@ -322,9 +312,8 @@ class BaseJob(ABC):
     async def _refresh_config(self, db: AsyncSession) -> None:
         """Load fresh job configuration from database.
 
-        `_reset_run_state` clears `job_config` before every run, so this always
-        selects rather than reading a cached instance: a config committed by
-        another session (an API update, say) is visible on the next tick.
+        Always selects rather than reading a cached instance, so a config
+        committed by another session is visible on the next tick.
 
         Args:
             db: Database session for querying configuration.
@@ -444,9 +433,8 @@ class BaseJob(ABC):
                 db, update_stmt
             )
 
-            # Publish the terminal status only once it is actually persisted:
-            # a cached status from a write that never landed would contradict
-            # the stored row for every reader that classifies from the scalar.
+            # Publish the terminal status only once persisted: a cached status
+            # from a write that never landed would contradict the stored row.
             if self._completion_logged:
                 self.job_execution_status = final_status
             self.job_execution.completed_at = completed_at
@@ -458,9 +446,8 @@ class BaseJob(ABC):
     async def fail_orphaned_execution(self, db: AsyncSession) -> None:
         """Fail a RUNNING/PAUSED row left behind by a process that died.
 
-        Only ever called once this run holds the runtime key, so any such row
-        belongs to a previous process: the registry is in-memory and does not
-        survive a restart, while the row does.
+        Only called once this run holds the runtime key, so any such row belongs
+        to a dead process: the registry is in-memory, the row is not.
         """
         stmt = (
             select(JobExecution)
@@ -544,9 +531,8 @@ class BaseJob(ABC):
 
     async def _begin_run(self, db: AsyncSession) -> bool:
         """Start bookkeeping and register runtime control when the job may run."""
-        # Claim first: everything below awaits, and a run that started its
-        # bookkeeping before taking the key could interleave with another run
-        # of the same configuration. Test runs claim the negated key.
+        # Claim first: everything below awaits, so bookkeeping done before taking
+        # the key could interleave with another run of the same configuration.
         if not claim_runtime_control(self.runtime_key, asyncio.current_task()):
             logger.info(
                 "Skipping job execution - already running",
@@ -679,9 +665,8 @@ class BaseJob(ABC):
     async def _fail_unfinished_execution(self, db: AsyncSession) -> None:
         """Close an execution whose completion logging never ran.
 
-        An exception raised outside `execute()` — while collecting logs or
-        writing completion — would otherwise leave the row `RUNNING` forever,
-        so the next scheduled tick reports it as an orphan.
+        An exception raised outside `execute()` would otherwise leave the row
+        `RUNNING` forever.
         """
         if self.job_execution_id is None or self._completion_logged:
             return
@@ -715,9 +700,8 @@ class BaseJob(ABC):
     async def check_control_state(self, db: AsyncSession) -> None:
         """Check pause/stop state and block while paused.
 
-        Reads only the in-memory runtime registry — jobs call this once per
-        work item (and the test runner once per second), so a DB round-trip
-        here multiplies into thousands of SELECTs per long run.
+        Reads only the in-memory runtime registry: jobs call this once per work
+        item, so a DB round-trip here would be thousands of SELECTs per run.
         """
         runtime_state = get_runtime_control_snapshot(self.runtime_key)
 
@@ -838,9 +822,8 @@ class BaseJob(ABC):
     ) -> None:
         """Record a safe, structured diagnostic for an execution error.
 
-        Persisted diagnostics deliberately retain the operation, exception type,
-        safe HTTP status and explicitly supplied identifiers, but never arbitrary
-        exception text or provider response bodies.
+        Persists only the operation, exception type, safe HTTP status and supplied
+        identifiers — never exception text or provider response bodies.
         """
         self._store_recorded_error(_build_error_diagnostic(error, operation, context))
         if is_api_key_error:
@@ -925,9 +908,11 @@ class BaseJob(ABC):
     ) -> bool:
         """Classify one player's failure and answer whether the run should stop.
 
-        Returns True when the caller should stop. A database error is re-raised
-        instead: the session cannot be reused, so continuing would run every
-        later player against a session that is already unusable.
+        A database error is re-raised instead of classified: the session cannot
+        be reused, so every later player would run against an unusable one.
+
+        Returns:
+            True when the caller should stop.
         """
         is_api_key_err = is_riot_api_key_error(error)
         logger.error(message, puuid=puuid, error_type=type(error).__name__)
@@ -936,9 +921,8 @@ class BaseJob(ABC):
             await rollback_quietly(db)
             raise error
 
-        # An API-key error recorded by an inner handler arrives here again as
-        # it propagates. Recording it twice makes one expired key read as a run
-        # full of distinct failures.
+        # An inner handler already recorded this; recording it twice makes one
+        # expired key read as a run full of distinct failures.
         if is_api_key_err and self.has_api_key_error():
             return True
 

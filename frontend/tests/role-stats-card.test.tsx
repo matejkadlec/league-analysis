@@ -59,9 +59,8 @@ function iconSources(): string[] {
 
 describe("the role performance card", () => {
   it("gives every lane the backend can send its own icon", () => {
-    // The card's lookup ends in `|| position-middle.svg`, so a rename draws the
-    // mid icon under alt text that still reads "Support". Distinctness catches
-    // that; "not the fallback" cannot, Mid's own icon being it.
+    // The lookup ends in `|| position-middle.svg`, so distinctness is the only
+    // check that catches a rename: Mid's own icon is the fallback.
     const names = backendLaneNames();
     expect(names.length).toBeGreaterThan(1);
 
@@ -86,15 +85,15 @@ describe("the role performance card", () => {
   });
 
   it("does not size the bar to NaN when no lane has been played", () => {
-    // Without the `totalGames > 0` guard the division is 0/0, and the browser
-    // drops `width: NaN%` -- a full-width bar saying the player mains every role
-    // equally. The count is asserted first so an empty loop cannot pass.
+    // Without the `totalGames > 0` guard the division is 0/0 and the browser
+    // drops `width: NaN%`, leaving a full-width bar for every role.
     const { container } = renderCard([
       lane("Top", { games_played: 0, wins: 0, losses: 0 }),
       lane("Mid", { games_played: 0, wins: 0, losses: 0 }),
     ]);
 
     const bars = container.querySelectorAll<HTMLElement>("[style*='width']");
+    // Asserted first so an empty `bars` cannot pass the loop below vacuously.
     expect(bars).toHaveLength(2);
     for (const bar of bars) {
       expect(bar.style.width).toBe("0%");

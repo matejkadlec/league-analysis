@@ -17,9 +17,8 @@ export function getChampionIconUrl(
   championName: string,
   version: string = DDRAGON_FALLBACK_VERSION,
 ): string {
-  // `championName` must already be in Data Dragon's own spelling -- camelCase,
-  // no spaces, no punctuation ("AurelionSol", "Kaisa", "KSante") -- which is
-  // what the backend's `championName` field carries.
+  // `championName` must already carry Data Dragon's own spelling -- camelCase,
+  // no spaces, no punctuation -- which is what the backend's field holds.
   return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
 }
 
@@ -75,8 +74,7 @@ export function getChampionDisplayName(championName: string): string {
 }
 
 /**
- * Riot spell ID to `summoner.json` (en_US) asset and in-game name. One entry
- * carries both, like the rune maps below, so no caller has to reach for a
+ * One entry carries both the asset and the in-game name, so no caller needs a
  * second table of names that can drift away from the icons.
  */
 const SUMMONER_SPELL_MAP: Record<number, { name: string; asset: string }> = {
@@ -113,19 +111,14 @@ export function getSummonerSpellIconUrlById(
   return `${getVersionedBaseUrl(version)}/img/spell/${asset}.png`;
 }
 
-/**
- * Get the in-game name of a summoner spell by ID.
- *
- * @returns The display name (e.g. "Flash"), or null if the ID is unknown
- */
+/** The in-game name (e.g. "Flash"), or null when the ID is unmapped. */
 export function getSummonerSpellName(spellId: number): string | null {
   return SUMMONER_SPELL_MAP[spellId]?.name ?? null;
 }
 
 /**
- * Keystone icons and names from `runesReforged` (en_US), one entry each: the
- * asset filename is not the in-game name and cannot be derived from it (8439
- * is still `VeteranAftershock`, 8008 is `LethalTempoTemp`).
+ * The asset filename is not the in-game name and cannot be derived from it
+ * (8439 is still `VeteranAftershock`, 8008 is `LethalTempoTemp`).
  */
 const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
   // Domination
@@ -214,11 +207,7 @@ export function getKeystoneIconUrlById(keystoneId: number): string | null {
   return `${DDRAGON_IMAGE_BASE_URL}/${iconPath}`;
 }
 
-/**
- * Get the in-game name of a keystone rune by ID.
- *
- * @returns The display name (e.g. "Conqueror"), or null if the ID is unknown
- */
+/** The in-game name (e.g. "Conqueror"), or null when the ID is unmapped. */
 export function getKeystoneName(keystoneId: number): string | null {
   return KEYSTONE_MAP[keystoneId]?.name ?? null;
 }
@@ -242,11 +231,7 @@ export function getRuneStyleName(styleId: number): string | null {
   return RUNE_STYLE_MAP[styleId]?.name ?? null;
 }
 
-/**
- * Get the URL for a rune style icon by style ID.
- *
- * Uses official Data Dragon rune style icon paths from runesReforged data.
- */
+/** Rune style icon URL, from Data Dragon's official `runesReforged` paths. */
 export function getRuneStyleIconUrl(styleId: number): string | null {
   const iconPath = RUNE_STYLE_MAP[styleId]?.iconPath;
   if (!iconPath) {

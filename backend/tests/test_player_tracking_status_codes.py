@@ -1,8 +1,7 @@
 """Tracking failures pick their status from the exception type, not the prose.
 
-Both routes used to classify by `"not found" in str(e).lower()`, so the status
-code was a property of the English sentence: rewording a service message moved
-the response between 404 and 400. These pin the mapping to the types.
+Classifying on `"not found" in str(e).lower()` makes the status a property of
+the English sentence, so rewording a message moves it between 404 and 400.
 """
 
 from unittest.mock import AsyncMock, MagicMock

@@ -66,9 +66,8 @@ describe("TrackedPlayersList", () => {
     await waitFor(() =>
       expect(scrollRegion.className).toContain("overflow-y-auto"),
     );
-    // The cap is a row count, not a number of pixels: five rows plus the four
-    // `space-y-3` gaps between them. Spelled as the arithmetic so a sixth row
-    // creeping into view is a wrong count rather than a wrong constant.
+    // The cap is a row count, not pixels; spelled as arithmetic so a sixth row in
+    // view reads as a wrong count rather than a wrong constant.
     const VISIBLE_ROWS = 5;
     const ROW_HEIGHT_PX = 88;
     const ROW_GAP_PX = 12;

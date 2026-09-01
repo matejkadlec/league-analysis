@@ -1,8 +1,7 @@
 """`JobService` read paths against the real schema.
 
-These filters decide what the jobs UI shows and which rows the orphan sweep
-rewrites. Only a database answers which rows come back, so every assertion
-here is over stored rows rather than over the query that fetched them.
+Only a database answers which rows come back, so every assertion here is over
+stored rows rather than over the query that fetched them.
 """
 
 from __future__ import annotations

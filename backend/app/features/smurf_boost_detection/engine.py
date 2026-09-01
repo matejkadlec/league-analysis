@@ -95,9 +95,8 @@ class AnalysisRequest:
     def eligible_total(self) -> int:
         """Every eligible game the player has, not just the loaded slice.
 
-        The service caps how many matches it loads for performance, so the
-        loaded list can be shorter than the player's real history; reporting
-        the slice length would understate it.
+        The service caps how many matches it loads, so `len(self.eligible)` would
+        understate the real history.
         """
         if self.total_eligible_games is None:
             return len(self.eligible)

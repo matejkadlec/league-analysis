@@ -19,9 +19,8 @@ function failed(error_code: string, error_message: string | null = null) {
 
 describe("analysisFailureMessage", () => {
   it("keeps the count the backend put in the not_enough_matches message", () => {
-    // Nearly every player in this dataset has under ten ranked games, so this
-    // is the failure the feature produces most often. The generic sentence
-    // loses the one number that tells the viewer how far off they are.
+    // The generic sentence loses the one number that tells the viewer how far
+    // off they are, and this is the commonest failure.
     expect(
       analysisFailureMessage(
         failed(

@@ -76,8 +76,7 @@ async def get_player_suggestions(
     """
     Get autocomplete suggestions for player search.
 
-    Matches "Name#TAG" as a Riot ID first, then "#TAG" or "Name" on its own;
-    returns up to `limit` players sorted by relevance.
+    Matches "Name#TAG" as a Riot ID first, then "#TAG" or "Name" on its own.
 
     Examples:
         GET /api/v1/players/suggestions?q=Danger&platform=eun1
@@ -102,9 +101,8 @@ async def get_player_context(
 ) -> PlayerContextResponse:
     """Get the authenticated user's current and recent tracked players.
 
-    Not a pure read: it creates the settings row a new account has yet to
-    get, clears a current-player pointer that no longer resolves, and
-    commits either.
+    Not a pure read: it creates a missing settings row, clears a current-player
+    pointer that no longer resolves, and commits either.
     """
     return await player_service.get_player_context(current_user.id)
 
@@ -208,9 +206,8 @@ async def start_player_sync(
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except SyncBusyError as error:
-        # A refusal, not a failure: no run was created, and the frontend
-        # reads the code to report it as "showing stored data" rather than
-        # as an error (`usePlayerProfileUpdate`).
+        # A refusal, not a failure: no run was created, and the frontend reads
+        # the code to report "showing stored data" (`usePlayerProfileUpdate`).
         raise HTTPException(
             status_code=409,
             detail={"code": "SYNC_BUSY", "message": error.message},
@@ -248,9 +245,8 @@ async def read_player_sync(
 
 
 @router.post("/{puuid}/track")
-# Same ceiling as POST /{puuid}/sync, because this starts the same run.
-# Deduplication in create_or_get_player_sync caps concurrency per PUUID, not
-# rate: cycling untrack/track would otherwise spend Riot quota past that limit.
+# Same ceiling as POST /{puuid}/sync: dedup in create_or_get_player_sync caps
+# concurrency per PUUID, not rate, so untrack/track cycling could burn quota.
 @rate_limit("10/minute")
 async def track_player(
     request: Request,
@@ -262,8 +258,7 @@ async def track_player(
     """
     Mark a player for automated tracking and monitoring.
 
-    Tracking alone only adds the player to the Match Fetcher's set, so this also
-    starts the Update button's explicit sync; a SYNC_BUSY run defers to the scheduler.
+    Tracking alone only adds the player to the Match Fetcher's set; this syncs too.
 
     Returns:
         Updated player data with is_tracked=True
@@ -292,9 +287,8 @@ async def track_player(
     except TrackingLimitReachedError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # The tracking row is committed by here, so claiming the run sits outside the
-    # block above on purpose: the sync only saves the viewer from waiting for the
-    # Match Fetcher, and failing to claim it must not report tracking as failed.
+    # The tracking row is already committed, so a failure to claim the sync run
+    # must not be reported to the caller as tracking having failed.
     try:
         sync_run, created = await create_or_get_player_sync(
             player_service.db,
@@ -332,8 +326,7 @@ async def untrack_player(
     """
     Remove a player from automated tracking.
 
-    The player's data will remain in the database but will no longer
-    receive automatic updates.
+    The player's data remains in the database but stops receiving updates.
 
     Returns:
         Updated player data with is_tracked=False

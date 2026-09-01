@@ -25,9 +25,8 @@ describe("Progress", () => {
   });
 
   it("fills the track by exactly the value given", () => {
-    // The fill is `translateX(-${100 - value}%)`: the one place the bar's
-    // geometry is computed, and a place an edit to the template quietly
-    // inverts (a bar that shrinks as the value grows).
+    // The fill is `translateX(-${100 - value}%)`, which an edit to the template
+    // can quietly invert into a bar that shrinks as the value grows.
     const { rerender } = render(<Progress value={40} />);
     const track = screen.getByRole("progressbar");
 

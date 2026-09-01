@@ -47,8 +47,7 @@ describe("smurfBoostQueryOptions", () => {
   });
 
   it("skips rather than disables when there is no player", () => {
-    // `skipToken`, not `enabled`: the card outlives its player, and `enabled`
-    // is an ordinary option a spreading caller can drop, which would fire a
+    // `skipToken`, not `enabled`: a spreading caller can drop `enabled` and fire a
     // request for `null`.
     expect(smurfBoostQueryOptions(null).queryFn).toBe(skipToken);
     expect(smurfBoostQueryOptions("p1").queryFn).not.toBe(skipToken);

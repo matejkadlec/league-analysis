@@ -1,8 +1,7 @@
 """Pure statistical helpers for `smurf-boost/v1`.
 
-The specification pins exact denominators, and `statistics` pins the same ones
-by documented contract -- `pvariance` divides by n, `variance` by n - 1. Below
-them, skewness, kurtosis and the Wilson interval stay spelled out.
+The specification pins exact denominators, matched by `statistics`:
+`pvariance` divides by n, `variance` by n - 1.
 """
 
 from __future__ import annotations
@@ -16,9 +15,8 @@ from .config import EPSILON
 
 WILSON_Z: float = 1.96
 
-# Re-exported under the names the signals read them by. Aliased here rather
-# than imported under these names because only sibling modules consume them,
-# which ruff's F401 reads as an unused import.
+# Re-exported under the names the signals read them by; aliased rather than
+# imported under those names, which ruff's F401 reads as unused.
 population_variance = pvariance
 population_stdev = pstdev
 
@@ -77,8 +75,10 @@ def bimodality_coefficient(values: Sequence[float]) -> float | None:
     """Bias-corrected bimodality coefficient.
 
     Skewness and excess kurtosis are standardized by the population second
-    central moment, not by the sample standard deviation; mixing the two
-    invalidates the calibrated threshold. Returns None when there is no spread.
+    central moment; the sample standard deviation invalidates the threshold.
+
+    Returns:
+        None when there is no spread.
     """
     n = len(values)
     if n < 4:

@@ -52,9 +52,8 @@ def _client() -> RiotAPIClient:
 def _job_double(**attributes: object) -> BaseJob:
     """Present a duck-typed writer result as the `BaseJob` the API declares.
 
-    `_failure_from_job` reads only the writer's cached scalars and its two
-    classification predicates. A real `BaseJob` carries a live `JobExecution`,
-    so it would hide exactly the regression under test.
+    Valid because `_failure_from_job` reads only cached scalars and two predicates;
+    a real `BaseJob`'s live `JobExecution` would hide the regression under test.
     """
     return cast(BaseJob, SimpleNamespace(**attributes))
 
@@ -340,9 +339,8 @@ async def test_a_cancelled_sync_run_is_never_reopened(
 ) -> None:
     """An operator stop or startup recovery may cancel a run mid-flight.
 
-    The orchestrator may still be running, and an unguarded write would set that
-    terminal row back to `running` and could then collide with a replacement run
-    on the same PUUID.
+    The orchestrator may still be running; an unguarded write would set the
+    terminal row back to `running` and collide with a replacement run.
     """
     run = SimpleNamespace(status="cancelled", started_at=None, completed_at=None)
     session = _RecordingSession(run)
@@ -379,9 +377,8 @@ async def test_an_active_sync_run_still_advances(
 class _NoMergeSession:
     """Session that fails the test if discovery reaches for another player row.
 
-    Discovery may look the resolved PUUID up by primary key and insert or update
-    that one row. Any statement execution, bulk query, or delete means it went
-    looking for rows sharing the Riot ID, the merge this regression forbids.
+    Discovery may only touch the resolved PUUID by primary key; reaching further
+    means it went looking for rows sharing the Riot ID.
     """
 
     def __init__(self) -> None:
@@ -402,9 +399,8 @@ class _NoMergeSession:
         instance.updated_at = datetime.now(UTC)
 
     async def execute(self, statement: object, **_kwargs: object) -> SimpleNamespace:
-        # The one statement discovery may run is the per-user tracking check
-        # that fills `is_tracked`; anything touching `core.players` would be
-        # the merge this regression forbids.
+        # The only statement discovery may run is the per-user tracking check;
+        # touching `core.players` would be the forbidden merge.
         assert "core.players" not in str(statement), (
             "discovery must not run a statement against other player rows"
         )
@@ -428,9 +424,8 @@ async def test_discovery_never_merges_a_row_sharing_the_riot_id(
 ) -> None:
     """A stale-looking row must survive discovery untouched.
 
-    Discovery cannot tell a PUUID re-encrypted under a new developer account
-    apart from a Riot ID reclaimed by someone else, and every table referencing
-    `core.players(puuid)` cascades on delete. A duplicate row is accepted.
+    Discovery cannot tell a re-encrypted PUUID from a reclaimed Riot ID, and
+    every table referencing `core.players(puuid)` cascades on delete.
     """
     monkeypatch.setattr(
         player_service_module,
@@ -509,9 +504,8 @@ def _indexed_active_statuses(model: type[Base], index_name: str) -> set[str]:
 async def test_startup_cancels_orphaned_player_syncs() -> None:
     """A restart must terminalize sync runs whose in-process worker is gone.
 
-    `jobs.player_sync_runs` allows one active row per PUUID, and the route
-    schedules work only for a newly created row, so an orphan left by an
-    ungraceful shutdown blocks that player's updates until something closes it.
+    `jobs.player_sync_runs` allows one active row per PUUID, so an orphan blocks
+    that player's updates until something closes it.
     """
     from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
 
@@ -565,8 +559,7 @@ async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
     """Cancelling an active analysis here would discard its persisted progress.
 
     `start_analysis` attaches to an active row and relaunches its worker, so the
-    documented restart contract is resume, not cancel. This covers only the
-    startup helper; the shutdown path has its own regression below.
+    restart contract is resume, not cancel.
     """
     from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
 
@@ -583,9 +576,8 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
 ) -> None:
     """Process shutdown cancels the task; the persisted run must stay active.
 
-    Writing a terminal row here would discard completed progress on every
-    deployment. Explicit user cancellation is unaffected because
-    `cancel_analysis` commits the terminal row before it cancels this task.
+    Writing a terminal row here would discard progress on every deployment;
+    `cancel_analysis` commits its terminal row before cancelling the task.
     """
     import asyncio
 

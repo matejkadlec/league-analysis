@@ -16,9 +16,8 @@ export const UserResponseSchema = z.object({
 export type UserResponse = z.infer<typeof UserResponseSchema>;
 
 /**
- * Request bodies, declared here and applied with `satisfies` so an unknown or
- * missing field is a type error rather than a runtime 422. Never `.parse()`d:
- * the server owns values, and being zod puts them inside the contract test.
+ * Applied with `satisfies`, never `.parse()`d: an unknown or missing field is a
+ * type error rather than a runtime 422, and zod puts them in the contract test.
  */
 export const UserProfileUpdateSchema = z.object({
   display_name: z.string().nullable().optional(),

@@ -119,9 +119,8 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         are handled by the separate PlayerUpdaterJob which runs less frequently (every 24h).
         """
 
-        # The identifier, not the row: this closure runs after a skipped match
-        # has rolled the session back, and a rolled-back session expires every
-        # instance it holds.
+        # The identifier, not the row: a skipped match rolls the session back,
+        # and a rolled-back session expires every instance it holds.
         puuid = player.puuid
 
         # Fetch new matches with rate limiting
@@ -159,9 +158,8 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         self.metrics["records_created"] += count
 
         if len(self._errors_encountered) != error_count_before:
-            # Same rollback, other half: everything below reads `player`
-            # synchronously, and an expired read outside an await raises
-            # `MissingGreenlet`, which `is_database_error` calls fatal.
+            # Everything below reads `player` synchronously, and an expired read
+            # outside an await raises `MissingGreenlet`, which is treated fatal.
             await db.refresh(player)
 
         if len(self._errors_encountered) == error_count_before:
@@ -186,9 +184,8 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         except RateLimitError:
             raise
         except Exception as e:
-            # This one re-raises rather than returning, because its caller
-            # `_process_player` has no stop channel of its own: the exception
-            # is how the decision reaches the loop.
+            # Re-raises rather than returning: `_process_player` has no stop
+            # channel, so the exception is how the decision reaches the loop.
             if await self.handle_player_error(
                 db,
                 e,
@@ -210,8 +207,7 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         """Close one Match Fetcher observation window and commit its evidence.
 
         Runs on every tick, including one that found no ranked match: an idle
-        refresh is what isolates LP decay into a snapshot of its own, so the
-        next ranked match is not charged for it.
+        refresh isolates LP decay into a snapshot of its own.
         """
         league_updated = await player_service.update_player_league(player, riot_client)
         if league_updated:

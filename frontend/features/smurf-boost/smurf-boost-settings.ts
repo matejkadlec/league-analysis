@@ -1,8 +1,7 @@
 import type { CardId } from "@/lib/core/schemas";
 /**
- * The viewer-configurable thresholds of the smurf and boost detection card.
- * The backend owns the ranges but exposes no endpoint describing them, so the
- * form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
+ * The backend owns these ranges but exposes no endpoint describing them, so
+ * the form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
  */
 
 /** Typed against the API's own card-id enum, so a rename fails here. */
@@ -165,9 +164,8 @@ export type ThresholdName = (typeof THRESHOLD_FIELDS)[number]["name"];
 export type ThresholdSettings = Partial<Record<ThresholdName, number>>;
 
 /**
- * Derive one value per threshold. The loop is what makes the result total, so
- * this is the only place that has to assert it -- every caller gets a map the
- * compiler knows has an entry for each name.
+ * The loop is what makes the result total, so this is the only place that has
+ * to assert it; every caller gets a map with an entry per name.
  */
 export function byThreshold<T>(
   derive: (field: (typeof THRESHOLD_FIELDS)[number]) => T,
@@ -180,9 +178,8 @@ export function byThreshold<T>(
 }
 
 /**
- * The one cross-field rule the backend enforces, restated here so the form can
- * say what is wrong before a request is sent. The server remains the authority
- * and rejects the write regardless.
+ * The backend's own cross-field rule, restated so the form can say what is
+ * wrong first; the server stays the authority and rejects the write anyway.
  */
 export function crossFieldError(values: ThresholdSettings): string | null {
   const novel = values.a3MinimumNovelGames;
@@ -236,9 +233,8 @@ export function numericSettings(
 export function writableSettings(
   settings: Record<string, number>,
 ): ThresholdSettings {
-  // A loop, not `THRESHOLD_FIELDS.map(...)` into `Object.fromEntries`: that
-  // map loses the tuple, so the narrowing it then needs is an assertion the
-  // compiler cannot check, and a widened value type would post a string.
+  // A loop, not `map` into `Object.fromEntries`: that loses the tuple, and the
+  // widened value type it leaves would post a string.
   const payload: ThresholdSettings = {};
   for (const field of THRESHOLD_FIELDS) {
     const value = settings[field.name];
@@ -250,16 +246,14 @@ export function writableSettings(
 }
 
 /**
- * The baseline floor the model treats as a correctness constraint. Not
- * configurable and never sent by the API, so this is a second copy of a backend
- * constant; `tests/smurf-boost-settings.test.ts` reads `config.py` for drift.
+ * A second copy of a backend constant the API never sends;
+ * `tests/smurf-boost-settings.test.ts` reads `config.py` for drift.
  */
 export const MINIMUM_BASELINE_GAMES = 15;
 
 /**
- * What a comparison still needs, said in one sentence, for the two surfaces
- * that say it. The recent window is taken first, so quoting only the sample
- * floors understates it; `fallbackRecentWindow` covers a run without a window.
+ * The recent window is taken first, so quoting only the sample floors
+ * understates it; `fallbackRecentWindow` covers a run without a window.
  */
 export function gameShortfall(
   eligibleGames: number,

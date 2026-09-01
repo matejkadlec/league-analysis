@@ -4,9 +4,8 @@ import { useRelativeTime } from "@/lib/core/hooks/use-relative-time";
 import { cn } from "@/lib/core/utils";
 
 /**
- * When the figures above were last refreshed, or nothing if that is unknown.
- * `useRelativeTime` runs before the absent case returns so the hook order does
- * not depend on the data. Callers pass their own spacing through `className`.
+ * `useRelativeTime` runs before the absent case returns, so hook order does not
+ * depend on the data.
  */
 export function UpdatedStamp({
   lastUpdated,

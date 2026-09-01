@@ -6,9 +6,8 @@ import {
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 
-// The roots of the two caches below, as constants rather than literals: the
-// predicate at the bottom has to recognise both, and a third hand-written
-// copy is how the pair drifted onto different casing last time.
+// Constants, not literals: the predicate at the bottom has to recognise both
+// roots, and a hand-written copy drifts.
 const MATCH_HISTORY_STATS_KEY = "match-history-stats";
 const MATCH_HISTORY_DETAILED_KEY = "match-history-detailed";
 
@@ -70,9 +69,8 @@ export function matchHistoryDetailedQueryOptions(args: {
 }
 
 /**
- * Either of the two caches above, for one player, whatever its queue filter,
- * search, page or page size. A predicate rather than a key prefix because the
- * two roots are siblings, not a shared prefix, and `refetchQueries` takes one.
+ * A predicate rather than a key prefix: the two roots are siblings, not a
+ * shared prefix, and `refetchQueries` takes one.
  */
 export function isMatchHistoryQuery(
   queryKey: readonly unknown[],

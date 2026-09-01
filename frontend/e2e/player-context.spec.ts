@@ -8,13 +8,10 @@ import {
 } from "./support/player-context-harness";
 
 // Each test installs its own mocks and its own copy of the mutable counters,
-// so the four can run against four pages at once instead of queueing behind
-// one worker.
+// so they share no state across parallel pages.
 test.describe.configure({ mode: "parallel" });
 
-// By its accessible name, not its class: the class is real styling, but a
-// user finds this control by the label a screen reader announces, and a
-// locator that survives a restyle is the one worth asserting through.
+// By accessible name, not class, so a restyle cannot break the locator.
 const trackingToggle = (page: Page) =>
   page.getByRole("button", { name: /^(Track|Untrack) player$/ });
 

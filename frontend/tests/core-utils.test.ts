@@ -17,9 +17,8 @@ describe("platform presentation", () => {
 
 describe("rank styling", () => {
   it("styles every tier the API can send", () => {
-    // The parameter is `Tier`, so the unknown-tier branch is gone. What is worth
-    // pinning is that the table covers the enum, since a tier added to
-    // `TierSchema` without a colour is a type error only if the table is exhaustive.
+    // A tier added to `TierSchema` without a colour is a type error only while
+    // the colour table stays exhaustive.
     for (const tier of TierSchema.options) {
       expect(getRankColors(tier).text).toBeTruthy();
     }

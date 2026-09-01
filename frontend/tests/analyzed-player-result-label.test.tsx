@@ -15,9 +15,8 @@ function sentence(playerLabel: string) {
 
 describe("the analyzed-player result label", () => {
   it("reads as one exact sentence with the player's name in it", () => {
-    // `e2e/player-context.spec.ts` matches this sentence word for word. The
-    // split spans are styling only; the sentence the viewer reads is the
-    // whole paragraph.
+    // `e2e/player-context.spec.ts` matches this sentence word for word; the split
+    // spans are styling only.
     render(<AnalyzedPlayerResultLabel playerLabel="Hide on bush#KR1" />);
 
     expect(screen.getByText(sentence("Hide on bush#KR1"))).toBeTruthy();

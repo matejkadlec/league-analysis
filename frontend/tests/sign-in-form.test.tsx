@@ -120,9 +120,8 @@ describe("SignInForm", () => {
   });
 
   it("shows a rejected field's message and points the input at it", async () => {
-    // Guards `components/ui/form.tsx` through its only consumer. `a@b` on purpose
-    // -- the input is `type="email"` with no `noValidate`, so a malformed value
-    // never reaches these primitives at all.
+    // `a@b` on purpose: the input is `type="email"` with no `noValidate`, so a
+    // malformed value never reaches these primitives at all.
     const user = userEvent.setup();
     render(<SignInForm />);
 
@@ -139,9 +138,8 @@ describe("SignInForm", () => {
   });
 
   it("hands the form back after a failure, without the last failure's message", async () => {
-    // Both halves strand the visitor: without `setIsSubmitting(false)` the button
-    // stays disabled forever after a rejection, and without `setError(null)` the
-    // previous failure stays on screen while the next attempt is in flight.
+    // Without `setIsSubmitting(false)` the button stays disabled forever; without
+    // `setError(null)` the old failure sits over the attempt in flight.
     const user = userEvent.setup();
     login.mockRejectedValueOnce(new Error("Failed to fetch"));
     render(<SignInForm />);
@@ -174,9 +172,8 @@ describe("SignInForm", () => {
 
   describe("when the server escalates to a captcha", () => {
     it("shows the challenge, sends the token, and drops one the server rejects", async () => {
-      // Nothing reached this path: the site key is unset in tests, so every existing
-      // case took the "not configured" branch and the whole escalation was 0%
-      // covered -- and it is the only way back in for someone being challenged.
+      // The site key is unset in tests, so without this stub every case takes the
+      // "not configured" branch and the escalation path goes unexercised.
       vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
       const user = userEvent.setup();
       login.mockRejectedValueOnce(
@@ -215,9 +212,8 @@ describe("SignInForm", () => {
         ),
       );
 
-      // A token the server rejected must not be sent again: dropping
-      // `setCaptchaToken(null)` leaves the form resubmitting it on every retry.
-      // The stubbed widget ignores `ref`, so this asserts the state the form owns.
+      // A token the server rejected must not be sent again; the stubbed widget
+      // ignores `ref`, so this asserts the state the form itself owns.
       await waitFor(() =>
         expect(
           screen.getByRole("button", { name: "Sign In" }),
@@ -226,9 +222,8 @@ describe("SignInForm", () => {
     });
 
     it("says so plainly when there is no widget to solve", async () => {
-      // The misconfiguration that fails closed: the server demands a captcha and the
-      // deployment has no site key, so no widget can render. Without the message the
-      // visitor gets a permanently disabled button and no reason.
+      // Server demands a captcha, deployment has no site key: without the message
+      // the visitor gets a permanently disabled button and no reason.
       vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
       const user = userEvent.setup();
       login.mockRejectedValueOnce(

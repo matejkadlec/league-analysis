@@ -23,9 +23,8 @@ function accept(): boolean {
 }
 
 /**
- * Always 204: this is a beacon, not a product API. A 4xx here would become
- * another client error and, without the swallow in `reportClientError`, a
- * loop. Invalid or cross-origin bodies are dropped.
+ * Always 204: a 4xx here would itself become another client error, and without
+ * the swallow in `reportClientError`, a loop.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const origin = request.headers.get("origin");

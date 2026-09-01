@@ -133,9 +133,8 @@ class SettingsService:
             self.db.add(target_key)
             await self.db.flush()
 
-        # Delete before binding, so this takes its key-row locks before the
-        # health-row lock -- the order `synchronize_riot_credential_health` uses.
-        # The reverse order deadlocks against a concurrent request.
+        # Delete before binding, so key-row locks precede the health-row lock --
+        # the order `synchronize_riot_credential_health` uses, or it deadlocks.
         await self.db.execute(delete(RiotAPIKey).where(RiotAPIKey.id != target_key.id))
         await mark_database_credential_valid(
             self.db,
@@ -440,9 +439,8 @@ class SettingsService:
         """Create or update authenticated user's cookie-consent record."""
         consent_level = CookieConsentLevel(update.consent_level.value)
 
-        # Selecting and then branching on the result raced: two concurrent PUTs
-        # both saw no row, both inserted, and the loser got a 500 from
-        # `user_cookie_consents_pkey`. One statement cannot lose that race.
+        # One statement: select-then-branch lets two concurrent PUTs both insert,
+        # and the loser hits `user_cookie_consents_pkey`.
         statement = (
             insert(UserCookieConsent)
             .values(
@@ -457,9 +455,8 @@ class SettingsService:
                     "consent_level": consent_level,
                     "consent_version": update.consent_version,
                     "consent_source": update.consent_source,
-                    # `consented_at` records an explicit choice, so a repeat
-                    # consent moves it. `updated_at` is set here because its
-                    # `onupdate` is an ORM hook a Core ON CONFLICT never fires.
+                    # `consented_at` moves on a repeat consent; `updated_at` is
+                    # set here because its `onupdate` is an ORM-only hook.
                     "consented_at": func.now(),
                     "updated_at": func.now(),
                 },

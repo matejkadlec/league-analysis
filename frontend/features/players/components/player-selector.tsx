@@ -83,9 +83,8 @@ interface PlayerSelectorProps {
   className?: string;
   inputClassName?: string;
   /**
-   * What the box reads on mount, for a surface that keeps a chosen player
-   * rather than switching away from one. Read once, as the initial state:
-   * after that the box belongs to whoever is typing in it.
+   * Read once, as the initial state: after that the box belongs to whoever is
+   * typing in it.
    */
   initialSearchValue?: string;
 }
@@ -126,9 +125,8 @@ export function PlayerSelector({
         ),
       );
     },
-    // Focus, not just length: a seeded box already holds a Riot ID, and the
-    // results only render while the box has focus, so without this every
-    // mount would spend a suggestions request on a list nothing can show.
+    // Focus, not just length: results only render while the box has focus, so
+    // a seeded box would otherwise spend a request on a list nothing shows.
     enabled: debouncedSearch.length >= 2 && isSearchFocused,
     staleTime: 30_000,
   });
@@ -136,13 +134,11 @@ export function PlayerSelector({
   const suggestions = suggestionsQuery.data ?? [];
   const listboxId = `${id}-suggestions`;
 
-  // A surface that seeds the box keeps its selection in it. Re-picking the
-  // player already chosen does not remount this control, so without this the
-  // box would empty for that one case and the name would look lost.
+  // Re-picking the player already chosen does not remount this control, so a
+  // seeded box must keep its selection or the name looks lost.
   const keepsSelection = initialSearchValue !== "";
-  // What the box reads when it is showing a selection rather than a query, so
-  // that Enter before the suggestions arrive does nothing instead of opening
-  // the server dialog for the player already chosen.
+  // Lets Enter before the suggestions arrive do nothing rather than open the
+  // server dialog for the player already chosen.
   const [selectedLabel, setSelectedLabel] = useState(initialSearchValue);
 
   const choosePlayer = async (player: Player) => {
@@ -163,9 +159,8 @@ export function PlayerSelector({
     }
   };
 
-  // The Riot ID and server travel as mutation variables rather than being read
-  // from state in `onError`: cancelling or switching server while the request
-  // is in flight would otherwise name a server that was never queried.
+  // Riot ID and server travel as mutation variables: reading state in
+  // `onError` would name a server never queried after a mid-flight switch.
   const discoverMutation = useMutation({
     mutationFn: async ({ riotId, platform }: DiscoverAttempt) => {
       return unwrap(
@@ -248,9 +243,8 @@ export function PlayerSelector({
       event.preventDefault();
       const suggestion = suggestions[activeSuggestion];
       if (suggestion) void choosePlayer(suggestion);
-      // Anything but the selection already in the box. Typing a name and
-      // pressing Enter before the suggestions arrive must still reach the
-      // discover path -- that is how an untracked player is added.
+      // Enter before the suggestions arrive must still reach the discover
+      // path: that is how an untracked player is added.
       else if (searchValue.trim() !== selectedLabel) submitUnknownPlayer();
     } else if (event.key === "Escape") {
       setSearchValue("");
@@ -274,9 +268,8 @@ export function PlayerSelector({
         }}
         onFocus={(event) => {
           setIsSearchFocused(true);
-          // Only where the box is seeded: there it holds a name with no
-          // visible way to clear it, so typing would append and match nothing.
-          // On an empty box, selecting would let the next keystroke wipe it.
+          // Only where the box is seeded: it holds a name with no visible way
+          // to clear it, and on an empty box a keystroke would wipe it.
           if (keepsSelection) event.target.select();
         }}
         onBlur={() => setIsSearchFocused(false)}
@@ -290,9 +283,8 @@ export function PlayerSelector({
         aria-controls={showResults ? listboxId : undefined}
         aria-expanded={showResults}
         aria-activedescendant={
-          // Gated on showResults: the option ids only exist while the listbox
-          // is mounted, and a dangling reference makes a screen reader
-          // announce a phantom active option after the list closes.
+          // Gated on showResults: option ids exist only while the listbox is
+          // mounted, and a dangling reference announces a phantom option.
           showResults && suggestions[activeSuggestion]
             ? `${listboxId}-${activeSuggestion}`
             : undefined

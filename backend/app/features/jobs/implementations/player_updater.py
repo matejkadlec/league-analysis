@@ -20,9 +20,8 @@ logger = structlog.get_logger(__name__)
 class PlayerUpdaterJob(PlayerTargetsMixin, BaseJob):
     """Job to update player profiles (game_name, tag_line, profile_icon_id, summoner_level).
 
-    Calls summoner-v4 by-puuid (profile_icon_id, summoner_level) and
-    account-v1 by-puuid (game_name, tag_line). Should run infrequently
-    (e.g., every 24 hours) as player profiles don't change often.
+    Calls summoner-v4 and account-v1 by-puuid. Meant to run infrequently; player
+    profiles rarely change.
     """
 
     recorded_errors_are_fatal = False

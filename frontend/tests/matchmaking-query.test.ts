@@ -66,9 +66,8 @@ describe("invalidateMatchmakingRun", () => {
   });
 
   it("leaves the status cache to the watcher that owns it", async () => {
-    // The status key is written and removed by the session watching one run:
-    // invalidating it here would refetch a run the other caches just
-    // learned is over.
+    // The status key belongs to the session watching one run; invalidating it
+    // here refetches a run the other caches just learned is over.
     const queryClient = new QueryClient();
     queryClient.setQueryData(
       matchmakingStatusQueryKey("player-puuid"),

@@ -1,6 +1,5 @@
-// Regression fixture for `house/require-query-key-factory`. Each directive
-// suppresses a shape the rule MUST flag; accepted cases carry none, so both
-// under- and over-matching fail the run.
+// Each directive suppresses a shape the rule MUST flag and accepted cases
+// carry none, so both under- and over-matching fail the run.
 
 declare const queryClient: {
   invalidateQueries: (filters?: unknown) => void;

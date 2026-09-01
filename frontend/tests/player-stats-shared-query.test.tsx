@@ -90,9 +90,8 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it("asks for one player's ranked aggregate once per page, not once per card", async () => {
-  // Both cards mount on /player-overview. They used to hold two query keys
-  // for the byte-identical request, so every visit fetched the same
-  // aggregate twice.
+  // Both cards mount on /player-overview, so two query keys for the
+  // byte-identical request means every visit fetches the aggregate twice.
   const { queryClient } = renderWithQueryClient(
     <>
       <PlayerCard player={player} />

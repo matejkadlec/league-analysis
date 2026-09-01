@@ -19,9 +19,8 @@ const player = trackedPlayer(NOW, {
 });
 
 async function signIn(page: Page) {
-  // The app gates routes on an httpOnly cookie, not on anything in
-  // localStorage; the middleware redirects without it and the page renders
-  // nothing at all.
+  // Routes are gated on an httpOnly cookie, not localStorage: without it the
+  // middleware redirects and the page renders nothing.
   await seedAuthenticatedSession(page);
   await blockUpstreamRequests(page);
 
@@ -78,8 +77,7 @@ test("the rewritten curated 404 detail reaches the viewer without a PUUID", asyn
       return;
     }
 
-    // Every data query fails with the rewritten players/service.py copy.
-    // The query-layer helpers rewrap errors, so what matters here is that the
+    // The query-layer helpers rewrap errors, so what matters is that the
     // failure is announced and no raw PUUID ever renders.
     await route.fulfill({
       status: 404,

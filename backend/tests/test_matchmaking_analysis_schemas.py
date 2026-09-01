@@ -25,9 +25,8 @@ def response(**overrides: object) -> MatchmakingAnalysisResponse:
 
 
 def test_progress_counts_only_the_puuids_actually_finished() -> None:
-    # The frontend draws its progress bar from progress/total_puuids. Counting
-    # keys instead of completed values reports 100% the moment the work is
-    # enumerated, before a single player has been analysed.
+    # Counting keys instead of completed values reports 100% the moment the work
+    # is enumerated, before a single player has been analysed.
     r = response(puuid_progress={"a": True, "b": False, "c": True, "d": False})
 
     assert r.progress == 2
@@ -47,9 +46,7 @@ def test_an_unstarted_analysis_reports_zero_of_zero() -> None:
 
 
 def test_the_map_nothing_reads_stays_off_the_wire() -> None:
-    # `puuid_progress` is the field that used to make `/status` a second,
-    # near-identical response schema. It still feeds the two computed fields;
-    # it just no longer ships.
+    # `puuid_progress` feeds the two computed fields but must not ship.
     dumped = response(puuid_progress={"a": True}).model_dump()
 
     assert "puuid_progress" not in dumped
@@ -57,9 +54,8 @@ def test_the_map_nothing_reads_stays_off_the_wire() -> None:
 
 
 def test_a_completed_run_missing_a_winrate_is_rejected_not_zero_filled() -> None:
-    # `/status` validates every row through the response, so a blob missing one
-    # of the three required keys fails loudly instead of rendering as a 0%
-    # winrate the response's own `ge=0.0, le=1.0` bound cannot reject.
+    # A blob missing a required key must fail loudly, not render as a 0% winrate
+    # that the response's own `ge=0.0, le=1.0` bound cannot reject.
     with pytest.raises(ValidationError):
         response(
             status="completed",
@@ -106,9 +102,7 @@ def test_request_bounds_reject_out_of_range_match_counts() -> None:
 
 
 def test_a_legacy_results_blob_parses_with_new_fields_absent_not_zero() -> None:
-    # Pre-extension rows carry only the three original keys. Every new field
-    # must read back as None -- a 0 here is the "0% average winrate" bug
-    # reborn as "average rank Iron IV".
+    # Every new field must read back as None: a 0 renders as average rank Iron IV.
     results = MatchmakingAnalysisResults.model_validate(
         {"team_avg_winrate": 0.5, "enemy_avg_winrate": 0.5, "matches_analyzed": 10}
     )

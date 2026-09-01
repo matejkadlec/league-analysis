@@ -8,9 +8,8 @@ import {
 } from "../features/smurf-boost/smurf-boost-vocabulary";
 
 describe("wording for a result this build has not seen", () => {
-  // Each of these lookups ends in a fallback so a result computed under a later
-  // model version stays readable. Dropping `?? family`, `?? note` or `?? ""`
-  // kept all 364 tests green and rendered the string "undefined" on the page.
+  // Each lookup ends in a fallback so a result from a later model version
+  // stays readable; without one the page renders the string "undefined".
 
   it("shows an unknown family's own identifier rather than undefined", () => {
     expect(familyTitle("account_sharing_v2")).toBe("account_sharing_v2");
@@ -29,14 +28,12 @@ describe("wording for a result this build has not seen", () => {
   });
 
   it("still uses the written wording for everything it does know", () => {
-    // The fallbacks must not be reachable for known keys, or the whole
-    // vocabulary silently becomes pass-through and every label on the page
-    // turns into a snake_case identifier.
+    // A fallback reachable for a known key turns the whole vocabulary into
+    // pass-through snake_case identifiers.
     expect(familyTitle("rapid_improvement")).toBe("Rapid Improvement Pattern");
     expect(familyDescription("rapid_improvement")).toContain("earlier games");
-    // The render test reads this sentence back through `BAND_MEANINGS`, so it
-    // cannot see the wording change. Written out, the band keeps saying what
-    // the finding word alone does not.
+    // The render test reads this back through `BAND_MEANINGS` and so cannot
+    // see the wording change; written out, it can.
     expect(bandMeaning("notable_indicators")).toBe(
       "Two different areas moved together",
     );

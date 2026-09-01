@@ -11,9 +11,8 @@ import {
 
 const scrollIntoView = vi.fn<typeof Element.prototype.scrollIntoView>();
 
-// Module level, exactly as the pages declare theirs: an array literal rebuilt
-// on each render is a new dependency every time, which re-runs the effect and
-// hides whether the observer does anything.
+// Module level, as the pages declare theirs: a literal rebuilt each render is
+// a new dependency, re-running the effect and hiding what the observer does.
 const ITEMS: SectionQuickNavigationItem[] = [
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
@@ -42,9 +41,8 @@ describe("SectionQuickNavigation", () => {
       />,
     );
 
-    // The tab is `fixed right-0`, so without this it overlays ~10% of a 390px
-    // phone on every page that mounts it, permanently and on both sides of a
-    // scroll.
+    // The tab is `fixed right-0`, so without this it permanently overlays ~10%
+    // of a 390px phone.
     const className = screen.getByTestId("section-quick-navigation").className;
     expect(className).toContain("hidden");
     expect(className).toContain("sm:block");
@@ -100,9 +98,8 @@ describe("SectionQuickNavigation", () => {
     const { rerender } = render(<Page withResult={false} />);
     await user.hover(screen.getByTestId("section-quick-navigation"));
 
-    // Rank Manipulation listed `Result` before any comparison had produced
-    // one, and clicking it did nothing at all. The list is the page's rendered
-    // sections, so a page cannot advertise a section it has not rendered.
+    // The list is the page's rendered sections, so a page cannot advertise a
+    // section it has not rendered.
     expect(
       screen.getByRole("button", { name: "Games Comparison" }),
     ).toBeTruthy();
@@ -121,9 +118,8 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("notices a section that arrives from outside React", async () => {
-    // The test above re-renders, and a re-render re-runs the effect on its own --
-    // which is why it passed with the observer deleted. This adds the node without
-    // React's help, so nothing else can explain the update.
+    // A re-render re-runs the effect on its own; adding the node without
+    // React's help leaves the observer as the only explanation.
     const user = userEvent.setup();
     render(<Page withResult={false} />);
     await user.hover(screen.getByTestId("section-quick-navigation"));
@@ -141,9 +137,8 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("does no watching while the panel is shut", async () => {
-    // The observer is on `document.body` with `subtree: true`, so it sees
-    // every DOM change on the page -- on a surface that polls, a callback
-    // several times a minute for a list nobody can read while collapsed.
+    // The observer watches `document.body` with `subtree: true`, so a polling
+    // page would fire it constantly for a list nobody can read.
     const user = userEvent.setup();
     const observe = vi.spyOn(MutationObserver.prototype, "observe");
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
@@ -168,9 +163,8 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("keeps the panel pinned while focus moves between its own items", async () => {
-    // `onBlurCapture` fires for focus moving *within* the panel too. Reading
-    // the containment backwards shuts the panel the moment a keyboard user
-    // reaches its first item, so the list can only be used with a mouse.
+    // `onBlurCapture` fires for focus moving *within* the panel, so reading
+    // containment backwards leaves the list usable only with a mouse.
     const user = userEvent.setup();
     render(
       <>
@@ -194,9 +188,8 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("takes its items out of the tab order once shut", async () => {
-    // A shut panel keeps its items mounted; `aria-hidden` is what hides them,
-    // and `queryByRole` honours that. Nothing hides them from the tab key, so
-    // a focusable item in that subtree is reachable and never visible.
+    // A shut panel keeps its items mounted and only `aria-hidden` hides them,
+    // so a focusable item there is reachable by tab and never visible.
     const user = userEvent.setup();
     render(<Page withResult />);
     const quickNavigation = screen.getByTestId("section-quick-navigation");

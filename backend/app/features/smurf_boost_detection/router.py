@@ -19,9 +19,8 @@ from .schemas import (
 )
 from .service import SmurfBoostDetectionError
 
-# A run already in flight under different settings is a retryable conflict, not
-# a malformed request; a run that cannot be read back after it was written is a
-# server-side invariant failure. Neither is the caller's fault.
+# Neither is the caller's fault: an in-flight run is a retryable conflict, and
+# a run that cannot be read back after writing is a server invariant failure.
 ERROR_STATUS_CODES = {"analysis_in_progress": 409, "analysis_missing": 500}
 
 logger = structlog.get_logger(__name__)
@@ -38,9 +37,8 @@ router = APIRouter(
 def get_presets() -> PresetsResponse:
     """List the named threshold presets and the shipped default.
 
-    Each preset is emitted in the card settings write contract's own field
-    names and numeric types, so a client can apply one by posting it straight
-    back to the settings API without reshaping it.
+    Emitted in the card settings write contract's own field names and types, so
+    a client can apply one by posting it straight back unreshaped.
     """
     return PresetsResponse(
         default_preset=DEFAULT_PRESET,
@@ -87,9 +85,8 @@ async def get_latest_analysis(
 ) -> SmurfBoostAnalysisResponse:
     """Read the caller's newest stored detection run for one player.
 
-    Scoped to the caller by the service, not by this signature: a run is
-    scored against the viewer's own thresholds, so another account's run is
-    not a weaker answer here -- it is the wrong one.
+    Scoped to the caller by the service, not this signature: runs are scored
+    against the viewer's own thresholds, so another account's run is wrong.
     """
     result = await service.get_latest(puuid)
     if not result:

@@ -46,9 +46,8 @@ class MatchType(str, Enum):
 class LeagueQueueType(str, Enum):
     """LEAGUE-V4 `queueType` values this product reads.
 
-    The by-PUUID payload can also carry TFT and other queues; those stay on
-    the DTO as plain strings so an unknown sibling cannot fail the ranked
-    snapshot. Only these two are stored on `core.player_leagues`.
+    Other queues stay plain strings on the DTO so an unknown one cannot fail the
+    ranked snapshot; only these two are stored on `core.player_leagues`.
     """
 
     RANKED_SOLO_5x5 = "RANKED_SOLO_5x5"
@@ -75,9 +74,7 @@ class TeamId(int, Enum):
 class QueueType(int, Enum):
     """Current Riot queue IDs accepted by MATCH-V5 filters.
 
-    Names follow Riot's maintained queue dataset, which includes active and
-    retained historical entries. Product support is a narrower allowlist
-    declared below.
+    Names follow Riot's queue dataset; product support is a narrower allowlist below.
     """
 
     NORMAL_DRAFT_5X5 = 400
@@ -156,9 +153,8 @@ TEAM_IDS: Final[tuple[int, int]] = (TeamId.BLUE.value, TeamId.RED.value)
 def normalize_platform(platform: Platform | str) -> str:
     """Return the canonical stored spelling of a platform id.
 
-    Lowercase is canonical: every read and write of `core.players.platform`
-    goes through here, under the check constraint on `Player.__table_args__`.
-    Membership is checked so an unknown id fails here, not later in a response.
+    Lowercase is canonical, under the check constraint on `Player.__table_args__`:
+    every read/write goes through here, so an unknown id fails now, not later.
 
     Raises:
         ValueError: the id is not one of Riot's platforms.
@@ -167,9 +163,7 @@ def normalize_platform(platform: Platform | str) -> str:
     return Platform(value.strip().lower()).value
 
 
-# Keyed by the enum so a platform added above cannot silently miss its
-# route: test_riot_api_boundaries.py walks every Platform member through
-# `get_region_by_platform`.
+# Keyed by the enum so a platform added above cannot silently miss its route.
 PLATFORM_REGIONS: Final[dict[Platform, Region]] = {
     Platform.NA1: Region.AMERICAS,
     Platform.BR1: Region.AMERICAS,
@@ -201,9 +195,7 @@ def get_region_by_platform(platform: Platform | str) -> Region:
 def enum_str(value: Region | Platform | str) -> str:
     """Extract string value from enum or return as-is.
 
-    Not `normalize_platform`: that one lowercases and strips because the
-    platform column has to match case-sensitively, and a region built through
-    it would be a different kind of value.
+    Not `normalize_platform`: lowercasing is for the platform column only.
     """
     if isinstance(value, Enum):
         return str(value.value)

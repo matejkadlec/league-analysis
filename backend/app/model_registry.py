@@ -1,12 +1,10 @@
 """The one place that names every module holding a mapped model.
 
-`Base.metadata` only knows about a table once the module defining it has been
-imported, and Alembic reads that metadata to decide what a migration must do.
-The list is hand-written; `tests/test_model_registry.py` catches a missed entry.
+`Base.metadata` only knows a table once its module is imported, and Alembic reads
+that metadata to decide what a migration must do.
 """
 
-# Every import here is unused by definition — importing *is* the side effect
-# that registers the model on `Base.metadata`.
+# Importing *is* the side effect that registers a model on `Base.metadata`.
 # pyright: reportUnusedImport=false
 
 from __future__ import annotations

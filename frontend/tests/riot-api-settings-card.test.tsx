@@ -47,9 +47,7 @@ import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot/riot-crede
 import { renderWithQueryClient } from "./support/render-support";
 
 /**
- * A key of the right shape, assembled rather than written out: the gitleaks
- * hook scans for this exact pattern, and rightly so. Joining the parts leaves
- * no key-shaped literal for the scanner -- or a reader -- to trip over.
+ * Assembled rather than written out: a key-shaped literal trips the gitleaks hook.
  */
 function riotKey(body: string): string {
   return [
@@ -124,9 +122,8 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("stamps the stored key in the viewer's clock, not UTC", async () => {
-    // Written out rather than built with `formatDateTime`, which cannot
-    // notice its own output changing. The zone sits five hours behind the
-    // stored instant, so the date rolls back a day: the "not UTC" half.
+    // Written out, not built with `formatDateTime`, which cannot notice its own
+    // output changing; the zone sits five hours back, so the date rolls a day.
     vi.stubEnv("TZ", "America/New_York");
 
     const queryClient = renderCard();
@@ -139,9 +136,8 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("refuses to save a key that is not shaped like a Riot key", async () => {
-    // The key this writes is what every ingestion job authenticates with, and
-    // saving activates it with no restart. The prefix check is all that keeps a
-    // mis-pasted string from becoming the live credential.
+    // Saving activates the key with no restart, so the prefix check is all that
+    // keeps a mis-pasted string out of every ingestion job.
     const user = userEvent.setup();
     const queryClient = renderCard();
 
@@ -158,9 +154,8 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("says so when the save request itself fails", async () => {
-    // A mutation returning the `ApiResponse` envelope cannot reject, which
-    // leaves `onError` dead and hides a failed key save from the global
-    // `MutationCache.onError`.
+    // A mutation returning the `ApiResponse` envelope never rejects, so `onError`
+    // and the global `MutationCache.onError` stay dead.
     const user = userEvent.setup();
     validatedPut.mockResolvedValue({
       success: false,
@@ -190,9 +185,7 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("will not save a key Riot has just rejected", async () => {
-    // Testing is the point of the button beside it. Once a test comes back
-    // failed, saving anyway would put a known-bad key live and take ingestion
-    // down until someone noticed.
+    // Saving after a failed test would put a known-bad key live and stop ingestion.
     const user = userEvent.setup();
     validatedPost.mockResolvedValue({
       success: true,
@@ -216,9 +209,8 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("stops holding a failed test against the next key typed", async () => {
-    // Without clearing the previous result, one rejected key leaves the save
-    // button disabled for every key typed after it -- locked out of applying a
-    // good key, with the reason no longer on screen.
+    // Without clearing the previous result, one rejected key disables the save
+    // button for every key typed after it.
     const user = userEvent.setup();
     validatedPost.mockResolvedValue({
       success: true,
@@ -250,9 +242,8 @@ describe("the card that swaps the Riot API key", () => {
     // Before the first key is saved there is no row, so the 404 is the normal
     // answer and the card renders it as a prompt.
 
-    // On the real provider wiring, because the DOM cannot tell the two apart:
-    // `setting` is null either way. The global `queryCache.onError` separates
-    // them, so letting the 404 through raises an error over a working card.
+    // On the real provider wiring: `setting` is null either way, so only the global
+    // `queryCache.onError` would raise an error over a working card.
     respondWith({
       setting: {
         success: false,
@@ -283,9 +274,8 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("tells the other surfaces the credential changed", async () => {
-    // Nothing polls for this. Panels elsewhere reload their credential health
-    // off this event, so without it they keep showing the old key's verdict
-    // -- including a red "invalid" beside a key that was just fixed.
+    // Nothing polls for this: panels elsewhere reload credential health off the
+    // event, so without it they keep showing the old key's verdict.
     const user = userEvent.setup();
     validatedPut.mockResolvedValue({ success: true, data: DB_SETTING });
     const heard = vi.fn<EventListener>();

@@ -19,9 +19,8 @@ export const SmurfBoostBandSchema = z.enum([
 
 export const SmurfBoostConfidenceBandSchema = z.enum(["low", "medium", "high"]);
 
-// The wire contract types the field as a plain string. Rejecting an unknown
-// family would fail the whole response and hide a valid result, so an unknown
-// id is carried through and rendered as itself.
+// A plain string on the wire: rejecting an unknown family would fail the whole
+// response, so an unknown id is carried through and rendered as itself.
 export const SmurfBoostFamilyIdSchema = z.string();
 
 export const SmurfBoostStatusSchema = z.enum([
@@ -72,9 +71,8 @@ export const SmurfBoostResultsSchema = z.object({
 
 export type SmurfBoostResults = z.infer<typeof SmurfBoostResultsSchema>;
 
-// Parsed permissively, then split on the lifecycle the way a matchmaking run
-// is: only the `completed` variant carries `results`. See `splitRunOnLifecycle`
-// in ./run-lifecycle for the `completed`-with-no-results case.
+// Parsed permissively, then split on the lifecycle: only the `completed`
+// variant carries `results`. See `splitRunOnLifecycle` in ./run-lifecycle.
 export const SmurfBoostAnalysisResponseSchema = z
   .object({
     puuid: z.string(),
@@ -96,9 +94,8 @@ export type SmurfBoostAnalysisResponse = z.infer<
   typeof SmurfBoostAnalysisResponseSchema
 >;
 
-// The named threshold sets the backend ships. Each one is emitted in the card
-// settings write contract's own camelCase field names, so a client applies a
-// preset by posting its thresholds back unchanged.
+// Thresholds arrive in the settings write contract's own camelCase names, so a
+// preset applies by posting them back unchanged.
 export const SmurfBoostPresetSchema = z.object({
   name: z.string(),
   thresholds: z.record(z.string(), z.number()),

@@ -28,9 +28,8 @@ from app.features.auth.users.models import User
 from route_helpers import loopback_request, undecorated
 
 
-# Each password trips exactly one rule and the message says which. Without the
-# pairing, a bare `pytest.raises(ValueError)` passes when the uppercase check
-# rejects the missing-digit password, so the rules could be reordered or merged.
+# Each password is paired with the one rule it trips: a bare
+# `pytest.raises(ValueError)` passes even when the wrong check fires.
 @pytest.mark.parametrize(
     ("password", "expected_rule"),
     [
@@ -47,8 +46,7 @@ def test_user_create_rejects_weak_passwords(password: str, expected_rule: str) -
 
 def test_password_policy_owns_the_length_rule_itself() -> None:
     # Both schema call sites hide the length rule behind Field(min_length=8);
-    # the named policy function must still enforce it for any caller that
-    # doesn't.
+    # the policy function must still enforce it for callers that don't.
     with pytest.raises(ValueError, match="at least 8 characters"):
         validate_password_strength("Sh0rt-!")
 
@@ -70,9 +68,8 @@ def test_join_us_body_is_trimmed_and_whitespace_only_is_rejected() -> None:
         ("MISSING-LOWERCASE-1!", "at least one lowercase letter"),
         ("MissingNumber!", "at least one digit"),
         ("MissingSpecial1", "at least one special character"),
-        # Pydantic's `Field(min_length=8)`, not `validate_password_strength`:
-        # the field constraint runs first and the policy never sees this one.
-        # Naming the message is what made that visible.
+        # Pydantic's `Field(min_length=8)` runs first, so the strength policy
+        # never sees this one.
         ("Sh0rt!", "String should have at least 8 characters"),
     ],
 )
@@ -82,9 +79,8 @@ def test_password_change_holds_the_new_password_to_the_strength_policy(
 ) -> None:
     """Registration's policy applies to a change too, and nothing said so.
 
-    Every password this file fed the model was already strong, so dropping
-    the `validate_password_strength` call from `PasswordChangeRequest` left
-    the suite green and accepted any eight characters.
+    Every other password here is strong, so dropping the strength call from
+    `PasswordChangeRequest` left the suite green on any eight characters.
     """
     with pytest.raises(ValueError, match=expected_rule):
         PasswordChangeRequest(
@@ -160,9 +156,8 @@ async def test_refresh_returns_the_same_inactive_account_code() -> None:
         )
 
     assert error.value.status_code == 403
-    # Starlette annotates ``HTTPException.detail`` as ``str``; FastAPI passes
-    # whatever the route raised, and this route raises the structured mapping
-    # the client contract is written against.
+    # Starlette annotates ``HTTPException.detail`` as ``str``, but FastAPI
+    # passes through the structured mapping this route actually raises.
     detail = cast(dict[str, str], error.value.detail)
     assert detail["code"] == "ACCOUNT_INACTIVE"
     revoke_all_refresh_tokens_for_user.assert_awaited_once_with(user.id)

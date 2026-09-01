@@ -1,8 +1,7 @@
 """How one Riot call behaves under rate limiting, per outcome.
 
-`_api_call_with_retries` is the whole of this analysis's rate-limit posture --
-how long it waits, how many times, what it tells the client while waiting, and
-whether exhaustion is a failure or a shrug.
+`_api_call_with_retries` is the whole of this analysis's rate-limit posture: how
+long it waits, what it reports while waiting, and what exhaustion means.
 """
 
 from typing import Any
@@ -147,9 +146,8 @@ async def test_ten_rate_limits_exhaust_the_budget_and_answer_nothing(
     )
 
     assert result is None
-    # Nine waits, not ten: there is nothing to wait *for* after the last
-    # attempt. The hand-rolled loop slept once more and then gave up anyway,
-    # burning up to MAX_RATE_LIMIT_WAIT seconds to reach the same answer.
+    # Nine waits, not ten: sleeping after the final attempt burns up to
+    # MAX_RATE_LIMIT_WAIT seconds to reach the same answer.
     assert len(slept) == svc.MAX_RATE_LIMIT_ATTEMPTS - 1
     assert svc.api_calls_made == 0
 
@@ -213,9 +211,8 @@ async def test_exhaustion_does_not_leave_the_client_told_it_is_still_waiting(
 ) -> None:
     """After giving up, nothing is waiting -- so nothing should say it is.
 
-    The persisted reset time drives the `waiting_rate_limit` state the page
-    renders. Left set after the analysis has stopped, it shows a countdown for
-    work that will never resume.
+    The persisted reset time drives the page's `waiting_rate_limit` state; left
+    set, it shows a countdown for work that will never resume.
     """
     svc, reset = _service()
     limits = [RateLimitError("slow down", retry_after=5) for _ in range(20)]

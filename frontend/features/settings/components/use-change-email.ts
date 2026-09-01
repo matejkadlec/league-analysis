@@ -46,9 +46,8 @@ export function useChangeEmail() {
       return;
     }
 
-    // Read the clock here rather than during render, so the derived flag
-    // stays a pure function of state. A lock restored already expired just
-    // gets a zero-delay timer.
+    // Read the clock here, not during render, so the derived flag stays a pure
+    // function of state; an already-expired lock gets a zero-delay timer.
     const remainingMs = Math.max(lockedUntil.getTime() - Date.now(), 0);
 
     const unlockTimer = window.setTimeout(

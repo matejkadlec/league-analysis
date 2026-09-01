@@ -1,8 +1,7 @@
 """Fixtures shared by the riot-client suites.
 
-The retry and logging files both drive the real ``_make_request`` path over
-an ``httpx.MockTransport``. The client builder and the sleep recorder live
-here once, so both suites share one stubbing contract.
+The retry and logging suites both drive the real ``_make_request`` path over an
+``httpx.MockTransport``; sharing the builders keeps one stubbing contract.
 """
 
 import asyncio
@@ -26,9 +25,8 @@ RiotClientFactory = Callable[[list[int]], tuple[RiotAPIClient, list[int]]]
 def riot_client_answering() -> RiotClientFactory:
     """A client whose transport answers each request with the next status.
 
-    Returns the client and the list of statuses actually served. A 429 comes
-    with real rate-limit headers, so exhaustion tests can assert the header
-    evidence survives to the raised error.
+    Returns the client and the list of statuses actually served. A 429 carries
+    real rate-limit headers so exhaustion tests can assert they survive.
     """
 
     def _build(statuses: list[int]) -> tuple[RiotAPIClient, list[int]]:
@@ -64,9 +62,8 @@ def recorded_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 def reset_process_wide_state() -> Iterator[None]:
     """Reset every process-global the application keeps, between tests.
 
-    The burst clock, the two run registries and slowapi's limiter belong to
-    the process rather than to one client or request, so all four leak across
-    tests -- the limiter's wall-clock window even across whole sessions.
+    The burst clock, the two run registries and slowapi's limiter are process
+    globals, so all four leak across tests -- the limiter across sessions.
     """
     from app.core.http_rate_limit import limiter
     from app.core.riot_api.rate_limiter import RateLimiter
@@ -76,9 +73,8 @@ def reset_process_wide_state() -> Iterator[None]:
     RateLimiter._last_request_time = 0.0
     limiter.reset()
     yield
-    # After, not before: a test that leaves a run registered would otherwise
-    # hand it to whichever test happens to follow, and under a shuffled order
-    # that is a different test each run.
+    # After, not before: a leaked run would otherwise reach whichever test
+    # follows, which under a shuffled order is a different one each run.
     RateLimiter._last_request_time = 0.0
     service._running_analyses.clear()
     control._runtime_controls.clear()

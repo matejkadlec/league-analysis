@@ -9,9 +9,8 @@ interface PlayerCardWinRateProps {
   league: PlayerLeague | null | undefined;
   stats: MatchStatsResponse | null | undefined;
   /**
-   * Whether the ranked lookup failed, as opposed to answering "no league".
-   * Both arrive as a falsy `league`, but only one licenses the "(unranked)"
-   * label: that word is a claim, and a failed request supports no claim.
+   * A failed lookup and "no league" both arrive as a falsy `league`, but only
+   * the latter licenses the "(unranked)" label -- that word is a claim.
    */
   leagueFailed?: boolean;
 }

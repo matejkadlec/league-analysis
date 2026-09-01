@@ -26,9 +26,8 @@ MatchmakingErrorCode = Literal[
     "analysis_failed",
 ]
 
-# The statuses the one-active-run interlock holds over; the partial unique
-# index on `matchmaking_analyses` is rendered from this tuple, so extending
-# it is a schema change, not just a query change.
+# The one-active-run interlock's statuses; the partial unique index on
+# `matchmaking_analyses` renders from this tuple, so extending it is DDL.
 ACTIVE_ANALYSIS_STATUSES: tuple[MatchmakingAnalysisStatus, ...] = (
     "pending",
     "in_progress",
@@ -74,9 +73,8 @@ _LEGACY_PARAMS = MatchmakingAnalysisParams()
 class MatchmakingPerMatchBreakdown(BaseModel):
     """Per-spine-match averages, kept so scopes can be recomputed client-side.
 
-    The performance fields default to None for runs stored before they
-    existed; kill participation is deliberately unbounded above -- Riot's
-    challenge value can exceed 1.0 on shared kills.
+    Kill participation is deliberately unbounded above: Riot's challenge value
+    can exceed 1.0 on shared kills.
     """
 
     match_id: str
@@ -120,9 +118,8 @@ class MatchmakingRankFreshness(BaseModel):
 class MatchmakingAnalysisResults(BaseModel):
     """Results of matchmaking analysis.
 
-    Every field beyond the original three is optional with a None default,
-    never 0: pre-extension runs lack them, and substituting 0 resurrects the
-    "0% average winrate" bug the results TypedDict documents.
+    Absent metrics default to None, never 0: a substituted 0 is indistinguishable
+    from a real "0% average winrate".
     """
 
     team_avg_winrate: float = Field(
@@ -202,8 +199,7 @@ class MatchmakingAnalysisResponse(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     # Excluded from the wire: the two computed fields below are all any
-    # client has ever read, and the per-PUUID map is the only thing that made
-    # the status response a second schema.
+    # client reads.
     puuid_progress: dict[str, bool] | None = Field(default=None, exclude=True)
     requests_saved: int = 0
     rate_limit_reset_at: datetime | None = None

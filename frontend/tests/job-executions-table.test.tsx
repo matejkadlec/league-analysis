@@ -88,9 +88,8 @@ describe("the job executions table", () => {
     await user.click(row);
 
     expect(onSelectExecution).toHaveBeenCalledTimes(1);
-    // The object identity is what the dialog reads (`detailed_logs` included);
-    // a reconstructed copy without it would open a details dialog with no
-    // transcript.
+    // The dialog reads this object, `detailed_logs` included; a reconstructed copy
+    // would open with no transcript.
     expect(onSelectExecution).toHaveBeenCalledWith(clicked);
   });
 

@@ -29,8 +29,7 @@ const {
 }));
 
 // `validatedPost`, not `api.post`: the helper closes over the module's own
-// axios instance, so replacing the exported `api` object leaves the real
-// request in place.
+// axios instance, so replacing exported `api` leaves the real request in place.
 vi.mock("@/lib/core/http/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/core/http/api")>();
   return { ...actual, validatedPost };
@@ -158,9 +157,8 @@ describe("what the join-us form refuses to send", () => {
   });
 
   it("gives a short message ending in #nl no length exemption", () => {
-    // `#nl` used to switch off the minimum length, the captcha and the
-    // hourly rate limit at once, and the literal shipped in the public
-    // bundle. The suffix is now ordinary text.
+    // `#nl` is ordinary text: the bypass literal it once triggered shipped in
+    // the public bundle.
     render(<JoinUsForm />);
     fillIn({ body: "please let me in #nl" });
     solveCaptcha();
@@ -169,9 +167,8 @@ describe("what the join-us form refuses to send", () => {
   });
 
   it("gives a long message ending in #nl no captcha exemption", () => {
-    // The other half of the old bypass, and the half a length-only test
-    // would miss: a body long enough to clear the minimum still cannot be
-    // sent without solving the captcha.
+    // The half a length-only test would miss: a body past the minimum still
+    // cannot be sent without solving the captcha.
     render(<JoinUsForm />);
     fillIn({ body: `${"a".repeat(300)} #nl` });
 
@@ -205,9 +202,8 @@ describe("what the join-us form refuses to send", () => {
   });
 
   it("does not accept an empty string as a solved captcha", () => {
-    // `captchaToken !== null` alone is not enough: the widget's callback
-    // hands back whatever it was given, and an empty token is one the server
-    // will reject, so the form must keep refusing.
+    // `captchaToken !== null` is not enough: the widget hands back whatever it
+    // was given, and the server rejects an empty token.
     render(<JoinUsForm />);
     fillIn();
     act(() => onSuccessRef.current?.(""));
@@ -254,9 +250,8 @@ describe("what the join-us form refuses to send", () => {
 
 describe("what happens after the send", () => {
   it("clears the form and the captcha on success", async () => {
-    // A Turnstile token is single-use. Leaving the solved token in state means
-    // the next submission sends one the server has already consumed, rejected
-    // for a reason the sender cannot see.
+    // A Turnstile token is single-use: a token left in state makes the next
+    // submission fail for a reason the sender cannot see.
     const user = userEvent.setup();
     render(<JoinUsForm />);
     fillIn();
@@ -287,9 +282,8 @@ describe("what happens after the send", () => {
   });
 
   it("resets the captcha after a failure so a retry is possible", async () => {
-    // The token was spent on the attempt that failed. Without the reset the
-    // form still holds it, the button is still enabled, and every retry is
-    // rejected by the server for reusing it.
+    // The token was spent on the failed attempt; without the reset the button
+    // stays enabled and every retry is rejected for reusing it.
     const user = userEvent.setup();
     validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
@@ -320,9 +314,8 @@ describe("what happens after the send", () => {
   });
 
   it("does not send twice while the first send is still going", async () => {
-    // The button is disabled during the send; the guard covers a second submit
-    // arriving before React has re-rendered. A holder rather than a bare `let`:
-    // TypeScript narrows a closure-only assignment to `never` at the call site.
+    // The guard covers a second submit arriving before React re-renders. A
+    // holder, not a `let`: TS narrows a closure-only assignment to `never`.
     const pending: { release: (() => void) | null } = { release: null };
     validatedPost.mockImplementation(
       () =>
@@ -363,9 +356,8 @@ describe("the way back out of the form", () => {
   });
 
   it("trusts the server's hint while the session is still loading", () => {
-    // Without the hint, a signed-in visitor sees "Back to Sign In page" for as
-    // long as the auth probe takes, on a page reachable from the signed-in
-    // app. The hint comes from the same cookie the server already read.
+    // Without the hint a signed-in visitor sees "Back to Sign In page" for as
+    // long as the auth probe takes.
     useAuth.mockReturnValue(session({ isAuthenticated: false, isLoading: true }));
     render(<JoinUsForm isAuthenticatedHint />);
 

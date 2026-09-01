@@ -12,9 +12,8 @@ LIMIT = 1024 * 1024
 
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
-    # `ASGITransport`, not starlette's TestClient: the latter is annotated
-    # against httpx2, which is not installed, and warns at import time. No
-    # lifespan is driven -- the body limit runs before routing, so no database.
+    # `ASGITransport`, not starlette's TestClient, which is annotated against an
+    # httpx2 that is not installed. No lifespan: the limit runs before routing.
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver"
@@ -33,9 +32,8 @@ async def test_oversized_body_is_refused_before_it_reaches_a_route(
 async def test_a_body_under_the_ceiling_still_reaches_routing(
     client: httpx.AsyncClient,
 ) -> None:
-    # Proves the test above is measuring the ceiling rather than the endpoint:
-    # the same route, one byte under, gets past the limiter and is answered by
-    # the application itself.
+    # Proves the test above measures the ceiling, not the endpoint: the same
+    # route one byte under gets past the limiter.
     response = await client.post("/api/v1/auth/login", content=b"x" * (LIMIT - 1))
 
     assert response.status_code != 413

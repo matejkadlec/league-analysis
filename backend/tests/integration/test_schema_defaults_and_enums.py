@@ -1,8 +1,7 @@
 """Native enum types, and the values the database writes when nobody supplies one.
 
-A mock returns whatever its fixture says, so it cannot see a Python enum member
-with no `ALTER TYPE` behind it, nor tell a value the DDL supplied from one
-SQLAlchemy compiled into the statement on the way out.
+A mock cannot see an enum member with no `ALTER TYPE` behind it, nor tell a DDL
+default from one SQLAlchemy compiled into the statement on the way out.
 """
 
 from __future__ import annotations
@@ -60,9 +59,8 @@ async def test_every_mapped_enum_member_exists_in_its_postgres_type(
 ) -> None:
     """A member added to a Python enum without an `ALTER TYPE` fails at write time.
 
-    Autogenerate does not diff enum members, which is why this repository
-    depends on `alembic-postgresql-enum`; this is the assertion that the
-    dependency is doing its job.
+    Autogenerate does not diff enum members; this asserts that the
+    `alembic-postgresql-enum` dependency is doing that job.
     """
     rows = (await database_session.execute(ENUM_LABELS_SQL, {"name": type_name})).all()
     assert frozenset(label for _, label in rows) == declared

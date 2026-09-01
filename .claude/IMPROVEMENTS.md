@@ -7,7 +7,7 @@ issue, newest last:
 
 ## Open
 
-Nothing open.
+- 2026-09-01 test.sh: the API-contract step is the only gate step that needs real Settings env — `scripts/dump_openapi.py` imports `app.main`, which constructs `Settings()` at import time, so a box without `backend/.env` fails that one step while every other step provisions its own env. Dummy `POSTGRES_*`/`ENVIRONMENT` values suffice; the step could export them itself.
 
 ## Findings that did not survive measurement
 

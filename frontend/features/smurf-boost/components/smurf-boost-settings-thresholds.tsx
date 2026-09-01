@@ -11,18 +11,16 @@ import { cn } from "@/lib/core/utils";
 const CROSS_FIELD_NAMES = ["recentWindowSize", "a3MinimumNovelGames"];
 
 /**
- * The fifteen thresholds grouped by what they tune, one tab each. Every group
- * stays mounted (`forceMount`) and is only visually hidden: the cross-field
- * rule spans two groups, and `aria-describedby` needs a mounted target.
+ * Every group stays mounted (`forceMount`) and is only visually hidden: the
+ * cross-field rule spans two groups, and `aria-describedby` needs a live target.
  */
 const GROUPS = [
   {
     value: "windows",
     title: "Games Compared",
     match: /^(recent|baseline)/,
-    // Column counts are per group so every group fits its fields in at most
-    // two rows -- that is what lets the dialog hold any tab without its own
-    // scrollbar at ordinary desktop heights.
+    // Per group so each fits its fields in at most two rows -- that is what
+    // lets the dialog hold any tab without its own scrollbar.
     columns: "sm:grid-cols-2",
   },
   {
@@ -84,9 +82,8 @@ export function SmurfBoostSettingsThresholds({
           {GROUPS.map((group) => (
             <TabsTrigger key={group.value} value={group.value}>
               {group.title}
-              {/* Decorative: the accessible signal is each field's
-                  aria-invalid and the role="alert" messages. A label here
-                  would leak into the tab's accessible name. */}
+              {/* Decorative: a label here would leak into the tab's accessible
+                  name, and aria-invalid already carries the signal. */}
               {groupHasProblem(group.match) && (
                 <span
                   aria-hidden="true"
@@ -96,9 +93,8 @@ export function SmurfBoostSettingsThresholds({
             </TabsTrigger>
           ))}
         </TabsList>
-        {/* From `sm` up every group occupies the same grid cell, so switching
-            tabs cannot move the tab row out from under the pointer. On a phone
-            the dialog scrolls, so an inactive group stays fully hidden. */}
+        {/* From `sm` up every group shares one grid cell, so switching tabs
+            cannot move the tab row from under the pointer; a phone scrolls. */}
         <div className="sm:grid">
           {GROUPS.map((group) => (
             <TabsContent

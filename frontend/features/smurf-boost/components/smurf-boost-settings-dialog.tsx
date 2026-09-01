@@ -51,9 +51,8 @@ const PREFERENCE_KEY = ["card-preferences"] as const;
 const PRESETS_KEY = ["smurf-boost-presets"] as const;
 
 /**
- * Detection Settings behind a button: the form is a page's worth of fields
- * that most visits never touch, so it lives in a dialog rather than a card in
- * the reading flow. The trigger stays enabled through every query state.
+ * A page's worth of fields most visits never touch, so it lives in a dialog
+ * rather than the reading flow. The trigger stays enabled in every state.
  */
 export function SmurfBoostSettingsDialog() {
   const queryClient = useQueryClient();
@@ -223,9 +222,8 @@ export function SmurfBoostSettingsDialog() {
           onChange={(name, value) => setDraft({ ...values, [name]: value })}
         />
 
-        {/* The dialog footer contract: cancel on the left in red-gradient
-            with StopCircle, the CTA on the right. Discard is this form's
-            cancel and only exists while there is a draft to throw away. */}
+        {/* Footer contract: cancel left in red-gradient, CTA right. Discard is
+            this form's cancel, so it exists only while a draft does. */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             {dirty && (
@@ -293,15 +291,13 @@ export function SmurfBoostSettingsDialog() {
           Detection Settings
         </Button>
       </DialogTrigger>
-      {/* Wide enough that the grouped thresholds fit without the dialog
-          scrolling; the max-h/overflow pair is a guard for short viewports,
-          not a layout the content is expected to reach. */}
+      {/* Wide enough that the grouped thresholds fit unscrolled; the
+          max-h/overflow pair guards short viewports only. */}
       <DialogContent
         id="smurf-boost-settings"
         className="max-h-[92vh] max-w-6xl overflow-y-auto p-5"
-        // A stray click on the dimmed page or a reflexive Escape must not
-        // throw away an edited draft: fifteen fields are a lot to retype.
-        // The X and the Discard button remain the deliberate ways out.
+        // A stray click or reflexive Escape must not throw away fifteen edited
+        // fields; the X and Discard stay the deliberate ways out.
         onInteractOutside={(event) => {
           if (draft !== null) {
             event.preventDefault();

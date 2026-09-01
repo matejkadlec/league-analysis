@@ -142,9 +142,8 @@ async def test_service_status_answers_from_the_shared_health_snapshot(
 ) -> None:
     """One endpoint now, so the pair can no longer disagree.
 
-    The admin card used to read its own /riot_api_key/status, backed by the
-    same synchronize call but cached separately and never refetched -- so an
-    expired key flipped the header banner and left the card stale.
+    A second status endpoint caches separately and is never refetched, so an
+    expired key flips the header banner and leaves the card stale.
     """
     observed_at = datetime(2026, 8, 11, tzinfo=UTC)
     snapshot = SimpleNamespace(
@@ -201,9 +200,8 @@ async def test_saving_a_key_takes_key_locks_before_the_health_lock(
 ) -> None:
     """Saving must lock key rows first, the order every read path uses.
 
-    `synchronize_riot_credential_health` locks the key row and then the health
-    row. Binding health before deleting the old key rows would reverse that
-    here, and a save racing an ordinary request would deadlock.
+    `synchronize_riot_credential_health` locks key then health; binding health
+    first reverses that and a save racing a read deadlocks.
     """
     events: list[str] = []
     saved_at = datetime(2026, 8, 11, tzinfo=UTC)

@@ -16,9 +16,8 @@ describe("DialogContent", () => {
       </Dialog>,
     );
 
-    // The upstream shadcn primitive has no such border. Re-adding `dialog`
-    // from the shadcn CLI reverts the local patch and every dialog in the app
-    // loses its edge against the dark background at once.
+    // The upstream shadcn primitive has no such border: re-adding `dialog` from
+    // the CLI reverts the patch and every dialog loses its edge at once.
     expect(screen.getByRole("dialog").className).toContain(
       "dialog-white-border",
     );

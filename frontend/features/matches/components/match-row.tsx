@@ -73,9 +73,8 @@ export function MatchRow({
       ? ((opponent.kills + opponent.assists) / enemyTeamStats.kills) * 100
       : null;
 
-  // Decided here because only the row sees both sides. CS compares the raw
-  // `total_cs` integers rather than the `/min` strings: both participants
-  // played the same `game_duration`, so the two orderings are the same.
+  // Decided here: only the row sees both sides. CS compares raw `total_cs`,
+  // not the `/min` strings -- both played the same `game_duration`, so orderings agree.
   const playerStatHighlight: SideStatHighlight = {
     kda: winsStat(participant?.kda, opponent?.kda),
     cs: winsStat(participant?.total_cs, opponent?.total_cs),
@@ -96,9 +95,8 @@ export function MatchRow({
         outcome.bgClass,
       )}
     >
-      {/* Below `lg` the blocks wrap instead of holding their desktop widths,
-          and the matchup jumps to the front so the two stat blocks end up
-          adjacent -- left the player's, right the opponent's, as on desktop. */}
+      {/* Below `lg` the matchup jumps to the front so the two stat blocks end
+          up adjacent, player left and opponent right, as on desktop. */}
       <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
         <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-35 lg:shrink-0">
           <span className="text-sm font-medium text-center">
@@ -118,9 +116,8 @@ export function MatchRow({
           </span>
         </div>
 
-        {/* Full width below `lg`: a half here would pair the duration with the
-            player's stat block and push the opponent's onto the next row,
-            breaking the side-by-side reading the wrap order above exists for. */}
+        {/* Full width below `lg`: a half would push the opponent's stat block
+            onto the next row, breaking the side-by-side reading. */}
         <div className="w-full shrink-0 text-center flex flex-col justify-center lg:w-16">
           {/* The row's tint is the only other outcome signal; colourblind
               players need the word (WCAG 1.4.1: no colour-only meaning). */}
@@ -141,9 +138,8 @@ export function MatchRow({
           />
         )}
 
-        {/* 484px, not 420: the LP cell took `w-12` + `mr-2` + one `gap-2`
-            (4rem) with it. The wrapper has to grow by the whole 4rem or the
-            columns take the space out of the swords divider instead. */}
+        {/* 484px, not 420: the removed LP cell's `w-12` + `mr-2` + one `gap-2`
+            (4rem) has to land here, or the columns take it from the swords divider. */}
         <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-[484px]">
           <MatchSideColumn
             participant={participant}
@@ -177,9 +173,8 @@ export function MatchRow({
           />
         )}
 
-        {/* No per-match LP column: reliable historical per-match LP is not
-            obtainable under the current Riot developer-key constraints.
-            `match.lp_change` is still stored and still served. */}
+        {/* No per-match LP column: reliable historical LP is not obtainable
+            under a developer key, though `match.lp_change` is still served. */}
 
         <MatchTeamCompositions
           teamComps={teamComps}

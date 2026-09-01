@@ -20,9 +20,8 @@ import {
   SmurfBoostExplanationCard,
 } from "@/features/smurf-boost";
 
-// `Result` is listed unconditionally on purpose: `SectionQuickNavigation`
-// keeps only the entries whose section is on the page. Detection Settings is
-// absent because it is a dialog, not a section to scroll to.
+// `Result` is listed unconditionally; `SectionQuickNavigation` drops entries
+// whose section is absent. Detection Settings is a dialog, not a section.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
@@ -61,9 +60,8 @@ function RankManipulationContent() {
             <RankManipulationSkeleton />
           ) : (
             <>
-              {/* Rendered with no player too: a "select a player" card would
-                  send people to the sidebar search, which navigates away from
-                  this route. Keyed by player so failures do not carry over. */}
+              {/* No "select a player" card: it would send people to the sidebar
+                  search, off this route. Keyed so failures do not carry over. */}
               <SmurfBoostDetection
                 key={analyzedPlayer?.puuid ?? "no-player"}
                 puuid={analyzedPlayer?.puuid ?? null}
@@ -88,9 +86,7 @@ function RankManipulationContent() {
             </>
           )}
 
-          {/* The action first, the reference last: someone who lands here
-              runs a comparison; the explanation waits below for whoever
-              wants the model spelled out. */}
+          {/* The reference stays last: someone landing here runs a comparison first. */}
           <SmurfBoostExplanationCard />
         </div>
       </div>

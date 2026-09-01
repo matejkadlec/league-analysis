@@ -1,10 +1,8 @@
 // Regression fixture for `house/no-deferral-comments`.
 
-// Every `oxlint-disable-next-line` below sits above a comment the rule MUST
-// report. A branch that stops matching turns its directive into an unused one
-// and fails the run; the accepted cases carry no directive, so widening fails too.
+// Every directive below sits above a comment the rule MUST report and the
+// accepted cases carry none, so narrowing and widening both fail the run.
 
-// MUST flag: the three classic markers.
 // oxlint-disable-next-line house/no-deferral-comments
 // TODO wire the retry path
 export const retryPath = 1;
@@ -17,7 +15,6 @@ export const emptyRoster = 2;
 // XXX the queue id is guessed here
 export const guessedQueue = 3;
 
-// MUST flag: the self-aware shortcut, in each of its spellings.
 // oxlint-disable-next-line house/no-deferral-comments
 // a hacky sort until the index exists
 export const sortOrder = 4;
@@ -42,7 +39,6 @@ export const missingIndex = 8;
 // quick fix ahead of the release
 export const releasePatch = 9;
 
-// MUST flag: the tier invented out of thin air.
 // oxlint-disable-next-line house/no-deferral-comments
 // good enough for one season of data
 export const oneSeason = 10;
@@ -55,7 +51,6 @@ export const skipValidation = 11;
 // in a real app this would paginate
 export const unpaginated = 12;
 
-// MUST flag: the promise nobody records anywhere an owner reads.
 // oxlint-disable-next-line house/no-deferral-comments
 // improve this later
 export const promisedRework = 13;

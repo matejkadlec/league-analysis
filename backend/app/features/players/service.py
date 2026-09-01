@@ -41,9 +41,8 @@ MAX_TRACKED_PLAYERS_PER_USER: Final = 10
 class PlayerNotFoundError(ValueError):
     """No player row matches the PUUID or Riot ID the caller named.
 
-    A `ValueError` subclass on purpose: the routers that answer 404 for every
-    failure of an operation still catch `ValueError` unconditionally and keep
-    working. Only the routes that need to tell 404 from 400 catch this.
+    A `ValueError` subclass on purpose, so routes that answer 404 for any failure
+    keep working; only routes that must tell 404 from 400 catch this type.
     """
 
 
@@ -92,9 +91,8 @@ class PlayerService:
     async def _update_global_tracking_flag(self, puuid: str) -> bool:
         """Update core.players.is_tracked_by_anyone from all user mappings.
 
-        Locks the player row first: count-then-write races otherwise leave
-        the stale count last. A correlated `EXISTS` does not fix it -- under
-        READ COMMITTED the subquery's snapshot predates the lock wait.
+        Locks the player row first, or count-then-write races leave the stale
+        count last; `EXISTS` cannot fix it, its snapshot predates the lock wait.
         """
         await self.db.execute(
             select(Player.puuid).where(Player.puuid == puuid).with_for_update()
@@ -167,9 +165,8 @@ class PlayerService:
     async def _one_player(self, player: Player, user_id: int) -> PlayerResponse:
         """One complete player, however the caller reached it.
 
-        Both `/players/{puuid}` and the `current_player` on `/players/context`
-        answer with a `PlayerResponse` for the same row, so both must fill the
-        match counts here -- `PlayerResponse` silently defaults them to 0.
+        Every caller must fill the match counts here: `PlayerResponse` silently
+        defaults them to 0.
         """
         response = self._to_response(
             player,
@@ -184,9 +181,8 @@ class PlayerService:
     def _to_response(player: Player, *, is_tracked: bool) -> PlayerResponse:
         """One player as one user sees it.
 
-        `is_tracked` is per-user and has no column: `core.players` stores
-        `is_tracked_by_anyone`, the writer jobs' allowlist. Passing it is
-        therefore not optional.
+        `is_tracked` is per-user and has no column — `core.players` stores only
+        `is_tracked_by_anyone` — so passing it is not optional.
         """
         response = PlayerResponse.model_validate(player)
         response.is_tracked = is_tracked
@@ -201,9 +197,8 @@ class PlayerService:
     ) -> list[PlayerResponse]:
         """Search stored players and answer with per-user tracking flags.
 
-        The search algorithm itself — parsing, SQL shape, scoring, ranking —
-        lives in `player_search`; this method owns the database round trip
-        and the per-user response assembly.
+        The search algorithm lives in `player_search`; this method owns only the
+        database round trip and the per-user response assembly.
         """
         search_type, game_name, tag_line = player_search.parse_search_query(query)
 
@@ -268,9 +263,8 @@ class PlayerService:
             raise PlayerNotFoundError("Player details were not found on this server.")
 
         now = datetime.now(UTC)
-        # A Riot ID whose stored row carries a different PUUID is left alone:
-        # discovery cannot tell a re-encrypted PUUID from a reclaimed Riot ID,
-        # so merging would risk moving one player's history onto another.
+        # A Riot ID whose stored row carries a different PUUID is left alone: discovery
+        # can't tell a re-encrypted PUUID from a reclaimed one; merging risks misattribution.
         player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(
@@ -481,9 +475,8 @@ class PlayerService:
     async def get_globally_tracked_players(self) -> list[Player]:
         """Get all players tracked by at least one user.
 
-        Rows, not `PlayerResponse`: the only callers are the two writer jobs
-        and the job test runner, none of which has a current user, so the
-        per-user `is_tracked` field on the response has no meaning for them.
+        Rows, not `PlayerResponse`: the callers are jobs with no current user,
+        so the response's per-user `is_tracked` would be meaningless.
         """
         query = (
             select(Player)

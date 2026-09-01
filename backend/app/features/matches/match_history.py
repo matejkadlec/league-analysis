@@ -89,9 +89,8 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
         or 0,
         summoner1_id=participant.summoner1_id,
         summoner2_id=participant.summoner2_id,
-        # The column holds `dict[str, Any] | None` while the field is declared
-        # `RunesData | None`; the `mode="before"` validator `transform_runes`
-        # converts the raw dict, so this cast marks a validator boundary.
+        # Column is `dict | None`, field is `RunesData | None`; the `mode="before"`
+        # validator `transform_runes` bridges them, so the cast is the boundary.
         runes=cast(Any, participant.runes),
     )
 
@@ -99,9 +98,8 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
 def empty_team_stats(timeline: MatchTimeline | None) -> TeamStats:
     """Seed team objective totals from timeline rows when they exist.
 
-    The running totals are the response model itself rather than a dict shaped
-    like it: the accumulators that follow mutate it in place. The None branch
-    matches `TeamStats`'s own defaults.
+    Returns the response model itself, not a dict shaped like it: the
+    accumulators that follow mutate it in place.
     """
     if timeline is None:
         return TeamStats(kills=0, deaths=0, assists=0)

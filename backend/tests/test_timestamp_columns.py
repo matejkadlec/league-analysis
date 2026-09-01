@@ -1,8 +1,7 @@
 """Pin the contract of the two shared timestamp column helpers.
 
-The difference that matters is one keyword: `updated_at` carries `onupdate`,
-`created_at` must not. Being a SQLAlchemy-side default it emits no DDL, so
-swapping or dropping it leaves `alembic check` seeing no drift.
+`updated_at` carries `onupdate` and `created_at` must not; being Python-side it
+emits no DDL, so `alembic check` sees no drift if it is swapped or dropped.
 """
 
 from typing import Any
@@ -24,12 +23,7 @@ TIMESTAMP_COLUMNS: list[tuple[str, Column[Any]]] = [
 
 
 def _case_id(value: object) -> str:
-    """Name a case by its table and column, so no two cases share an id.
-
-    The column half used to render empty, so the test taking both columns gave
-    eleven tables two cases each called `auth.users-` -- unselectable by node
-    id, and a failure that could not say which column broke.
-    """
+    """Name a case by its table and column, so no two cases share an id."""
     if isinstance(value, str):
         return value
     return value.name if isinstance(value, Column) else ""
@@ -70,18 +64,16 @@ def test_created_at_never_moves(table_name: str, column: Column[Any]) -> None:
 def test_every_stamp_is_defaulted_and_tz_aware(
     table_name: str, column: Column[Any]
 ) -> None:
-    # A naive column would read back as local time from a container set to UTC
-    # and compare wrongly against everything else, which is a bug that survives
-    # every gate because it only shows up across a timezone boundary.
+    # A naive column reads back as local time and compares wrongly against
+    # everything else, visible only across a timezone boundary.
     assert column.server_default is not None, f"{table_name}.{column.name}"
     assert isinstance(column.type, DateTime), f"{table_name}.{column.name}"
     assert column.type.timezone is True, f"{table_name}.{column.name}"
 
 
 def test_the_comment_is_the_only_thing_a_caller_chooses() -> None:
-    # Passing no comment must be indistinguishable from the hand-written
-    # `mapped_column` that never had one -- that equivalence is what kept the
-    # emitted DDL byte-identical through the refactor that introduced these.
+    # Passing no comment must be indistinguishable from a hand-written
+    # `mapped_column` without one, so the emitted DDL stays byte-identical.
     assert created_at_column().column.comment is None
     assert created_at_column("why").column.comment == "why"
     assert updated_at_column().column.comment is None

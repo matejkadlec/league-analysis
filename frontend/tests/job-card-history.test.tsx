@@ -130,9 +130,8 @@ describe("JobCardHistory", () => {
   });
 
   it("flags a running row as force stopping, and only a running one", () => {
-    // The amber flag is the admin's only warning that the button they are
-    // about to press kills the run mid-write; showing it on finished rows,
-    // or hiding it while a stop is in flight, both misdirect that press.
+    // The amber flag is the only warning that the next press kills the run
+    // mid-write; showing it on finished rows or hiding it both misdirect.
     const { rerender } = render(
       <JobCardHistory
         recentExecutions={[

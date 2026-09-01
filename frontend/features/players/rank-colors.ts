@@ -8,9 +8,8 @@ export interface RankColors {
 }
 
 /**
- * Rank styling per tier, keyed by the tier itself. `PlayerLeagueSchema.tier`
- * is the API's own `Tier` enum, so a `Record<Tier, …>` makes an eleventh tier
- * a type error here. Keep aligned with PlayerCard rank styling.
+ * Keyed by the API's own `Tier` enum, so an eleventh tier is a type error
+ * here rather than a silently missing style. Keep aligned with PlayerCard.
  */
 const RANK_COLORS: Record<Tier, RankColors> = {
   IRON: {

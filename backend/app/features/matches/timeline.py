@@ -66,9 +66,8 @@ class TimelineMatchMetadata(Protocol):
 class TimelineMatch(Protocol):
     """A match seen through the small window timeline aggregation needs.
 
-    Both a full `MatchDTO` off the wire and the synthetic DTO rebuilt from
-    stored participants (`build_synthetic_match_dto`) are accepted here, so the
-    parameter names the members actually read rather than either concrete type.
+    Both a full `MatchDTO` off the wire and the synthetic DTO rebuilt from stored
+    participants are accepted, so this names the members read, not either type.
     """
 
     @property
@@ -94,9 +93,8 @@ class TeamTotalBucket(TypedDict):
 class TimelineRow(TeamTotalBucket):
     """The row accumulator one participant's `MatchTimeline` row is built from.
 
-    Starts as the identity columns plus zeroed team totals; the team totals are
-    overwritten from the team bucket at finalization. `MatchTimeline(**row)` is
-    the single point where this shape meets the ORM.
+    Starts as identity columns plus zeroed team totals, overwritten from the team
+    bucket at finalization. `MatchTimeline(**row)` is where this meets the ORM.
     """
 
     match_id: str
@@ -139,9 +137,8 @@ class MatchTimeline(Base):
             "participant_id",
             name="uq_match_timelines_match_participant",
         ),
-        # Bare names: the `ck` naming convention is
-        # `ck_%(table_name)s_%(constraint_name)s`, so it prefixes these itself.
-        # Spelling the prefix here too yields `ck_match_timelines_ck_match_...`.
+        # Bare names: the `ck` convention already prefixes `ck_%(table_name)s_`,
+        # so spelling the prefix here would double it.
         CheckConstraint(
             "participant_id BETWEEN 1 AND 10",
             name="participant_id_range",
@@ -195,9 +192,7 @@ class MatchTimeline(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
-    # The comment is the decoder for the short keys, so it belongs on the column
-    # rather than only here -- it is the one place the encoding is written down
-    # next to the data.
+    # The column comment is the decoder for the short keys, kept next to the data.
     objective_events: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
@@ -327,9 +322,8 @@ def _append_compact_objective_event(
 def _new_team_total_bucket() -> TeamTotalBucket:
     """Create an empty team-level objective totals bucket.
 
-    The one place the team-total defaults live: `TeamTotalBucket` declares
-    the key set, `_new_participant_row` splats this bucket, and
-    `_apply_team_totals_to_row` iterates it.
+    The one place the team-total defaults live: `TeamTotalBucket` declares the
+    key set and `_apply_team_totals_to_row` iterates it.
     """
     return {
         "team_turrets_destroyed": 0,
@@ -475,9 +469,7 @@ def _record_monster_takedown(
 ) -> None:
     """Record a monster takedown, retaining the type when it is unrecognized.
 
-    A monster this codebase does not know about is still logged, under
-    `other_epic_monster` and carrying `m` -- that is what let ATAKHAN appear in
-    current-patch matches before it was an objective here.
+    An unknown monster is still logged, under `other_epic_monster` carrying `m`.
     """
     known = objective if objective in OBJECTIVE_KINDS else None
     _append_compact_objective_event(
@@ -744,9 +736,8 @@ async def replace_match_timeline_rows(
     match_id = match_dto.metadata.match_id
     await db.execute(delete(MatchTimeline).where(MatchTimeline.match_id == match_id))
 
-    # Write what is already pending before adding rows that point at it: with
-    # `autoflush=False` and no `relationship()` edges, SQLAlchemy orders the
-    # flush by `"<module>.<ClassName>"`, putting this table ahead of `core.players`.
+    # Write what is pending before adding rows that point at it: with
+    # `autoflush=False`, SQLAlchemy orders the flush by class name, not by FK.
     await db.flush()
 
     for row in rows:

@@ -13,12 +13,7 @@ from .service import SettingsService
 async def get_settings_service(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SettingsService:
-    """
-    Get settings service instance.
-
-    :param db: Database session
-    :returns: SettingsService instance
-    """
+    """Get settings service instance."""
     return SettingsService(db)
 
 

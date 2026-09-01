@@ -86,9 +86,8 @@ describe("LegalPageShell", () => {
   });
 
   it("keeps the signed-in frame while the session probe is still loading", () => {
-    // `isAuthenticatedHint` exists because every legal route is reachable both
-    // ways: while the probe is in flight the page must not flash the public
-    // frame at someone who is actually signed in.
+    // Every legal route is reachable both ways, so while the probe is in flight
+    // the page must not flash the public frame at someone signed in.
     useAuth.mockReturnValue(authState({ isAuthenticated: false, isLoading: true }));
 
     const { rerender } = render(

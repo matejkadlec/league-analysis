@@ -80,8 +80,7 @@ async def get_current_admin_user(
     return current_user
 
 
-# Spelled once, matching `JobServiceDep`: 29 routes across five features asked
-# for the same two dependencies, and every one of them restated the whole
+# Spelled once, matching `JobServiceDep`, so routes never restate the
 # `Annotated[User, Depends(...)]` form.
 CurrentUserDep = Annotated[User, Depends(get_current_active_user)]
 AdminUserDep = Annotated[User, Depends(get_current_admin_user)]

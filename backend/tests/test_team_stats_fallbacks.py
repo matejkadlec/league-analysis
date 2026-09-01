@@ -1,8 +1,7 @@
 """Where each team objective total comes from, per team, per match.
 
-Two sources feed the same nine numbers: the timeline aggregate row when the
-match has one, and the participants' own counters when it does not. These
-cases pin which wins, and the derived voidgrub count.
+Two sources feed the same nine numbers -- the timeline aggregate row, and the
+participants' own counters -- and these cases pin which one wins.
 """
 
 from app.features.matches.match_history import build_team_compositions_and_stats
@@ -68,9 +67,8 @@ def test_a_team_with_a_timeline_row_reports_the_timeline_numbers() -> None:
 def test_without_a_timeline_the_participants_supply_every_objective() -> None:
     """Turrets sum, dragons/barons/heralds take the highest claim.
 
-    The three team-wide counts are each participant's view of the same team
-    number, so the largest is the team's -- summing them would multiply the
-    team's barons by the number of players who saw them.
+    Each participant reports the same team-wide number, so summing would multiply
+    the team's barons by the number of players who saw them.
     """
     _, stats = build_team_compositions_and_stats(
         [

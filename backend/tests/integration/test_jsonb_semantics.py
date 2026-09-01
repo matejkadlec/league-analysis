@@ -1,8 +1,7 @@
 """What JSONB stores, and what it gives back.
 
 Python `None`, SQL NULL and JSON `null` are three different values in a JSONB
-column, and only the database can tell them apart. A mocked session returns
-whatever the fixture handed it and sees none of this.
+column, and only a real database tells them apart.
 """
 
 from __future__ import annotations
@@ -59,9 +58,8 @@ async def test_an_empty_analysis_writes_the_sql_null_its_column_promises(
 ) -> None:
     """A `None` written to JSONB must land as SQL NULL, not as JSON `null`.
 
-    Python reads both back as `None`, which is why no unit test sees this, but
-    `IS NULL` matches only one of them -- and revision 0022's backfilled rows
-    are that one, so the other would be a second spelling of the same absence.
+    Python reads both back as `None`, but `IS NULL` matches only SQL NULL, which
+    is what revision 0022's backfilled rows carry.
     """
     service = PlaystyleAnalysisService(database_session)
     await service._save_empty_analysis(stored_player.puuid)
@@ -130,9 +128,8 @@ async def test_a_failed_run_is_not_a_run_that_kept_its_results(
 ) -> None:
     """`_complete_with_error` writes `results=None`, and `IS NOT NULL` must miss it.
 
-    `_completed_run_where` reads that clause to mean "finished and kept
-    results". Written as JSON `null` the row satisfies it, and only the
-    `status == "completed"` half of the same `and_` keeps it off the history.
+    `_completed_run_where` reads that clause as "finished and kept results", and
+    a JSON `null` would satisfy it.
     """
     created_at = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
     await database_session.execute(

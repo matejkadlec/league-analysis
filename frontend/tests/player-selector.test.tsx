@@ -70,9 +70,8 @@ describe("PlayerSelector", () => {
 
 
   it("lets a seeded box be typed over rather than appended to", async () => {
-    // The box keeps the chosen player's name and offers no clear button, so
-    // without selecting the text on focus the next search reads
-    // "Selected#TAGnewname" and matches nothing.
+    // The box keeps the chosen name and offers no clear button, so without
+    // selecting on focus the next search reads "Selected#TAGnewname".
     const user = userEvent.setup();
     renderSelector(vi.fn(), "Selected#TAG");
 
@@ -84,9 +83,8 @@ describe("PlayerSelector", () => {
   });
 
   it("does not read Enter on a seeded box as an unknown Riot ID", async () => {
-    // The seeded value parses as a Riot ID, and its suggestions request only
-    // starts on focus -- so Enter pressed straight away used to open the
-    // "which server?" dialog for the player already selected.
+    // The seeded value parses as a Riot ID and its suggestions start only on
+    // focus, so an immediate Enter can open discovery for the chosen player.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
     const user = userEvent.setup();
     renderSelector(vi.fn(), "Selected#TAG");
@@ -117,9 +115,8 @@ describe("PlayerSelector", () => {
   });
 
   it("still reaches discovery for a name typed over a seeded box", async () => {
-    // The other half of the Enter guard. It has to refuse only the value the
-    // box was seeded with -- narrow it any further and adding an untracked
-    // player, the whole point of the discover path, stops working.
+    // The Enter guard must refuse only the seeded value; any wider and adding
+    // an untracked player stops working.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
     const user = userEvent.setup();
     renderSelector(vi.fn(), "Selected#TAG");
@@ -146,9 +143,8 @@ describe("PlayerSelector", () => {
   });
 
   it("keeps the chosen player in a box that was seeded with one", async () => {
-    // Both analysis pages analyse the player named in the box, so emptying it on
-    // selection leaves the page describing a result whose subject is nowhere on
-    // screen. A box nobody seeded still clears.
+    // Both analysis pages analyse the player named in the box, so clearing it
+    // on selection leaves a result whose subject is nowhere on screen.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
     renderSelector(vi.fn(), "Previous#ONE");
     const user = userEvent.setup();
@@ -182,14 +178,12 @@ describe("PlayerSelector", () => {
   });
 
   it("asks for no suggestions until the box has focus", async () => {
-    // A seeded box holds a Riot ID from its first render, and the list it
-    // would populate only renders while the box is focused -- so an ungated
-    // query spends a request per mount on results nothing can show.
+    // A seeded box holds a Riot ID from first render but its list shows only
+    // while focused, so an ungated query spends a request per mount.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
 
-    // Past the 250ms search debounce on a driven clock: before it elapses an
-    // ungated query has not fired either, so an immediate assertion would
-    // pass either way.
+    // Past the 250ms debounce: before it elapses an ungated query has not
+    // fired either, so an immediate assertion would pass either way.
     vi.useFakeTimers();
     try {
       renderSelector(vi.fn(), "Previous#ONE");

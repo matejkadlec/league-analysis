@@ -38,9 +38,8 @@ def _request() -> Request:
 async def test_the_global_tracking_recount_locks_the_row_it_rewrites() -> None:
     """Count-then-write on one PUUID is only safe while the row is held.
 
-    Two users acting on one player interleaved there: the untrack counted
-    zero without seeing the other's uncommitted track, then wrote its stale
-    `false` last, and nothing but another track or untrack clears it.
+    An untrack that counts zero without seeing a concurrent uncommitted track
+    writes a stale `false` nothing but another track or untrack clears.
     """
     statements: list[object] = []
 
@@ -150,9 +149,8 @@ async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
 ) -> None:
     """The tracking write is already committed when the claim runs.
 
-    Reporting 500 here would tell the client the player was not tracked while
-    the row exists, so the toast would contradict the sidebar. The sync is
-    only an optimisation over the scheduler's next pass.
+    Reporting 500 would deny a player the row already holds; the sync is only
+    an optimisation over the scheduler's next pass.
     """
     response = SimpleNamespace(puuid="test-puuid", platform="eun1")
     player_service = SimpleNamespace(
@@ -183,9 +181,8 @@ async def test_player_refresh_uses_the_shared_writer_guard(
 ) -> None:
     """Profile and league refreshes cannot repopulate cleanup-owned rows.
 
-    Driven through the service rather than a route: the only route that
-    called it was `POST /{puuid}/refresh-league`, which had no client. The
-    jobs reach these two methods directly, so the guard still has to hold.
+    Driven through the service rather than a route: the jobs reach these two
+    methods directly, so the guard has to hold there.
     """
     guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
     monkeypatch.setattr(

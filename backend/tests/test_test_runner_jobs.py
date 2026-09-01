@@ -1,8 +1,7 @@
 """Pin which endpoints each test-runner job actually calls.
 
 The endpoint list *is* the feature: drop a call and the run still reports
-success while covering less than it claims. `call_endpoints` is driven with a
-stubbed client because the surrounding loop waits 60 seconds per iteration.
+success while covering less than it claims.
 """
 
 from typing import Any
@@ -19,9 +18,8 @@ from app.features.jobs.implementations.test_runner import (
     TestPlayerUpdaterJob as PlayerUpdaterRunner,
 )
 
-# Imported under different names on purpose: pytest tries to *collect* any
-# imported class whose name starts with `Test`, and refuses these because they
-# take constructor arguments.
+# Renamed on import: pytest tries to collect any imported class named `Test*`
+# and refuses these because they take constructor arguments.
 
 
 class FakeMatchList:
@@ -76,9 +74,8 @@ async def test_match_fetcher_covers_all_four_of_its_endpoints() -> None:
 
 
 async def test_match_fetcher_skips_match_calls_when_there_is_no_match() -> None:
-    # A brand-new account has no match history. The per-match calls have
-    # nothing to ask about, but the two puuid-scoped calls still run -- without
-    # that guard the run dies on the first iteration and reports a key failure.
+    # With no match history the puuid-scoped calls must still run; without that
+    # guard the run dies on the first iteration and reports a key failure.
     client = RecordingClient(match_ids=[])
 
     assert await run(MatchFetcherRunner(1), client) == [

@@ -1,12 +1,9 @@
-// A comment past three lines is code that never got clarified, or narration
-// of how it got that way. A run of consecutive `//` lines is ONE block: the
-// repo writes rationale that way, so per-line counting would not bind.
+// A comment past two lines is code that never got clarified, or narration of
+// how it got that way. A run of consecutive `//` lines is ONE block.
 
-// Blank ` *` lines count, bare `/**` and `*/` do not. A run at the ceiling
-// passes, and so does a `// why` trailing a statement, which opens its own
-// block instead of extending the run above.
-
-const DEFAULT_MAX_LINES = 3;
+// A blank ` *` line still counts toward the limit; only a bare `/**`/`*/`
+// does not. A run sitting exactly at the ceiling passes; only going over reports.
+const DEFAULT_MAX_LINES = 2;
 
 type Position = { line: number; column: number };
 type Comment = { type: string; loc: { start: Position; end: Position } };
@@ -34,9 +31,8 @@ const isTrailing = (sourceCode: SourceCode, comment: Comment) => {
   return before != null && before.loc.end.line === comment.loc.start.line;
 };
 
-// Prose, not span: a bare `/**`, `/*` or `*/` carries no words, while a blank
-// ` *` line does, so the same rationale costs the same written as a `//` run
-// or as a JSDoc block.
+// Prose, not span: a bare `/**`, `/*` or `*/` carries no words, so the same
+// rationale costs the same as a `//` run or as a JSDoc block.
 const proseLines = (sourceCode: SourceCode, block: Block) => {
   let count = 0;
   for (

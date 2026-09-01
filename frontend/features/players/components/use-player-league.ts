@@ -6,7 +6,6 @@ import { unwrap, validatedGet } from "@/lib/core/http/api";
 import { PlayerLeagueSchema } from "@/lib/core/schemas";
 
 /**
- * The player's current ranked-solo standing, or `null` when they have none.
  * `/players/{puuid}/league` never 404s -- unranked is a 200 carrying `null` --
  * so a failure reaches the `QueryCache` toast rather than reading as unranked.
  */
@@ -22,9 +21,7 @@ export function usePlayerLeague(puuid: string) {
         ),
       ),
     retry: false,
-    // Both callers can be on screen at once, and a rank moves on the order of a
-    // match, not a render. `handleRefreshAll` invalidates this key, so a sync
-    // still shows its new rank immediately.
+    // A rank moves on the order of a match; `handleRefreshAll` invalidates this key.
     staleTime: 60000,
   });
 }

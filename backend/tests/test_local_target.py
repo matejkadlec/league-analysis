@@ -1,8 +1,7 @@
 """The loopback proof both destructive local commands now share.
 
-`cleanse_local_riot_data.py` and `reconcile_admin_account.py` mutate a
-database only after proving it is loopback-only. These cases cover the union
-of what each accepted, plus the range a string comparison misses.
+`cleanse_local_riot_data.py` and `reconcile_admin_account.py` mutate a database
+only after proving it loopback-only; a string comparison misses part of the range.
 """
 
 from __future__ import annotations

@@ -245,9 +245,8 @@ describe("Match History progressive loading", () => {
   });
 
   it("stops claiming more matches once the match half of the run is done", async () => {
-    // Still `running` -- but the backend stamps `match_execution_id` between
-    // the Match Fetcher and the Player Updater, and the profile half that
-    // follows writes no matches.
+    // Still `running`, but `match_execution_id` is stamped between the Match
+    // Fetcher and the Player Updater, and the profile half writes no matches.
     mockHistory(3, "running", 41);
     renderHistory();
 
@@ -258,9 +257,8 @@ describe("Match History progressive loading", () => {
   });
 
   it("re-reads the list once a run that stopped early settles", async () => {
-    // A rate-limited run still stored whatever it got through before Riot cut
-    // it off, and the 2s poll ends the moment the status leaves `running` —
-    // so without this the rows written since its last tick stay invisible.
+    // A rate-limited run still stored rows, and the 2s poll ends the moment
+    // the status leaves `running`, so its last tick's writes stay invisible.
     mockHistory(3, "rate_limited");
     renderHistory();
 
@@ -273,18 +271,16 @@ describe("Match History progressive loading", () => {
   });
 
   it("keeps the fetched rows when a poll of the list fails", async () => {
-    // The 2s poll only exists while rows are arriving, so its failures land
-    // exactly when the card has rows worth keeping. Replacing them with an
-    // error card throws away readable matches over a blip.
+    // The 2s poll only exists while rows are arriving, so an error card here
+    // throws away readable matches over a blip.
     mockHistory(3, "running");
     renderHistory();
     await waitFor(() =>
       expect(screen.getAllByText("Mordekaiser").length).toBeGreaterThan(0),
     );
 
-    // Only the list fails. The run keeps reporting itself, which is what keeps
-    // the 2s poll alive — the failure has to happen while the card still
-    // believes more rows are coming.
+    // Only the list fails: the run keeps reporting itself, so the failure
+    // lands while the card still believes more rows are coming.
     const stillRunning = {
       id: 7,
       puuid: PUUID,
@@ -337,9 +333,8 @@ describe("Match History progressive loading", () => {
   });
 
   it("does not call an empty list a verdict when the request failed", async () => {
-    // Nothing stored yet and the poll fails: "No matches found" would be a
-    // conclusion drawn from a request that never answered, and the query is
-    // opted out of the global error toast, so this row is the only report.
+    // "No matches found" would be a conclusion drawn from a request that
+    // never answered, and this row is the only report the query has.
     mockHistory(0, "running");
     renderHistory();
     await waitFor(() =>
@@ -379,9 +374,8 @@ describe("Match History progressive loading", () => {
   });
 
   it("reports a failed page change instead of leaving the old page up", async () => {
-    // Placeholder data keeps the previous page's rows on screen through the
-    // failed fetch, and this query is opted out of the global error toast, so
-    // without a report here nothing says the page change failed.
+    // Placeholder data keeps the old rows on screen and the query is opted out
+    // of the global toast, so without this nothing says the change failed.
     mockHistory(30, null);
     renderHistory();
     await waitFor(() =>
@@ -406,9 +400,8 @@ describe("Match History progressive loading", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: "2" }));
 
-    // Reported, rather than silently reverted. The failed page-2 fetch carries
-    // no data, so the error card is the right shape -- the card must not
-    // quietly return to page 1 as though nothing was asked for.
+    // The failed page-2 fetch carries no data, so the card must report rather
+    // than quietly return to page 1 as though nothing was asked for.
     await waitFor(() =>
       expect(
         screen.getByText(/Unable to reach the League Analysis/),

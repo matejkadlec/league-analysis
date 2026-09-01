@@ -4,8 +4,7 @@ import { rankValueToDisplay } from "@/features/players";
 
 /**
  * Shared with the backend scale test (`test_matchmaking_ranks.py`): the same
- * fixtures must hold on both sides, or the two scale implementations drift.
- * Everything at or above the MASTER floor collapses to "Master+".
+ * fixtures must hold on both sides, or the two implementations drift.
  */
 const SCALE_FIXTURES: Array<[number, string, string]> = [
   [0, "IRON", "Iron IV · 0 LP"],

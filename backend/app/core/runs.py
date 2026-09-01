@@ -1,8 +1,7 @@
 """Lifecycle primitives shared by one-active-run-per-player analyses.
 
-Background analysis features persist runs with the same mechanics: one active
-row per account and PUUID, insert races resolved by re-reading the concurrent
-winner, and guarded updates that can never revive a finished run.
+One active row per account and PUUID, insert races resolved by re-reading the
+concurrent winner, and guarded updates that can never revive a finished run.
 """
 
 from collections.abc import Sequence
@@ -20,9 +19,8 @@ from .db_session import rollback_quietly
 def values_in_sql(column: str, values: Sequence[str]) -> str:
     """The ``<column> IN (...)`` text a Python vocabulary renders to in SQL.
 
-    Every run table spells its status vocabulary twice in DDL -- the CHECK
-    constraint and the partial unique index -- so rendering the SQL from the
-    Python values means extending a vocabulary cannot leave a constraint behind.
+    Every run table spells its status vocabulary twice in DDL (CHECK constraint
+    and partial unique index), so rendering both from Python keeps them in step.
     """
     joined = ", ".join(f"'{value}'" for value in values)
     return f"{column} IN ({joined})"
@@ -48,9 +46,8 @@ def active_run_filter(
 ) -> ColumnElement[bool]:
     """WHERE clause naming one account's active runs for a player.
 
-    `user_id` is positional and required rather than optional: matching on
-    `puuid` alone makes a stored run the property of the Riot player instead
-    of the account that asked for it, and the query still returns a row.
+    `user_id` is required because matching on `puuid` alone still returns a row,
+    one owned by the Riot player rather than the account that asked for it.
     """
     clauses: list[ColumnElement[bool]] = [
         model.user_id == user_id,
@@ -65,9 +62,8 @@ def active_run_filter(
 async def commit_new_run(db: AsyncSession, run: Any) -> IntegrityError | None:
     """Commit a new active run.
 
-    On an integrity failure — normally losing the one-active-run race — the
-    session is rolled back and the error returned so the caller can decide
-    between attaching to the concurrent winner and re-raising it visibly.
+    On an integrity failure — losing the one-active-run race — the session rolls back and
+    the error returns so the caller can attach to the winner or re-raise it.
     """
     db.add(run)
     try:

@@ -60,16 +60,14 @@ async def update_riot_api_key(
     settings_service: SettingsServiceDep,
     current_user: AdminUserDep,
 ) -> SettingResponse:
-    """
-    Update the Riot API key.
+    """Update the Riot API key.
 
     The key is validated against the Riot API before being saved. A database-backed
     key takes effect immediately; an environment-backed one needs a restart.
     """
     try:
-        # No first-store branch: `update_setting` creates the key row when the
-        # value has never been seen, so the extra SELECT decided nothing and
-        # both arms called the same method.
+        # No first-store branch: `update_setting` creates the key row when
+        # unseen, so an extra SELECT here would decide nothing.
         setting = await settings_service.update_setting("riot_api_key", update)
 
         logger.info(

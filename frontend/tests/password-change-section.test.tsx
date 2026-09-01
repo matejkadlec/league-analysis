@@ -95,9 +95,8 @@ describe("changing an account password", () => {
 
   it("will not send a new password that was typed differently twice", async () => {
     const user = userEvent.setup();
-    // The repeat field exists because this value cannot be read back. Send a
-    // mistyped one and the account's password becomes a string nobody knows.
-    // The server cannot see the two fields differ, so the check belongs here.
+    // The server cannot see the two fields differ, and a mistyped one makes the
+    // password a string nobody knows.
     const queryClient = renderSection();
 
     fill({ current: CURRENT, next: STRONG, repeat: "Str0ng!Pas" });
@@ -114,9 +113,8 @@ describe("changing an account password", () => {
 
   it("will not send a password that does not meet the stated requirements", async () => {
     const user = userEvent.setup();
-    // The requirements are printed under the field, so a refusal here is the
-    // one the person can act on. Sending it instead spends a round trip to be
-    // told the same thing in a toast that does not name the rule.
+    // The requirements are printed under the field, so only a refusal here names
+    // the rule that was broken.
     const queryClient = renderSection();
 
     fill({ current: CURRENT, next: "weakpass", repeat: "weakpass" });
@@ -131,9 +129,8 @@ describe("changing an account password", () => {
 
   it("puts a wrong current password on the field, not in a toast", async () => {
     const user = userEvent.setup();
-    // This is the field to correct, and it is the one case where the server
-    // knows something the form cannot. A toast would vanish while the person
-    // is still looking at three filled-in inputs wondering which one was wrong.
+    // A toast would vanish while three filled-in inputs stay on screen with nothing
+    // saying which one was wrong.
     validatedPost.mockResolvedValue(refusal("CURRENT_PASSWORD_INVALID"));
     const queryClient = renderSection();
 
@@ -150,9 +147,8 @@ describe("changing an account password", () => {
 
   it("clears every field and re-hides them once the password has changed", async () => {
     const user = userEvent.setup();
-    // Two of these inputs can be switched to plain text, and this section
-    // lives on a settings page that stays open. Leaving the new password
-    // visible after a change leaves it on screen for whoever walks past.
+    // Two inputs can be switched to plain text on a settings page that stays open,
+    // so a revealed password would sit there for whoever walks past.
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "Password changed" },
@@ -190,9 +186,8 @@ describe("changing an account password", () => {
 
   it("stops a second submit while the first is still in flight", async () => {
     const user = userEvent.setup();
-    // The button's `disabled` is what holds this shut, not the handler's own
-    // pending check -- a disabled button never delivers the click, so this
-    // stays green with that check deleted.
+    // The button's `disabled` holds this shut, not the handler's pending check: a
+    // disabled button never delivers the click.
     let release: (value: ChangePasswordResponse) => void = () => {};
     validatedPost.mockImplementation(
       () =>

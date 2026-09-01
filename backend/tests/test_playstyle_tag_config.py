@@ -1,8 +1,7 @@
 """What `TAG_CONFIG` has to be true of, that the type checker cannot say.
 
-`TagConfig` pins the spelling and the value type of every key, and nothing
-else. Every gap below is silent when broken -- a tag whose criteria never
-match simply does not appear, and no caller notices.
+`TagConfig` pins key spellings and value types and nothing else; every gap
+below is silent, since a tag that never matches simply does not appear.
 """
 
 from __future__ import annotations
@@ -74,9 +73,8 @@ def test_threshold_keys_hold_numbers() -> None:
                 assert isinstance(value, int | float), (
                     f"{tag_code}.{key} is not a number, so it is silently skipped"
                 )
-                # `bool` is a subclass of `int`, so the check above accepts
-                # `True`. A threshold of `True` compares as 1 and the tag fires
-                # on the wrong data rather than erroring.
+                # `bool` passes the `int` check above, and a threshold of
+                # `True` compares as 1 rather than erroring.
                 assert not isinstance(value, bool), (
                     f"{tag_code}.{key} is a bool, so it compares as 0 or 1"
                 )
@@ -93,9 +91,8 @@ def test_the_presentation_keys_every_tag_is_read_for_are_present() -> None:
 def test_every_generic_tag_names_a_metric_that_can_be_read() -> None:
     """A tag reaching the generic comparison must have something to compare.
 
-    `_generic_metric_average` looks its metric up by name -- a
-    `MatchParticipant` column, or an `advanced_stats` key via `_CHALLENGE_KEYS`.
-    A name that is neither averages 0.0, so the tag silently stops existing.
+    `_generic_metric_average` resolves the name to a column or an
+    `advanced_stats` key; anything else averages 0.0 and the tag stops existing.
     """
     unreadable = [
         f"{tag_code}: {sorted(k for k in config if k.startswith(('min_', 'max_')))}"

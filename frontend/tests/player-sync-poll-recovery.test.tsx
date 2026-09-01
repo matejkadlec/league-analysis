@@ -49,9 +49,8 @@ function run(status: string) {
 }
 
 /**
- * A backend that reports one running run, fails the exact-status poll for a
- * while, then recovers with a terminal status. `/sync/active` keeps answering
- * throughout: a transient failure is the case under test, not a total outage.
+ * The exact-status poll fails for a while, then recovers. `/sync/active` keeps
+ * answering: the case under test is a transient failure, not an outage.
  */
 function mockPollThatFailsThenRecovers(recoversAs: string) {
   let exactCalls = 0;
@@ -86,8 +85,7 @@ describe("player sync poll recovery", () => {
 
   it("keeps polling after the exact-status poll errors", async () => {
     // `refetchInterval` reads `query.state.data`, which survives an error, so
-    // the status still says `running` and the interval keeps being consulted —
-    // an errored poll backs off to 15s, it does not stop.
+    // an errored poll backs off to 15s rather than stopping.
     const exactCalls = mockPollThatFailsThenRecovers("completed");
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, {}));
 
@@ -102,9 +100,8 @@ describe("player sync poll recovery", () => {
   });
 
   it("keeps polling when the very first read of the run fails", async () => {
-    // The case that made "unreadable forever" real: with no successful read
-    // there is no last-known status, so an interval keyed on the payload
-    // returned false and the run was never spoken of again.
+    // With no successful read there is no last-known status, so an interval
+    // keyed on the payload returns false and the run is never read again.
     let exactCalls = 0;
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
       if (path.endsWith("/sync/active")) {
@@ -128,9 +125,8 @@ describe("player sync poll recovery", () => {
   });
 
   it("settles once, with the real status, when the poll recovers", async () => {
-    // A few seconds of failed polling must not settle the run: the caller acts
-    // on that callback, and acting on `null` while the run is still going means
-    // acting on partial data, which a later real settle then contradicts.
+    // Failed polling must not settle the run: the caller would act on partial
+    // data that a later real settle then contradicts.
     const onSettled = vi.fn<OnSettled>();
     mockPollThatFailsThenRecovers("completed");
     renderHookWithQueryClient(() => usePlayerSyncRun(PUUID, { onSettled }));

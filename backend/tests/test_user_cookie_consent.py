@@ -18,9 +18,8 @@ from app.features.settings.schemas import CookieConsentLevel as ApiLevel
 def test_the_column_persists_the_lowercase_labels_the_schema_declares() -> None:
     """The database enum is `('necessary', 'all')`; member names would not fit.
 
-    Without `values_callable`, SQLAlchemy persists the member *names*
-    (`NECESSARY`, `ALL`) as the enum labels, and every consent write is
-    rejected by the type declared in the initial revision.
+    Without `values_callable`, SQLAlchemy persists the member *names* and every
+    consent write is rejected by the type the initial revision declared.
     """
     column = UserCookieConsent.__table__.c.consent_level
     assert isinstance(column.type, Enum)

@@ -1,8 +1,7 @@
 """Characterise champion and lane statistic aggregation.
 
 The two accumulators and the two builders are near-copies, and a copy nobody
-checks is where the two halves quietly stop agreeing. Written to pass against
-the pre-refactor implementation as well.
+checks is where the two halves quietly stop agreeing.
 """
 
 import pytest

@@ -57,8 +57,7 @@ async def test_champion_stats_returns_every_champion_with_stable_ties() -> None:
     response = await service.get_player_champion_stats("test-puuid", queue_ids=None)
 
     # The double answers every query with the same rows, so only the statement
-    # itself can say whether the twenty-row cap came back. It did once, and
-    # every player with more than twenty champions silently lost the tail.
+    # itself can say whether the twenty-row cap came back.
     assert "LIMIT" not in str(session.statements[0])
 
     assert response.total_champions == 23

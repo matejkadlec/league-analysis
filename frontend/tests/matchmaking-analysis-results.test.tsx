@@ -84,9 +84,8 @@ beforeEach(() => {
 
 describe("the last matchmaking analysis result", () => {
   it("tells a player who has never run one apart from one that failed to load", async () => {
-    // The endpoint answers 404 when this player has never run an analysis,
-    // which the query turns into `null` rather than an error. Both states
-    // render the same card, so only the sentence inside it tells them apart.
+    // A 404 means "never ran one" and the query turns it into `null`, not an
+    // error; both states share a card, so only its sentence separates them.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: false,
       error: {
@@ -125,9 +124,8 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("does not show numbers from an analysis that has not finished", async () => {
-    // A row exists but the run is still going, so it has no verdict to show.
-    // `splitRunOnLifecycle` is why the partial averages cannot even be
-    // handed to the card: only `completed` owns `results`.
+    // A row exists but the run is unfinished: `splitRunOnLifecycle` keeps the
+    // partial averages from reaching the card, since only `completed` owns them.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: true,
       data: {
@@ -152,9 +150,8 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("calls a gap of exactly three points favourable, not fair", async () => {
-    // The card says "within 3%", so 3.0 falls outside it. The pair has to be
-    // 0.03 and 0, not 0.53 and 0.5: `0.53 - 0.5` is 0.030000000000000027 and was
-    // never on the boundary, so that draft passed with `>=` mutated to `>`.
+    // The pair has to be 0.03 and 0, not 0.53 and 0.5: `0.53 - 0.5` is
+    // 0.030000000000000027 and so never lands on the `>=` boundary.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.03,
@@ -177,9 +174,8 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("colours the two rows against each other, not the same way", async () => {
-    // The two cells carry mirror-image ternaries over the same pair of
-    // booleans. Copy one into the other and both teams turn green on a
-    // favourable result, quietly losing the only signal in the table.
+    // The two cells carry mirror-image ternaries over one pair of booleans:
+    // copy one into the other and both teams turn green on a favourable result.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.6,
@@ -201,9 +197,8 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("calls a gap of exactly three points against the player unfavourable", async () => {
-    // The mirror of the favourable boundary, and it needs its own exact pair
-    // for the same floating-point reason: `0 - 0.03` is the same double as
-    // `-0.03`. Without it, `<=` can be narrowed to `<` unnoticed.
+    // The mirror boundary needs its own exact pair: `0 - 0.03` is the same
+    // double as `-0.03`, so `<=` narrowed to `<` shows up only here.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0,
@@ -239,8 +234,7 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("names the opponents when the gap runs the other way", async () => {
-    // The two directions are separate branches over the same number, and the
-    // percentage shown is `Math.abs`, so a sign that leaks tells a player who
+    // The percentage shown is `Math.abs`, so a leaked sign tells a player who
     // was outmatched that they were favoured.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
@@ -256,9 +250,8 @@ describe("the last matchmaking analysis result", () => {
     );
     expect(screen.getByText("5%")).toBeTruthy();
     expect(screen.queryByText(/teammates had higher/)).toBeNull();
-    // The three verdicts are three independent conditions rather than one
-    // cascade, so nothing structural stops two of them rendering at once:
-    // dropping `!isUnfavorable` from `isFair` prints both contradictions.
+    // The three verdicts are independent conditions, not a cascade: dropping
+    // `!isUnfavorable` from `isFair` renders two contradictions at once.
     expect(screen.queryByText(/relatively fair/)).toBeNull();
     queryClient.clear();
   });
@@ -427,18 +420,16 @@ describe("the last matchmaking analysis result", () => {
 
   it.each([
     [new Date(2026, 2, 4, 14, 7), "4.3.2026 2:07 PM"],
-    // Midnight is the one `hours % 12` turns into 0, which is what the
-    // `|| 12` in the shared formatter exists for. Without a midnight fixture
-    // that expression can be deleted and every other hour still reads right.
+    // Midnight is the one `hours % 12` turns into 0, so without this fixture
+    // the formatter's `|| 12` can be deleted unnoticed.
     [new Date(2026, 2, 4, 0, 5), "4.3.2026 12:05 AM"],
     // Noon is the only hour where `>= 12` and `> 12` disagree, so it is the
     // only fixture that pins the meridiem boundary.
     [new Date(2026, 2, 4, 12, 30), "4.3.2026 12:30 PM"],
     [new Date(2026, 2, 4, 23, 59), "4.3.2026 11:59 PM"],
   ])("writes %s as %s", async (createdAt, expected) => {
-    // These fixtures pin the three things every hand-rolled clock gets wrong:
-    // `07` minutes rather than `7`, midnight reading as 12 rather than 0, and
-    // noon being PM rather than AM.
+    // The three things a hand-rolled clock gets wrong: `07` not `7`, midnight
+    // as 12 not 0, noon as PM not AM.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed(EVEN, createdAt.toISOString()),
     );

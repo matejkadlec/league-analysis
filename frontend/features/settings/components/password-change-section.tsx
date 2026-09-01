@@ -27,9 +27,8 @@ import {
 } from "../settings-helpers";
 
 /**
- * A password field with its own show/hide toggle. Local to this file: two
- * uses in one component is one file's worth of abstraction. The visibility
- * flag stays with the form because a successful change resets both to hidden.
+ * A password field with a show/hide toggle, kept local since both uses are in
+ * this component. The flag stays with the form: a successful change resets both to hidden.
  */
 function PasswordInput({
   id,

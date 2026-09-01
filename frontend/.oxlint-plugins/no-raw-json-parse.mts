@@ -1,6 +1,5 @@
-// JSON text reaching this app came from somewhere it does not control -- a
-// viewer's storage, a beacon body -- and `JSON.parse` answers `any`. Every
-// other foreign payload here crosses through a zod schema; these do too.
+// JSON text reaching this app came from somewhere it does not control and
+// `JSON.parse` answers `any`; every foreign payload crosses a zod schema.
 
 // Flagged: any `JSON.parse` call in application code. `lib/core/http/untrusted-json.ts`
 // owns the one call, and `oxlint.config.mts` exempts it and the test tree.

@@ -1,8 +1,7 @@
 """Logout asserted through real FastAPI routing, not by calling the function.
 
-Every other logout test unwraps the endpoint and awaits it directly, skipping
-decorators and dependencies. Re-adding `@rate_limit` or an auth `Depends` would
-leave that file green while sign-out broke — so these go through the router.
+Every other logout test awaits the endpoint directly, skipping decorators and
+dependencies: a re-added `@rate_limit` or auth `Depends` would stay green there.
 """
 
 from collections.abc import AsyncIterator
@@ -38,9 +37,8 @@ def service() -> AuthService:
 
 @pytest.fixture
 async def client(service: AuthService) -> AsyncIterator[httpx.AsyncClient]:
-    # `ASGITransport`, not starlette's TestClient: the latter is annotated
-    # against httpx2, which this environment does not install, and it warns at
-    # import time in a suite that treats warnings as errors.
+    # `ASGITransport`, not starlette's TestClient: the latter is annotated against
+    # httpx2 and warns at import in a suite that treats warnings as errors.
     app = FastAPI()
     app.include_router(router)
 
@@ -72,9 +70,8 @@ async def test_logout_needs_no_credentials_to_reach_the_handler(
 async def test_repeated_logouts_are_never_refused(client: httpx.AsyncClient) -> None:
     """Pins the absence of a rate limit on this route.
 
-    The limiter keys on `get_remote_address`, and behind the Next.js rewrite
-    with `--no-proxy-headers` every user in production shares one bucket. A
-    limit here is globally deniable: one client can spend everyone's quota.
+    Behind the Next.js rewrite with `--no-proxy-headers`, `get_remote_address`
+    puts every user in one bucket, so a limit here is globally deniable.
     """
     # More iterations than any per-minute limit anyone would plausibly set
     # here; the existing limits in this router run 3-20/minute.
@@ -87,9 +84,8 @@ async def test_anonymous_logout_does_not_run_the_table_wide_cleanup(
 ) -> None:
     """The route is unauthenticated, so this must not be reachable by anyone.
 
-    `cleanup_expired_token_state` issues two full-table DELETEs and a COMMIT.
-    Running it for credential-less callers lets anonymous requests drive write
-    transactions at request rate.
+    `cleanup_expired_token_state` issues two full-table DELETEs and a COMMIT, so
+    credential-less callers could drive write transactions at request rate.
     """
     assert (await _post(client)).status_code == 200
 
@@ -112,9 +108,8 @@ async def test_a_credential_less_logout_writes_no_deletion_cookies(
 ) -> None:
     """Because anyone's website can make this request.
 
-    The route is unauthenticated, so a top-level form POST from any page
-    reaches it. SameSite=Lax keeps the cookies off that request, so it revokes
-    nothing, but deletion Set-Cookies would still sign the visitor out.
+    A top-level form POST reaches this unauthenticated route; SameSite=Lax means
+    it revokes nothing, but deletion Set-Cookies would still sign the visitor out.
     """
     assert (await _post(client)).headers.get_list("set-cookie") == []
 
@@ -124,9 +119,8 @@ async def test_a_real_sign_out_still_clears_every_cookie(
 ) -> None:
     """The other direction, and the reason the guard reads the request.
 
-    Narrowing it further -- to a valid refresh token, say -- would leave the
-    cookies in place for anyone whose token had expired or been revoked, a
-    signed-out visitor still holding a hint that `proxy.ts` admits.
+    Narrowing the guard to a *valid* refresh token would strand expired-token
+    visitors holding a hint that `proxy.ts` admits.
     """
     cast(AsyncMock, service).resolve_user_id_for_refresh_token.return_value = None
 

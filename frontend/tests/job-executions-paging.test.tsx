@@ -29,9 +29,8 @@ class FakeIntersectionObserver {
 }
 
 /**
- * A paging number off a request's query string. Throws rather than
- * defaulting: losing the param is the failure these tests exist to catch, and
- * a default would quietly answer page 1 for every request instead.
+ * Throws rather than defaulting: a default would quietly answer page 1 for a
+ * request that lost the param.
  */
 function paging(query: URLSearchParams, name: "page" | "size"): number {
   const value = Number(query.get(name));
@@ -130,9 +129,8 @@ describe("the executions list's paging", () => {
   });
 
   it("never grows the page size past the backend's cap", async () => {
-    // The regression this component shipped with: a single growing-`size`
-    // request hit the router's `le=100` bound and 422'd on the sixth
-    // load-more. Paging must scale by page number, never by request size.
+    // Paging must scale by page number, never by request size: the router
+    // bounds `size` at `le=100` and 422s past it.
     renderExecutions();
     await waitFor(() =>
       expect(screen.getByText("Showing 20 of 50 executions")).toBeTruthy(),
@@ -174,9 +172,8 @@ describe("the executions list's paging", () => {
   });
 
   it("keeps every loaded page on screen through a failed poll", async () => {
-    // The 15-second poll refetches every loaded page. Returned as data rather
-    // than thrown, a failure envelope *replaces* the good pages and truncates the
-    // list back to page 1 -- 20 rows an operator does not get back.
+    // The poll refetches every loaded page, so a failure returned as data
+    // rather than thrown replaces the good pages and truncates back to page 1.
     const { queryClient } = renderExecutions();
     await waitFor(() =>
       expect(screen.getByText("Showing 20 of 50 executions")).toBeTruthy(),

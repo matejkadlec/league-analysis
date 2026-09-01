@@ -22,9 +22,8 @@ afterEach(() => {
 
 describe("what counts as consent", () => {
   it("does not honour a consent given against an older version", () => {
-    // Dropping `isCurrentCookieConsent` from this check kept all 356 tests green,
-    // and it silently converts every stale "accept all" in the wild into consent
-    // for terms its owner never saw.
+    // Without `isCurrentCookieConsent` every stale "accept all" in the wild becomes
+    // consent for terms its owner never saw.
     expect(
       canUseOptionalStorage({
         level: "all",
@@ -48,18 +47,16 @@ describe("what counts as consent", () => {
     ["no timestamp at all", "v1|all|"],
     ["nothing but separators", "||"],
   ])("refuses a consent cookie carrying %s", (_label, raw) => {
-    // A consent cookie is visitor-writable and outlives releases. Every rejection
-    // branch in the parser was unexercised: removing them left the suite green
-    // while a hand-edited cookie became state the rest of the app trusts.
+    // A consent cookie is visitor-writable, so a hand-edited one must not become
+    // state the rest of the app trusts.
     setConsentCookie(raw);
 
     expect(readCookieConsentFromBrowser()).toBeNull();
   });
 
   it("writes a consent cookie that survives a round trip, with its attributes", () => {
-    // jsdom hands back only `name=value`, so the attributes are asserted at the
-    // point of writing -- otherwise dropping `SameSite=Lax`, or the six-month
-    // `Max-Age` that makes the answer persist, passes every other test here.
+    // jsdom hands back only `name=value`, so the attributes have to be asserted at
+    // the point of writing.
     const writes: string[] = [];
     vi.spyOn(document, "cookie", "set").mockImplementation((value: string) => {
       writes.push(value);
@@ -71,9 +68,8 @@ describe("what counts as consent", () => {
     expect(writes[0]).toContain("Path=/");
     expect(writes[0]).toContain("SameSite=Lax");
     expect(writes[0]).toContain(`Max-Age=${COOKIE_CONSENT_MAX_AGE_SECONDS}`);
-    // The retention the comment above claims is protected. Without it the
-    // `Max-Age` check only proves the cookie and the constant agree, which
-    // holds just as well at sixty seconds.
+    // Without pinning the value, the `Max-Age` check only proves the cookie and the
+    // constant agree, which holds just as well at sixty seconds.
     expect(COOKIE_CONSENT_MAX_AGE_SECONDS).toBe(60 * 60 * 24 * 180);
     expect(written.version).toBe(COOKIE_CONSENT_VERSION);
 

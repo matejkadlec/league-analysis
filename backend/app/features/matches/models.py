@@ -18,9 +18,8 @@ from app.core.models import Base, created_at_column, updated_at_column
 from app.core.riot_api.constants import Platform
 from app.core.runs import values_in_sql
 
-# Imported at runtime, not under TYPE_CHECKING: the name appears in a `Mapped`
-# annotation, and SQLAlchemy resolves those by evaluating them. `participants`
-# does not import this module, so there is no cycle.
+# Imported at runtime, not under TYPE_CHECKING: SQLAlchemy resolves `Mapped`
+# annotations by evaluating them. `participants` does not import this module.
 from .participants import MatchParticipant
 
 
@@ -29,9 +28,8 @@ class Match(Base):
 
     __tablename__ = "matches"
     __table_args__: Final = (
-        # Same canonical spelling as `core.players.platform` -- two columns of
-        # the same name disagreeing is a comparison bug waiting to be written.
-        # Spelled bare: the `ck` convention prefixes `ck_<table>_` itself.
+        # Same canonical spelling as `core.players.platform`, so the two never
+        # silently disagree in a comparison; bare because `ck` already prefixes it.
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",
@@ -164,15 +162,13 @@ class Match(Base):
         comment="Whether this match has been processed for playstyle analysis",
     )
 
-    # `playstyle_analysis` eager-loads this with `selectinload`. `lazy="raise"`
-    # because without `AsyncAttrs` a lazy load from async code is a
-    # MissingGreenlet. No cascade: `match_id` already cascades in the database.
+    # `lazy="raise"`: without `AsyncAttrs` a lazy load from async code is a
+    # MissingGreenlet. No cascade -- `match_id` already cascades in the database.
     participants: Mapped[list[MatchParticipant]] = relationship(lazy="raise")
 
 
-# None of these columns also carries `index=True`: a btree on (a, b) already
-# serves every lookup a btree on (a) would. `game_mode` and `game_type` do
-# carry it, because no composite here leads with either.
+# No `index=True` on these columns: a btree on (a, b) already serves lookups on
+# (a). `game_mode`/`game_type` carry it because no composite leads with either.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
@@ -186,9 +182,8 @@ Index(
     "idx_matches_analyzed_timestamp", Match.fully_analyzed, Match.game_start_timestamp
 )
 
-# Partial index the baseline created for the "what still needs analysing?" scan.
-# Narrower than the plain `fully_analyzed` index and cheap to keep, so it is
-# declared rather than dropped.
+# Narrower than the plain `fully_analyzed` index, for the needs-analysing scan.
+# Cheap to keep, so it stays declared rather than dropped.
 Index(
     "idx_matches_processed",
     Match.fully_analyzed,

@@ -8,9 +8,8 @@ import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-a
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
 import type { JobExecutionApiCall } from "@/lib/core/schemas";
 
-// The two renderers behind a job execution's expanded view. What lives here
-// and nowhere else is the conditional structure — which call gets an expander,
-// which params are shown, and how a malformed log line degrades.
+// What these two renderers own and nothing else does is the conditional
+// structure: which call gets an expander, and how a bad log line degrades.
 
 
 const STARTED = "2026-08-19T10:00:00Z";
@@ -53,9 +52,8 @@ describe("the API calls transcript", () => {
   });
 
   it("collapses a repeated call into first, ..., last", () => {
-    // 400 match fetches must not be 400 lines. The collapsed label carries
-    // the range; the params of any single call would be wrong for the other
-    // 399, so they must not render.
+    // 400 match fetches must not be 400 lines, and the params of any single
+    // call would be wrong for the other 399, so they must not render.
     renderCalls([
       call({
         count: 400,
@@ -73,9 +71,8 @@ describe("the API calls transcript", () => {
 
   it("opens and closes the range detail from its own expander", async () => {
     const user = userEvent.setup();
-    // Expansion state lives inside the component (the dialog remounts it
-    // per execution), so the behavior under test is the round trip: click
-    // opens the detail, click again closes it.
+    // Expansion state lives inside the component, which the dialog remounts
+    // per execution, so the round trip is what the component itself owns.
     const entry = call({
       count: 400,
       param_key: "matchId",

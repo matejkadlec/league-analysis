@@ -1,8 +1,7 @@
 """BaseJob.run() bookkeeping: the decisions that outlive one execution row.
 
-The scheduler registers `job_instance.run` once and re-invokes that same
-instance forever, so state kept between ticks, a leaked runtime key and an
-overwritten completion row all fail silently: the job just stops working.
+The scheduler re-invokes one long-lived instance forever, so leaked state and
+overwritten completion rows fail silently -- the job just stops working.
 """
 
 import asyncio

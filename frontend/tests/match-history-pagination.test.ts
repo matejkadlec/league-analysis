@@ -9,9 +9,8 @@ import {
 
 describe("Match History pagination", () => {
   it("offers page sizes the selector can render and a default among them", () => {
-    // Restating the six numbers only copies the constant. What the dropdown
-    // needs is a default it can show as selected, and a list that climbs --
-    // it is rendered in array order.
+    // The dropdown needs a default it can show as selected and a list that
+    // climbs, because it renders in array order.
     expect(MATCH_HISTORY_PAGE_SIZES).toContain(DEFAULT_MATCH_HISTORY_PAGE_SIZE);
     expect([...MATCH_HISTORY_PAGE_SIZES]).toEqual(
       [...MATCH_HISTORY_PAGE_SIZES].sort((a, b) => a - b),

@@ -46,9 +46,8 @@ describe("scopeAggregates", () => {
 });
 
 /**
- * Duplicated as TRIM_FIXTURES in the backend lifecycle test; both copies must
- * stay identical or the stored All-scope figure and the client's slices drift.
- * The n=5 fixture is asymmetric so trimming below ten values fails it.
+ * Duplicated in the backend lifecycle test, both must stay identical. The
+ * n=5 fixture is asymmetric so trimming below ten values would fail it.
  */
 const TRIM_FIXTURES: Array<[number[], number]> = [
   [[0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625],
@@ -61,9 +60,8 @@ describe("trimmedMean", () => {
   });
 
   it("sorts before trimming, so input order cannot change the answer", () => {
-    // Both fixtures arrive sorted, so dropping the sort still trims the same
-    // window. This permutation is picked so it does not: reversing, or moving
-    // the extremes inward, happens to drop a pair summing to the same 1.0.
+    // Picked so that dropping the sort changes the answer: reversing or moving
+    // the extremes inward happens to drop a pair summing to the same 1.0.
     const [values, expected] = TRIM_FIXTURES[0]!;
     const shuffled = [0.45, 0.0, 0.4, 1.0, 0.5, 0.5, 0.55, 0.55, 0.6, 0.5];
 
@@ -213,9 +211,8 @@ describe("rankAggregates", () => {
   ];
 
   it("averages unique matchmade players per side only", () => {
-    // "foe1" recurs across both duo matches but counts once. "me" (the
-    // analyzed player) and "partner" (a recurring ally = likely duo) are
-    // not matchmade and never tilt the ally side.
+    // "foe1" recurs across both duo matches but counts once; "me" and the
+    // recurring ally "partner" are not matchmade at all.
     const duo = rankAggregates(DUO_MATCHES, RANKS, "duo", "me");
 
     expect(duo).toEqual({
@@ -227,9 +224,8 @@ describe("rankAggregates", () => {
   });
 
   it("means the ranked players on a side rather than summing them", () => {
-    // Every other case here leaves at most one ranked player per side, where
-    // a mean, a sum, and "take the first" are all the same number. Two per
-    // side is what tells them apart.
+    // Every other case leaves one ranked player per side, where a mean, a sum
+    // and "take the first" are the same number.
     const twoRankedPerSide = [
       {
         match_id: "m1",

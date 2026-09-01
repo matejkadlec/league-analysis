@@ -12,9 +12,8 @@ import {
 } from "@/features/smurf-boost/smurf-boost-vocabulary";
 
 /**
- * Nothing executed this card: `rank-manipulation-page.test.tsx` stubs the
- * whole smurf-boost module out. It takes no props, so the assertions are on
- * the diagram and on the vocabulary it must not restate in its own words.
+ * `rank-manipulation-page.test.tsx` stubs the whole smurf-boost module out, so
+ * nothing else executes this card.
  */
 
 afterEach(() => {
@@ -23,9 +22,8 @@ afterEach(() => {
 
 describe("SmurfBoostExplanationCard", () => {
   it("draws two windows of the same player, the recent one smaller", () => {
-    // The diagram is the explanation: eight muted dots for the earlier window
-    // and five primary ones for the recent. Equal counts, or one colour for
-    // both, would read as two players compared against each other.
+    // Equal dot counts, or one colour for both windows, would read as two
+    // players compared against each other.
     const { container } = render(<SmurfBoostExplanationCard />);
 
     const earlier = container.querySelectorAll(".bg-muted-foreground\\/40");
@@ -39,9 +37,8 @@ describe("SmurfBoostExplanationCard", () => {
   });
 
   it("reads both signal families out of the vocabulary rather than its own copy", () => {
-    // Not a pin on the wording -- `smurf-boost-vocabulary.test.ts` holds that.
-    // What this rules out is the card spelling the copy inline, where an edit
-    // to the vocabulary would leave the page showing the old sentences.
+    // Rules out the card spelling the copy inline, where a vocabulary edit
+    // would leave the page showing the old sentences.
     render(<SmurfBoostExplanationCard />);
 
     for (const family of ["rapid_improvement", "playing_pattern_change"]) {

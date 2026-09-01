@@ -27,12 +27,10 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
   style: "narrow",
 });
 
-// Both clocks clamp toward "Just now" across the present: the past clock so a
-// browser running behind the DB never reads a fresh run as the future, the
-// upcoming clock so an overdue schedule never reads as history.
+// Both clamp toward "Just now": clock skew could make a fresh run read as
+// future, or an overdue run read as history.
 
 /**
- * A minute count laddered up into hours and days, signed for `Intl`.
  * `direction` is all that separates the two clocks: -1 elapsed, +1 upcoming.
  * The clamp stays on `diffMins` so neither crosses into the other's side.
  */
@@ -50,9 +48,8 @@ function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
 }
 
 /**
- * The narrow, always-relative clock the job surfaces run on: "2h ago", and
- * never anything else. Deliberately not `formatRelativeTime`, which answers
- * "Never" and goes absolute past a week -- wrong for an execution row.
+ * Not `formatRelativeTime`: that answers "Never" and goes absolute past a
+ * week, both wrong for an execution row.
  */
 export function formatLastRun(timestamp: string): string {
   const elapsedMins = Math.floor(

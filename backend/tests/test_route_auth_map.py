@@ -1,8 +1,7 @@
 """Which routes require a signed-in user, and which require an admin.
 
-Route-level dependencies are the only authorization boundary in this app --
-`main.py` mounts every router with no global dependency. The table below is the
-contract, and PUBLIC is a claim too: those routes are open on purpose.
+`main.py` mounts every router with no global dependency, so route-level
+dependencies are the only authorization boundary; PUBLIC is a claim too.
 """
 
 from __future__ import annotations
@@ -97,9 +96,8 @@ class _IncludeContext(Protocol):
 class _IncludedRouter(Protocol):
     """FastAPI 0.141 keeps each `include_router` call as one of these.
 
-    They are not `APIRoute`s, and they are not publicly typed, so this file
-    names the two attributes it reads in one place rather than reaching
-    through `getattr` at every use.
+    They are not `APIRoute`s and are not publicly typed, so the two attributes
+    this file reads are named here rather than `getattr`-ed at every use.
     """
 
     @property
@@ -128,9 +126,7 @@ def _tier(dependency_names: set[str]) -> Guard:
 def _method(route: APIRoute) -> str:
     """The one verb a route is registered under.
 
-    `APIRoute.methods` is typed optional by Starlette and never is one here;
-    asserting says so rather than inventing a value for a route without a
-    verb.
+    `APIRoute.methods` is typed optional by Starlette but never is one here.
     """
     assert route.methods, f"{route.path} is registered under no HTTP method"
     return sorted(route.methods)[0]
@@ -147,9 +143,8 @@ def _dependency_names(dependencies: Sequence[params.Depends]) -> set[str]:
 def _observed_guards() -> dict[tuple[str, str], Guard]:
     """The tier each registered route actually enforces.
 
-    `app.routes` cannot be walked naively: all but one entry is an include
-    record holding its own router, and router-level dependencies live on that
-    record, so they have to be unioned in or every jobs route reads unguarded.
+    Router-level dependencies live on the include record, not the route, so they
+    must be unioned in or every jobs route reads unguarded.
     """
     observed: dict[tuple[str, str], Guard] = {}
     for entry in app.routes:

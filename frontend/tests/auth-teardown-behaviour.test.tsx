@@ -15,9 +15,8 @@ import {
   hasAuthStateCookie,
 } from "@/lib/session/auth-state-cookie";
 
-// The session hint survives every failure that is not a refusal. Lint rules
-// recognise shapes of code, so these assert the effect instead: each surface
-// put where a refusal and an outage look alike, hint still there.
+// The session hint survives every failure that is not a refusal; lint sees
+// shapes, so these assert the effect where refusal and outage look alike.
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;
 
@@ -87,9 +86,8 @@ describe("the axios interceptor", () => {
   });
 
   it("reports a rate limit as a rate limit, not as an outage", async () => {
-    // `/auth/refresh` is rate limited and browser traffic arrives through one
-    // rewrite with --no-proxy-headers, so every user shares one bucket and a
-    // 429 is ordinary.
+    // Browser traffic reaches `/auth/refresh` through one rewrite with
+    // --no-proxy-headers, so every user shares a bucket and a 429 is ordinary.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 429 }),
@@ -105,17 +103,15 @@ describe("the axios interceptor", () => {
     const failure = await api.get("/players").catch((error: unknown) => error);
 
     expect(normalizeApiError(failure).kind).toBe("rate-limit");
-    // The code axios itself pairs with a 4xx. Reporting ERR_BAD_RESPONSE for
-    // every unavailable status tells a consumer reading `.code` that a rate
-    // limit came back as a server fault.
+    // The code axios pairs with a 4xx: ERR_BAD_RESPONSE would tell a consumer
+    // reading `.code` that a rate limit was a server fault.
     expect((failure as { code?: string }).code).toBe("ERR_BAD_REQUEST");
     expect(hasAuthStateCookie()).toBe(true);
   });
 
   it("stops calling an unreachable server an authentication failure", async () => {
-    // The 401 is true of the expired access token and nothing else, so
-    // forwarding it makes a redeploy read as a refusal: the viewer then gets
-    // no toast, no navigation and no error.
+    // The 401 is true of the expired access token only, so forwarding it makes
+    // a redeploy read as a refusal: no toast, no navigation, no error.
     setHint();
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
     api.defaults.adapter = async (config) => {
@@ -152,9 +148,8 @@ describe("the axios interceptor", () => {
   });
 
   it("retries a 401 once, never in a loop", async () => {
-    // `_retry` is the only thing stopping this interceptor re-entering itself:
-    // a 401 that survives a refresh loops, rotating the token every turn
-    // against a 20/minute site-wide bucket.
+    // `_retry` is the only thing stopping re-entry: a 401 surviving a refresh
+    // loops, rotating the token against a 20/minute site-wide bucket.
     setHint();
     let refreshes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -185,13 +180,11 @@ describe("the axios interceptor", () => {
   });
 
   it("still calls a refused session an authentication failure", async () => {
-    // The other direction, and the reason the interceptor forwards what the
-    // refresh reported rather than guessing: relabelling a refusal would leave
-    // a dead session looking transient and retryable forever.
+    // The interceptor forwards what the refresh reported: relabelling a refusal
+    // leaves a dead session looking transient and retryable forever.
     setHint();
-    // The refusal this API actually issues, code and all: a bare 401 with no
-    // body is what a challenge in front of the API sends, and the client no
-    // longer takes that for a refusal.
+    // The refusal this API actually issues, code and all: a bare 401 is what a
+    // challenge in front of the API sends, and no longer counts as a refusal.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -227,16 +220,13 @@ describe("the can't-reach-the-server surface", () => {
   });
 
   it("does not sign the visitor out on its own", async () => {
-    // Sitting on this screen is not evidence of anything. An effect that gave
-    // up after a few retries and called `logout()` would retract the hint on a
-    // redeploy and leave the refresh token live.
+    // Sitting on this screen is evidence of nothing: a give-up effect calling
+    // `logout()` retracts the hint on a redeploy and leaves the token live.
     setHint();
 
     render(<AuthGate>protected content</AuthGate>);
 
-    // Long enough that a teardown on a timer cannot simply outwait the
-    // assertion. Fifty milliseconds passed a retry-then-give-up effect that
-    // fired a second later.
+    // Long enough that a teardown on a timer cannot outwait the assertion.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
@@ -248,9 +238,8 @@ describe("the can't-reach-the-server surface", () => {
 
   it("still signs the visitor out when they press the button here", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    // Why `logout` takes a flag rather than never tearing down: this screen
-    // exists for the server that is not answering, so its Sign out is the one
-    // caller that must act anyway.
+    // Why `logout` takes a flag: this screen exists for the server that is not
+    // answering, so its Sign out is the one caller that must act anyway.
     setHint();
     // The teardown the real `logout` performs, so the button is observable by
     // what it releases the visitor from rather than by the mock it called.
@@ -273,9 +262,8 @@ describe("the can't-reach-the-server surface", () => {
 });
 
 describe("cookie consent", () => {
-  // The one file allowed to write cookies by hand, so no lint rule covers it.
-  // A sweep keeping a "necessary" list without the session hint signs out every
-  // visitor the moment COOKIE_CONSENT_VERSION is bumped.
+  // The one file allowed to write cookies by hand: a sweep whose "necessary"
+  // list omits the session hint signs everyone out on a version bump.
 
   // Each branch that can reach a sweep, not one: no consent, stale consent,
   // and the button that writes one.

@@ -92,9 +92,8 @@ class UserCreate(UserBase):
     def validate_password(cls, v: str) -> str:
         """Validate password meets security requirements.
 
-        At least 8 characters, with a lowercase letter, an uppercase letter, a
-        digit, and one of an expanded special-character set that password
-        managers can produce.
+        At least 8 characters with a lowercase letter, an uppercase letter, a
+        digit, and one of an expanded set of special characters.
         """
         return validate_password_strength(v)
 
@@ -102,9 +101,8 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     """Schema for user responses (excludes sensitive data)."""
 
-    # Deliberately looser than `UserBase`: FastAPI validates response models on
-    # the way out, so inheriting `DisplayName` would turn a row that predates the
-    # rule into a 500 on `GET /auth/me` -- the one page you would use to fix it.
+    # Deliberately looser than `UserBase`: response models validate on the way
+    # out, so inheriting `DisplayName` would 500 `GET /auth/me` on a stored row.
     display_name: str = Field(max_length=128)
 
     id: int

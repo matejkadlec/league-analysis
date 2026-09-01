@@ -113,8 +113,7 @@ beforeEach(() => {
 describe("the analyzed player scope", () => {
   it("seeds the default through the router, not a raw history write", async () => {
     // `window.history.replaceState` puts the PUUID in the address bar without
-    // telling the router, so every other `useSearchParams` reader keeps
-    // answering "no player". Seeding has to be a navigation.
+    // telling the router, so other `useSearchParams` readers see no player.
     const { result } = renderHookWithQueryClient(() => useAnalyzedPlayer());
 
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
@@ -129,8 +128,7 @@ describe("the analyzed player scope", () => {
 
   it("stops seeding once the URL carries a player", async () => {
     // The effect's only loop guard is this early return: it re-runs on the
-    // navigation it just caused, and a guard that did not see its own write
-    // land would replace forever.
+    // navigation it caused, so a guard blind to its own write never stops.
     search.current = `puuid=${ANALYZED.puuid}`;
     const { result } = renderHookWithQueryClient(() => useAnalyzedPlayer());
 
@@ -141,9 +139,8 @@ describe("the analyzed player scope", () => {
   });
 
   it("treats a valueless `?puuid=` as absent rather than as a selection", async () => {
-    // `searchParams.get` answers `""` for it, and `"" ?? fallback` keeps the
-    // empty string -- so a malformed link used to suppress the saved player
-    // and render the empty state instead of the default.
+    // `searchParams.get` answers `""`, and `"" ?? fallback` keeps it, so a
+    // malformed link suppresses the saved player instead of the default.
     search.current = "puuid=";
     const { result } = renderHookWithQueryClient(() => useAnalyzedPlayer());
 
@@ -157,9 +154,8 @@ describe("the analyzed player scope", () => {
   });
 
   it("selects into the URL and the cache, never into global context", async () => {
-    // The page says this choice will not change or track the reference
-    // player. Routing the selection through `usePlayerContext.selectPlayer`
-    // would persist it to the account, which is the thing being avoided.
+    // Routing this through `usePlayerContext.selectPlayer` would persist the
+    // choice to the account, which the page promises not to do.
     search.current = `puuid=${REFERENCE.puuid}`;
     const selectPlayer = vi.fn<PlayerContextValue["selectPlayer"]>();
     usePlayerContext.mockReturnValue(context(selectPlayer));

@@ -26,9 +26,8 @@ import {
 import { switchTarget, type MatchSideParticipant } from "../match-row-format";
 
 /**
- * Names a wordless icon on hover and on keyboard focus. Focus is the caller's
- * job: `asChild` hands the trigger to its child and a `div` is not focusable,
- * so icon-group callers pass `tabIndex={0}`, one stop per group.
+ * Names a wordless icon on hover and on keyboard focus. `asChild` hands the
+ * trigger to its child, so the caller owns focus and passes `tabIndex={0}`.
  */
 function IconTooltip({
   label,
@@ -56,9 +55,8 @@ export function renderSummonerSpells(
   const spells = spellIds.map((spellId) => {
     if (!spellId) return null;
     const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
-    // Both or neither: art and name come out of the same entry, so an id this
-    // build does not know falls back to the placeholder rather than to an icon
-    // labelled "Summoner spell", which named nothing and read as a real answer.
+    // Both or neither: an id this build does not know falls back to the
+    // placeholder rather than to an icon labelled with a name that says nothing.
     const name = getSummonerSpellName(spellId);
     return url && name ? { url, name } : null;
   });
@@ -82,9 +80,8 @@ export function renderSummonerSpells(
     ),
   );
   const names = spells.filter((spell) => spell !== null);
-  // One focus stop and one tooltip for the pair, not one per icon: a page of
-  // rows is tabbed through, and per-icon stops made the tab order mostly
-  // decoration (LGA-91 review). Each icon keeps its own `alt`.
+  // One focus stop and one tooltip for the pair: per-icon stops make the tab
+  // order through a page of rows mostly decoration.
   if (names.length === 0) {
     return <div className="flex gap-0.5">{icons}</div>;
   }
@@ -134,9 +131,8 @@ export function renderRunes(
   const subStyleName = runes.sub_style
     ? getRuneStyleName(runes.sub_style)
     : null;
-  // The top icon is the keystone whenever we have art for it, so its label
-  // has to be the keystone too. Both come out of the same keystone table, so
-  // the label falls back to the tree exactly when the icon does.
+  // Label and art come out of the same keystone table, so the label falls
+  // back to the tree exactly when the icon does.
   const primaryLabel = keystoneName || primaryStyleName || "Primary rune style";
   // The bottom icon really is the secondary tree, and keeps saying so.
   const subLabel = subStyleName || "Secondary rune style";
@@ -181,8 +177,7 @@ export function renderRunes(
 
 /**
  * The 52px champion icon at the centre of the matchup. Switchable only for
- * the lane opponent: the other side is the player whose page this is, whom
- * the API does not identify here and who has nowhere to switch to anyway.
+ * the lane opponent: the other side is the player whose page this already is.
  */
 export function ChampionPortrait({
   participant,
@@ -267,9 +262,8 @@ export function renderTeamChampIcon(
     />
   );
 
-  // The tooltip names the player, not the champion: the champion is what the
-  // icon already is. The current player's own icon stays a plain div with no
-  // focus stop -- it cannot switch anywhere.
+  // The tooltip names the player, not the champion the icon already shows.
+  // The current player's own icon takes no focus stop: it switches nowhere.
   return isCurrentPlayer ? (
     <IconTooltip key={champ.puuid} label={riotId}>
       <div className={shell}>{icon}</div>
@@ -278,9 +272,8 @@ export function renderTeamChampIcon(
     <IconTooltip key={champ.puuid} label={riotId}>
       <button
         type="button"
-        // Both halves on purpose: the ticket wants the target player in the
-        // accessible name, and dropping the champion would lose what the icon
-        // used to say.
+        // Both halves on purpose: the target player names the action, the
+        // champion names what the icon shows.
         aria-label={`${championName} — view ${riotId}`}
         onClick={() => onSelectPlayer(champ.puuid)}
         className={cn(

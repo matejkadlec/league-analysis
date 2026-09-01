@@ -78,9 +78,8 @@ describe("the display name on the settings page", () => {
 
   it("sends the trimmed name, not what the box contains", async () => {
     const user = userEvent.setup();
-    // This is the name other people see. A pasted value carries whatever
-    // whitespace came with it, and the server stores the string it is given,
-    // so without the trim the name renders with a gap in front of it.
+    // The server stores the string it is given, so without the trim a pasted
+    // name renders to everyone else with a gap in front of it.
     const queryClient = renderField();
 
     type("  Padded Name  ");
@@ -102,9 +101,8 @@ describe("the display name on the settings page", () => {
 
   it("tells someone who cleared the box that it is empty", async () => {
     const user = userEvent.setup();
-    // Drop the empty-name guard and the blank field is still refused -- by
-    // the length check below it, which answers "Use at least 3 characters"
-    // to someone who typed nothing. Only the message tells the two apart.
+    // Without the empty-name guard the length check still refuses a blank
+    // field, so only the message tells the two apart.
     const queryClient = renderField();
 
     type("     ");
@@ -141,9 +139,8 @@ describe("the display name on the settings page", () => {
     ["has1digit", "a digit"],
     ["has-hyphen", "a hyphen"],
   ])("refuses %s (%s)", async (name) => {
-    // The rule is printed in the refusal, so each of these is a case someone
-    // will actually type. Widen the pattern and the name goes to the server,
-    // which answers with a generic failure toast that names none of this.
+    // Widen the pattern and the name reaches the server, which answers with a
+    // generic failure toast that names none of the rule.
     const user = userEvent.setup();
     const queryClient = renderField();
 
@@ -159,9 +156,8 @@ describe("the display name on the settings page", () => {
 
   it("accepts letters from outside the Latin alphabet", async () => {
     const user = userEvent.setup();
-    // The pattern is written with `\p{L}`, not `[a-zA-Z]`, and the deployment
-    // this runs on is a single European region. A name in accented or
-    // non-Latin letters must save, or the rule quietly means "English only".
+    // `\p{L}`, not `[a-zA-Z]`: accented and non-Latin names must save, or the
+    // rule quietly means "English only".
     const queryClient = renderField();
 
     type("Žluťoučký Kůň");
@@ -182,9 +178,8 @@ describe("the display name on the settings page", () => {
 
   it("re-reads the session so the new name appears everywhere else", async () => {
     const user = userEvent.setup();
-    // The header and the sidebar read the display name off the auth session,
-    // not off this mutation. Without the re-read the field shows the new name
-    // and every other surface keeps the old one until a full page reload.
+    // Header and sidebar read the name off the auth session, so without the
+    // re-read they keep the old one until a full page reload.
     const queryClient = renderField();
     // Seeded so the invalidation has something to mark: the surfaces that
     // read the user off this key are the ones the re-read is for.

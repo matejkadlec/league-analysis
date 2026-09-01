@@ -1,8 +1,7 @@
 """Test job runners — lightweight API health-check loops that never write data.
 
-Each test job calls all Riot API endpoints its corresponding real job uses,
-once per minute, for up to 1 hour.  Results are discarded; only the
-execution record (with execution_type=TEST) is persisted.
+Each test job calls the Riot endpoints its real counterpart uses; results are
+discarded and only the execution record (execution_type=TEST) is persisted.
 """
 
 import asyncio
@@ -55,9 +54,8 @@ async def _resolve_test_puuid(db: AsyncSession) -> tuple[str, str]:
 class RunnerTarget:
     """The one player every endpoint in a test iteration is asked about.
 
-    Not named `TestTarget`: pytest tries to collect any class whose name starts
-    with `Test`, and warns rather than fails, so the name would quietly cost
-    coverage in any test module that imported it.
+    Not named `TestTarget`: pytest collects any class named `Test*` and only
+    warns, quietly costing coverage in any test module that imports this one.
     """
 
     puuid: str
@@ -174,12 +172,7 @@ class TestMatchFetcherJob(_TestRunnerJob):
 
 
 class TestPlayerUpdaterJob(_TestRunnerJob):
-    """Test runner for Player Updater — calls 2 endpoints once per minute.
-
-    Endpoints per iteration:
-      1. summoner by puuid
-      2. account by puuid
-    """
+    """Test runner for Player Updater — calls 2 endpoints once per minute."""
 
     label = "Test Player Updater"
 

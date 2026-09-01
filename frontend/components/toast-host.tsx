@@ -15,9 +15,8 @@ import { cn } from "@/lib/core/utils";
 const TOAST_ICON_CLASS = "h-[18px] w-[18px]";
 const TOAST_PREVIEW_EVENT = "league-analysis:toast";
 
-// The event detail is an untrusted payload off the DOM, so it gets the same
-// treatment as wire data in lib/core/schemas. `.finite()` is load-bearing:
-// z.number() alone accepts Infinity, which the old guard rejected.
+// The event detail is an untrusted payload off the DOM. `.finite()` is
+// load-bearing: `z.number()` alone accepts Infinity.
 const ToastPreviewDetailSchema = z.object({
   variant: z.enum(TOAST_VARIANTS),
   title: z.string(),

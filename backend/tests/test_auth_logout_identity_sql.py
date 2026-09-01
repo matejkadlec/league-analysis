@@ -1,8 +1,7 @@
 """Who a refresh token names at logout, asserted by running the query.
 
-A mocked `db.execute` makes the WHERE clause invisible, and that filter is the
-whole behaviour here. So these run the real statement against SQLite in memory,
-with `auth` attached as a schema so the model's table definition is unmodified.
+A mocked `db.execute` hides the WHERE clause, which is the whole behaviour, so
+these run the real statement against SQLite with `auth` attached as a schema.
 """
 
 from collections.abc import Iterator
@@ -104,9 +103,8 @@ async def test_a_live_token_names_its_owner(session: Session) -> None:
 async def test_an_expired_token_names_nobody(session: Session) -> None:
     """An expired cookie carries no session, so it has none to end.
 
-    Honouring one lets a copy kept past its 30 days sign the owner out of
-    every device, on a credential `/refresh` refuses outright. The route still
-    answers 200 and still clears the browser's cookies.
+    Honouring one lets a copy kept past its 30 days sign the owner out of every
+    device, on a credential `/refresh` refuses outright.
     """
     service = _service(session)
     _store(session, service, "old", token_id="t1", expired=True)
@@ -119,9 +117,8 @@ async def test_an_expired_token_with_an_unused_replacement_names_nobody(
 ) -> None:
     """The gap the reuse-heal rule closed on `/refresh` and this route kept.
 
-    `_reuse_is_healable` requires the presented token to be live on its own
-    terms; reading identity by anything weaker left the superseded-holder case
-    open for as long as the replacement went unused.
+    `_reuse_is_healable` requires the presented token to be live on its own terms;
+    anything weaker leaves the superseded holder open while the replacement idles.
     """
     service = _service(session)
     _store(
@@ -143,9 +140,8 @@ async def test_a_token_this_server_rotated_out_still_names_its_owner(
 ) -> None:
     """The Sign Out that arrives one moment after a refresh.
 
-    A logout clicked while a refresh is in flight carries the superseded token.
-    Answering "no such user" there revokes nothing, and the replacement the
-    server just issued stays live for its full 30 days with no browser holding it.
+    A logout clicked mid-refresh carries the superseded token; answering "no such
+    user" revokes nothing and leaves the new token live for 30 days.
     """
     service = _service(session)
     _store(session, service, "rotated", token_id="t1", revoked=True, replaced_by="t2")
@@ -159,9 +155,8 @@ async def test_a_token_whose_replacement_was_used_names_nobody(
 ) -> None:
     """Only the just-superseded holder, not every ancestor of the live token.
 
-    A stolen cookie from weeks ago is revoked-with-a-replacement too, and
-    logout is the one route that takes it for 30 days: it would sign the owner
-    out of every device on a credential `/refresh` already refuses.
+    A stolen cookie from weeks ago is revoked-with-a-replacement too, and would
+    otherwise sign the owner out on a credential `/refresh` already refuses.
     """
     service = _service(session)
     _store(session, service, "old", token_id="t1", revoked=True, replaced_by="t2")
@@ -194,9 +189,8 @@ async def test_a_token_revoked_without_a_replacement_names_nobody(
 ) -> None:
     """The other direction, and the reason this is not simply "any token".
 
-    A token revoked by a logout, or left at the tip of a chain reuse detection
-    killed, has no replacement recorded. That session is over, and letting it
-    name its owner would make a dead credential a way to end the current one.
+    A token revoked without a replacement ends a finished session; letting it name
+    its owner would make a dead credential a way to end the current one.
     """
     service = _service(session)
     _store(session, service, "dead", token_id="t1", revoked=True)
@@ -216,9 +210,8 @@ async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
 ) -> None:
     """The other half of the route, and it was mocked everywhere.
 
-    Everywhere else `revoke_all_refresh_tokens_for_user` is an AsyncMock
-    asserted to have been awaited, so matching on `id` instead of `user_id`,
-    inverting the revoked filter, or never stamping `revoked_at` all stay green.
+    Against an AsyncMock, matching on `id` instead of `user_id`, inverting the
+    revoked filter, or never stamping `revoked_at` all stay green.
     """
     service = _service(session)
     _store(session, service, "live", row_id=1, token_id="t1")
@@ -259,9 +252,8 @@ def _executed_statements(service: TokenLifecycleMixin) -> list[Any]:
 async def test_a_logout_locks_the_owner_before_it_stamps(session: Session) -> None:
     """SQLite drops `FOR UPDATE`, so the lock is read off the compiled SQL.
 
-    Without it a rotation commits a replacement between this statement's
-    snapshot and its write, and no amount of re-reading sees that row: it is
-    below the snapshot however long the statement waited on a lock.
+    Without it a rotation commits a replacement between this statement's snapshot
+    and its write, and no re-read can see a row below the snapshot.
     """
     service = _service(session)
     _store(session, service, "live", token_id="t1")

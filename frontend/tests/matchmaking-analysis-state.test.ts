@@ -54,9 +54,8 @@ function analysis(
 
 describe("isSameAnalysisInstance", () => {
   it("treats two missing ids as different runs, not as one", () => {
-    // The reducer re-anchors progress whenever this says "different". Calling
-    // two absences equal makes a fresh run inherit the previous run's anchor
-    // and display a progress bar that starts wherever the last one stopped.
+    // The reducer re-anchors on "different", so calling two absences equal
+    // makes a fresh run inherit the previous run's progress anchor.
     expect(isSameAnalysisInstance(null, null)).toBe(false);
     expect(isSameAnalysisInstance(undefined, createdAt)).toBe(false);
     expect(isSameAnalysisInstance(createdAt, "")).toBe(false);
@@ -158,9 +157,8 @@ describe("analysisUiReducer", () => {
 
     const restarted = analysisUiReducer(failed, { type: "start-requested" });
 
-    // The failure message and the old run's anchor both belong to the run
-    // being replaced; carrying either shows the last run's error over the new
-    // run's progress bar.
+    // Message and anchor belong to the run being replaced; carrying either
+    // shows the last run's error over the new run's progress bar.
     expect(restarted.phase).toBe("starting");
     expect(restarted.analysisFailure).toBeNull();
     expect(restarted.currentAnalysisCreatedAt).toBeNull();

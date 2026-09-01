@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 import { EMAIL_CODE_LENGTH } from "@/features/settings/settings-helpers";
 
 /**
- * The form's box count comes from `EMAIL_CODE_SLOTS.length` and the API's from
- * a pattern on `EmailChangeVerifyRequest.code`, and nothing held them equal: a
- * backend that moved to eight digits would 422 every code typed into six boxes.
+ * Holds the form's box count equal to the API's `code` pattern: a backend
+ * moved to eight digits would 422 every code typed into six boxes.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath

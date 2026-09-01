@@ -92,9 +92,8 @@ afterEach(() => {
 });
 
 describe("request deadlines", () => {
-  // Asserted as an effect -- the request gives up, at that length -- not as
-  // `expect(signal).toBeInstanceOf(AbortSignal)`, which stays green against
-  // deadlines that never fire. `deadline-support.ts` says why.
+  // Asserted as an effect -- the request gives up, at that length -- because
+  // asserting the signal's type stays green against a deadline that never fires.
   let restoreDeadlines: (() => void) | null = null;
 
   afterEach(() => {
@@ -105,8 +104,7 @@ describe("request deadlines", () => {
 
   it("gives up on the session probe at the deadline, not never", async () => {
     // A backend that accepts the connection and never answers leaves
-    // `isLoading` true forever, and every surface gated on it renders nothing:
-    // the original white screen, reachable by simply waiting.
+    // `isLoading` true forever, blanking every surface gated on it.
     vi.useFakeTimers();
     restoreDeadlines = installDrivableAbortDeadlines();
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
@@ -128,8 +126,7 @@ describe("request deadlines", () => {
   });
 
   it("gives up on the logout request at the deadline, not never", async () => {
-    // Without one, Sign Out does nothing at all -- no teardown, no navigation,
-    // and the promise both buttons drive their spinner from never settles, so
+    // Without one, Sign Out never settles: no teardown, no navigation, and
     // every further click stacks another dead request.
     vi.useFakeTimers();
     restoreDeadlines = installDrivableAbortDeadlines();
@@ -162,8 +159,7 @@ describe("request deadlines", () => {
 
 describe("a 200 the client cannot read", () => {
   it("does not sign the visitor in on a body that is not a user record", async () => {
-    // `GET /auth/me` becomes React state, and `Response.json()` is
-    // `Promise<any>`: without a zod parse a renamed field or a captive
+    // `Response.json()` is `Promise<any>`: without a zod parse a captive
     // portal's HTML type-checks into `user`, whose `is_admin` gates /jobs.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -183,13 +179,11 @@ describe("a 200 the client cannot read", () => {
 
 describe("re-checking an established session", () => {
   it("never raises isLoading, which would unmount the whole app shell", async () => {
-    // Four consumers render null while `isLoading` is true. Raising it on a
-    // re-check blanked the settings page mid-edit -- where the real callers
-    // live -- and blanked the retry surface for the full probe timeout.
+    // Four consumers render null while `isLoading` is true, so raising it on a
+    // re-check blanks the settings page mid-edit.
 
-    // The probe is held open on purpose: a re-check that resolves in the same
-    // tick collapses both state writes into one render, so the transient this
-    // is about is only observable while the request is still outstanding.
+    // The probe is held open on purpose: a re-check resolving in the same tick
+    // collapses both state writes into one render, hiding the transient.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     const settled = () =>
       new Response(
@@ -232,9 +226,8 @@ describe("re-checking an established session", () => {
 
 describe("a refresh that never reaches the server", () => {
   it("does not end the session", async () => {
-    // `auth-context.tsx` may tear a session down for logout and for a 403, but
-    // not here: the probe 401'd and the refresh was never delivered, so the
-    // jar's refresh cookie may still be good.
+    // The probe 401'd and the refresh was never delivered, so the jar's
+    // refresh cookie may still be good.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/auth/refresh")) {
@@ -254,9 +247,8 @@ describe("a refresh that never reaches the server", () => {
 
 describe("the first probe answering 403", () => {
   it("keeps the session when the 403 names nothing", async () => {
-    // A Cloudflare challenge answers a background request with 403 and an HTML
-    // body the origin never sees. A bare teardown here signs every visitor out
-    // over a challenge while their 30-day refresh token stays live.
+    // A Cloudflare challenge answers 403 with HTML the origin never sees, so a
+    // bare teardown signs visitors out while their refresh token stays live.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     let refreshes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -281,9 +273,7 @@ describe("the first probe answering 403", () => {
   });
 
   it("ends the session when the 403 names the end of it", async () => {
-    // The other half: `/auth/me` answers 403 ACCOUNT_INACTIVE for a
-    // deactivated account, and that is a refusal this API issued about this
-    // session.
+    // 403 ACCOUNT_INACTIVE is a refusal this API issued about this session.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -305,9 +295,8 @@ describe("the first probe answering 403", () => {
 
 describe("a probe that fails right after a refresh the server honoured", () => {
   it("does not end the session over a 5xx", async () => {
-    // The server honoured the refresh a moment ago, so a fresh 30-day token is
-    // in the jar. Tearing down on the retried probe's 502 clears the hint and
-    // leaves that new HttpOnly credential live and unrevoked.
+    // The honoured refresh put a fresh 30-day token in the jar; tearing down on
+    // the retried probe's 502 leaves that credential live and unrevoked.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     let probes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -329,13 +318,11 @@ describe("a probe that fails right after a refresh the server honoured", () => {
   });
 
   it("does end the session when the retried probe names a refusal", async () => {
-    // The other half, so the branch is pinned in both directions rather than
-    // satisfied by never tearing down at all: `/auth/me` answers 403
-    // ACCOUNT_INACTIVE for a deactivated account, which names the end.
+    // The other half, so the branch is not satisfied by never tearing down at
+    // all: 403 ACCOUNT_INACTIVE names the end.
 
-    // The first probe has to answer 401, or the refresh is never attempted and
-    // this lands in the first-probe 403 branch instead. `probes` is asserted
-    // for that reason.
+    // The first probe has to answer 401, or no refresh is attempted and this
+    // lands in the first-probe 403 branch instead.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     let probes = 0;
     let refreshes = 0;
@@ -372,9 +359,8 @@ describe("a probe that fails right after a refresh the server honoured", () => {
   });
 
   it("signs the visitor in when the retried probe answers", async () => {
-    // The whole point of refreshing: an expired access token should be
-    // invisible. Every other test here asserts a teardown that must NOT
-    // happen, so all of them pass on a provider that never signs anyone in.
+    // Every other test here asserts a teardown that must NOT happen, so all of
+    // them pass on a provider that never signs anyone in.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     let probes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -404,9 +390,8 @@ describe("a probe that fails right after a refresh the server honoured", () => {
   });
 
   it("keeps the session when the retried probe refuses without naming why", async () => {
-    // `/auth/me`'s own 401 carries a plain-string detail and so does a
-    // challenge in front of it, and this one contradicts the refresh the
-    // server honoured moments ago. Guessing strands that new 30-day token.
+    // A plain-string 401 detail comes from `/auth/me` and from a challenge in
+    // front of it alike, and guessing strands the new 30-day token.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     let probes = 0;
     let refreshes = 0;
@@ -443,9 +428,8 @@ describe("the first probe failing without saying anything", () => {
   it.each([500, 502, 503, 429])(
     "keeps the session when the probe answers %i",
     async (status) => {
-      // A 5xx is a redeploy and a 429 is the rate-limit bucket every visitor
-      // shares behind the rewrite; neither says anything about this session,
-      // so neither may end one.
+      // A 5xx is a redeploy and a 429 is the shared rate-limit bucket; neither
+      // says anything about this session, so neither may end one.
       document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
         new Response("{}", { status }),
@@ -461,9 +445,8 @@ describe("the first probe failing without saying anything", () => {
   );
 
   it("keeps the session when the probe never reaches the server", async () => {
-    // `fetchCurrentUser` answers null for a rejected fetch -- the offline tab,
-    // the dropped connection, the deadline expiring. Retracting the hint here
-    // sends the visitor to /sign-in with a live token they cannot spend.
+    // `fetchCurrentUser` answers null for any rejected fetch, so retracting the
+    // hint sends the visitor to /sign-in with a live token they cannot spend.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
 
@@ -478,9 +461,8 @@ describe("the first probe failing without saying anything", () => {
 
 describe("a response that arrives but cannot be read", () => {
   it("is not treated as a rejected session", async () => {
-    // A truncated body, a captive portal, a bad gzip: none of it says the
-    // session ended. The teardown bumps the session epoch, so an in-flight
-    // refresh would then end the session on every device.
+    // An unreadable body does not say the session ended, and the teardown bumps
+    // the session epoch, ending it on every device.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("<html>captive portal</html>", {
@@ -535,9 +517,8 @@ describe("signed-out session probe", () => {
       "/api/v1/auth/me",
       expect.objectContaining({
         credentials: "include",
-        // A backend that never answers leaves `isLoading` true forever and
-        // every surface gated on it blank. `objectContaining` matches a
-        // subset, so without naming the signal a deleted deadline stays green.
+        // `objectContaining` matches a subset, so without naming the signal a
+        // deleted deadline stays green.
         signal: expect.any(AbortSignal),
       }),
     );
@@ -545,9 +526,8 @@ describe("signed-out session probe", () => {
 });
 
 describe("data cached for one account", () => {
-  // The cache holds the account's own data and the QueryClient is created
-  // once per tab, so it outlives any number of sessions unless something
-  // empties it.
+  // The QueryClient is created once per tab, so an account's cached data
+  // outlives any number of sessions unless something empties it.
   const cachedPrivateData = { note: "previous account's data" };
 
   it("is dropped when the session ends", async () => {
@@ -569,9 +549,8 @@ describe("data cached for one account", () => {
   });
 
   it("is dropped before the next sign-in can read it", async () => {
-    // The shared-machine case: sign in as someone else in the same tab and the
-    // first paint comes from cache, so the new account's screen is filled with
-    // the previous account's data until every query has refetched.
+    // Sign in as someone else in the same tab and the first paint comes from
+    // cache, showing the previous account's data until every query refetches.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).includes("/auth/login")
@@ -604,9 +583,8 @@ describe("data cached for one account", () => {
 
 describe("a login the server refuses", () => {
   it("surfaces what the server said rather than a generic failure", async () => {
-    // The helper is unit-tested and the form is tested against a mocked
-    // `login`, so the line joining them -- the only place the server's own
-    // reason enters the app -- is guarded by nothing else.
+    // The helper and the form are tested apart, so the line joining them is the
+    // only guard on the server's own reason reaching the app.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({ detail: { code: "INVALID_CREDENTIALS" } }),
@@ -627,12 +605,10 @@ describe("a login the server refuses", () => {
 
 describe("useAuth outside an AuthProvider", () => {
   it("refuses rather than handing back an undefined session", () => {
-    // Without the guard the context is `undefined` and the destructure throws
-    // "Cannot destructure property" at the caller rather than naming the
-    // missing provider, which is what makes it a one-line fix.
+    // Without the guard the destructure throws "Cannot destructure property"
+    // instead of naming the missing provider.
 
-    // React logs the thrown render, so the console is silenced for the length
-    // of the assertion rather than left to look like a real failure.
+    // React logs the thrown render, so the console is silenced for the assertion.
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(() => render(<AuthStateProbe />)).toThrow(

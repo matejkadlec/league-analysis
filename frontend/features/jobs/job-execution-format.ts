@@ -47,14 +47,12 @@ export function formatApiCallParamLabel(paramKey?: string | null): string {
   return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
 }
 
-// Deliberately not shared with the identical-looking set in
-// `job-execution-logs.tsx`: that one hides fields the row already renders, this
-// one skips fields the key emits positionally. Sharing them collides rows.
+// Not shared with the identical-looking set in `job-execution-logs.tsx`: that one
+// hides fields the row renders, this one skips fields the key emits positionally.
 const KEYED_POSITIONALLY = new Set(["level", "timestamp", "event"]);
 
-// Every field of a structlog record arrives as `unknown`, `event` and
-// `timestamp` included. Bare `String()` renders an object as `[object Object]`,
-// which reads as nothing on screen and collides with every other object here.
+// Structlog fields arrive as `unknown`, so a bare `String()` renders an object as
+// `[object Object]` -- indistinguishable from every other object on screen.
 export function logFieldText(value: unknown): string {
   return typeof value === "object" && value !== null
     ? JSON.stringify(value)

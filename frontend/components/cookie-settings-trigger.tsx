@@ -1,7 +1,6 @@
 "use client";
 
-// Not through the barrel: it re-exports CookieConsentManager, whose useAuth
-// import drags in the auth barrel and its forms, which render this footer.
+// The barrel re-exports CookieConsentManager, whose useAuth drags the auth feature into this footer.
 // oxlint-disable-next-line no-restricted-imports -- see above: the barrel pulls the auth feature into the shared layer
 import { requestCookieConsentPreferences } from "@/features/cookie-consent/consent-storage";
 

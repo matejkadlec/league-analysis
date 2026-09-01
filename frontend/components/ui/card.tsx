@@ -29,9 +29,8 @@ const CardHeader = React.forwardRef<
 ));
 CardHeader.displayName = "CardHeader";
 
-// Deliberate deviation from the shadcn primitive, which renders a div: card
-// headings are the real structure of every page here. Re-adding this component
-// from the shadcn CLI reverts it, so check this element after any such re-add.
+// Deliberate deviation from the shadcn primitive's div: card headings carry
+// the heading structure of every page. Re-adding via the shadcn CLI reverts it.
 const CardTitle = React.forwardRef<
   HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>

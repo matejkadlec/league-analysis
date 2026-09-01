@@ -30,9 +30,8 @@ import {
 } from "@/features/players/player-api";
 import { api } from "@/lib/core/http/api";
 
-// The wire shape per function. The backend's test_frontend_api_paths.py proves
-// every (path, method) pair; what nothing else checks is query parameter names,
-// the request body, and URL-versus-`params`.
+// The backend's test_frontend_api_paths.py proves every (path, method) pair;
+// query parameter names, the body and URL-versus-`params` are checked nowhere else.
 
 const originalAdapter = api.defaults.adapter;
 
@@ -71,9 +70,8 @@ function request() {
 
 describe("player-api wire shapes", () => {
   it("tracks over POST and untracks over DELETE on the same route", async () => {
-    // The two halves of one toggle differ only in the verb. Crossed, the
-    // track button untracks — and the path test cannot see it, because both
-    // (path, method) pairs are registered routes.
+    // Crossed verbs make the track button untrack, and the path test cannot
+    // see it: both (path, method) pairs are registered routes.
     await trackPlayer("p-1");
     await untrackPlayer("p-1");
 
@@ -84,9 +82,8 @@ describe("player-api wire shapes", () => {
   });
 
   it("sends only the search params the caller gave", async () => {
-    // `platform` and `limit` are spread conditionally. axios drops an
-    // `undefined` param anyway — the real risk is a typo'd key (`platform_` ),
-    // silently ignored by the server so the search spans the wrong platform.
+    // axios drops an `undefined` param anyway; the risk is a typo'd key the
+    // server ignores, so the search spans the wrong platform.
     await searchPlayerSuggestions({ q: "faker" });
 
     expect(request().params).toEqual({ q: "faker" });
@@ -130,9 +127,8 @@ describe("matchmaking-api wire shapes", () => {
   });
 
   it("asks for status with the created_at the row is keyed by", async () => {
-    // `created_at` identifies *which* analysis. Dropped or renamed, the
-    // backend answers 422 — or worse, a default — and polling watches the
-    // wrong run.
+    // `created_at` identifies *which* analysis: dropped or renamed, polling
+    // watches the wrong run.
     await getMatchmakingAnalysisStatus("p-1", "2026-08-19T10:00:00Z");
 
     expect(request().url).toBe("/matchmaking-analysis/player/p-1/status");

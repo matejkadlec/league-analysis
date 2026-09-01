@@ -17,9 +17,8 @@ async def get_matchmaking_service(
 ) -> MatchmakingAnalysisService:
     """Get matchmaking analysis service instance.
 
-    Resolving the owner here scopes every route in the feature at once.
-    Deliberately built without a Riot client: `get_riot_client` refuses the
-    whole request when no key is active, which would take the DB reads down.
+    Deliberately built without a Riot client: `get_riot_client` refuses the whole
+    request when no key is active, which would take the DB reads down with it.
     """
     return MatchmakingAnalysisService(db, None, current_user.id)
 

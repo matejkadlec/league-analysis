@@ -13,9 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CONSTANTS = join(here, "../../backend/app/core/riot_api/constants.py");
 
 /**
- * Supported queues are decided on the backend and copied by hand into the
- * filter row and the queue-name lookup: a queue added there renders as
- * "Queue 490". One-way -- an extra name the backend does not store is allowed.
+ * Supported queues are decided on the backend and copied by hand here, so a new
+ * one renders as "Queue 490". One-way: an unstored extra name is allowed.
  */
 function backendSupportedQueueIds(): number[] {
   const source = readFileSync(CONSTANTS, "utf8");

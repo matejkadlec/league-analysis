@@ -33,9 +33,8 @@ class Division(str, Enum):
 
 UNRANKED: Final = "UNRANKED"
 
-# Product bucket for a player with no league entry. LEAGUE-V4 itself never
-# emits this; matchmaking invents it so unranked players are counted, not
-# averaged in as Iron IV.
+# LEAGUE-V4 never emits UNRANKED; matchmaking invents it so players with no
+# league entry are counted rather than averaged in as Iron IV.
 LobbyTier = Literal[
     "IRON",
     "BRONZE",

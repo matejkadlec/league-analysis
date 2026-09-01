@@ -13,9 +13,8 @@ import { cn } from "@/lib/core/utils";
 interface TrackPlayerButtonProps {
   puuid: string;
   playerName: string;
-  /** From the `PlayerResponse` the caller already holds: the backend fills
-   * `is_tracked` per authenticated user on every player read, so asking a
-   * second endpoint for the same boolean only added a spinner. */
+  /** The backend fills `is_tracked` per authenticated user on every player
+   * read, so a second endpoint for the same boolean only adds a spinner. */
   isTracked: boolean;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";

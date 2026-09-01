@@ -66,8 +66,7 @@ interface TierDistributionProps {
 
 /**
  * Share of each side's unique players per tier, as paired horizontal bars.
- * Rows exist only for tiers someone actually occupies, so a Gold-lobby chart
- * is two or three rows, not eleven.
+ * Rows exist only for occupied tiers, so a Gold lobby is three rows, not eleven.
  */
 export function TierDistribution({
   allyCounts,

@@ -33,9 +33,8 @@ export function isPasswordStrong(password: string): boolean {
 }
 
 /**
- * The structured detail behind a thrown settings mutation, or undefined when
- * the failure carried none. Every caller here branches on `detail.code`, which
- * `normalizeApiError` has already read and sanitized.
+ * The structured detail behind a thrown settings mutation. Callers branch on
+ * `detail.code`, which `normalizeApiError` has already read and sanitized.
  */
 export function settingsErrorDetail(
   error: unknown,

@@ -78,9 +78,8 @@ def test_non_loopback_addresses_are_rejected(mirror: ModuleType, value: str) -> 
 @pytest.mark.parametrize(
     "value",
     [
-        # The forms the two case lists above already cover, plus the ones a
-        # divergence has actually slipped through before (127.0.0.2) and the
-        # spellings only one side used to accept.
+        # Both case lists above, plus the forms a divergence has slipped through
+        # before (127.0.0.2) and the spellings only one side accepted.
         "localhost",
         "LOCALHOST ",
         "127.0.0.1",
@@ -102,10 +101,9 @@ def test_non_loopback_addresses_are_rejected(mirror: ModuleType, value: str) -> 
 def test_the_private_copy_agrees_with_local_target(
     mirror: ModuleType, value: str
 ) -> None:
-    """The mirror keeps its own `is_loopback_address` on purpose -- the
-    installer ships this one file with no repository on `sys.path` -- and both
-    copies guard a destructive operation. 'Keep the two in step' was prose
-    until now; this holds their verdicts equal over every reviewed form."""
+    """The mirror keeps its own `is_loopback_address`: the installer ships that one
+    file with no repository on `sys.path`, and both copies guard a destructive
+    operation, so their verdicts must agree on every form."""
     from scripts.local_target import is_loopback_address
 
     assert mirror.is_loopback_address(value) == is_loopback_address(value)

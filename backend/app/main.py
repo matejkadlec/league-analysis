@@ -66,9 +66,8 @@ structlog.configure(
 async def _start_scheduler_safely() -> None:
     """Start job scheduler with error handling.
 
-    A failed scheduler is degraded but serviceable, so it must not stop the
-    application. `StartupRecoveryError` is the exception: it means persisted
-    state was stranded, and serving would look healthy while polls never finish.
+    A failed scheduler is degraded but serviceable. `StartupRecoveryError` is the
+    exception: stranded state would serve as healthy while polls never finish.
     """
     try:
         scheduler = await start_scheduler()
@@ -155,14 +154,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# No endpoint accepts an upload, so a mebibyte is far above anything legitimate;
-# uncapped, one client can stream arbitrarily much into memory. Added before the
-# logging middleware so that stays outermost and records the 413.
+# No endpoint accepts uploads, so 1 MiB is generous; uncapped, a client could
+# stream unboundedly. Added before logging so that stays outermost and logs the 413.
 app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 
-# Added after CORS so it runs outermost of the user middlewares, just inside
-# Starlette's ServerErrorMiddleware, where it observes both response statuses
-# and unhandled exceptions.
+# Added after CORS so it runs outermost of the user middlewares, where it sees
+# both response statuses and unhandled exceptions.
 app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router, prefix="/api/v1")

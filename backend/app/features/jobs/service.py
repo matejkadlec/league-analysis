@@ -192,9 +192,8 @@ class JobService:
 
     # === Job Execution Operations ===
 
-    # The execution filters apply to two different selects — the row query
-    # (`Select[tuple[JobExecution]]`) and its count query (`Select[tuple[int]]`)
-    # — so the helper hands the caller back the same select type it was given.
+    # Generic in the select type because the row query and its count query have
+    # different ones; the caller gets back exactly what it passed in.
     def _apply_execution_filters[SelectT: Select[Any]](
         self,
         query: SelectT,
@@ -309,9 +308,8 @@ class JobService:
     async def _cleanup_orphaned_running_executions(self) -> int:
         """Mark RUNNING/PAUSED executions as FAILED if no in-memory runtime control exists.
 
-        This handles cases where a job execution record is stuck in RUNNING or PAUSED
-        state (e.g. due to a race condition during startup or a failed completion update)
-        but the job is no longer actually running in memory.
+        The in-memory control is the authority: a record with no control is stuck
+        (crashed startup, failed completion update) and can never finish itself.
 
         Returns:
             Number of orphaned executions cleaned up.
@@ -348,9 +346,8 @@ class JobService:
     async def get_running_execution_count(self) -> int:
         """Get count of currently running regular job executions.
 
-        Cross-references DB records with in-memory runtime controls.
-        Automatically cleans up orphaned RUNNING records.
-        Test runs are excluded from the count.
+        Counts only DB records backed by a runtime control, excluding test runs;
+        orphans are cleaned up as a side effect.
 
         Returns:
             Number of truly running regular executions.
@@ -418,9 +415,8 @@ class JobService:
     ) -> JobControlActionResponse | None:
         """Pause or resume a running job execution (or its test run).
 
-        Pause lives on the run's own runtime-control entry (test runs under
-        the negated config ID), so a test run's pause and a concurrent
-        scheduled run's pause cannot interfere, and the flag dies with the run.
+        Pause lives on the run's own runtime-control entry (test runs under the
+        negated config ID), so concurrent test and scheduled runs cannot interfere.
         """
         job = await self.get_job_configuration_model(job_id)
         if not job:

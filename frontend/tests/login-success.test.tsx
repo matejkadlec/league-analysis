@@ -32,9 +32,8 @@ function userBody(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Signing in successfully. `login` raises `isLoading` and only the
- * `checkAuth()` in its `finally` lowers it, so losing that line leaves every
- * route reading "Checking your session..." for the rest of the tab's life.
+ * `login` raises `isLoading` and only the `checkAuth()` in its `finally`
+ * lowers it, so losing that line pins every route on "Checking your session".
  */
 
 type Router = ReturnType<typeof import("next/navigation").useRouter>;

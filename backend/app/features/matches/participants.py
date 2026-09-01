@@ -266,9 +266,8 @@ class MatchParticipant(Base):
     )
 
 
-# Composite indexes for common queries. No `idx_participants_match_puuid`:
-# `uq_match_participants_puuid_match` is unique on the same two columns and
-# already serves them, as the primary key does for `match_id`.
+# No `idx_participants_match_puuid`: `uq_match_participants_puuid_match` is
+# unique on the same two columns and already serves them.
 
 Index(
     "idx_participants_champion_win", MatchParticipant.champion_id, MatchParticipant.win

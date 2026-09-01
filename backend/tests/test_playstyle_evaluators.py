@@ -99,9 +99,7 @@ def _assert_met(result: Any) -> dict[str, Any]:
     return cast(dict[str, Any], result)
 
 
-# ------------------------------------------------------------------
-# Generic thresholds
-# ------------------------------------------------------------------
+# --- Generic thresholds ---
 
 
 def test_a_clearly_met_min_threshold_carries_the_score_and_the_note() -> None:
@@ -213,9 +211,7 @@ def test_kill_participation_boundary_and_just_below() -> None:
     assert _share(9) is None  # (2+3) of 11 = 45.5%.
 
 
-# ------------------------------------------------------------------
-# Occurrence counts and percentages
-# ------------------------------------------------------------------
+# --- Occurrence counts and percentages ---
 
 
 def test_occurrence_count_counts_qualifying_games() -> None:
@@ -290,9 +286,7 @@ def test_a_max_percentage_tag_inverts_the_first_blood_comparison() -> None:
     assert missing["value"] == pytest.approx(0.0)
 
 
-# ------------------------------------------------------------------
-# Comparison / type tags
-# ------------------------------------------------------------------
+# --- Comparison / type tags ---
 
 
 def test_damage_type_majority_and_the_target_school_filter() -> None:
@@ -450,9 +444,7 @@ def test_gold_diff_without_a_lane_opponent_is_no_verdict() -> None:
     assert _evaluate([player, unmapped], matches, "golden_leader") is None
 
 
-# ------------------------------------------------------------------
-# Ratio tags
-# ------------------------------------------------------------------
+# --- Ratio tags ---
 
 
 def test_kill_greed_counts_games_by_non_solo_kills_per_assist() -> None:
@@ -566,9 +558,7 @@ def test_ignores_objectives_just_below_the_game_percentage() -> None:
     assert _evaluate(rows, matches, "ignores_objectives") is None
 
 
-# ------------------------------------------------------------------
-# Code-keyed tags
-# ------------------------------------------------------------------
+# --- Code-keyed tags ---
 
 
 def test_nolifer_reads_the_summoner_level() -> None:
@@ -623,9 +613,7 @@ def test_main_role_below_the_rate_bar_is_no_verdict() -> None:
     assert _evaluate(rows, {}, "main_role") is None
 
 
-# ------------------------------------------------------------------
-# Display formatting
-# ------------------------------------------------------------------
+# --- Display formatting ---
 
 
 def test_format_value_rounds_displays() -> None:

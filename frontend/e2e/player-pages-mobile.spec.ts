@@ -6,28 +6,24 @@ import {
 } from "./support/populated-player-harness";
 
 /**
- * `main` in the app shell is a flex item, so content wider than the viewport
- * stretches the document rather than its own card -- hence the assertion on
- * the document. Against an empty database every route reports exactly 390.
+ * `main` is a flex item, so content wider than the viewport stretches the
+ * document rather than its own card -- hence the assertion on the document.
  */
 
 const PHONE = { width: 390, height: 844 };
 
-// A container that scrolls its own content keeps the document honest while
-// still costing the reader a swipe, so surfaces that should reflow are measured
-// one by one and each asserted present.
+// A container that scrolls its own content keeps the document honest but still
+// costs a swipe, so each reflow surface is measured separately.
 test.describe("player pages on a phone", () => {
-  // A viewport alone leaves a desktop user agent, a mouse and no touch, so
-  // these specs could not catch a hover-only affordance on a phone -- and
-  // this app has them (`track-player-button` swaps its label on group-hover).
+  // A viewport alone leaves a desktop user agent and a mouse, so a hover-only
+  // affordance (`track-player-button` swaps its label on group-hover) would go uncaught.
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   for (const route of POPULATED_ROUTES) {
     const { name, reflowSurfaces } = route;
     test(`${name} never scrolls the page sideways`, async ({ page }) => {
-      // The readiness gate inside waits for populated content, so the
-      // measurement cannot land on the loading skeletons, which are narrow
-      // by construction and would pass whatever the real content does.
+      // The readiness gate waits for populated content: loading skeletons are
+      // narrow by construction and would pass whatever the real content does.
       await gotoPopulatedRoute(page, route);
 
       const { scrollWidth, clientWidth, widest, surfaceOverflow } =

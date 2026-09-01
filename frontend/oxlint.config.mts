@@ -8,9 +8,8 @@ import {
   restrictedImports,
 } from "./.oxlint-plugins/restricted-imports.mts";
 
-// Files whose developer-observability console output is reviewed and kept:
-// API validation mismatches, Data Dragon fallbacks, the error reporter, and
-// dev-gated auth warns. Everything else goes through the toast adapter.
+// Files whose developer-observability console output is reviewed and kept.
+// Everything else goes through the toast adapter.
 const CONSOLE_OWNERS = [
   "features/auth/context/auth-context.tsx",
   "lib/core/http/api-error-logging.ts",
@@ -31,9 +30,8 @@ const HINT_READING_PAGES = [
   "app/join-us/page.tsx",
 ];
 
-// Every name Next will run as the edge, not just the one in the tree: it
-// accepts `proxy` and `middleware`, both under `src/` too, and the discovery
-// loop takes the LAST match.
+// Every name Next will run as the edge, not just the one in the tree: `proxy`
+// and `middleware`, `src/` too, and the discovery loop takes the LAST match.
 const EDGE_FILES = [
   "proxy.ts",
   "proxy.tsx",
@@ -83,9 +81,8 @@ export default defineConfig({
     // it in scope.
     "react/react-in-jsx-scope": "off",
 
-    // `eslint-config-next` spread `eslint-plugin-react-hooks`'s recommended
-    // set, which is not a category oxlint has -- so it is listed. Only
-    // `config` and `gating` are missing, and both configure the Compiler.
+    // oxlint has no category for react-hooks' recommended set, so it is
+    // listed by hand, minus `config` and `gating`, which configure the Compiler.
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "error",
     "react-hooks/set-state-in-effect": "error",
@@ -134,9 +131,8 @@ export default defineConfig({
       { assertFunctionNames: ["expect", "screen.find*"] },
     ],
 
-    // Three a11y rules `eslint-config-next` did not run, each of which this
-    // tree contradicts on purpose and says why at the call site: `tabIndex`,
-    // `role="list"` against Tailwind's reset, and a Radix role IS the semantics.
+    // Three a11y rules this tree contradicts on purpose, each saying why at
+    // the call site.
     "jsx-a11y/no-noninteractive-tabindex": "off",
     "jsx-a11y/no-redundant-roles": "off",
     "jsx-a11y/prefer-tag-over-role": "off",
@@ -226,9 +222,7 @@ export default defineConfig({
         ),
       },
     },
-    // The two files that own cookie writes: one performs the delete
-    // `token-manager` asks for, the other handles an unrelated, non-credential
-    // cookie. Neither decides that a session is over.
+    // The two files that own cookie writes; neither decides a session is over.
     {
       files: [
         "lib/session/auth-state-cookie.ts",
@@ -242,16 +236,14 @@ export default defineConfig({
       files: ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
       rules: { "no-restricted-imports": "off" },
     },
-    // Vendored shadcn primitives, which `components/CLAUDE.md` forbids
-    // hand-editing. A primitive's heading takes its content from the call
+    // Vendored shadcn primitives: a heading takes its content from the call
     // site, which is where the rule would have to look.
     {
       files: ["components/ui/**"],
       rules: { "jsx-a11y/heading-has-content": "off" },
     },
     // Plugin sources traverse AST nodes the runtime delivers untyped, and
-    // fixtures hold deliberately broken shapes and directive strings that are
-    // documentation rather than real suppressions.
+    // fixtures hold deliberately broken shapes.
     {
       files: [".oxlint-plugins/**"],
       rules: {
@@ -260,15 +252,13 @@ export default defineConfig({
         // A fixture imports the feature internals whose import it is proving
         // a rule catches. This is the plugin directory, not application code.
         "no-restricted-imports": "off",
-        // Each fixture proves ONE rule. A second rule reporting on the same
-        // line would keep that line's directive "used" after the rule under
-        // test regressed, which is the failure the fixtures exist to catch.
+        // Each fixture proves ONE rule: a second rule reporting on the same
+        // line keeps its directive "used" after the rule under test regressed.
         "house/require-fetch-timeout": "off",
       },
     },
-    // Each fixture proves its own rule still fires. The rules scoped to one
-    // filename above do not reach the fixtures directory, so they are turned
-    // back on here by name.
+    // The filename-scoped rules above do not reach the fixtures directory, so
+    // each is turned back on here by name.
     {
       files: [".oxlint-plugins/fixtures/edge-isolation-syntax.fixture.ts"],
       rules: { "house/edge-isolation-syntax": "error" },

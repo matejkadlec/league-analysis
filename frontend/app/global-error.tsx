@@ -3,9 +3,8 @@
 import { useEffect } from "react";
 
 /**
- * The boundary of last resort: `error.tsx` sits inside the layout and cannot
- * catch a throw from the providers, the auth gate or the sidebar. This one
- * replaces the document, so it brings its own `html`/`body` and inline styles.
+ * `error.tsx` sits inside the layout and cannot catch a throw from the providers;
+ * this one replaces the document, so it brings its own `html`/`body` and styles.
  */
 export default function GlobalError({
   error,
@@ -15,9 +14,8 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Inlined: this file replaces the whole document and must not import the
-    // application graph that just threw. `/client-error-report` is the same
-    // beacon `reportClientError` uses.
+    // Inlined: this file must not import the application graph that just threw.
+    // The literal path must match `CLIENT_ERROR_REPORT_PATH`, the beacon `reportClientError` uses.
     void fetch("/client-error-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,9 +24,7 @@ export default function GlobalError({
         message: error.message.slice(0, 240),
         source: "boundary",
       }),
-      // Nothing awaits this and the app has already failed: a same-origin log
-      // write that has not landed in three seconds never will, and holding the
-      // socket open on a crashed page buys nothing.
+      // Nothing awaits this; holding a socket open on a crashed page buys nothing.
       signal: AbortSignal.timeout(3000),
     }).catch(() => undefined);
   }, [error]);

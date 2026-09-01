@@ -305,9 +305,8 @@ async def test_playstyle_degradations_are_visible() -> None:
 
 
 async def test_close_disposes_the_engine_the_scripts_shut_down() -> None:
-    # `validate_migrations.py` and `reconcile_admin_account.py` both end with
-    # `await db_manager.close()`; if it stops delegating to dispose, their
-    # connections leak past process intent silently.
+    # Scripts end with `await db_manager.close()`; if it stops delegating to
+    # dispose, their connections leak silently.
     manager = DatabaseManager.__new__(DatabaseManager)
     disposed: list[bool] = []
 

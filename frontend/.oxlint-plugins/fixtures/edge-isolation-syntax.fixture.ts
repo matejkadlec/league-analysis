@@ -1,5 +1,4 @@
-// Regression fixture for `house/edge-isolation-syntax`, the guard on
-// `proxy.ts`. Same contract as the sibling fixture: a suppressed case the
+// Regression fixture for `house/edge-isolation-syntax`: a suppressed case the
 // rule must flag, an unsuppressed case it must not.
 
 // oxlint-disable-next-line house/edge-isolation-syntax

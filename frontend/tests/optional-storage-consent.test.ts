@@ -7,9 +7,8 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles } from "./support/source-scan-support";
 
 /**
- * Withdrawing consent erases `OPTIONAL_STORAGE_KEYS` and nothing else, so a
- * key the app writes but that list does not name survives a withdrawal with
- * no error anywhere. These two checks are what make the single registry hold.
+ * Withdrawing consent erases `OPTIONAL_STORAGE_KEYS` and nothing else, so a key
+ * the app writes but that list omits survives a withdrawal with no error.
  */
 const CONSENT_STORAGE = join(
   dirname(fileURLToPath(import.meta.url)),

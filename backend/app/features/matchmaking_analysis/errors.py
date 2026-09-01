@@ -1,8 +1,7 @@
 """The matchmaking analysis failure type.
 
-Orchestration, the statistics that refuse to call an empty run finished, and
-the retry policy all raise it, so it lives beside them instead of inside
-`service.py`, which would force the siblings to import their composer.
+Orchestration, the statistics, and the retry policy all raise it, so it lives
+beside them rather than in `service.py`, which siblings would then import.
 """
 
 from .schemas import MatchmakingErrorCode

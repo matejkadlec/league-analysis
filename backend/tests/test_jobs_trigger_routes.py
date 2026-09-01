@@ -1,8 +1,7 @@
 """What the trigger and test-run routes refuse, and what they hand the runner.
 
-Both routes answer a refusal with HTTP 200 and `success=False`, so nothing
-raises when they decline; the only evidence is the body and whether a task was
-queued. Both assertions are made here.
+Both routes answer a refusal with HTTP 200 and `success=False`, so the only
+evidence is the body and whether a task was queued.
 """
 
 from datetime import UTC, datetime

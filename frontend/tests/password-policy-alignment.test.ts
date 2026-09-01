@@ -7,9 +7,8 @@ import { describe, expect, it } from "vitest";
 import { isPasswordStrong } from "@/features/settings/settings-helpers";
 
 /**
- * The password policy is written twice and nothing else notices when they
- * disagree: `validate_password_strength` is a Pydantic field validator, so its
- * regexes never reach the OpenAPI document. This reads the backend source.
+ * The password policy is written twice: `validate_password_strength` is a
+ * Pydantic field validator, so its regexes never reach the OpenAPI document.
  */
 
 const BACKEND_SCHEMAS = join(

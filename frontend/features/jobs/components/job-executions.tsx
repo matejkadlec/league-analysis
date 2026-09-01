@@ -34,8 +34,7 @@ export function JobExecutions({
     useInfiniteQuery(jobExecutionsInfiniteQueryOptions());
 
   // A failed poll must not empty a table someone is reading: the queryFn
-  // re-throws rather than returning a failure envelope, so React Query keeps
-  // the previous pages stale and this reads them.
+  // re-throws, so React Query keeps the previous pages and this reads them.
   const allExecutions = useMemo(
     () => data?.pages.flatMap((page) => page.executions) ?? [],
     [data],
@@ -105,8 +104,7 @@ export function JobExecutions({
   }
 
   // Without this arm a failed first load renders the empty state below, so a
-  // scheduler whose API is down reads as one that has never run. Later failures
-  // keep their pages, so `allExecutions` is non-empty and the table stays up.
+  // scheduler whose API is down reads as one that has never run.
   if (isError && allExecutions.length === 0) {
     return (
       <Card>

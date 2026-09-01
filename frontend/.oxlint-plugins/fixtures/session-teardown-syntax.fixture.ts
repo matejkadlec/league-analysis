@@ -58,8 +58,7 @@ export const headerProperty = () => ({
 });
 
 // MUST flag: Next's own header shape, `{ key, value }` -- the key is `key`,
-// so the property selector above stays silent. An audit retracted the hint
-// from next.config.ts through exactly this.
+// so the property selector above stays silent.
 export const nextHeaderShape = () => ({
   // oxlint-disable-next-line house/session-teardown-syntax
   key: "Set-Cookie",

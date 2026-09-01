@@ -22,14 +22,12 @@ export function playerContextQueryKey(userId: number | null | undefined) {
   return ["player-context", userId] as const;
 }
 
-/** The suggestion caches `player-selector.tsx` reads; it keys full searches on
- * this prefix and invalidates the whole family by it. An array, not a bare
- * string, so query-key-scope-contract.test.ts can read the namespace here. */
+/** The prefix `player-selector.tsx` keys searches on and invalidates by; an array,
+ * not a bare string, so query-key-scope-contract.test.ts can read the namespace. */
 export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
-/** Invalidate everything that reflects whether a player is tracked, awaiting
- * every invalidation the way `invalidateMatchmakingRun` does. Track and
- * untrack both touch the same three caches; this names that set once. */
+/** Track and untrack touch the same three caches; this names that set once, and
+ * awaits every invalidation. */
 export async function invalidateTrackingQueries(
   queryClient: QueryClient,
   userId: number | null | undefined,
@@ -49,27 +47,24 @@ export async function invalidateTrackingQueries(
 export function playerQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: playerQueryKey(puuid),
-    // `skipToken` rather than `enabled: !!puuid`: `enabled` is an ordinary
-    // option, so a caller spreading these options and setting its own drops
-    // the guard -- on `queryFn` the guard cannot be spread away.
+    // `skipToken`, not `enabled: !!puuid`: a caller spreading these options and
+    // setting its own `enabled` would drop the guard.
     queryFn: puuid
       ? async ({ signal }) =>
           unwrap(
             await validatedGet(PlayerSchema, `/players/${puuid}`, { signal }),
           )
       : skipToken,
-    // The copy `player-context.tsx` seeds from `/players/context` is only
-    // worth seeding while it counts as fresh: at `staleTime: 0` every route
-    // refetches a player it was just handed. Invalidation beats `staleTime`.
+    // At `staleTime: 0` every route refetches the player `player-context.tsx` just
+    // seeded; invalidation, not staleness, is what retires that copy.
     staleTime: 60_000,
     retry: false,
   });
 }
 
 /**
- * Ranked Solo/Duo stats for one player, over their whole history or the last
- * `limit` games. The player card and the recent-performance card share this
- * key, so their unlimited variants are one round trip.
+ * The player card and the recent-performance card share this key, so their
+ * unlimited variants are one round trip.
  */
 export function playerStatsQueryOptions(puuid: string, limit?: number) {
   return queryOptions({
@@ -81,9 +76,8 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
           `/matches/player/${puuid}/stats`,
           {
             params: {
-              // `queues`, not the scalar `queue`: a name this endpoint does not
-              // declare is dropped rather than refused, which would leave the
-              // card averaging every queue.
+              // `queues`, not the scalar `queue`: an undeclared name is dropped
+              // rather than refused, leaving the card averaging every queue.
               queues: String(RANKED_SOLO_QUEUE_ID),
               ...(limit !== undefined && { limit }),
             },

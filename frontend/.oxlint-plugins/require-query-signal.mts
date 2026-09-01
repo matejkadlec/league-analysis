@@ -1,10 +1,8 @@
-// Every `queryFn` written here takes React Query's `signal`. Reading it off
-// the context is what sets `abortSignalConsumed`, and that flag is the only
-// thing that makes the client abort when the last observer unmounts.
+// Reading `signal` off the context sets `abortSignalConsumed`, the only thing
+// that makes the client abort once the last observer unmounts.
 
-// Flagged: a `queryFn` whose function literal does not destructure `signal`,
-// including the branches of a `skipToken` conditional. Accepted: a `queryFn`
-// held in a variable or passed by name, which this cannot read.
+// Function literals only, both branches of a `skipToken` conditional included; a
+// `queryFn` passed by name cannot be read here.
 
 type Node = {
   type: string;

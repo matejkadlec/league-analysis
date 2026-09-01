@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles } from "./support/source-scan-support";
 
 /**
- * Player freshness is `*_synced_at`, the timestamp of the provider check that
- * sourced the field. `updated_at` moves when anything on the row changes, so a
- * card using it claims freshness an unrelated column earned.
+ * Freshness is `*_synced_at`: `updated_at` moves when anything on the row changes,
+ * so a card using it claims freshness an unrelated column earned.
  */
 const NON_FRESHNESS_UPDATED_AT = new Map<string, string>([
   // The schema modules declare the wire shape; none of them display anything.

@@ -1,8 +1,7 @@
 /** Shared display formatters over the platform's own Intl machinery. */
 
-// Module-level: Intl formatters are expensive to construct and these are
-// called from render paths. `minimumFractionDigits` defaults to 0, so a
-// whole number renders "52%" and anything else "52.3%" — no branch needed.
+// Module-level: Intl formatters are expensive and these run in render paths.
+// `minimumFractionDigits` defaults to 0, so "52%" and "52.3%" need no branch.
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   maximumFractionDigits: 1,
@@ -13,9 +12,8 @@ export function formatFractionAsPercent(fraction: number): string {
   return percentFormatter.format(fraction);
 }
 
-// One copy of the win-rate verdict, and the contract everywhere is a
-// 0-1 fraction. The one percent-shaped API field (league.win_rate) is
-// normalized in its schema.
+// The contract everywhere is a 0-1 fraction; the one percent-shaped API
+// field (league.win_rate) is normalized in its schema.
 
 /** Text and bar colors for a 0-1 win-rate fraction: green ≥51%, yellow >49%, rose below. */
 export function winRateColors(fraction: number): { text: string; bar: string } {
@@ -52,9 +50,8 @@ export function formatSeconds(seconds: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainingSeconds}s`;
 }
 
-// One copy of the local-time timestamp, dot-separated. Hand-rolled rather
-// than Intl because recent ICU puts a narrow no-break space before AM/PM,
-// which breaks exact-text assertions and copy-paste.
+// Hand-rolled rather than Intl: recent ICU puts a narrow no-break space
+// before AM/PM, which breaks exact-text assertions and copy-paste.
 
 /** Local-time "4.3.2026 2:07 PM"; pass { seconds: true } for "…2:07:09 PM". */
 export function formatDateTime(

@@ -38,9 +38,8 @@ vi.mock("@/lib/core/hooks/use-relative-time", () => ({
   useRelativeTime: () => "just now",
 }));
 
-// The rows themselves are not the subject; the container around them is.
-// Stubbing them keeps this test off a 40-field match fixture while leaving
-// the real `match-history.tsx` -- where the conditional lives -- under test.
+// The container is the subject, so stubbing the rows keeps this off a 40-field
+// fixture while the real `match-history.tsx` stays under test.
 vi.mock("@/features/matches/components/match-row", () => ({
   MatchRow: () => <div data-testid="match-row" />,
 }));
@@ -63,9 +62,8 @@ function setOptionalConsent(): void {
   document.cookie = `${CONSENT_COOKIE}=${value}; Path=/`;
 }
 
-// The list scrolls sideways only from `lg` up, so only there does it need to be
-// a named keyboard-reachable region. These render the real `MatchHistory`; a
-// local copy of the JSX would survive the revert they exist to catch.
+// The list scrolls sideways only from `lg` up, so only there does it need to
+// be a named keyboard-reachable region.
 
 function stubMatchMedia(matches: boolean): void {
   vi.stubGlobal("matchMedia", (query: string) => ({

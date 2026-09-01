@@ -1,6 +1,5 @@
-// Regression fixture for `house/require-query-signal`. Each directive
-// suppresses a shape the rule MUST flag; accepted cases carry none. A stale
-// selector leaves an unused directive; an over-broad one reports on an accept.
+// Regression fixture for `house/require-query-signal`: every directive marks a
+// shape the rule MUST flag, so a stale or over-broad selector shows up here.
 
 declare const skipToken: unique symbol;
 declare const puuid: string | null;

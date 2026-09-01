@@ -52,9 +52,8 @@ describe("how a job run is worded", () => {
 });
 
 describe("keys for rows React will reuse", () => {
-  // These are React list keys. Two entries that differ must not collide, or
-  // React keeps the first row mounted and the second one's numbers never
-  // appear -- a wrong reading on screen, with nothing failing.
+  // React list keys: two differing entries that collide leave the first row
+  // mounted and the second one's numbers never rendered.
 
   it("separates log lines that differ only in a field neither names", () => {
     const base = { timestamp: "2026-01-02T03:04:05Z", level: "INFO", event: "fetched" };

@@ -16,9 +16,8 @@ describe("CardTitle", () => {
       </Card>,
     );
 
-    // The upstream shadcn primitive renders a div, and re-adding `card` from
-    // the CLI reverts the local patch. The level is the part that matters:
-    // every surface's heading outline is built on `CardTitle` being an `h3`.
+    // Upstream renders a div, so a shadcn CLI re-add reverts this patch; every
+    // heading outline is built on `CardTitle` being an `h3`.
     expect(
       screen.getByRole("heading", { name: "Tracked Players" }).tagName,
     ).toBe("H3");

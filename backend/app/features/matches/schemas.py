@@ -239,9 +239,8 @@ class TeamStats(BaseModel):
 class TeamStatsComposition(BaseModel):
     """Schema for both team statistics."""
 
-    # Required, not defaulted: `match_history.py` is the only construction
-    # site and it passes both, so a default would make the response schema
-    # claim a shape no response has.
+    # Required, not defaulted: a default would make the published response schema
+    # claim a shape no response actually has.
     blue_team: TeamStats = Field(description="Blue team stats")
     red_team: TeamStats = Field(description="Red team stats")
 

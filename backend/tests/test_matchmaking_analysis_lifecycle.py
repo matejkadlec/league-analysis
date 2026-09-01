@@ -407,11 +407,10 @@ def _completion_results(
 def test_a_run_that_measured_nothing_is_not_a_completed_run(
     spine_stats: list[SpineMatchStats],
 ) -> None:
-    """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
+    """0.0% vs 0.0% must not be written as a fair-matchmaking verdict.
 
     Every spine match failing to load returns None from the optional fetch, so
-    both averages fell back to 0.0 and the run was still stamped `completed`.
-    The failure path already persists a terminal diagnostic.
+    both averages would otherwise fall back to 0.0 and stamp `completed`.
     """
     with pytest.raises(MatchmakingAnalysisRuntimeError):
         _completion_results(spine_stats)
@@ -627,9 +626,8 @@ def test_per_match_carries_both_sides_puuids_for_rank_scoping() -> None:
 async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
     """A lapsed Riot key must never block the pure DB reads.
 
-    `get_riot_client` refuses the whole request when no key is active, and
-    injected into this feature's service it took down `latest-completed`,
-    `history` and `status` with it. Only the background instance talks to Riot.
+    `get_riot_client` refuses the whole request when no key is active, so only
+    the background instance may depend on it.
     """
     from app.features.auth.users.models import User
     from app.features.matchmaking_analysis.dependencies import (
@@ -894,9 +892,8 @@ async def test_store_rank_snapshot_inserts_a_changed_rank(
 
     await service._store_rank_snapshot("p1", _gold_entry())
 
-    # The write is an INSERT ... FROM SELECT re-checking the tracked flag at
-    # insert time, so a tracking activation racing the earlier probe cannot
-    # land an analysis-time snapshot for a tracked player.
+    # The INSERT ... FROM SELECT re-checks the tracked flag at insert time, so a
+    # tracking activation racing the earlier probe cannot land a snapshot.
     inserted = execute.await_args_list[2].args[0]
     assert isinstance(inserted, Insert)
     assert "core.players" in str(inserted.compile())

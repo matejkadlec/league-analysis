@@ -57,9 +57,8 @@ def advanced_int(advanced_stats: object, key: str) -> int:
 def page_of(start: int, count: int) -> int:
     """The zero-based page a start/count window lands on.
 
-    The page count that used to come back with it is a `computed_field` on
-    `PaginatedResponse` now. The `count > 0` guard stays here rather than at
-    each call site: this is arithmetic on a caller-supplied page size.
+    The `count > 0` guard stays here rather than at each call site: this is
+    arithmetic on a caller-supplied page size.
     """
     return start // count if count > 0 else 0
 
@@ -71,9 +70,8 @@ def _accumulate_group_stats(
 ) -> dict[str, dict[str, int]]:
     """Total wins and combat scores per group, however the caller groups them.
 
-    `first_seen` supplies any fields copied off the first participant in a
-    group rather than summed -- champion stats carry the champion id that way.
-    A participant whose group key is empty is skipped.
+    `first_seen` supplies fields copied off the first participant in a group
+    rather than summed. A participant whose group key is empty is skipped.
     """
     grouped: dict[str, dict[str, int]] = {}
     for participant in participants:

@@ -82,9 +82,8 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              {/* `min-w-0` is what lets the truncating title actually shrink:
-                  a flex item defaults to `min-width: auto`, so without it a
-                  long Riot ID pushes the controls past a phone's viewport. */}
+              {/* A flex item defaults to `min-width: auto`, so without `min-w-0`
+                  a long Riot ID pushes the controls off a phone's viewport. */}
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <CardTitle className="text-xl truncate">
                   {player.game_name}

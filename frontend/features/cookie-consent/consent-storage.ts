@@ -8,9 +8,8 @@ export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
 /**
- * Every optional-storage key the app writes, owned here rather than by its
- * writer: `match-history-preferences.ts` imports from this module, so the
- * other direction is a cycle. Withdrawing consent erases the derived list.
+ * Owned here rather than by each writer: `match-history-preferences.ts` imports
+ * this module, so the other direction would be a cycle.
  */
 export const HEADER_MESSAGES_CLOSED_STORAGE_KEY = "header_messages_closed:v1";
 export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
@@ -142,9 +141,8 @@ export function clearOptionalBrowserStorage(): void {
     return;
   }
 
-  // Blocked site data makes every `localStorage` access throw, and this runs
-  // in a mount effect above every error boundary: an unguarded throw unmounts
-  // the whole tree and hands the visitor a blank page.
+  // Blocked site data makes every `localStorage` access throw, and this runs above
+  // every error boundary, so an unguarded throw blanks the page.
   try {
     for (const key of OPTIONAL_STORAGE_KEYS) {
       window.localStorage.removeItem(key);
@@ -154,9 +152,8 @@ export function clearOptionalBrowserStorage(): void {
   }
 }
 
-// Optional storage is only readable and writable with current "all" consent,
-// and every access needs the same SecurityError guard -- the
-// `window.localStorage` getter itself throws when site data is blocked.
+// Only readable with current "all" consent, and guarded: the `window.localStorage`
+// getter itself throws when site data is blocked.
 export function readOptionalStorage(key: string): string | null {
   if (!isBrowser() || !canUseOptionalStorage()) {
     return null;

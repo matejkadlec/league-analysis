@@ -55,9 +55,8 @@ def restrict_participants_to_queues(
 ) -> Select[tuple[MatchParticipant]]:
     """Filter a participant query by queue, joining the match row only if asked.
 
-    The champion and lane aggregates read participants, so the queue lives one
-    join away. Without a filter the join is pure cost, which is why this is a
-    wrapper rather than a condition in `build_match_history_conditions`.
+    A wrapper rather than a condition in `build_match_history_conditions` because
+    with no queue filter the join to `Match` is pure cost.
     """
     if not queue_ids:
         return query
@@ -146,11 +145,9 @@ class MatchService:
         count: int = 20,
         queue_ids: Sequence[int] | None = None,
     ) -> MatchListResponse:
-        """
-        Get match history for a player from database only.
+        """Get match history for a player from database only.
 
-        Never calls Riot API - returns whatever matches are available in database.
-        Supports pagination for infinite scroll.
+        Never calls the Riot API; returns only what is already stored.
 
         Args:
             puuid: Player PUUID
@@ -199,11 +196,7 @@ class MatchService:
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
     ) -> MatchListWithPlayerDataResponse:
-        """
-        Get match history for a player with participant data.
-
-        Returns matches with the player's champion, stats, lane opponent,
-        and LP changes.
+        """Get match history for a player with participant data.
 
         Args:
             puuid: Player PUUID
@@ -430,9 +423,8 @@ class MatchService:
     ) -> tuple[list[Match], int, int]:
         """Return one page of matches with its total and analyzed total.
 
-        Both totals come from a single pass: `count(*) FILTER (WHERE ...)`
-        answers "how many are analyzed" from the same scan the plain count
-        already needed, so a page costs two round trips rather than three.
+        `count(*) FILTER (WHERE ...)` takes both totals from one scan, so a page
+        costs two round trips rather than three.
         """
         conditions = build_match_history_conditions(
             puuid=puuid,
@@ -457,9 +449,7 @@ class MatchService:
         total, total_analyzed = totals.one()
         return list(page.scalars().all()), total, total_analyzed
 
-    # ============================================
-    # Helper Methods for Jobs
-    # ============================================
+    # === Helper Methods for Jobs ===
 
     async def _reprocess_match(
         self,

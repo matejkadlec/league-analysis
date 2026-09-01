@@ -41,9 +41,8 @@ def _parse_match_queue_union(queues: str) -> tuple[int, ...]:
 def parse_match_queue_ids(queues: str | None) -> tuple[int, ...] | None:
     """Answer the union filter, or None when the caller named no queues.
 
-    Kept separate from the validation above rather than folded into it: one
-    function carries four decision points plus the null check and xenon ranks
-    it C, over the B this repo holds itself to.
+    Kept separate from the validation above because folding the null check in
+    pushes the xenon rank to C, over the B this repo holds itself to.
     """
     return _parse_match_queue_union(queues) if queues is not None else None
 

@@ -25,8 +25,7 @@ class Player(Base):
     __tablename__ = "players"
     __table_args__ = (
         # Canonical casing is lowercase — Riot's own spelling and the `Platform`
-        # enum's values (see `normalize_platform`). The database owns the
-        # invariant so a writer that forgets fails loudly.
+        # enum's values; the database owns it so a forgetful writer fails loudly.
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",
@@ -121,7 +120,6 @@ class Player(Base):
     )
 
 
-# Create composite indexes for common queries. `game_name` carries no
-# `index=True` of its own -- this index leads with it and so serves a game-name
-# lookup already -- and neither does `puuid`, which the primary key covers.
+# `game_name` carries no `index=True`: this index leads with it and already
+# serves a game-name lookup. `puuid` is covered by the primary key.
 Index("idx_players_game_name_tag_line", Player.game_name, Player.tag_line)

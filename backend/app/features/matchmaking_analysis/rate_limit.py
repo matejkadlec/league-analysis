@@ -1,8 +1,7 @@
 """The rate-limit wait and retry policy one analysis run's Riot calls use.
 
 `_api_call_with_retries` is the whole posture: wait budget, attempt count,
-client status while waiting, and whether exhaustion is a failure. The service
-composes the mixin; `_RetryPolicyHost` declares the plumbing it leans on.
+client status while waiting, and whether exhaustion is a failure.
 """
 
 import asyncio
@@ -90,9 +89,11 @@ class RateLimitRetryMixin(_RetryPolicyHost):
     ) -> T | None:
         """Run one Riot call under the shared rate-limit retry policy.
 
-        Returns None when capacity is unavailable, the error is recoverable,
-        or retries are exhausted; `required=True` raises instead. These attempts
-        stack on the Riot client's own tenacity retry of 429/5xx.
+        These attempts stack on the Riot client's own tenacity retry of 429/5xx.
+
+        Returns:
+            None when capacity is unavailable, the error is recoverable, or
+            retries are exhausted; `required=True` raises instead.
         """
         for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
             try:

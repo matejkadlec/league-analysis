@@ -14,9 +14,8 @@ import {
 } from "../components/ui/form";
 import { Input } from "../components/ui/input";
 
-// `components/ui/form.tsx` is a vendored shadcn primitive carrying two
-// deliberate patches. Re-adding `form` from the CLI reverts both silently and
-// neither revert changes what anyone sees, so these are the tests that notice.
+// `components/ui/form.tsx` is a vendored shadcn primitive with two deliberate
+// patches; re-adding `form` from the CLI reverts both invisibly.
 
 function Harness({ error }: { error?: string }) {
   const form = useForm<{ email: string }>({
@@ -57,8 +56,7 @@ describe("the patched form primitives", () => {
 
   it("describes a healthy control by nothing at all", async () => {
     // Upstream points `aria-describedby` at `<id>-form-item-description`
-    // unconditionally, and nothing in this app renders that id, so upstream's
-    // version names an element that is not in the document.
+    // unconditionally; nothing in this app renders that id.
     render(<Harness />);
 
     expect(
@@ -82,9 +80,8 @@ describe("the patched form primitives", () => {
   });
 
   it("refuses a form primitive used outside a FormField", () => {
-    // Upstream guards on `!fieldContext`, which cannot be false, and reads
-    // `fieldContext.name` through it one line earlier anyway. Without the patch
-    // the label's `htmlFor` is "undefined-form-item", pointing at nothing.
+    // Upstream's `!fieldContext` guard never fires, so without the patch the
+    // label's `htmlFor` is "undefined-form-item", pointing at nothing.
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});

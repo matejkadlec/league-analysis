@@ -8,14 +8,12 @@ import { allSourceFiles, allTestFiles } from "./support/source-scan-support";
 /**
  * Every export of `lib/core/schemas/` is reached by something -- which knip
  * cannot answer, because a namespace import counts as a use of every export.
- * Text is matched whole-file and comment-stripped: prose is not a reader.
  */
 const SCHEMA_DIRECTORY = "lib/core/schemas";
 
 /**
- * Request-body schemas whose only reader is the contract test, by design:
  * `validatedPost` takes the body as `unknown`, so a request schema has no call
- * site to be named at. A name leaves this list by gaining a reader.
+ * site to be named at; a name leaves this list by gaining a reader.
  */
 const PAIRED_BY_THE_CONTRACT_TEST = new Set([
   "CardPreferenceUpdateSchema",
@@ -52,9 +50,8 @@ function exportedNames(): Map<string, string> {
 }
 
 /**
- * Every line a reader could live on, except this file's own: the allowance
- * below names its schemas in order to exempt them, and a contract that scans
- * itself reports every name it discusses as reached.
+ * This file is left out of the scan: the allowance above names schemas in
+ * order to exempt them, which would read as reaching them.
  */
 /** Source with comments removed, so prose about a schema is not a use. */
 function code(path: string): string {
@@ -90,9 +87,8 @@ function isReached(name: string, sources: readonly string[]): boolean {
 
 describe("every schema export is reached", () => {
   it("scans the modules it is written against", () => {
-    // Signal first: this check is a scan, and a scan that stopped matching
-    // reports nothing wrong with what it can no longer see. Both floors are
-    // the counts as they stand, not those minus slack.
+    // A scan that stopped matching reports nothing wrong with what it can no
+    // longer see; both floors are the counts as they stand, without slack.
     expect(schemaModules().length).toBeGreaterThanOrEqual(9);
     expect(exportedNames().size).toBeGreaterThanOrEqual(120);
   });
@@ -109,9 +105,8 @@ describe("every schema export is reached", () => {
   });
 
   it("keeps the contract-test allowance honest", () => {
-    // A name that gained a reader does not belong on the list any more, and a
-    // name that was deleted outright would sit there forever pointing at
-    // nothing. Either way the list stops describing the code.
+    // A name that gained a reader, or was deleted outright, leaves the list
+    // describing something other than the code.
     const sources = everySource();
     const names = exportedNames();
     const stale = [...PAIRED_BY_THE_CONTRACT_TEST]

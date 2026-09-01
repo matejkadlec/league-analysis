@@ -4,9 +4,8 @@ export const RIOT_ID_GAME_NAME_MAX_LENGTH = 16;
 export const RIOT_ID_TAG_LINE_MAX_LENGTH = 5;
 
 /**
- * What `GET /players/suggestions` accepts in `q`, which is more than the
- * longest Riot ID (16 + `#` + 5). Past it the query 422s and the viewer gets
- * an error toast from the shared `QueryCache` instead of "no results".
+ * What `GET /players/suggestions` accepts in `q` -- more than the longest
+ * Riot ID (16 + `#` + 5); past it the query 422s into an error toast instead of "no results".
  */
 export const RIOT_ID_SEARCH_MAX_LENGTH = 30;
 

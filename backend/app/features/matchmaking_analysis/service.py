@@ -1,8 +1,7 @@
 """Matchmaking analysis service for analyzing League of Legends matchmaking fairness.
 
 Averages ally against enemy winrates and ranks over the analyzed player's last
-N ranked matches (N and an optional end date are run params). Each spine match
-anchors its participants' samples; the DB is read before the Riot API.
+N ranked matches; each spine match anchors its participants' samples.
 """
 
 import asyncio
@@ -90,13 +89,11 @@ logger = structlog.get_logger(__name__)
 
 MATCHES_FOR_WINRATE = 10
 # Absolute floor, deliberately below the smallest selectable spine size: a
-# backdated run that finds only part of its requested window must still
-# complete, or comparing against a month ago fails exactly when it matters.
+# backdated run that finds only part of its window must still complete.
 MIN_MATCHES_FLOOR = 5
 
 # How close a stored league snapshot must sit to the run's reference time to be
-# reused instead of fetched: the last day for latest runs, two weeks around the
-# chosen day for backdated ones, where a period snapshot beats today's rank.
+# reused: a day for latest runs, two weeks around the day for backdated ones.
 RANK_SNAPSHOT_MAX_AGE = timedelta(hours=24)
 HISTORICAL_RANK_WINDOW = timedelta(days=14)
 
@@ -104,9 +101,8 @@ HISTORICAL_RANK_WINDOW = timedelta(days=14)
 def theoretical_max_requests(spine_size: int) -> int:
     """Request maximum with an empty database, as a function of spine size.
 
-    The spine ID list, one match-ID list per other player, one detail per spine
-    match, each other player's remaining details (one of theirs is the known
-    spine match), and one league-v4 call per unique player.
+    Counts the spine ID list, one match-ID list and the remaining details per
+    other player, one detail per spine match, one league-v4 call per player.
     """
     others = spine_size * 9
     return (
@@ -125,9 +121,8 @@ class RunningAnalysis:
     task: asyncio.Task[None]
 
 
-# Keyed by account and player together. Keyed by player alone, one account's
-# worker was the only worker that could exist for a lobby, so a second account
-# asking was silently handed the first one's run.
+# Keyed by account and player together: keyed by player alone, a second account
+# asking about the same lobby would be handed the first one's run.
 _running_analyses: dict[tuple[int, str], RunningAnalysis] = {}
 
 
@@ -216,8 +211,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     ):
         self.db = db
         # None on the request-scoped instance (see `get_matchmaking_service`):
-        # only the background instance, built with its own tracked client,
-        # ever reaches Riot.
+        # only the background instance ever reaches Riot.
         self.riot_client = riot_client
         # The account this service answers for: every run WHERE clause is keyed
         # on it, not on the player alone.
@@ -246,10 +240,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self._rank_period_accurate: int = 0
         self._rank_current_day: int = 0
 
-    # ================================================================
-    # Public API
-    # ================================================================
-
     async def start_analysis(
         self,
         puuid: str,
@@ -257,9 +247,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     ) -> MatchmakingAnalysisResponse:
         """Create or attach to one active analysis and return immediately.
 
-        On attach the existing run's persisted params win over the request's:
-        the response carries them so the client shows what is actually
-        running, not what the form last said.
+        On attach the existing run's persisted params win over the request's, so
+        the response shows what is actually running.
         """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
 
@@ -289,8 +278,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             existing = await self._get_active_analysis(puuid)
             if not existing:
                 # `commit_new_run` returns the IntegrityError rather than
-                # raising it, so no exception is in flight here and a bare
-                # `raise` would not surface the constraint that failed.
+                # raising, so a bare `raise` would have nothing in flight.
                 raise conflict
             logger.info("Attached after concurrent start", puuid=puuid)
             self._ensure_background_task(puuid, existing.created_at)
@@ -384,8 +372,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         response = MatchmakingAnalysisResponse.model_validate(analysis)
         if response.status in ACTIVE_ANALYSIS_STATUSES:
             # Shutdown leaves the row active on the contract that a restart
-            # resumes it, and this poll is the only caller left to honour it:
-            # the UI hides Start, and startup recovery skips this table.
+            # resumes it, and this poll is the only caller left to honour it.
             self._ensure_background_task(puuid, created_at)
         return response
 
@@ -455,10 +442,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             task=task,
         )
 
-    # ================================================================
-    # Background Analysis
-    # ================================================================
-
     async def _run_analysis_background(self, puuid: str, created_at: datetime) -> None:
         """Run analysis in background with its own DB session."""
         # Every log line below this point — the whole run, several call layers
@@ -472,9 +455,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 service = MatchmakingAnalysisService(db, riot_client, self.user_id)
                 await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
-            # Deliberately leaves the persisted row active: this also fires when
-            # process shutdown cancels the task, and a restart is contracted to
-            # resume with progress intact.
+            # Deliberately leaves the persisted row active: this also fires on
+            # process shutdown, and a restart is contracted to resume it.
             logger.info("Background analysis task cancelled; persisted run left active")
             raise
         except Exception as e:
@@ -536,8 +518,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         """Core analysis logic.
 
         Each spine match anchors the winrate lookups for all 10 of its
-        participants to that match's own timestamp; the verdict is the average
-        of the 10 per-match team and enemy averages.
+        participants to that match's own timestamp.
         """
         logger.info("Starting matchmaking analysis")
         self._reset_run_state(puuid, created_at)
@@ -610,8 +591,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         """Guarded UPDATE of one active run, committed.
 
         Deliberately not used by `cancel_analysis`, which omits the maintenance
-        check on purpose, nor by `_finalize_completed_analysis`, which reads the
-        status back before it commits.
+        check, nor by `_finalize_completed_analysis`, which reads status back.
         """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await guarded_run_update(
@@ -642,9 +622,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     async def _load_spine_match_ids(
         self, puuid: str, created_at: datetime
     ) -> list[str] | None:
-        # This call cannot be skipped. Without an end date it has no endTime —
-        # the actual latest matches; with one, endTime bounds the spine to the
-        # matches played on or before that day.
+        # This call cannot be skipped: without an end date it has no endTime and
+        # returns the latest matches; with one, endTime bounds the spine.
         spine_match_ids = await self._api_fetch_match_ids(
             puuid,
             count=self.match_count,
@@ -749,9 +728,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         *,
         spine_size: int,
     ) -> None:
-        # The ally rank aggregates exclude the players matchmaking never
-        # chose: the analyzed player and the inferred duo partners. Both stay
-        # in `player_ranks` for the client's lobby-gap line.
+        # Excludes the players matchmaking never chose (the analyzed player and
+        # duo partners), who still stay in `player_ranks` for the lobby-gap line.
         excluded_allies = duo_partner_puuids(
             [(s.match_id, s.ally_puuids) for s in spine_stats],
             analyzed_puuid=puuid,
@@ -817,10 +795,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             requests_saved=self.requests_saved,
         )
 
-    # ================================================================
-    # Match Processing
-    # ================================================================
-
     async def _sample_spine_match(
         self,
         analysis_puuid: str,
@@ -843,9 +817,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         enemy_puuids: list[str] = []
 
         for p_puuid, team_id in participants:
-            # Everyone is sampled keyed by puuid; the analyzed player and the
-            # duo partners are excluded later, at completion-time aggregation,
-            # once the whole spine is known.
+            # Everyone is sampled; the analyzed player and the duo partners are
+            # excluded later, once the whole spine is known.
             side = team if team_id == target_team else enemy
             await self._sample_participant(
                 side, p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
@@ -906,10 +879,10 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     async def _cached_player_performance(
         self, p_puuid: str
     ) -> PlayerPerformance | None:
-        """One player's trailing form, from exactly the matches their winrate
-        counted (`_winrate_sample_ids`) -- every sampled match had a readable
-        participant row when that pass finished, so this read is DB-only and
-        cannot describe a different window than the figure beside it.
+        """One player's form over exactly the matches their winrate counted.
+
+        Every match in `_winrate_sample_ids` had a readable participant row, so
+        this read is DB-only and cannot describe a different window.
         """
         if p_puuid in self._performance_cache:
             return self._performance_cache[p_puuid]
@@ -945,16 +918,11 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 progress[key] = True
         await self._update_progress(analysis_puuid, analysis_created_at, progress)
 
-    # ================================================================
-    # Participant Ranks
-    # ================================================================
-
     async def _cached_player_rank(self, p_puuid: str) -> None:
         """Resolve one participant's Solo/Duo rank once per run.
 
         Snapshot-first: a `player_leagues` row near the run's reference time is
-        reused without an API call, and live fetches leave snapshots behind. A
-        failed or empty read degrades to UNRANKED (auth errors still re-raise).
+        reused without an API call. A failed read degrades to UNRANKED.
         """
         if p_puuid in self._rank_values:
             return
@@ -1049,9 +1017,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     ) -> None:
         """Persist a live league read as a snapshot for future runs.
 
-        Tracked players are skipped: Match Fetcher owns their snapshot cadence,
-        and an analysis-time snapshot inside its before/after observation
-        window would downgrade LP attribution to `counter_mismatch`.
+        Tracked players are skipped: an analysis-time snapshot inside Match
+        Fetcher's before/after window downgrades LP attribution.
         """
         tracked = await self.db.execute(
             select(Player.is_tracked_by_anyone).where(Player.puuid == p_puuid)
@@ -1073,9 +1040,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             return
 
         await ensure_riot_writer_maintenance_is_inactive(self.db)
-        # INSERT-from-SELECT so the tracked check re-evaluates inside the
-        # insert itself: the check above can go stale if someone starts
-        # tracking this player between it and the commit.
+        # INSERT-from-SELECT so the tracked check re-evaluates inside the insert:
+        # the check above goes stale if tracking starts before the commit.
         await self.db.execute(_untracked_snapshot_insert(p_puuid, solo_entry))
         await self.db.commit()
 
@@ -1084,11 +1050,10 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         puuid: str,
         end_time_seconds: int,
     ) -> float | None:
-        """Calculate a player's winrate from their last 10 ranked matches
-        ending before the anchor time.
+        """Calculate a player's winrate from their last 10 ranked matches.
 
         DB-first: uses the DB when it holds ≥10 fully_analyzed ranked matches
-        before the anchor, otherwise falls back to the API.
+        before the anchor time, otherwise falls back to the API.
         """
         anchor_ms = end_time_seconds * 1000
 
@@ -1139,10 +1104,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self.matches_analyzed += len(sampled)
         self._winrate_sample_ids[puuid] = sampled
         return wins / len(sampled)
-
-    # ================================================================
-    # Data Access (DB-first)
-    # ================================================================
 
     async def _get_match_participants(self, match_id: str) -> list[tuple[str, int]]:
         """Get (puuid, team_id) for all participants. DB-first."""
@@ -1213,10 +1174,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             end_time=end_time_seconds,
         )
 
-    # ================================================================
-    # Rate-Limited API Calls
-    # ================================================================
-
     @property
     def _riot(self) -> RiotAPIClient:
         """The Riot client, which only the background instance carries."""
@@ -1261,10 +1218,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             operation="match fetch",
             match_id=match_id,
         )
-
-    # ================================================================
-    # Analysis Record Helpers
-    # ================================================================
 
     async def _get_analysis(
         self, puuid: str, created_at: datetime

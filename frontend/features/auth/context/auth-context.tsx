@@ -40,14 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
   const router = useRouter();
-  // The account the cache below currently holds data for. A ref rather than
-  // reading `user`: `checkAuth` would otherwise have to depend on it, and it
-  // is re-created on every identity change as it is.
+  // Which account the query cache holds. A ref, not `user`, so `checkAuth`
+  // need not depend on identity.
   const cachedAccountRef = useRef<number | null>(null);
 
-  // Adopt whoever the server says is signed in, dropping the previous
-  // account's cached data first: cookies are jar-wide, so a second tab can
-  // change who this tab is without any transition running here.
+  // Cookies are jar-wide, so another tab can change who this tab is with no
+  // transition running here: drop the previous account's cache on any change.
   const adoptUser = useCallback(
     (next: User) => {
       if (
@@ -64,15 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
-    // Deliberately does NOT raise `isLoading`: four consumers unmount their
-    // whole subtree while it is true, so a re-check would blank the settings
-    // page mid-edit. `forceRecheck` in `auth-gate.tsx` drives the re-render.
+    // Must not raise `isLoading`: consumers unmount their whole subtree while
+    // it is true, so a re-check would blank the settings page mid-edit.
+
+    // `forceRecheck` in `auth-gate.tsx` drives the re-render instead.
     const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: "include",
-        // A backend that accepts the connection and never answers is not
-        // hypothetical on a small host; without a deadline `isLoading` stays
-        // true and every surface gated on it renders a white screen for good.
+        // Without a deadline a hung backend pins `isLoading` true forever,
+        // white-screening every surface gated on it.
         signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
       }).catch((fetchError) => {
         if (process.env.NODE_ENV === "development") {
@@ -84,9 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       });
 
-    // No session hint means the backend never issued one, or cleared it on
-    // logout or a rejected refresh. Asking anyway costs two requests and logs
-    // a 401 that reads like a fault to anyone with devtools open.
+    // No session hint means there is no session; asking anyway costs two
+    // requests and logs a 401 that reads like a fault.
     if (!hasAuthStateCookie()) {
       endLocalSession();
       setUser(null);
@@ -108,9 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (response.status === 401) {
         const refresh = await refreshAccessToken();
         if (refresh.outcome !== "refreshed") {
-          // No `endLocalSession()` here: only the refresh call can tell a
-          // rejected session from one it never reached, and it already tears
-          // down in the first case. Clearing here strands a valid cookie.
+          // No `endLocalSession()`: refresh already tore down a rejected
+          // session, and clearing an unreachable one strands a valid cookie.
           setUser(null);
           queryClient.clear();
           return;
@@ -120,9 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response && response.ok) {
           adoptUser(UserResponseSchema.parse(await response.json()));
         } else {
-          // Only a refusal ends the session, and only when the body names one
-          // of this API's session-ending codes: the refresh succeeded a moment
-          // ago, so a fresh 30-day token is in the jar and a guess strands it.
+          // Refresh just succeeded, so a fresh 30-day token is in the jar: end
+          // the session only when the body names a session-ending code.
           if (
             response &&
             (response.status === 401 || response.status === 403) &&
@@ -134,9 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           queryClient.clear();
         }
       } else if (response.status === 403) {
-        // Only if it names the end of the session. A 403 means "not
-        // authorized for this", and a challenge in front of the API means
-        // nothing about the session at all.
+        // A 403 can also come from a challenge in front of the API, so only an
+        // explicit end-of-session code ends the session.
         if (await namesTheEndOfTheSession(response)) {
           endLocalSession();
         }
@@ -149,9 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      // The request came back but reading it did not work -- a truncated body,
-      // a captive portal, a bad gzip. That says nothing about the session, so
-      // no token teardown: that would sign the account out on every device.
+      // A body that would not parse says nothing about the session; tearing the
+      // token down here would sign the account out on every device.
       if (process.env.NODE_ENV === "development") {
         console.warn("Auth check failed:", error);
       }
@@ -234,27 +227,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(
     async (options?: { evenIfTheServerCannotBeReached?: boolean }) => {
-      // The default is safe, and that is the whole point of the option: a
-      // plain `logout()` changes nothing locally when the server never
-      // answered, and only a button under someone's finger passes the flag.
+      // The default is safe: a plain `logout()` changes nothing locally when
+      // the server never answered; only a deliberate click passes the flag.
       let serverAnswered = false;
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
           method: "POST",
           credentials: "include",
-          // Without a deadline a backend that accepts the connection and hangs
-          // makes Sign Out do nothing at all — no teardown, no navigation, no
-          // spinner — and every further click stacks another dead request.
+          // Without a deadline a hung backend makes Sign Out do nothing at all,
+          // and every further click stacks another dead request.
           signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
         });
-        // Success only. `/auth/logout` carries no auth dependency and cannot
-        // answer 401 itself; a 401 minted by the maintenance Worker during a
-        // deploy would tear the session down with nothing revoked.
+        // Success only: `/auth/logout` cannot answer 401 itself, so a 401 from
+        // the maintenance Worker would tear down a session nothing revoked.
         serverAnswered = response.ok;
         if (!response.ok) {
-          // `fetch` only rejects on network failure, so a 5xx arrives here
-          // looking like success. Say so rather than reporting a revocation
-          // that did not happen.
+          // `fetch` resolves on 5xx, so say the revocation failed rather than
+          // report one that did not happen.
           console.error("Sign out could not be completed by the server", {
             status: response.status,
           });

@@ -35,9 +35,8 @@ def test_the_envelope_is_exactly_these_four_counters() -> None:
 def test_every_counter_is_required() -> None:
     """A missing counter must be a parse failure, not a silent zero.
 
-    `pages` reaches this the stronger way: a computed field cannot be absent
-    from a serialized response, and cannot be given a value that disagrees
-    with `total` and `size`.
+    `pages` gets there differently: a computed field can neither be absent nor
+    disagree with `total` and `size`.
     """
     assert all(
         PaginatedResponse.model_fields[name].is_required() for name in SUPPLIED_FIELDS

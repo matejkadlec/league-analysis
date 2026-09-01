@@ -1,8 +1,7 @@
 """Lane-opponent lookup shared by match history and playstyle analysis.
 
-The rule is three-way: other player, other team, same assigned lane. Match
-history additionally asks that `UNKNOWN` positions never pair up; playstyle
-analysis leans on the raw rule.
+The rule is three-way — other player, other team, same assigned lane — and
+match history additionally asks that `UNKNOWN` positions never pair up.
 """
 
 from dataclasses import dataclass

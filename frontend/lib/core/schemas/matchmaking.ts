@@ -53,9 +53,8 @@ export const MatchmakingRankFreshnessSchema = z.object({
 });
 
 /**
- * Every field beyond the original three is optional and read as null-or-absent,
- * never defaulted to a number: pre-extension runs lack them, and a 0 renders as
- * "average rank Iron IV" — the same bug class as the backend's 0% winrate.
+ * Later fields stay null-or-absent, never defaulted to a number: pre-extension
+ * runs lack them and a 0 renders as "average rank Iron IV".
  */
 export const MatchmakingAnalysisResultsSchema = z.object({
   team_avg_winrate: z.number().min(0).max(1),

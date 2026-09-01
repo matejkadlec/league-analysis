@@ -4,9 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/core/utils";
 
 /**
- * Statuses the badge variants cannot express: `Badge` offers four and the job
- * ladder has seven, so the three that would collapse into the same grey carry
- * an explicit colour. These win over `variant` by setting the same properties.
+ * `Badge` offers four variants and the job ladder has seven; the three that
+ * would collapse into one grey carry a colour that overrides `variant`.
  */
 const STATUS_CLASSES: Partial<Record<JobStatus, string>> = {
   RATE_LIMITED:

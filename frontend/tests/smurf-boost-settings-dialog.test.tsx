@@ -110,9 +110,8 @@ async function renderCard() {
 }
 
 /**
- * Typing into a field first opens the tab holding it, via the component's own
- * `thresholdGroupTitle` map. Every group stays mounted while inactive, so only
- * the interaction needs the tab visible; the querySelector finds it either way.
+ * Opens the field's tab first, via the component's own `thresholdGroupTitle`
+ * map: inactive groups stay mounted, so only the interaction needs it visible.
  */
 async function typeValue(
   user: ReturnType<typeof userEvent.setup>,
@@ -164,9 +163,8 @@ describe("SmurfBoostSettingsDialog", () => {
       const input = document.querySelector(`#smurf-boost-${field.name}`);
       expect(input, `${field.name} has no input`).toBeTruthy();
       expect(screen.getByLabelText(field.label)).toBeTruthy();
-      // Inside the loop, and read off each field's own help text: the range
-      // was asserted for recentWindowSize alone, so suppressing it on the
-      // eleven float thresholds -- whose bounds nobody could guess -- passed.
+      // Per field, off its own help text: asserting recentWindowSize alone let
+      // the eleven float thresholds ship without stating their bounds.
       const help = document.querySelector(`#smurf-boost-${field.name}-help`);
       expect(
         help?.textContent,
@@ -281,9 +279,8 @@ describe("SmurfBoostSettingsDialog", () => {
   });
 
   it("reports a rejected write without leaking the server's own words", async () => {
-    // The real 422 body is a Pydantic report naming a model class and a schema
-    // URL. `normalizeApiError` replaces it before any component sees it, so
-    // what reaches this card is already the shared safe sentence.
+    // The real 422 body is a Pydantic report naming a model class and schema
+    // URL; `normalizeApiError` replaces it before any component sees it.
     updateCardPreference.mockResolvedValue({
       success: false,
       error: {

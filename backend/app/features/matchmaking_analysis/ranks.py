@@ -19,9 +19,8 @@ def _lobby_tier(value: str) -> LobbyTier:
     return cast(LobbyTier, value) if value in _LOBBY_TIERS else UNRANKED
 
 
-# LP-equivalent scale: each tier spans 400 points (4 divisions x 100 LP).
-# MASTER and above have no divisions and uncapped LP, so they continue the
-# scale from the shared floor: DIAMOND I 100 LP == MASTER 0 LP == 2800.
+# LP-equivalent scale: each tier spans 400 points (4 divisions x 100 LP), and
+# divisionless MASTER+ continues it from DIAMOND I 100 LP == MASTER 0 == 2800.
 _TIER_INDEX = {tier.value: index for index, tier in enumerate(Tier)}
 _DIVISION_OFFSET = {
     Division.IV.value: 0,
@@ -82,9 +81,8 @@ def summarize_ranks(
 ) -> RankSummary:
     """Aggregate cached per-player ranks into per-side averages and buckets.
 
-    A player seen as ally in one spine match and enemy in another counts once
-    per side. Unranked players sit in the UNRANKED bucket and are excluded
-    from the averages -- never averaged in as 0.
+    A player seen on both sides counts once per side, and unranked players are
+    bucketed rather than averaged in as 0.
     """
     ally_avg, ally_counts = _side_summary(ally_puuids, tiers, values)
     enemy_avg, enemy_counts = _side_summary(enemy_puuids, tiers, values)

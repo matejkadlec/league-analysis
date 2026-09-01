@@ -3,9 +3,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-// A pass-through <img>: the real next/image needs a loader jsdom does not
-// have, and the card's own contract is only which picture it asks for and
-// how visibly it shows it.
+// A pass-through <img>: the real next/image needs a loader jsdom does not have.
 vi.mock("next/image", () => ({
   default: ({
     src,

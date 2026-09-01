@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The module reads the environment at import time, so each case stubs the
- * variables and imports it fresh — the same pattern `robots.test.ts` uses for
- * the crawl policy.
+ * variables and imports it fresh.
  */
 
 async function loadSiteUrl() {

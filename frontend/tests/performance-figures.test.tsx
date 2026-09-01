@@ -33,9 +33,8 @@ describe("the shared performance figures", () => {
   });
 
   it("colours KDA and win rate by the thresholds they claim", () => {
-    // Each figure's verdict comes from the shared colour helpers, so the
-    // boundaries here are the ones everywhere else relies on: green >= 51%
-    // and >= 3.0 KDA, rose below 49% and under 2.0 KDA.
+    // The shared colour helpers' boundaries, relied on everywhere else: green
+    // at >= 51% and >= 3.0 KDA, rose below 49% and under 2.0 KDA.
     render(<PerformanceFigures stats={stats({ avg_kda: 3, win_rate: 0.51 })} />);
     expect(screen.getByText("3.00").className).toContain("text-green-500");
     expect(screen.getByText("51%").className).toContain("text-green-500");

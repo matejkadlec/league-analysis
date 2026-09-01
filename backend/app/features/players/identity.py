@@ -18,9 +18,8 @@ def first_present[T](*values: T | None, default: T) -> T:
     return default
 
 
-# Per column: the stored value that means "nothing known yet". Riot omits
-# identity fields from older match payloads, so a row written from one must
-# not overwrite a real name with a placeholder.
+# Per column, the value meaning "nothing known yet": Riot omits identity fields
+# from older match payloads, which must not overwrite a real name.
 _UNSET: dict[str, Any] = {
     "game_name": "",
     "tag_line": "",
@@ -35,9 +34,8 @@ def upsert_player_statement(
 ) -> Insert:
     """Build the INSERT ... ON CONFLICT that satisfies the participant FK.
 
-    Precedence -- the participant's own field, else the stored one, else a
-    placeholder -- lives in the conflict clause so concurrent writers cannot
-    race. `is_tracked_by_anyone` is absent: a stale write-back loses a track.
+    Precedence lives in the conflict clause so concurrent writers cannot race.
+    `is_tracked_by_anyone` is absent: a stale write-back would lose a track.
     """
     values: dict[str, Any] = {
         "puuid": participant.puuid,

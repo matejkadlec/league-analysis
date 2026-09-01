@@ -20,9 +20,7 @@ import { Loader2, AlertCircle, Clock } from "lucide-react";
 import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs";
 
 function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
-  // Its own component, and its own second: the countdown is a pure function
-  // of the wall clock read by one <span>, and ticking it in the page re-ran
-  // every job card ten times a second for a number that changes once.
+  // Its own component: ticking this second in the page re-renders every job card.
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(
     JOBS_REFRESH_INTERVAL_MS / 1000,
   );

@@ -1,8 +1,6 @@
 """The pure completion model of a matchmaking analysis run.
 
-Arithmetic over already fetched winrates -- no session, client, or service
-state. Duo partners are identified globally at completion time and excluded
-from ally averages, just like the analyzed player.
+Arithmetic over already fetched winrates -- no session, client, or service state.
 """
 
 from collections.abc import Sequence
@@ -21,11 +19,10 @@ from .ranks import (
 
 
 def trimmed_mean(values: Sequence[float]) -> float:
-    """Mean with 10% trimmed from each end -- a floor'd count, so below ten
-    values nothing is trimmed and this is the plain mean.
+    """Mean with a floor'd 10% trimmed from each end -- under ten values, plain mean.
 
-    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the
-    fixtures duplicated across both test suites must stay identical.
+    Mirrored by `trimmedMean` in the frontend's scope-aggregates.ts; the fixtures
+    duplicated across both test suites must stay identical.
     """
     k = int(len(values) * 0.1)
     kept = sorted(values)[k : len(values) - k]
@@ -36,9 +33,8 @@ def trimmed_mean(values: Sequence[float]) -> float:
 class PlayerPerformance:
     """One participant's form over their trailing ranked matches.
 
-    KDA is the median of their per-game KDAs -- single stomps or zero-death
-    games skew a mean badly at this sample size. The two team-normalized
-    ratios are means over the games that carry them.
+    KDA is a median, not a mean: stomps and zero-death games skew a mean badly at
+    this sample size. The team-normalized ratios are means.
     """
 
     kda: float
@@ -68,9 +64,8 @@ def player_performance_from_rows(
 ) -> PlayerPerformance | None:
     """Fold one player's trailing (kda, kill_participation, damage_share) rows.
 
-    Casts to float at this boundary: the columns are NUMERIC, and a Decimal in
-    the results payload fails JSON serialization at finalize. The None-skip
-    serves pre-column rows; modern writes store absent keys as 0, accepted.
+    Casts to float since the NUMERIC columns fail JSON serialization as Decimal;
+    skips None, which only pre-column rows write (modern writes store 0).
     """
     if not rows:
         return None
@@ -107,9 +102,8 @@ def side_performance(players: list[PlayerPerformance]) -> SidePerformance:
 class SpineMatchStats:
     """One spine match's per-player samples, keyed by puuid per side.
 
-    Aggregation happens at completion time, once the whole spine is known:
-    the duo partners can only be identified globally, and they are excluded
-    from ally averages just like the analyzed player.
+    Aggregation waits for completion time: duo partners can only be identified
+    once the whole spine is known, and they are excluded from ally averages.
     """
 
     match_id: str
@@ -190,9 +184,8 @@ def build_completion_results(
 ) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
 
-    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict. The
-    headline averages keep their full per-side lists, while `per_match` keeps
-    only both-sided matches -- the SoloQ/DuoQ scope split needs comparable pairs.
+    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict.
+    `per_match` keeps only both-sided matches; the scope split needs comparable pairs.
     """
     spine_allies = [(s.match_id, s.ally_puuids) for s in spine_stats]
     excluded = duo_partner_puuids(spine_allies, analyzed_puuid=analyzed_puuid) | {

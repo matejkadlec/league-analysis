@@ -5,9 +5,8 @@ import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
- * The mocked API surface the smurf-and-boost page needs, shared by the
- * behavioural spec and the mobile-layout spec, so a fixture that drifts from
- * the real contract fails in both places at once.
+ * Shared by the behavioural and mobile-layout specs, so a fixture that drifts
+ * from the real contract fails in both places at once.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
@@ -20,9 +19,8 @@ const player = trackedPlayer(NOW, {
 });
 
 /**
- * A second player, never tracked and never the account's current one: the
- * page's local search exists to analyse somebody the sidebar has never heard
- * of, so `/players/context` returns only `player`.
+ * A second player, never tracked and never current: the local search exists
+ * to analyse somebody the sidebar has never heard of.
  */
 export const OTHER_PUUID = "rank-manipulation-other-puuid";
 
@@ -183,8 +181,7 @@ export interface HarnessState {
   /** Every PUUID an explicit game fetch was started for, in order. */
   synced: string[];
   /**
-   * How many times the run started by the last fetch has been polled. The first
-   * three answer `running`, the fourth `completed`: a mock that finished
+   * Polls of the run started by the last fetch. A mock that finished
    * immediately would let a card that never shows the fetch pass.
    */
   syncPolls: number;
@@ -196,15 +193,13 @@ export interface HarnessState {
 }
 
 /**
- * Routes every API call the page makes. Returns the mutable state the spec
- * asserts on, because a route handler runs in the driver and cannot hand a
- * value back through the page.
+ * Returns the mutable state the spec asserts on: a route handler runs in the
+ * driver and cannot hand a value back through the page.
  */
 export async function installSmurfBoostMocks(
   page: Page,
-  // A fresh account has never chosen a player, and `useAnalyzedPlayer` then
-  // resolves to none: no `?puuid=`, and nothing to seed one from. Optional so
-  // the specs that want the ordinary account do not have to say so.
+  // `null` is a fresh account that never chose a player, so `useAnalyzedPlayer`
+  // resolves to none: no `?puuid=` and nothing to seed one from.
   { currentPlayer = player }: { currentPlayer?: typeof player | null } = {},
 ): Promise<HarnessState> {
   const state: HarnessState = {
@@ -238,8 +233,7 @@ export async function installSmurfBoostMocks(
       path.endsWith("/players/context/current")
     ) {
       // A write really moves the account's player, so a spec asserting that
-      // something left it alone is asserting against a mock that could have
-      // shown otherwise.
+      // something left it alone could have seen otherwise.
       if (request.method() === "PUT") {
         const { puuid } = request.postDataJSON() as { puuid: string };
         state.currentPlayer = puuid === OTHER_PUUID ? otherPlayer : player;
@@ -270,9 +264,8 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The suggestion list behind the shared player search. It answers for the
-    // stranger only, so a spec that finds them here has proved the search --
-    // not the tracked list -- put them on screen.
+    // Answers for the stranger only, so a spec that finds them here has proved
+    // the search -- not the tracked list -- put them on screen.
     if (path.endsWith("/players/suggestions")) {
       const query = new URL(request.url()).searchParams.get("q") ?? "";
       await route.fulfill({
@@ -335,9 +328,8 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The explicit per-player game fetch the run button starts. The
-    // `/players/{puuid}` handlers above match on `endsWith`, so a longer sync
-    // path falls through to here regardless of order.
+    // The `/players/{puuid}` handlers above match on `endsWith`, so a longer
+    // sync path falls through to here regardless of order.
     const syncMatch = /\/players\/([^/]+)\/sync(\/active|\/(\d+))?$/.exec(path);
     if (syncMatch) {
       const target = syncMatch[1]!;
@@ -357,9 +349,8 @@ export async function installSmurfBoostMocks(
         state.syncPolls += 1;
         await route.fulfill({
           contentType: "application/json",
-          // Several polls of slack before the run ends. The assertion that no
-          // comparison has started yet is plain and non-retrying, so one poll
-          // of room on a starved shared runner would flake.
+          // Several polls of slack: the "no comparison yet" assertion does not
+          // retry, so one poll of room flakes on a starved runner.
           body: JSON.stringify(run(state.syncPolls > 3 ? "completed" : "running")),
         });
         return;
@@ -374,9 +365,8 @@ export async function installSmurfBoostMocks(
     }
 
     if (path.endsWith("/smurf-boost-detection/analyze")) {
-      // Answers about the player the request named. A handler that always
-      // said `PUUID` would make a run aimed at anybody else look like it
-      // worked while the page silently discarded a mismatched result.
+      // Answers about the player the request named: a fixed puuid would hide
+      // the page silently discarding a mismatched result.
       const target = (request.postDataJSON() as { puuid: string }).puuid;
       state.analyzeCalls += 1;
       state.analyzed.push(target);
@@ -414,8 +404,7 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The stored ranked-solo pool the run card names above its button. Left
-    // unanswered it is one more 404 on the global error toast, sitting beside
+    // Left unanswered this 404s onto the global error toast, sitting beside
     // whatever this suite asserts.
     if (path.includes("/matches/player/") && path.endsWith("/stats")) {
       await route.fulfill({
@@ -437,9 +426,8 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The three remaining `/player-overview` reads the first detection spec loads
-    // on its way here. Each is otherwise a 404 raising its own global error
-    // toast; `/league` is nullable by design, an unranked player being `null`.
+    // Otherwise each 404s onto the global error toast. `/league` is nullable
+    // by design: an unranked player is `null`.
     if (path.endsWith("/league")) {
       await route.fulfill({ contentType: "application/json", body: "null" });
       return;
@@ -470,9 +458,8 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // Polled every 15s by `serviceStatusQueryOptions`. Unanswered it 404s on
-    // that loop, and the global query-error toast it raises then sits beside
-    // whatever this suite is asserting.
+    // Polled every 15s by `serviceStatusQueryOptions`, so unanswered it 404s
+    // onto the global error toast beside whatever this suite asserts.
     if (path.endsWith("/settings/service-status")) {
       await route.fulfill({
         contentType: "application/json",

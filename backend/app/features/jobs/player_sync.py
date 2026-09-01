@@ -29,8 +29,7 @@ class SyncBusyError(Exception):
     """A sync start refused because another update holds the pipeline.
 
     Raised instead of creating a run the job layer would only fail with
-    SYNC_BUSY minutes later. `message` is the client-safe sentence, naming
-    the running player when one is known.
+    SYNC_BUSY minutes later. `message` is the client-safe sentence.
     """
 
     def __init__(self, message: str) -> None:
@@ -41,9 +40,8 @@ class SyncBusyError(Exception):
 async def _busy_message(db: AsyncSession, puuid: str) -> str | None:
     """The refusal sentence when the sync pipeline is held, else None.
 
-    Two holders are visible before a run is created: another player's active
-    `PlayerSyncRun`, and the writers' runtime keys — which the scheduled Match
-    Fetcher claims too. A race past this check is caught by the job layer.
+    Two holders are visible before a run exists: another player's active
+    `PlayerSyncRun`, and the writers' runtime keys. Races are caught downstream.
     """
     other_active = await db.scalar(
         select(PlayerSyncRun)
@@ -132,8 +130,7 @@ def _failure_from_job(job: BaseJob) -> tuple[str, str, str]:
     """Map an internal writer result to a stable client-safe terminal state.
 
     Reads only the writer's cached scalars: the job session is already closed
-    here, so touching the `JobExecution` instance would raise. Only a run the
-    scheduler skipped is busy -- a failed start also has no execution id.
+    here, so touching the `JobExecution` instance would raise.
     """
     if job.skipped_as_already_running:
         return (
@@ -184,9 +181,8 @@ async def _finish_sync(
 ) -> None:
     """Persist one safe lifecycle update from the background orchestrator.
 
-    A terminal row is never reopened: startup recovery or an operator may
-    cancel a run while this orchestrator is mid-flight. The row lock makes the
-    check hold against a cancellation committing between read and write.
+    A terminal row is never reopened: startup recovery or an operator can cancel a run
+    mid-flight, and the row lock holds this check against that race.
     """
     async with db_manager.get_session() as db:
         sync_run = await db.get(PlayerSyncRun, sync_id, with_for_update=True)
@@ -270,9 +266,8 @@ async def _finish_failed_writer(
 async def run_player_sync(sync_id: int) -> None:
     """Run Match Fetcher then Player Updater for one exact PUUID."""
     puuid: str | None = None
-    # Loading and the first status write sit inside the `try` too: the up-front
-    # busy check reads any active run as a held pipeline, so a row left
-    # `pending` by a failure here would block the player until startup recovery.
+    # Loading and the first status write sit inside the `try`: a row left
+    # `pending` reads as a held pipeline until startup recovery clears it.
     try:
         loaded = await _load_player_sync(sync_id)
         if loaded is None:

@@ -31,9 +31,8 @@ def set_auth_cookies(
 ) -> None:
     """Persist tokens as HttpOnly cookies so browser JS cannot read them."""
     secure = _cookie_secure()
-    # Measured once, not twice: `max_age_seconds` truncates against the clock of
-    # the moment it is called, so a second call could leave the hint below the
-    # shorter of the two -- exactly the stranded session this guards against.
+    # Measured once: `max_age_seconds` truncates against the clock at call time,
+    # so a second call could strand the hint below the refresh cookie.
     refresh_max_age = max_age_seconds(refresh_expires_at)
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -54,14 +53,12 @@ def set_auth_cookies(
         path="/",
     )
     # Deliberately readable by JavaScript, unlike the two above: it carries no
-    # secret — only the literal "1" — and answers "is there a session?" without a
-    # round trip, for `proxy.ts` server-side and `AuthProvider` in the browser.
+    # secret and answers "is there a session?" without a round trip.
     response.set_cookie(
         AUTH_STATE_COOKIE_NAME,
         AUTH_STATE_COOKIE_VALUE,
-        # The same lifetime as the refresh token beside it, never restated: a
-        # hint that expires first makes `proxy.ts` report signed out while the
-        # refresh token is still spendable.
+        # Must match the refresh cookie: a hint that expires first makes
+        # `proxy.ts` report signed out while the refresh token is still spendable.
         max_age=refresh_max_age,
         httponly=False,
         secure=secure,
@@ -73,9 +70,8 @@ def set_auth_cookies(
 def clear_auth_cookies(response: Response) -> None:
     """Expire every auth cookie. Called by logout, and by logout only.
 
-    A rejected refresh does NOT come through here: `refresh_access_token`
-    raises straight out, so its 401 carries no Set-Cookie and leaves the jar
-    in place. The browser has to retract the session hint itself.
+    A rejected refresh does NOT come through here: its 401 carries no Set-Cookie,
+    so the browser has to retract the session hint itself.
     """
     secure = _cookie_secure()
     for name in (

@@ -54,14 +54,12 @@ describe("API error presentation", () => {
       { error_code: "at Object.<anonymous> (/app/main.py)" },
     ],
   ])("refuses to carry %s through as an error code", (_label, data) => {
-    // Widening `SAFE_CODE_PATTERN` to `/.*/` kept all 353 tests green. `code` is
-    // the field callers branch on and `reportApiError` logs, so prose arriving in
-    // it is the same leak the message pattern exists to stop.
+    // `code` is the field callers branch on and `reportApiError` logs, so prose
+    // arriving in it is the leak `SAFE_CODE_PATTERN` exists to stop.
     const { code } = normalizeApiError(axiosError(400, data));
 
-    // The invariant is the shape, not one bad string: whatever reaches `code`
-    // is a token this API defines, never text from a server it does not
-    // control.
+    // The invariant is the shape, not one bad string: whatever reaches `code` is
+    // a token this API defines, never text from a server it does not control.
     expect(code).toMatch(/^[A-Z][A-Z0-9_]{1,63}$/);
   });
 
@@ -118,9 +116,8 @@ describe("API error presentation", () => {
   });
 
   it("survives the array `detail` FastAPI returns for a 422", () => {
-    // The only response body where `detail` is neither a string nor the
-    // structured object: a list of per-field validation errors. A stricter
-    // reader could throw out of `normalizeApiError`, which every path calls.
+    // The one body where `detail` is a list rather than a string or the
+    // structured object, and every path calls `normalizeApiError`.
     expect(
       normalizeApiError(
         axiosError(422, {
@@ -189,9 +186,8 @@ describe("API error presentation", () => {
   });
 
   it("reads a connect timeout as a timeout, not as an unknown failure", () => {
-    // Axios reports a read timeout as ECONNABORTED and a connect timeout as
-    // ETIMEDOUT. This error's message says nothing about time, so the branch
-    // is the only thing that can classify it.
+    // Axios reports a connect timeout as ETIMEDOUT, not ECONNABORTED, and its
+    // message says nothing about time, so only the branch can classify it.
     const connectTimeout = normalizeApiError(
       axiosError(undefined, undefined, "ETIMEDOUT"),
     );
@@ -215,9 +211,8 @@ describe("API error presentation", () => {
     ).toBe("Player tracking could not be updated. Please try again later.");
   });
   it("sanitizes the message inside details, not only the top-level one", () => {
-    // `details.detail` is handed to callers whole. Cleaning only the message
-    // the toast shows leaves the same text one property deeper, where the
-    // credential dialog and `reportApiError` both read it.
+    // `details.detail` goes to callers whole, so cleaning only the toast's
+    // message leaves the same text where `reportApiError` reads it.
     const result = normalizeApiError(
       axiosError(409, {
         detail: {
@@ -232,9 +227,8 @@ describe("API error presentation", () => {
   });
 
   it("attaches no structured details when the server sent a plain string", () => {
-    // Parsing an unguarded string through the schema yields a truthy `{}`,
-    // which reads downstream as "structured detail present but empty" rather
-    // than as the legacy string shape it actually is.
+    // Parsing an unguarded string through the schema yields a truthy `{}`, which
+    // downstream reads as "structured detail present but empty".
     const stringDetail = normalizeApiError(
       axiosError(409, { detail: "That name is already taken." }),
     );

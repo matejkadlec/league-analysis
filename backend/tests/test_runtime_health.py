@@ -59,9 +59,8 @@ async def test_readiness_requires_a_database_round_trip(
 ) -> None:
     """The probe must run, not merely be reachable.
 
-    The assertion used to live inside the double's `execute`, which never
-    runs if the endpoint stops calling it -- so a readiness check that only
-    opened a session and reported "ready" passed this test.
+    An assertion inside the double's `execute` never runs if the endpoint stops
+    calling it, so it must be asserted from outside.
     """
     execute = AsyncMock()
 

@@ -46,16 +46,14 @@ def _write_contract_models() -> list[type[BaseModel]]:
 def test_strict_write_models_spell_every_alias_explicitly() -> None:
     """A generated alias is invisible to the type checker, so require a literal.
 
-    With `populate_by_name=False` the alias is the *only* accepted spelling at
-    runtime, but Pyright builds `__init__` from the field names instead, so it
-    rejects the spelling that works. An explicit `Field(alias=...)` suits both.
+    With `populate_by_name=False` the alias is the only accepted spelling, but
+    Pyright builds `__init__` from the field names; an explicit alias suits both.
     """
     models = _write_contract_models()
     assert models, "expected at least one strict write model to guard"
 
-    # Validate this test's own signal first. `info.alias` is populated by the
-    # generator too, so checking it for None guards nothing at all; only
-    # `alias_priority` separates a generated alias (1) from an explicit one (2).
+    # `info.alias` is populated by the generator too; only `alias_priority`
+    # separates a generated alias (1) from an explicit one (2).
     class _Probe(BaseModel):
         model_config = ConfigDict(alias_generator=to_camel, populate_by_name=False)
 

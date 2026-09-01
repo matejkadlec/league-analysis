@@ -1,8 +1,7 @@
 """The one answer to "is this database on this machine and nowhere else?".
 
-Two mutating commands -- `cleanse_local_riot_data.py` and
-`reconcile_admin_account.py` -- gate on this. `mirror_pi_postgres_to_local.py`
-keeps its own copy: it is installed alone, with no repository on `sys.path`.
+The mutating commands gate on this. `mirror_pi_postgres_to_local.py` keeps its
+own copy because it is installed alone, with no repository on `sys.path`.
 """
 
 from __future__ import annotations

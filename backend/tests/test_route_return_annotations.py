@@ -1,8 +1,7 @@
 """Every route says what it returns, in the annotation a type checker reads.
 
-A `response_model=` decorator kwarg is not read by pyright, so a handler could
-return the wrong shape, or fall off the end of an `except` arm and return
-`None`, with FastAPI still serialising it and the OpenAPI document still right.
+A `response_model=` kwarg is not read by pyright, so a handler could return the
+wrong shape, or `None` off an `except` arm, with the OpenAPI document still right.
 """
 
 import ast

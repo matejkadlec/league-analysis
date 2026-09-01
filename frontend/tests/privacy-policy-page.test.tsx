@@ -61,9 +61,8 @@ describe("the privacy policy page", () => {
   });
 
   it("hands the storage detail off to the cookie policy, by link", async () => {
-    // The retention table lives in one place; this page points at it. The
-    // footer's legal notice links there too, so every "Cookie Policy" link
-    // on the page -- the inline one included -- must agree on the target.
+    // The footer's legal notice links to the retention table too, so every
+    // "Cookie Policy" link on the page must agree on the target.
     render(await PrivacyPolicyPage());
 
     expect(

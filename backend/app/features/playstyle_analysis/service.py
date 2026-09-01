@@ -52,9 +52,7 @@ class TagEngine:
                 config,
             )
             if result:
-                # Two evaluators name the champion or role they matched; every
-                # other tag is named by its config, and no evaluator ever set
-                # a sentiment, which is why these used to be `setdefault`.
+                # Sentiment always comes from the config: no evaluator sets one.
                 detected_tags[tag_code] = DetectedTag(
                     threshold_met=result["threshold_met"],
                     description=result["description"],
@@ -139,9 +137,8 @@ class PlaystyleAnalysisService:
         else:
             logger.warning("playstyle_analysis_player_row_missing", puuid=puuid)
 
-        # Marks the player's newest 100 matches analysed. Ordering by match ID
-        # rather than `game_start_timestamp` can mark a boundary match the
-        # analysis never read, and `fully_analyzed` stops a Riot re-fetch.
+        # Ordering by match ID rather than `game_start_timestamp` can mark a
+        # boundary match the analysis never read, and that stops a Riot re-fetch.
         subquery = (
             select(MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
@@ -156,8 +153,7 @@ class PlaystyleAnalysisService:
         await self.db.execute(stmt_update_matches)
 
         # One statement rather than select-then-insert: two concurrent first
-        # analyses would both miss the select and both insert, which the unique
-        # `ix_playstyle_analyses_puuid` rejects outright.
+        # analyses would both insert, which `ix_playstyle_analyses_puuid` rejects.
         insert_analysis = pg_insert(PlaystyleAnalysis).values(
             puuid=puuid,
             tags=tags,

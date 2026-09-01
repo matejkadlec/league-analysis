@@ -112,9 +112,8 @@ describe("sign-in error mapping", () => {
   });
 
   it("tells a locked-out account when it may try again", () => {
-    // Without the branch that names a time, a lockout says "try again later"
-    // and the person guesses between a minute and a day. The assertion pins the
-    // shape, not the instant: the fixture is UTC and the gate is not.
+    // Without a named time a lockout has the person guessing between a minute
+    // and a day. Shape, not instant: the fixture is UTC and the gate is not.
     const message = getLoginErrorMessage(
       createAuthLoginError(
         {
@@ -136,9 +135,8 @@ describe("sign-in error mapping", () => {
   });
 
   it("does not treat a thrown non-Error as an authentication error", () => {
-    // `getLoginRequestError` gates on `instanceof Error`, so a bare object thrown
-    // by the fetch layer would skip the NETWORK_ERROR fallback and stop telling
-    // the visitor to check their connection.
+    // `getLoginRequestError` gates on `instanceof Error`, so a bare thrown
+    // object would skip the NETWORK_ERROR fallback entirely.
     expect(isAuthLoginError("boom")).toBe(false);
     expect(isAuthLoginError({ code: "ACCOUNT_LOCKED" })).toBe(false);
     expect(isAuthLoginError(null)).toBe(false);
@@ -147,9 +145,8 @@ describe("sign-in error mapping", () => {
   });
 
   it("names the two refusals a person can act on themselves", () => {
-    // A rejected CAPTCHA and a rate limit are both recoverable by the person
-    // in front of the form -- solve it again, or wait. Falling through to
-    // "Something went wrong" turns both into a dead end.
+    // Both are recoverable by the person at the form -- solve it again, or
+    // wait -- and "Something went wrong" turns them into a dead end.
     expect(
       getLoginErrorMessage(
         createAuthLoginError({ detail: { code: "CAPTCHA_INVALID" } }, 403),
@@ -160,9 +157,8 @@ describe("sign-in error mapping", () => {
     );
   });
   it("tells a person a 500 is the server's fault, not their password", () => {
-    // 500 is the boundary and the commonest of the range, so `> 500` reads as
-    // covered while failing the exact status most outages produce. The generic
-    // fallback invites them to re-check credentials that were never wrong.
+    // 500 is the boundary, so `> 500` reads as covered while failing the exact
+    // status most outages produce.
     const outage = "Sign-in is temporarily unavailable. Please try again.";
 
     expect(getLoginErrorMessage(createAuthLoginError(null, 500))).toBe(outage);

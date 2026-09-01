@@ -38,9 +38,8 @@ def _set_cookie_headers() -> dict[str, str]:
 def test_tokens_are_httponly_and_the_hint_is_not() -> None:
     """The hint exists to be read by client JS; the tokens must never be.
 
-    Flipping either direction breaks something quietly: HttpOnly on the hint
-    puts back the two-request signed-out probe it was added to remove, and
-    dropping it from a token would expose a credential to any script.
+    Either direction fails quietly: HttpOnly on the hint restores the
+    two-request signed-out probe, and dropping it from a token exposes it to JS.
     """
     cookies = _set_cookie_headers()
 
@@ -55,9 +54,8 @@ def test_the_two_lifetimes_are_measured_once_not_twice(
 ) -> None:
     """The test above only catches this about once in a hundred thousand runs.
 
-    `max_age_seconds` truncates against the clock of the moment it is called,
-    so measuring twice can leave the hint, written second, a second shorter
-    than the refresh token. This clock advances a second per reading.
+    `max_age_seconds` truncates against the clock of the moment it is called, so
+    measuring twice can leave the hint a second shorter than the refresh token.
     """
 
     class _AdvancingClock:
@@ -96,9 +94,8 @@ def test_the_two_lifetimes_are_measured_once_not_twice(
 def test_the_hint_is_written_host_only() -> None:
     """No Domain, because the browser is what has to delete it.
 
-    A refused refresh answers with no Set-Cookie at all, so only
-    `clearAuthStateCookie` in the frontend retracts the hint. Domain is part
-    of a cookie's identity, and a `Domain=` the delete misses strands it.
+    Only the frontend's `clearAuthStateCookie` retracts the hint, and Domain is
+    part of a cookie's identity: a `Domain=` the delete misses strands it.
     """
     cookies = _set_cookie_headers()
 
@@ -108,9 +105,8 @@ def test_the_hint_is_written_host_only() -> None:
 def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
     """The other half of a coupling with no compiler between its ends.
 
-    `proxy.ts` routes on `request.cookies.get(NAME)?.value === VALUE` and
-    `auth-state-cookie.ts` deletes by name at `path=/`, both as literal
-    TypeScript strings; SameSite=Lax is what sends the hint on a navigation.
+    `proxy.ts` and `auth-state-cookie.ts` hardcode the name, value and `path=/`
+    as TypeScript literals; SameSite=Lax is what sends the hint on a navigation.
     """
     cookies = _set_cookie_headers()
     hint = cookies[AUTH_STATE_COOKIE_NAME].lower()
@@ -130,9 +126,8 @@ def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
 def _assert_the_session_was_installed(response: Response) -> None:
     """The three cookies, carrying the right tokens, for the right lengths.
 
-    Names alone are not enough: passing the *old* refresh token leaves the
-    browser holding what the rotation just revoked, and `access_expires_at`
-    on the refresh cookie gives it a 30-minute life against a 30-day row.
+    Names alone are not enough: the *old* refresh token, or `access_expires_at`
+    on the refresh cookie, both write a cookie that reads as correct.
     """
     written = {
         header.split("=", 1)[0]: header
@@ -159,9 +154,8 @@ def _assert_the_session_was_installed(response: Response) -> None:
                 return int(part.split("=", 1)[1])
         raise AssertionError(f"{name} has no Max-Age")
 
-    # Relative, not absolute seconds: the hint has to outlive nothing and
-    # outlast the access token, and it has to match the refresh cookie exactly
-    # -- which is what pairing them to the same expiry is for.
+    # The hint must outlast the access token and match the refresh cookie
+    # exactly; that is what pairing them to one expiry is for.
     assert max_age(AUTH_STATE_COOKIE_NAME) == max_age(REFRESH_TOKEN_COOKIE_NAME)
     assert max_age(REFRESH_TOKEN_COOKIE_NAME) > max_age(ACCESS_TOKEN_COOKIE_NAME)
 
@@ -191,8 +185,7 @@ async def test_a_successful_refresh_installs_the_new_cookies() -> None:
     """Rotation without the Set-Cookie breaks the session, not just one call.
 
     The server revokes the old row and commits the new token either way, so a
-    refresh that forgets to install it leaves the browser holding the token
-    that was just revoked, with an access cookie that never updates.
+    missing Set-Cookie leaves the browser holding what was just revoked.
     """
     now = datetime.now(UTC)
     service = MagicMock(spec=AuthService)
@@ -224,8 +217,7 @@ async def test_a_successful_login_installs_the_cookies() -> None:
     """The same for the first pair: no hint, no session, however valid it is.
 
     `proxy.ts` routes on the hint alone, so a login that issues tokens without
-    writing it bounces the visitor straight back to /sign-in -- signed in on
-    the server, signed out everywhere they can see.
+    writing it bounces the visitor straight back to /sign-in.
     """
     from fastapi.security import OAuth2PasswordRequestForm
 
@@ -266,9 +258,8 @@ def test_secure_tracks_the_environment(
 ) -> None:
     """The one attribute deciding whether the browser stores the cookie at all.
 
-    The suite runs with ENVIRONMENT=test, so `_cookie_secure()` answered False
-    everywhere and both ways of breaking it passed. The settings object is
-    `@cache`d, so `monkeypatch.setenv` is inert -- substitute at the reader.
+    The settings object is `@cache`d, so `monkeypatch.setenv` is inert here --
+    the substitution has to happen at the reader.
     """
     monkeypatch.setattr(
         cookies_module,

@@ -29,15 +29,13 @@ function cacheKey(key: readonly unknown[] | undefined): string | undefined {
 }
 
 /**
- * Build the shared cache handlers exactly the way `Providers` mounts them.
- * An exported factory so the wiring is testable by driving a QueryClient
- * directly instead of rendering the whole provider tree.
+ * Exported so the cache wiring can be tested by driving a QueryClient directly
+ * instead of rendering the whole provider tree.
  */
 export function createProvidersQueryClient(): QueryClient {
   return new QueryClient({
-    // Most `useQuery` call sites read only `data` and `isLoading`, so a failed
-    // fetch renders as a permanently empty surface. Announcing it once here
-    // covers every call site including the ones not written yet.
+    // Most call sites read only `data` and `isLoading`, so a failed fetch would
+    // render as a permanently empty surface; announcing once here covers them all.
     queryCache: new QueryCache({
       onError: (error, query) => {
         reportApiError(normalizeApiError(error), {
@@ -50,9 +48,8 @@ export function createProvidersQueryClient(): QueryClient {
         }
       },
     }),
-    // Mutations keep their user-facing announcement in each call site's own
-    // onError callback, so the global handler reports for developers only
-    // and never double-toasts a failure the viewer already saw.
+    // Mutations announce from their own `onError`, so this handler reports for
+    // developers only and never double-toasts a failure the viewer already saw.
     mutationCache: new MutationCache({
       onError: (error, _variables, _onMutateResult, mutation) => {
         reportApiError(normalizeApiError(error), {
@@ -83,9 +80,8 @@ export function Providers({
     <DDragonVersionProvider version={ddragonVersion}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          {/* Not `fallback={null}`: `PlayerContextProvider` reads
-              `useSearchParams`, which bails to client rendering during a static
-              prerender, so this fallback is what the prerender emits. */}
+          {/* Not `fallback={null}`: `useSearchParams` bails to client rendering
+              during a static prerender, so this fallback is what gets emitted. */}
           <Suspense fallback={<AppSkeleton />}>
             <PlayerContextProvider>
               <AuthGate>{children}</AuthGate>

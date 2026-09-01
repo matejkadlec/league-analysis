@@ -19,9 +19,8 @@ vi.mock("@/lib/core/http/api", async (importOriginal) => ({
   validatedGet,
 }));
 
-// `SelectPlayerCard` and `playerQueryOptions` stay real: the empty branch and
-// the player query are the page's own wiring. `PlayerCard` opens the stats
-// read the RecentPerformanceCard also reads, so it is stubbed.
+// `SelectPlayerCard` and `playerQueryOptions` stay real as the page's own
+// wiring; `PlayerCard` is stubbed because it duplicates a stats read.
 vi.mock("@/features/players", async (importOriginal) => ({
   ...(await importOriginal<Players>()),
   usePlayerContext,

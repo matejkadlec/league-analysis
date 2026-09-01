@@ -57,9 +57,8 @@ export const PlayerMatchParticipantSchema = z.object({
   runes: ParticipantRunesSchema.optional().nullable(),
 });
 
-// The three identity fields live here and not on
-// `PlayerMatchParticipantSchema`: the backend publishes them only on the
-// opponent, so the omit base would claim a shape the player never sends.
+// The identity fields live here, not on the base: the backend publishes them
+// only on the opponent, so the base would claim a shape players never send.
 export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
   team_position: true,
   team_id: true,
@@ -112,18 +111,16 @@ export const MatchWithPlayerDataSchema = MatchSchema.extend({
   team_stats: TeamStatsCompositionSchema.optional().nullable(),
 });
 
-// The four counters every paginated endpoint answers with, mirroring the
-// backend's `PaginatedResponse`. Spelled once so a page cannot mean `size`
-// here and `page_size` there.
+// Mirrors the backend's `PaginatedResponse`, spelled once so a page cannot
+// mean `size` here and `page_size` there.
 export const MatchListWithPlayerDataResponseSchema = z.object({
   matches: z.array(MatchWithPlayerDataSchema),
   total_analyzed: z.number().int().optional().default(0),
   ...paginationFields,
 });
 
-// The win/loss and per-game averages the backend returns for every stats
-// grouping -- overall, per champion, per lane. Spelled once so a new metric
-// cannot land on two of the three.
+// Shared by every stats grouping -- overall, per champion, per lane -- so a
+// new metric cannot land on only two of the three.
 const performanceStatsFields = {
   wins: z.number().int(),
   losses: z.number().int(),

@@ -1,8 +1,7 @@
 """Comment hygiene for Python, mirroring the frontend's oxlint rules.
 
-Ruff has no plugin API and no comment-length rule, so the backend half is this
-script rather than a fork. Every rule states its whole reasoning in its own
-report message. Run from `backend/`: `python scripts/check_comments.py [path]`.
+Ruff has no comment-length rule, so the backend half is a script, not a fork.
+Run from `backend/`: `python scripts/check_comments.py [path]`.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ import sys
 import tokenize
 from pathlib import Path
 
-MAX_PROSE_LINES = 3
+MAX_PROSE_LINES = 2
 DEFAULT_PATHS = ("app", "tests", "scripts")
 
 DEFERRAL = re.compile(
@@ -33,9 +32,8 @@ COMPAT_COMMENT = re.compile(
 )
 COMPAT_NAME = re.compile(r"^(legacy|deprecated)|Legacy|Deprecated")
 
-# A docstring is the documented interface, so its summary line and its
-# structured sections are free. Everything else in it is prose under the same
-# ceiling as a comment -- rationale was found relocated here to dodge that.
+# A docstring's summary line and structured sections are free; everything else
+# in it is prose under the same ceiling as a comment.
 SECTIONS = frozenset(
     (
         "Args:",

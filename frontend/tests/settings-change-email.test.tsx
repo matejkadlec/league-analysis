@@ -79,9 +79,8 @@ describe("changing the address an account is identified by", () => {
   });
 
   it("normalises the address it sends, and keeps the normalised one", async () => {
-    // What the server stores becomes the identity this account signs in with,
-    // so the spacing and case a person happens to type must not survive into
-    // it. The resend path reuses that stored value.
+    // What the server stores becomes the sign-in identity, so typed spacing
+    // and case must not survive into it; resend reuses the stored value.
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "sent", expires_in_minutes: 10 },
@@ -106,9 +105,8 @@ describe("changing the address an account is identified by", () => {
   });
 
   it("puts an already-registered address on the field, not in a toast", async () => {
-    // The dialog stays on the email step with the reason attached to the
-    // input, because that is the field the person has to change. A toast here
-    // would vanish while they are still looking at the form.
+    // The reason belongs on the field the person has to change; a toast would
+    // vanish while they are still looking at the form.
     validatedPost.mockResolvedValue(refusal("EMAIL_ALREADY_REGISTERED"));
     const { result } = renderChangeEmail();
 
@@ -148,9 +146,8 @@ describe("changing the address an account is identified by", () => {
   });
 
   it("re-checks the session once the address has actually changed", async () => {
-    // The account's identity just changed server-side. Without `checkAuth`
-    // every surface keeps rendering the old address until something else
-    // happens to refresh it.
+    // The identity changed server-side; without `checkAuth` every surface
+    // keeps rendering the old address.
     validatedPost.mockResolvedValue({
       success: true,
       data: { message: "sent", expires_in_minutes: 10 },
@@ -180,9 +177,8 @@ describe("changing the address an account is identified by", () => {
   });
 
   it("keeps the dialog shut while the server says the account is locked", async () => {
-    // The lock is the brake on guessing a six-digit code. It has to outlive
-    // the dialog that triggered it, or reopening resets straight back to a
-    // fresh set of attempts.
+    // The lock brakes guessing a six-digit code, so it must outlive the
+    // dialog or reopening resets to a fresh set of attempts.
     const lockedUntil = new Date(Date.now() + 5 * 60_000).toISOString();
     validatedPost.mockResolvedValue(
       refusal("EMAIL_CHANGE_LOCKED", lockedUntil),

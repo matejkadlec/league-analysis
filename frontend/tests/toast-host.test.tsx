@@ -17,9 +17,8 @@ const sonner = vi.hoisted(() => ({
 }));
 
 vi.mock("sonner", async (importOriginal) => {
-  // Spies in front of the real toaster rather than instead of it: the
-  // recorded call shows what the adapter asked for, the rendered toast shows
-  // what a person is left looking at.
+  // Spies in front of the real toaster, not instead of it: the assertions
+  // need both the recorded call and the toast a person is left looking at.
   const actual = await importOriginal<typeof import("sonner")>();
   sonner.toast.mockImplementation(actual.toast);
   sonner.success.mockImplementation(actual.toast.success);

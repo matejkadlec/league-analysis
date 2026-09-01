@@ -249,9 +249,8 @@ describe("Match History controls", () => {
   });
 
   it("reports a failed load inline, and retries when asked", async () => {
-    // This query sets `silenceErrorToast`, so the card below is the only thing
-    // telling the viewer anything went wrong. The network-shaped rejection also
-    // pins the component's own `retry` predicate.
+    // `silenceErrorToast` leaves the inline card as the only failure notice;
+    // the network-shaped error also pins the component's `retry` predicate.
     const user = userEvent.setup();
     const networkFailure = new axios.AxiosError("Network Error");
     validatedGet.mockReset();
@@ -273,9 +272,8 @@ describe("Match History controls", () => {
   });
 
   it("caps what the search box will hold", async () => {
-    // 64 characters. Without the cap every keystroke past it still re-renders
-    // and, after the debounce, becomes a query parameter -- an unbounded
-    // string from the viewer straight into a request URL.
+    // Without the 64-character cap every further keystroke debounces into a
+    // query parameter: an unbounded viewer string straight into a request URL.
     const queryClient = renderHistory();
 
     await screen.findByText("Showing 1 to 25 of 126 matches");

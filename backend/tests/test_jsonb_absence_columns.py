@@ -1,8 +1,7 @@
 """Every nullable JSONB column must spell "no document" as SQL NULL.
 
-`JSON.none_as_null` is a Python-side flag that emits no DDL, so a column
-declared without it stores `'null'::jsonb` for a written `None`: `IS NULL`
-stops matching the row and Python still reads it back as `None`.
+`JSON.none_as_null` emits no DDL, so a column declared without it stores
+`'null'::jsonb` for a written `None` and `IS NULL` stops matching the row.
 """
 
 from typing import Any

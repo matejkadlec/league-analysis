@@ -1,7 +1,6 @@
 /**
- * The two API shapes every spec has to answer: the signed-in user behind
- * `/auth/me`, and a tracked player. Specs override only the fields they
- * depend on, so a deliberate difference stays visible.
+ * The two API shapes every spec has to answer. Specs override only the fields
+ * they depend on, so a deliberate difference stays visible.
  */
 
 const baseUser = (now: string) => ({
@@ -31,9 +30,8 @@ const basePlayer = (now: string) => ({
   game_name: "",
   tag_line: "",
   platform: "eun1",
-  // Required since the DB, the API and zod agreed both are non-null; these are
-  // the defaults `resolve_player_display_fields` writes for a player Riot has
-  // not been asked about yet.
+  // Non-null in the DB, the API and zod; these are the defaults
+  // `resolve_player_display_fields` writes before Riot is asked.
   summoner_level: 0,
   profile_icon_id: 29,
   is_tracked: true,
@@ -49,9 +47,8 @@ const basePlayer = (now: string) => ({
 type Player = ReturnType<typeof basePlayer>;
 
 /**
- * Identity is required and everything else defaulted: a player fixture with
- * no puuid answers requests for a player nobody asked about, which fails as
- * an unexplained empty page rather than as a missing argument.
+ * Identity is required: a fixture with no puuid answers requests for a player
+ * nobody asked about, failing as an empty page, not a missing argument.
  */
 export function trackedPlayer(
   now: string,

@@ -7,9 +7,8 @@ import { ServiceStatusSchema } from "@/lib/core/schemas";
 export const SERVICE_STATUS_QUERY_KEY = ["service-status"] as const;
 
 /**
- * The one credential-health read. Splitting it again gives the header banner
- * and the settings card separate refetch schedules, so they disagree whenever
- * the key's health changes.
+ * The one credential-health read: splitting it gives the header banner and the
+ * settings card separate refetch schedules, so they disagree.
  */
 export function serviceStatusQueryOptions(options?: { enabled?: boolean }) {
   return queryOptions({

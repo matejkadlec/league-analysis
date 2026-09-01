@@ -4,17 +4,15 @@ import { acceptCookieBanner } from "./support/auth";
 import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 
 /**
- * The result carries the widest content in the feature -- a six-column table
- * needs roughly 450px against the 390px viewport this suite emulates. `main`
- * has default `min-width: auto`, so too-wide content stretches the document.
+ * The six-column result table needs ~450px against a 390px viewport, and
+ * `main` defaults to `min-width: auto`, so wide content stretches the document.
  */
 
 const PHONE = { width: 390, height: 844 };
 
 test.describe("smurf and boost detection on a phone", () => {
-  // A viewport alone leaves a desktop user agent, a mouse and no touch, so
-  // these specs could not catch a hover-only affordance on a phone -- and
-  // this app has them (`track-player-button` swaps its label on group-hover).
+  // A viewport alone leaves a desktop user agent and a mouse, so a hover-only
+  // affordance like `track-player-button` would go uncaught.
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   test("never scrolls the page sideways, before or after a comparison", async ({

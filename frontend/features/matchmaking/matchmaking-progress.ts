@@ -1,7 +1,6 @@
 const RIOT_LONG_WINDOW_SECONDS = 120;
-// A warm-cache analysis completes about seven Riot requests per logical player
-// (six match reads plus the league-v4 rank read). Display-only interpolation;
-// every real backend milestone still moves the projection immediately.
+// ~7 Riot requests per player on a warm cache (six match reads plus league-v4).
+// Display-only: every real backend milestone still moves the projection.
 const ESTIMATED_PLAYERS_PER_WINDOW = 100 / 7;
 
 export interface ProgressProjection {
@@ -45,9 +44,8 @@ export interface ThroughputSample {
   progress: number;
 }
 
-// The trailing window the observed pace is measured over. Long enough to
-// smooth poll jitter, short enough that a burst of DB-cached players ages
-// out quickly instead of promising the cold tail will finish just as fast.
+// Long enough to smooth poll jitter, short enough that a burst of DB-cached
+// players ages out instead of promising the cold tail will finish as fast.
 const THROUGHPUT_WINDOW_MS = 60_000;
 const MIN_THROUGHPUT_SPAN_MS = 15_000;
 
@@ -94,9 +92,8 @@ export function estimateMatchmakingMinutesRemaining(
     return null;
   }
 
-  // The recent-window rate is the better predictor when available: cached
-  // players finish near-instantly and rate-limit waits slow everything down,
-  // and both show up in it — without a warm-up burst haunting the whole run.
+  // The recent window is the better predictor: cached players and rate-limit
+  // waits both show up in it, without a warm-up burst haunting the whole run.
   const playersPerSecond =
     observedRate ?? ESTIMATED_PLAYERS_PER_WINDOW / RIOT_LONG_WINDOW_SECONDS;
   return Math.max(1, Math.ceil(remainingPlayers / playersPerSecond / 60));

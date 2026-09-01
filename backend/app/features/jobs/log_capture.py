@@ -12,8 +12,7 @@ from typing import Any
 class BoundedLogCapture:
     """Log capture with bounded memory using deque.
 
-    Automatically drops oldest entries when max capacity is reached. Only
-    events carrying the ``job_execution_id`` contextvar are captured, so
+    Only events carrying the ``job_execution_id`` contextvar are captured, so
     request-scoped traffic cannot evict a long job's early entries.
     """
 

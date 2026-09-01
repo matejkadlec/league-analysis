@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The page is a redirect while Riot production-key review is pending, so the
- * destination is the whole observable behaviour. `redirect` is mocked to
- * throw the way the real one does, so the destination is observable.
+ * The page is only a redirect, so `redirect` is mocked to throw the way the
+ * real one does and make the destination observable.
  */
 
 type CookieStore = {

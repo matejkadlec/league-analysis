@@ -10,18 +10,16 @@ import {
 } from "@/features/auth/join-us-message";
 
 /**
- * The two halves of the rule live in different places on the backend, so they
- * are read from different places here: the maximum is a `max_length` that
- * reaches the OpenAPI document, the minimum a module constant reaching nothing.
+ * The maximum is a `max_length` reaching the OpenAPI document, the minimum a
+ * module constant reaching nothing, so each half is read from its own source.
  */
 const BACKEND_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../backend",
 );
 
-// Where the constant lives, not where the flow lives: it moved from
-// `service.py` to `join_us.py` with the Join Us extraction. The error below is
-// the only thing that says which file to look in.
+// Where the constant lives, not where the flow lives. The error below is the
+// only thing that says which file to look in.
 const MINIMUM_SOURCE = "app/features/auth/join_us/join_us.py";
 
 function backendMinimumBodyLength(): number {
