@@ -50,14 +50,12 @@ class MatchListDTO(RiotDTO):
 class ParticipantDTO(RiotDTO):
     """Match participant information."""
 
-    # Core IDs
     participant_id: int = Field(...)
     puuid: str
     summoner_name: str | None = Field(default=None)
     summoner_level: int = Field(default=0)
     profile_icon: int = Field(default=0)
 
-    # Riot ID fields
     game_name: str | None = Field(default=None, alias="riotIdGameName")
     tag_line: str | None = Field(default=None, alias="riotIdTagline")
 
@@ -66,13 +64,11 @@ class ParticipantDTO(RiotDTO):
     team_id: TeamId = Field(...)
     team_position: str | None = Field(default=None)
 
-    # Champions
     champion_id: int = Field(...)
     champion_name: str = Field(...)
     champion_level: int = Field(..., alias="champLevel")
     champion_transform: int = Field(default=0)
 
-    # KDA & Perf
     win: bool
     kills: int
     deaths: int
@@ -86,7 +82,6 @@ class ParticipantDTO(RiotDTO):
     first_blood_kill: bool = Field(default=False)
     first_tower_kill: bool = Field(default=False)
 
-    # Economy & Vision
     gold_earned: int = Field(default=0)
     gold_spent: int = Field(default=0)
     vision_score: float | None = Field(default=None)
@@ -95,11 +90,9 @@ class ParticipantDTO(RiotDTO):
     wards_placed: int = Field(default=0)
     wards_killed: int = Field(default=0)
 
-    # Farming
     total_minions_killed: int = Field(default=0)
     neutral_minions_killed: int = Field(default=0)
 
-    # Damage
     total_damage_dealt: int = Field(default=0)
     total_damage_dealt_to_champions: int = Field(default=0)
     physical_damage_dealt_to_champions: int = Field(default=0)
@@ -113,13 +106,11 @@ class ParticipantDTO(RiotDTO):
     magic_damage_taken: int = Field(default=0)
     true_damage_taken: int = Field(default=0)
 
-    # Healing & Shielding
     total_self_healing: int = Field(default=0, alias="totalHeal")
     total_healing: int = Field(default=0, alias="totalHealsOnTeammates")
     total_shielding: int = Field(default=0, alias="totalDamageShieldedOnTeammates")
     total_self_mitigated: int = Field(default=0, alias="damageSelfMitigated")
 
-    # Items
     item0: int = Field(default=0)
     item1: int = Field(default=0)
     item2: int = Field(default=0)
@@ -131,7 +122,6 @@ class ParticipantDTO(RiotDTO):
     consumables_purchased: int = Field(default=0)
     role_bound_item: int = Field(default=0)
 
-    # Spells/Objectives/Time
     summoner1_id: int = Field(default=0)
     summoner1_casts: int = Field(default=0)
     summoner2_id: int = Field(default=0)
@@ -144,7 +134,6 @@ class ParticipantDTO(RiotDTO):
     time_spent_dead: int = Field(default=0, alias="totalTimeSpentDead")
     time_played: int = Field(default=0)
 
-    # Flags
     eligible_for_progression: bool = Field(default=True)
     game_ended_in_early_surrender: bool | None = Field(default=None)
     game_ended_in_surrender: bool | None = Field(default=None)
@@ -154,9 +143,6 @@ class ParticipantDTO(RiotDTO):
         """Remake is the negation of eligibleForProgression."""
         return not self.eligible_for_progression
 
-    # Advanced
-
-    # Advanced
     runes: dict[str, Any] = Field(default_factory=dict, alias="perks")
     advanced_stats: dict[str, Any] = Field(default_factory=dict, alias="challenges")
 

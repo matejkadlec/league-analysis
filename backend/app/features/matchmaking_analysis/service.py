@@ -1116,7 +1116,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         if rows:
             return [(r.puuid, r.team_id) for r in rows]
 
-        # Not in DB → fetch from API
         dto = await self._api_fetch_match(match_id, required=True)
         if dto is None:
             return []
@@ -1133,10 +1132,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         )
         win = result.scalar_one_or_none()
         if win is not None:
-            # Found in DB - no API call needed
             return win
 
-        # Fetch from API
         dto = await self._api_fetch_match(match_id)
         if dto is None:
             return None

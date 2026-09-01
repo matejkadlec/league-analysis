@@ -93,9 +93,6 @@ def _create_test_job_instance(
     return test_class(job.id)
 
 
-# === Job Configuration Endpoints ===
-
-
 @router.get("/")
 async def list_job_configurations(
     job_service: JobServiceDep,
@@ -135,9 +132,6 @@ async def update_job_configuration(
         raise HTTPException(status_code=400, detail=str(error)) from error
     except JobIntervalError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-
-
-# === Job Execution Endpoints ===
 
 
 @router.get("/{job_id}/executions")
@@ -190,9 +184,6 @@ async def list_all_executions(
     return executions
 
 
-# === Job Control Endpoints ===
-
-
 @router.post("/{job_id}/trigger")
 async def trigger_job(
     job_id: int,
@@ -230,7 +221,6 @@ async def trigger_job(
             admin_user_id=current_user.id,
         )
 
-    # Check if job is already running (prevent concurrent runs)
     is_running = await job_service.is_job_running(job.job_type)
     if is_running:
         logger.info(
@@ -327,9 +317,6 @@ async def stop_job(
         admin_user_id=current_user.id,
     )
     return state
-
-
-# === Test Run Endpoints ===
 
 
 def _set_scheduled_job_suspended(job_id: int, *, suspended: bool) -> None:
@@ -508,12 +495,10 @@ async def get_job_system_status(
     """
     from .scheduler import get_scheduler
 
-    # Get metrics
     active_jobs = await job_service.get_active_job_count()
     running_executions = await job_service.get_running_execution_count()
     last_execution = await job_service.get_latest_execution()
 
-    # Get actual scheduler status
     scheduler = get_scheduler()
     scheduler_running = scheduler is not None and scheduler.running
 

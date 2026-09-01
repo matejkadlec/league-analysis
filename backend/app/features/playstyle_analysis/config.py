@@ -98,10 +98,7 @@ class TagConfig(TypedDict):
     max_objective_damage_pct: NotRequired[float]
 
 
-# Tag Configuration
-# Each tag has specific parameters used in its formula.
 TAG_CONFIG: dict[str, TagConfig] = {
-    # Match-Based Condition Tags
     "aggresive_laner": {
         "type": "occurrence_percentage",
         "min_first_blood_participation": 1,
@@ -341,7 +338,6 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Averages {value} epic monster steals.",
         "display_name": "Epic Thief",
     },
-    # Comparison / Type Tags
     "warrior": {
         "type": "damage_type",
         "target_damage_type": "physical",
@@ -372,7 +368,6 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Higher winrate on Red Side ({value}%).",
         "display_name": "Prefers Red Side",
     },
-    # Global / Special Tags
     "nolifer": {
         "type": "summoner_level",
         "min_summoner_level": 500,
@@ -415,7 +410,6 @@ TAG_CONFIG: dict[str, TagConfig] = {
         "hover_template": "Surrenders {value}% of games.",
         "display_name": "FF15",
     },
-    # Negation / Complementary Tags
     "resourceless": {
         "max_gold_per_minute": 350,
         "sentiment": "negative",

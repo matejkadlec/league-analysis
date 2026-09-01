@@ -17,7 +17,6 @@ async def get_job_service(
     return JobService(db)
 
 
-# Type aliases for cleaner dependency injection
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]
 
 __all__ = ["JobServiceDep", "get_job_service"]

@@ -17,5 +17,4 @@ async def get_settings_service(
     return SettingsService(db)
 
 
-# Type alias for dependency injection
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]

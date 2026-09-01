@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load environment variables from .env file in project root
 # Get the project root (4 levels up from this file: backend/app/core/config.py -> root)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -25,7 +24,6 @@ RequiredEnvStr = Annotated[str, Field(pattern=r"\S")]
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Database Configuration (loaded from POSTGRES_* env vars in .env)
     postgres_db: RequiredEnvStr
     postgres_user: RequiredEnvStr
     postgres_password: RequiredEnvStr
@@ -37,13 +35,11 @@ class Settings(BaseSettings):
         """Construct async database URL from components."""
         return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
-    # Application Configuration
     debug: bool = Field(default=False)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO"
     )
 
-    # CORS Configuration
     cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
 
     @property
@@ -57,7 +53,6 @@ class Settings(BaseSettings):
     # `validate_jwt_secret` reads it from `info.data`. Defaulting would hide absence.
     environment: Literal["dev", "test", "production"]
 
-    # JWT Authentication Configuration
     jwt_secret_key: str = Field(
         default="dev_secret_key_please_change_in_production",
         description="Secret key for JWT token signing - MUST be changed in production",
@@ -139,7 +134,6 @@ class Settings(BaseSettings):
         # invalid ENVIRONMENT must stay its own error, not a KeyError from here.
         is_production = info.data.get("environment") == "production"
 
-        # Check for default/placeholder secrets
         weak_indicators = ["dev_secret", "please_change", "changeme", "secret_key"]
         is_weak = any(indicator in v.lower() for indicator in weak_indicators)
 
@@ -150,7 +144,6 @@ class Settings(BaseSettings):
                     "Generate a strong secret using: python -c 'import secrets; print(secrets.token_hex(32))' "
                     "and set it via JWT_SECRET_KEY environment variable."
                 )
-            # Warn in development but allow
             import sys
 
             print(
@@ -167,7 +160,6 @@ class Settings(BaseSettings):
                     f"Current length: {len(v)} characters. "
                     f"Generate a strong secret using: python -c 'import secrets; print(secrets.token_hex(32))'"
                 )
-            # Warn in development but allow
             import sys
 
             print(

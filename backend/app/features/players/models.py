@@ -37,7 +37,6 @@ class Player(Base):
         {"schema": "core"},
     )
 
-    # Primary key - PUUID is the unique identifier from Riot API
     # Note: Riot PUUID is a base64-encoded string, not a standard UUID
     puuid: Mapped[str] = mapped_column(
         String(78),  # Riot PUUIDs are 78 characters
@@ -45,7 +44,6 @@ class Player(Base):
         comment="Player's universally unique identifier from Riot API",
     )
 
-    # Player Name & Tag (Game Name + Tag Line)
     game_name: Mapped[str] = mapped_column(
         String(16), nullable=False, comment="Player's game name"
     )
@@ -54,7 +52,6 @@ class Player(Base):
         String(5), nullable=False, comment="Player's tag line"
     )
 
-    # Platform
     platform: Mapped[str] = mapped_column(
         String(4),
         nullable=False,
@@ -62,7 +59,6 @@ class Player(Base):
         comment="Platform, canonical lowercase (e.g. eun1)",
     )
 
-    # Player statistics
     profile_icon_id: Mapped[int] = mapped_column(
         Integer, nullable=False, comment="Profile icon ID"
     )
@@ -71,7 +67,6 @@ class Player(Base):
         Integer, nullable=False, comment="Summoner/Account level"
     )
 
-    # Tracking & Analysis flags
     is_tracked_by_anyone: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -80,7 +75,6 @@ class Player(Base):
         comment="Whether this player is tracked by at least one user for continuous updates",
     )
 
-    # Timestamps
     last_playstyle_analysis: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,

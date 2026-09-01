@@ -66,7 +66,6 @@ class JobConfiguration(Base):
     __tablename__ = "job_configurations"
     __table_args__: Final = {"schema": "jobs"}
 
-    # Primary key
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
@@ -74,7 +73,6 @@ class JobConfiguration(Base):
         comment="Unique identifier for job configuration",
     )
 
-    # Job identification
     job_type: Mapped[JobType] = mapped_column(
         ENUM(JobType, name="job_type_enum", create_type=False, schema="jobs"),
         nullable=False,
@@ -96,14 +94,12 @@ class JobConfiguration(Base):
         comment="Description of what the job does",
     )
 
-    # Scheduling configuration
     schedule: Mapped[str] = mapped_column(
         String(256),
         nullable=False,
         comment="Run interval: '60', 'interval:60' or '60s'",
     )
 
-    # Status and configuration
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -118,7 +114,6 @@ class JobConfiguration(Base):
         comment="Job-specific configuration parameters in JSON format",
     )
 
-    # Timestamps
     created_at: Mapped[datetime] = created_at_column(
         "When this job configuration was created"
     )
@@ -134,7 +129,6 @@ class JobExecution(Base):
     __tablename__ = "job_executions"
     __table_args__: Final = {"schema": "jobs"}
 
-    # Primary key
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
@@ -142,7 +136,6 @@ class JobExecution(Base):
         comment="Unique identifier for job execution",
     )
 
-    # Foreign key to job configuration
     job_config_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("jobs.job_configurations.id", ondelete="CASCADE"),
@@ -152,7 +145,6 @@ class JobExecution(Base):
         comment="Reference to the job configuration",
     )
 
-    # Execution timing
     started_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
@@ -168,7 +160,6 @@ class JobExecution(Base):
         comment="When this job execution completed",
     )
 
-    # Execution status
     status: Mapped[JobStatus] = mapped_column(
         ENUM(JobStatus, name="job_status_enum", create_type=False, schema="jobs"),
         nullable=False,
@@ -177,7 +168,6 @@ class JobExecution(Base):
         comment="Current status of job execution",
     )
 
-    # Execution metrics
     api_requests_made: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -199,28 +189,24 @@ class JobExecution(Base):
         comment="Number of database records updated during this execution",
     )
 
-    # Error handling
     error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Error message if job execution failed",
     )
 
-    # Detailed execution log
     execution_log: Mapped[dict[str, Any] | None] = mapped_column(
         ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Detailed execution log and metrics in JSON format",
     )
 
-    # Detailed logs captured during execution
     detailed_logs: Mapped[dict[str, Any] | None] = mapped_column(
         ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="All logs captured during job execution (INFO, WARNING, ERROR, etc.)",
     )
 
-    # Trigger source
     triggered_by: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
@@ -228,7 +214,6 @@ class JobExecution(Base):
         comment="Who triggered the job execution: 'system' (scheduler) or 'user' (manual trigger)",
     )
 
-    # API key error tracking
     has_api_key_error: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -236,7 +221,6 @@ class JobExecution(Base):
         comment="Whether this execution encountered an API key authentication error",
     )
 
-    # Execution type (regular scheduled/manual run vs test run)
     execution_type: Mapped[ExecutionType] = mapped_column(
         ENUM(
             ExecutionType, name="execution_type_enum", create_type=False, schema="jobs"
@@ -312,7 +296,6 @@ class PlayerSyncRun(Base):
     updated_at: Mapped[datetime] = updated_at_column()
 
 
-# Create composite indexes for common queries
 Index(
     "idx_job_config_type_active",
     JobConfiguration.job_type,

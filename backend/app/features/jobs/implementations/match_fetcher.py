@@ -123,7 +123,6 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         # and a rolled-back session expires every instance it holds.
         puuid = player.puuid
 
-        # Fetch new matches with rate limiting
         def record_match_sync_failure(
             operation: str,
             error: Exception,

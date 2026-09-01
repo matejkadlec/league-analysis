@@ -45,7 +45,6 @@ export function getProfileIconFallbackUrl(
  * Maps internal names (e.g., "MissFortune") to proper display names (e.g., "Miss Fortune").
  */
 const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
-  // Champions with apostrophes
   Kaisa: "Kai'Sa",
   Khazix: "Kha'Zix",
   Chogath: "Cho'Gath",
@@ -54,7 +53,6 @@ const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   RekSai: "Rek'Sai",
   Belveth: "Bel'Veth",
   KSante: "K'Sante",
-  // Champions with spaces
   AurelionSol: "Aurelion Sol",
   DrMundo: "Dr. Mundo",
   JarvanIV: "Jarvan IV",
@@ -121,7 +119,6 @@ export function getSummonerSpellName(spellId: number): string | null {
  * (8439 is still `VeteranAftershock`, 8008 is `LethalTempoTemp`).
  */
 const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
-  // Domination
   8112: {
     name: "Electrocute",
     iconPath: "perk-images/Styles/Domination/Electrocute/Electrocute.png",
@@ -134,7 +131,6 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
     name: "Hail of Blades",
     iconPath: "perk-images/Styles/Domination/HailOfBlades/HailOfBlades.png",
   },
-  // Inspiration
   8351: {
     name: "Glacial Augment",
     iconPath:
@@ -149,7 +145,6 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
     name: "First Strike",
     iconPath: "perk-images/Styles/Inspiration/FirstStrike/FirstStrike.png",
   },
-  // Precision
   8005: {
     name: "Press the Attack",
     iconPath: "perk-images/Styles/Precision/PressTheAttack/PressTheAttack.png",
@@ -166,7 +161,6 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
     name: "Conqueror",
     iconPath: "perk-images/Styles/Precision/Conqueror/Conqueror.png",
   },
-  // Resolve
   8437: {
     name: "Grasp of the Undying",
     iconPath:
@@ -181,7 +175,6 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
     name: "Guardian",
     iconPath: "perk-images/Styles/Resolve/Guardian/Guardian.png",
   },
-  // Sorcery
   8214: {
     name: "Summon Aery",
     iconPath: "perk-images/Styles/Sorcery/SummonAery/SummonAery.png",

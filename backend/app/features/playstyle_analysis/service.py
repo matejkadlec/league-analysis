@@ -82,7 +82,6 @@ class PlaystyleAnalysisService:
         self, puuid: str, force: bool = False
     ) -> PlaystyleAnalysis:
         """Perform playstyle analysis for a player."""
-        # 1. Fetch data
         stmt = (
             select(MatchParticipant)
             .join(Match, MatchParticipant.match_id == Match.match_id)
@@ -95,7 +94,6 @@ class PlaystyleAnalysisService:
 
         if not participants:
             logger.info("playstyle_analysis_no_match_data", puuid=puuid)
-            # Handle no data
             return await self._save_empty_analysis(puuid)
 
         # Fetch Matches for context - eagerly load participants to avoid lazy load issues
@@ -108,12 +106,10 @@ class PlaystyleAnalysisService:
         result_matches = await self.db.execute(stmt_matches)
         matches = list(result_matches.scalars().all())
 
-        # 2. Run Engine
         engine = TagEngine(participants, matches)
         tags = engine.generate_tags()
         stats = engine.generate_summary_stats()
 
-        # 3. Save
         return await self._save_analysis(puuid, tags, stats)
 
     async def _save_analysis(
@@ -125,7 +121,6 @@ class PlaystyleAnalysisService:
         """Save or update analysis record."""
         current_time = datetime.now(UTC)
 
-        # Update Player's last_playstyle_analysis
         stmt_player = select(Player).where(Player.puuid == puuid)
         result_player = await self.db.execute(stmt_player)
         player = result_player.scalar_one_or_none()

@@ -20,12 +20,10 @@ from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
 
-# Fallback PUUID used by test job runs when no tracked players exist
 TEST_PUUID = (
     "PNm-92VrUvdu-cj0KFhqs0_8dNV2g9DsQ2pObEKsJZum-3uISPmVr2xn2eI1ztzq10TJb9M-ZpdbdQ"
 )
 
-# Test loop constants
 _MAX_ITERATIONS = 60  # 1 hour (60 x 1-minute intervals)
 _WAIT_SECONDS = 60  # seconds between API call batches
 
@@ -145,7 +143,6 @@ class TestMatchFetcherJob(_TestRunnerJob):
     async def call_endpoints(
         self, riot_client: RiotAPIClient, target: RunnerTarget
     ) -> None:
-        # 1. Match list
         match_list = await riot_client.get_match_list_by_puuid(
             target.puuid,
             start=0,
@@ -157,15 +154,12 @@ class TestMatchFetcherJob(_TestRunnerJob):
         if match_list.match_ids:
             match_id = match_list.match_ids[0]
 
-        # 2. Match detail (if we have a match)
         if match_id:
             await riot_client.get_match(match_id, region=target.region)
 
-        # 3. Match timeline
         if match_id:
             await riot_client.get_match_timeline(match_id, region=target.region)
 
-        # 4. League entries
         await riot_client.get_league_entries_by_puuid(
             target.puuid, platform=target.platform
         )
@@ -180,8 +174,6 @@ class TestPlayerUpdaterJob(_TestRunnerJob):
     async def call_endpoints(
         self, riot_client: RiotAPIClient, target: RunnerTarget
     ) -> None:
-        # 1. Summoner by puuid
         await riot_client.get_summoner_by_puuid(target.puuid, platform=target.platform)
 
-        # 2. Account by puuid
         await riot_client.get_account_by_puuid(target.puuid, region=target.region)

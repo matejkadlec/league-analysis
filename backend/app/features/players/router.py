@@ -241,9 +241,6 @@ async def read_player_sync(
     return sync_run
 
 
-# === Player Tracking Endpoints ===
-
-
 @router.post("/{puuid}/track")
 # Same ceiling as POST /{puuid}/sync: dedup in create_or_get_player_sync caps
 # concurrency per PUUID, not rate, so untrack/track cycling could burn quota.
@@ -352,9 +349,6 @@ async def get_tracked_players(
         List of tracked players with their current data
     """
     return await player_service.get_tracked_players(current_user.id)
-
-
-# === Player League Endpoints ===
 
 
 @router.get("/{puuid}/league", response_model=PlayerLeagueResponse | None)

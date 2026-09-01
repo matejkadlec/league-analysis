@@ -265,7 +265,6 @@ class RiotAPIClient:
         """Log the header evidence, then raise the 429 as a retryable error."""
         retry_after = self._parse_retry_after(headers)
 
-        # Log the detailed rate limit headers for debugging
         app_limit = headers.get("x-app-rate-limit", "unknown")
         app_count = headers.get("x-app-rate-limit-count", "unknown")
         method_limit = headers.get("x-method-rate-limit", "unknown")
@@ -433,7 +432,6 @@ class RiotAPIClient:
         if self.session is None:
             raise RiotAPIError("Session not initialized")
 
-        # Rate limiting
         await self.rate_limiter.wait_if_needed(url, method)
 
         max_attempts = 4 if retry_on_failure else 1
@@ -506,7 +504,6 @@ class RiotAPIClient:
             )
         return response
 
-    # Account endpoints
     async def get_account_by_riot_id(
         self, game_name: str, tag_line: str, region: Region | None = None
     ) -> AccountDTO:
@@ -535,8 +532,6 @@ class RiotAPIClient:
         response = await self._make_request(url)
         return AccountDTO(**self._require_object(response, "account"))
 
-    # Summoner endpoints
-
     async def get_summoner_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> SummonerDTO:
@@ -551,7 +546,6 @@ class RiotAPIClient:
         response = await self._make_request(url)
         return SummonerDTO(**self._require_object(response, "summoner"))
 
-    # Match endpoints
     async def get_match_list_by_puuid(
         self,
         puuid: str,
@@ -587,7 +581,6 @@ class RiotAPIClient:
         )
         response_data: dict[str, Any] | list[str] = await self._make_request(url)
 
-        # Extract match IDs from response
         match_ids: list[str]
         if isinstance(response_data, list):
             match_ids = response_data
@@ -624,7 +617,6 @@ class RiotAPIClient:
             self._require_object(response, "match timeline")
         )
 
-    # League endpoints
     async def get_league_entries_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> list[LeagueEntryDTO]:
@@ -680,8 +672,6 @@ class RiotAPIClient:
                     tier=entry.get("tier"),
                 )
         return parsed
-
-    # Utility methods
 
     @staticmethod
     def _normalize_queue_type(

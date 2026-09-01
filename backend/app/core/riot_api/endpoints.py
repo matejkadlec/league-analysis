@@ -41,7 +41,6 @@ class RiotAPIEndpoints:
         platform = platform or self.platform
         return f"https://{enum_str(platform)}.api.riotgames.com"
 
-    # Account endpoints (Regional)
     def account_by_riot_id(
         self, game_name: str, tag_line: str, region: Region | None = None
     ) -> str:
@@ -62,7 +61,6 @@ class RiotAPIEndpoints:
         platform_url = self.get_platform_url(platform)
         return platform_url + SUMMONER_BY_PUUID.format(puuid=quote(puuid, safe=""))
 
-    # Match endpoints (Regional)
     def match_list_by_puuid(
         self,
         puuid: str,
@@ -101,7 +99,6 @@ class RiotAPIEndpoints:
         base_url = self.get_base_url(region)
         return base_url + MATCH_TIMELINE_BY_ID.format(matchId=quote(match_id, safe=""))
 
-    # League endpoints (Platform)
     def league_entries_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> str:

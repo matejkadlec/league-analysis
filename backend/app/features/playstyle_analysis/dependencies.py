@@ -17,7 +17,6 @@ async def get_playstyle_analysis_service(
     return PlaystyleAnalysisService(db)
 
 
-# Type alias for cleaner dependency injection
 PlaystyleAnalysisServiceDep = Annotated[
     PlaystyleAnalysisService, Depends(get_playstyle_analysis_service)
 ]

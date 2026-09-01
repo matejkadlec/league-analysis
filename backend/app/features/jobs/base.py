@@ -269,7 +269,6 @@ class BaseJob(ABC):
             }
         )
         self.execution_log: dict[str, Any] = {}
-        # Track safe, structured diagnostics for errors encountered during execution.
         self._errors_encountered: list[dict[str, Any]] = []
         self._has_api_key_error: bool = False
         self._has_puuid_binding_error: bool = False
@@ -277,7 +276,6 @@ class BaseJob(ABC):
         # A skipped-as-already-running run creates no execution row, and must stay
         # distinguishable from a start failure, which also leaves no execution id.
         self.skipped_as_already_running: bool = False
-        # Track API call records for detailed logging
         self._api_call_records: list[APICallRecord] = []
 
     def _track_api_request(self, metric_name: str, count: int) -> None:
@@ -390,7 +388,6 @@ class BaseJob(ABC):
 
         `status`, when given, overrides the success-based status.
         """
-        # Exit early if job execution was never started
         if self.job_execution is None:
             logger.warning(
                 "Cannot record completion, job execution not started",
@@ -720,7 +717,6 @@ class BaseJob(ABC):
             runtime_key=self.runtime_key,
         )
 
-        # Mark execution as PAUSED in the database
         await self._set_execution_status(db, JobStatus.PAUSED)
 
         while True:
@@ -738,7 +734,6 @@ class BaseJob(ABC):
                     "Job resumed",
                     job_config_id=self.job_config_id,
                 )
-                # Restore execution to RUNNING status
                 await self._set_execution_status(db, JobStatus.RUNNING)
                 return
 
@@ -955,8 +950,6 @@ class BaseJob(ABC):
         """Add an entry to the execution log."""
         self.execution_log[key] = value
 
-    # Private helper methods
-
     def _log_completion_summary(self, success: bool, duration: float) -> None:
         """Log completion details to structured logger."""
         if self.job_config is None or self.job_execution is None:
@@ -1020,7 +1013,6 @@ class BaseJob(ABC):
                 error_type=type(execute_error).__name__,
             )
 
-        # Retry once after rollback
         try:
             await rollback_quietly(db)
             await db.execute(stmt)

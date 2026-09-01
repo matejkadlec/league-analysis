@@ -80,7 +80,6 @@ class PlaystyleAnalysis(Base):
     __tablename__ = "playstyle_analyses"
     __table_args__: Final = {"schema": "core"}
 
-    # Primary key
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
@@ -88,7 +87,6 @@ class PlaystyleAnalysis(Base):
         comment="Auto-incrementing primary key",
     )
 
-    # Foreign key
     puuid: Mapped[str] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="CASCADE"),
@@ -98,7 +96,6 @@ class PlaystyleAnalysis(Base):
         comment="Reference to the player being analyzed (Riot PUUID)",
     )
 
-    # Status
     status: Mapped[AnalysisStatus] = mapped_column(
         Enum(
             AnalysisStatus, schema="core", name="analysis_status_enum", create_type=True
@@ -109,7 +106,6 @@ class PlaystyleAnalysis(Base):
         comment="Current status of the analysis",
     )
 
-    # Analysis Results
     tags: Mapped[dict[str, DetectedTag]] = mapped_column(
         JSONB,
         nullable=False,
@@ -124,9 +120,6 @@ class PlaystyleAnalysis(Base):
         comment="Summary statistics, NULL when the player had no matches",
     )
 
-    # Timestamps
     created_at: Mapped[datetime] = created_at_column("Analysis creation time")
 
     updated_at: Mapped[datetime] = updated_at_column("Last update time")
-
-    # Relationship to Player

@@ -23,10 +23,8 @@ class User(Base):
     __tablename__ = "users"
     __table_args__: Final = {"schema": "auth"}
 
-    # Primary key
     id: Mapped[int] = id_column()
 
-    # Authentication fields
     email: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -41,14 +39,12 @@ class User(Base):
         comment="Hashed password using Argon2id",
     )
 
-    # Profile information
     display_name: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
         comment="Display name shown in UI",
     )
 
-    # Account status flags
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -66,7 +62,6 @@ class User(Base):
         comment="Whether the user has admin privileges",
     )
 
-    # Email verification
     email_verified: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -80,7 +75,6 @@ class User(Base):
         comment="When the email was verified",
     )
 
-    # Activity tracking
     last_login: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
@@ -107,7 +101,6 @@ class User(Base):
         comment="Account lock expiration timestamp after too many failed logins",
     )
 
-    # Timestamps
     created_at: Mapped[datetime] = created_at_column(
         "When this user account was created"
     )
@@ -117,7 +110,6 @@ class User(Base):
     )
 
 
-# Create composite indexes for common queries
 Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
 Index("idx_users_email_is_active", User.email, User.is_active)
 # Only `created_at` needs this; `last_login` and `locked_until` carry

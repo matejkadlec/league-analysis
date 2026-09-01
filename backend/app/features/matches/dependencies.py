@@ -23,5 +23,4 @@ def get_match_service(db: Annotated[AsyncSession, Depends(get_db)]) -> MatchServ
     return MatchService(db)
 
 
-# Type alias for dependency injection
 MatchServiceDep = Annotated[MatchService, Depends(get_match_service)]

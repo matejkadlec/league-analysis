@@ -21,7 +21,6 @@ MINIMUM_RECENT_GAMES: Final[int] = 10
 MINIMUM_BASELINE_GAMES: Final[int] = 15
 MINIMUM_SHAPE_GAMES: Final[int] = 12
 
-# Composite construction.
 EPSILON: Final[float] = 1e-9
 Z_CLAMP: Final[float] = 3.0
 SIGMA_RELATIVE_FLOOR: Final[float] = 0.05
@@ -73,7 +72,6 @@ EVIDENCE_GROUPS: Final[dict[str, str]] = {
     "B3": "shape",
 }
 
-# Band thresholds.
 NOTABLE_SCORE: Final[float] = 0.40
 NOTABLE_EVIDENCE: Final[int] = 2
 STRONG_SCORE: Final[float] = 0.65
@@ -87,7 +85,6 @@ BAND_WEAK: Final = "weak_indicators"
 BAND_NOTABLE: Final = "notable_indicators"
 BAND_STRONG: Final = "strong_indicators"
 
-# Confidence.
 PATCH_DISJOINT_FACTOR: Final[float] = 0.85
 LEGACY_TIMESTAMP_FACTOR: Final[float] = 0.90
 RANK_SPAN_BONUS: Final[float] = 0.05

@@ -166,9 +166,6 @@ def _store_matchmaking(
     return created_at
 
 
-# --- Rank Manipulation ---
-
-
 async def test_the_newest_run_read_back_is_the_callers_own(session: Session) -> None:
     """The defect, stated as a test.
 
@@ -238,9 +235,6 @@ async def test_expiring_abandoned_runs_leaves_another_account_running(
     survived = session.get(SmurfBoostAnalysis, (PUUID, stale))
     assert survived is not None
     assert survived.status == "in_progress"
-
-
-# --- Matchmaking Analysis ---
 
 
 async def test_another_accounts_running_analysis_cannot_be_cancelled(

@@ -57,7 +57,6 @@ from .tokens.token_service import TokenLifecycleMixin
 from .users.models import User
 from .users.passwords import DUMMY_PASSWORD_HASH, hash_password, verify_password
 
-# OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
     auto_error=False,
@@ -303,12 +302,10 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
         Raises:
             EmailAlreadyRegisteredError: If the email already has an account.
         """
-        # Check if user already exists
         existing_user = await self.get_user_by_email_case_insensitive(user_create.email)
         if existing_user:
             raise EmailAlreadyRegisteredError
 
-        # Create new user
         hashed_password = await hash_password(user_create.password)
         user = User(
             email=user_create.email,

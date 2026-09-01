@@ -168,7 +168,6 @@ class MatchTimeline(Base):
         nullable=False,
     )
 
-    # Participant identity and match-level timeline shape.
     participant_id: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(Integer, nullable=False)
 

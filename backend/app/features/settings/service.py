@@ -58,7 +58,6 @@ class SettingsService:
             if not setting:
                 return None
 
-            # Masking
             val = setting.key_value
             masked = f"{val[:6]}...{val[-4:]}" if len(val) > 10 else "***"
 
@@ -110,7 +109,6 @@ class SettingsService:
         if key != "riot_api_key":
             raise ValueError(f"Setting '{key}' not supported")
 
-        # Validate the new value before saving
         validation = await self.validate_riot_api_key(update.value)
         if not validation.valid:
             logger.warning(
@@ -233,17 +231,14 @@ class SettingsService:
                     details="Successfully validated with Riot API (test account not found, but authentication succeeded)",
                 )
             else:
-                # Re-raise for other status codes
                 raise
 
     async def validate_riot_api_key(self, api_key: str) -> SettingValidationResponse:
         """Validate a Riot API key by making a test API call."""
-        # Check format first
         format_error = self._check_api_key_format(api_key)
         if format_error:
             return format_error
 
-        # Test the API key with a simple request
         try:
             client = RiotAPIClient(
                 api_key=api_key, region=Region.EUROPE, platform=Platform.EUN1
@@ -281,8 +276,6 @@ class SettingsService:
                 else None
             ),
         )
-
-    # ===== CARD PREFERENCE METHODS =====
 
     async def get_card_preferences(self, user_id: int) -> list[CardPreferenceResponse]:
         """Return every approved card's effective v1 settings for one viewer."""
@@ -424,8 +417,6 @@ class SettingsService:
             settings=serialize_card_preference_settings(settings),
             is_default=True,
         )
-
-    # ===== USER SETTINGS METHODS =====
 
     async def get_user_cookie_consent(self, user_id: int) -> UserCookieConsent | None:
         """Get authenticated user's stored cookie-consent record."""

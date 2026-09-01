@@ -34,7 +34,6 @@ class DatabaseManager:
             pool_pre_ping=True,
         )
 
-        # Create async session factory
         self.async_session_factory = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
@@ -65,11 +64,9 @@ class DatabaseManager:
         await self.engine.dispose()
 
 
-# Global database manager instance
 db_manager = DatabaseManager()
 
 
-# Dependency for FastAPI routes
 async def get_db() -> AsyncGenerator[AsyncSession]:
     """Fastapi dependency for getting a database session."""
     async with db_manager.get_session() as session:

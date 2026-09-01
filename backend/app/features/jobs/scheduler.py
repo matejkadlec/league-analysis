@@ -74,7 +74,6 @@ class SchedulerLike(Protocol):
     def resume_job(self, job_id: str) -> object: ...
 
 
-# Global scheduler instance
 _scheduler: SchedulerLike | None = None
 _job_registry: dict[JobType, type[BaseJob]] | None = None
 _test_job_registry: (
@@ -247,7 +246,6 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
     try:
         from sqlalchemy import select, update
 
-        # Find ALL running or paused jobs (none should exist during startup)
         stmt = select(JobExecution).where(
             JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED])
         )
@@ -261,7 +259,6 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
                 job_ids=[job.id for job in stale_jobs],
             )
 
-            # Update them to cancelled status — they were interrupted by shutdown
             update_stmt = (
                 update(JobExecution)
                 .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
@@ -300,19 +297,16 @@ def _build_scheduler(settings: Settings) -> SchedulerLike:
     # APScheduler's job store is synchronous psycopg2, not async asyncpg.
     jobstore_url = f"postgresql+psycopg2://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 
-    # Configure job stores (APScheduler stores job state in jobs.apscheduler_jobs)
     jobstores = {
         "default": SQLAlchemyJobStore(
             url=jobstore_url, tablename="apscheduler_jobs", tableschema="jobs"
         ),
     }
 
-    # Configure executors (how jobs are executed)
     executors = {
-        "default": AsyncIOExecutor(),  # Async executor for our async jobs
+        "default": AsyncIOExecutor(),
     }
 
-    # Configure job defaults
     job_defaults = {
         "coalesce": True,  # Combine multiple missed runs into one
         "max_instances": 1,  # Only one instance of each job at a time
@@ -359,7 +353,6 @@ async def start_scheduler() -> SchedulerLike:
         _scheduler.start(paused=True)
         _scheduler.remove_all_jobs()
 
-        # Load and schedule job configurations from database
         await _load_and_schedule_jobs()
 
         # Queue each overdue configuration once. These are scheduler-owned

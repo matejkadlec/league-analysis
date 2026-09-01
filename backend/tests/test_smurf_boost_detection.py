@@ -271,9 +271,6 @@ def test_windows_too_small_to_have_spread_report_zero_or_none() -> None:
     assert hedges_g([1.0], [2.0]) is None
 
 
-# === Composite construction ===
-
-
 def test_composite_is_standardized_against_the_baseline_window() -> None:
     """`sd(C_B)` is exactly 1, which is what the thresholds are expressed in."""
     from app.features.smurf_boost_detection.composite import standardized_series
@@ -304,9 +301,6 @@ def test_a_role_seen_only_in_the_recent_window_still_has_a_baseline() -> None:
     result = analyze(_request(recent, baseline))
 
     assert _family(result, FAMILY_A).band != BAND_NOT_ENOUGH_DATA
-
-
-# === Sample floor and the first-class insufficient-data outcome ===
 
 
 def test_below_floor_reports_not_enough_data_for_both_families() -> None:
@@ -341,9 +335,6 @@ def test_flat_baseline_triggers_nothing_under_every_preset() -> None:
         for family in result.families:
             assert family.band == BAND_NONE, f"{name} moved {family.family}"
             assert not any(signal.triggered for signal in family.signals)
-
-
-# === Family A ===
 
 
 def test_step_change_triggers_a1() -> None:
@@ -485,9 +476,6 @@ def test_unknown_account_level_makes_a4_unavailable() -> None:
     assert "summoner_level_unknown" in a4.notes
 
 
-# === Family B ===
-
-
 def test_win_rate_surge_without_performance_triggers_b1() -> None:
     """A win-rate jump that per-game performance does not explain is B1."""
     baseline = _window(60, wins=24)
@@ -601,9 +589,6 @@ def test_unsustained_reversal_does_not_trigger_b4() -> None:
     assert not b4.triggered
 
 
-# === Degenerate baseline ===
-
-
 def test_degenerate_baseline_makes_composite_signals_unavailable() -> None:
     """With no baseline spread the composite is undefined, never divided by."""
     baseline = _window(60, levels=[0.0] * 60, wins=30)
@@ -621,9 +606,6 @@ def test_degenerate_baseline_makes_composite_signals_unavailable() -> None:
 
     assert _signal(result, FAMILY_A, "A2").available
     assert _signal(result, FAMILY_B, "B4").available
-
-
-# === Bands and the distinct-evidence guard ===
 
 
 def test_one_evidence_group_is_capped_at_weak_indicators() -> None:
@@ -673,9 +655,6 @@ def test_notable_requires_two_evidence_groups() -> None:
     family = _family(result, FAMILY_A)
     assert family.distinct_evidence == 2
     assert family.band == BAND_NOTABLE
-
-
-# === Confidence ===
 
 
 def test_disjoint_patches_reduce_confidence() -> None:
@@ -734,9 +713,6 @@ def test_partial_window_coverage_lowers_confidence() -> None:
     assert result.baseline_games == 30
     assert result.confidence == pytest.approx(0.5, abs=1e-6)
     assert result.confidence_band == "medium"
-
-
-# === Model invariants ===
 
 
 def test_every_bounded_range_stays_below_its_saturation() -> None:
@@ -808,9 +784,6 @@ def test_the_disclaimer_never_reads_as_an_accusation() -> None:
     assert "Do not use it to accuse anyone." in DISCLAIMER
 
 
-# === Catalog registration ===
-
-
 def test_the_detection_card_is_in_the_approved_catalog() -> None:
     """The engine reads thresholds through the existing viewer-scoped catalog.
 
@@ -874,9 +847,6 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
         ValueError, match="a3MinimumNovelGames must not exceed recentWindowSize"
     ):
         validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
-
-
-# === Service orchestration, driven directly with a stub session ===
 
 
 def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:

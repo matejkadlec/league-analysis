@@ -307,7 +307,6 @@ class MatchService:
 
         A `limit` of None analyzes every stored match, not a page of them.
         """
-        # If limit is None, get all matches (use a high count)
         fetch_limit = limit if limit is not None else 10000
         matches = await self.get_player_matches(
             puuid,
@@ -448,8 +447,6 @@ class MatchService:
 
         total, total_analyzed = totals.one()
         return list(page.scalars().all()), total, total_analyzed
-
-    # === Helper Methods for Jobs ===
 
     async def _reprocess_match(
         self,

@@ -96,19 +96,16 @@ def build_player_search_query(
         return select(Player).where(
             *platform_filter,
             or_(
-                # Exact match
                 and_(
                     Player.game_name.ilike(game_name),
                     Player.tag_line.ilike(tag_line),
                 ),
-                # Partial matches
                 Player.game_name.ilike(f"%{game_name}%"),
                 Player.tag_line.ilike(f"%{tag_line}%"),
             ),
         )
 
     if search_type == "tag" and tag_line:
-        # Search tags only
         return select(Player).where(
             *platform_filter,
             Player.tag_line.ilike(f"%{tag_line}%"),
@@ -135,7 +132,6 @@ def score_player_match(
     Returns:
         Score where 1000.0 = exact match, 0.0-1.0 = fuzzy match quality
     """
-    # Exact match = highest priority
     if (
         search_type == "full_id"
         and game_name
@@ -146,7 +142,6 @@ def score_player_match(
         return 1000.0
 
     distance = _closest_field_distance(player, search_type, query_lower, tag_line)
-    # Convert to score: 1 / (1 + distance)
     return 1.0 / (1.0 + distance) if distance is not None else 0.0
 
 

@@ -72,8 +72,6 @@ class JobService:
 
         return response
 
-    # === Job Configuration CRUD ===
-
     async def get_job_configuration(
         self, job_id: int
     ) -> JobConfigurationResponse | None:
@@ -190,8 +188,6 @@ class JobService:
         )
         return self._to_job_response(job)
 
-    # === Job Execution Operations ===
-
     # Generic in the select type because the row query and its count query have
     # different ones; the caller gets back exactly what it passed in.
     def _apply_execution_filters[SelectT: Select[Any]](
@@ -230,13 +226,11 @@ class JobService:
         Returns:
             Paginated list of job executions.
         """
-        # Build base query
         query = select(JobExecution).order_by(desc(JobExecution.started_at))
         query = self._apply_execution_filters(
             query, job_config_id, status, execution_type
         )
 
-        # Get total count
         count_query = select(func.count()).select_from(JobExecution)
         count_query = self._apply_execution_filters(
             count_query, job_config_id, status, execution_type
@@ -245,11 +239,9 @@ class JobService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # Apply pagination
         offset = (page - 1) * size
         query = query.offset(offset).limit(size)
 
-        # Execute query
         result = await self.db.execute(query)
         executions = result.scalars().all()
 
@@ -287,8 +279,6 @@ class JobService:
         if execution:
             return JobExecutionResponse.model_validate(execution)
         return None
-
-    # === Job Status and Metrics ===
 
     async def get_active_job_count(self) -> int:
         """Get count of active job configurations.

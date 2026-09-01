@@ -110,9 +110,6 @@ async def test_riot_api_key(
     return test_result
 
 
-# ===== CARD PREFERENCE ENDPOINTS =====
-
-
 @router.get(
     "/card-preferences",
 )

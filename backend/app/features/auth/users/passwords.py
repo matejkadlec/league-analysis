@@ -25,7 +25,6 @@ class PasswordHasher(Protocol):
         ...
 
 
-# Password hashing context using Argon2id
 pwd_context: PasswordHasher = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # Pre-computed Argon2 hash of "dummy_password_for_timing_protection"

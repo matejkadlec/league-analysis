@@ -393,9 +393,6 @@ class ServiceStatusResponse(BaseModel):
     )
 
 
-# ===== USER SETTINGS SCHEMAS =====
-
-
 class CookieConsentLevel(str, PyEnum):
     """Cookie-consent levels exposed in settings API."""
 

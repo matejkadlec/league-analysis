@@ -48,7 +48,6 @@ class Match(Base):
         {"schema": "core"},
     )
 
-    # Primary key - match ID from Riot API
     match_id: Mapped[str] = mapped_column(
         # Same width as the two tables that reference it.
         String(20),
@@ -56,14 +55,12 @@ class Match(Base):
         comment="Unique match identifier from Riot API",
     )
 
-    # Platform and routing information
     platform: Mapped[str] = mapped_column(
         String(4),
         nullable=False,
         comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
     )
 
-    # Game information
     game_creation_timestamp: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
@@ -111,7 +108,6 @@ class Match(Base):
         Integer, nullable=False, comment="Map ID (e.g., 11=Summoner's Rift)"
     )
 
-    # Game mode information
     game_mode: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -126,7 +122,6 @@ class Match(Base):
         comment="Game type (e.g., 'MATCHED_GAME')",
     )
 
-    # Match result
     early_surrender: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -145,7 +140,6 @@ class Match(Base):
         comment="End of game result",
     )
 
-    # Timestamps
     created_at: Mapped[datetime] = created_at_column(
         "When this match record was created in our database"
     )
@@ -154,7 +148,6 @@ class Match(Base):
         "When this match record was last updated"
     )
 
-    # Processing flags
     fully_analyzed: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -175,7 +168,6 @@ Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
 
 Index("idx_matches_version_timestamp", Match.game_version, Match.game_start_timestamp)
 
-# Additional performance indexes for common query patterns
 Index("idx_matches_timestamp_queue", Match.game_start_timestamp, Match.queue_id)
 
 Index(

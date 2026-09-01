@@ -23,7 +23,6 @@ async def get_matchmaking_service(
     return MatchmakingAnalysisService(db, None, current_user.id)
 
 
-# Type alias for cleaner dependency injection
 MatchmakingServiceDep = Annotated[
     MatchmakingAnalysisService, Depends(get_matchmaking_service)
 ]

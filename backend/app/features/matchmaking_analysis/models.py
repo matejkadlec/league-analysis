@@ -86,7 +86,6 @@ class MatchmakingAnalysis(Base):
         index=True,
     )
 
-    # Composite primary key
     puuid: Mapped[str] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="CASCADE"),
@@ -105,14 +104,12 @@ class MatchmakingAnalysis(Base):
         comment="Run parameters as JSON: {match_count, end_date}",
     )
 
-    # Analysis results - stored as JSON for flexibility
     results: Mapped[MatchmakingAnalysisResultsJSON | None] = mapped_column(
         ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Analysis results as JSON (team/enemy winrates)",
     )
 
-    # Timestamps
     started_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
@@ -145,7 +142,6 @@ class MatchmakingAnalysis(Base):
         comment="Reviewed user-safe terminal failure message",
     )
 
-    # Progress tracking - which PUUIDs have been analyzed
     puuid_progress: Mapped[dict[str, bool] | None] = mapped_column(
         ABSENT_AS_NULL_JSONB,
         nullable=True,
@@ -153,14 +149,12 @@ class MatchmakingAnalysis(Base):
         comment="Tracks analyzed PUUIDs: {puuid: true/false}",
     )
 
-    # Number of API requests saved due to cached match data
     requests_saved: Mapped[int] = mapped_column(
         nullable=False,
         default=0,
         comment="Count of API requests saved from cached matches",
     )
 
-    # Rate limit wait tracking - timestamp when rate limit resets (NULL = not waiting)
     rate_limit_reset_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,

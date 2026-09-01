@@ -19,7 +19,6 @@ class UserSettings(Base):
     __tablename__ = "user_settings"
     __table_args__: Final = {"schema": "auth"}
 
-    # Primary key (also FK to users)
     user_id: Mapped[int] = user_id_column("Reference to the user", primary_key=True)
 
     current_player_puuid: Mapped[str | None] = mapped_column(
@@ -30,14 +29,11 @@ class UserSettings(Base):
         comment="Last player selected by this application user",
     )
 
-    # Timestamps
     created_at: Mapped[datetime] = created_at_column("When these settings were created")
 
     updated_at: Mapped[datetime] = updated_at_column(
         "When these settings were last updated"
     )
-
-    # Relationships
 
 
 async def ensure_user_settings(db: AsyncSession, user_id: int) -> UserSettings:

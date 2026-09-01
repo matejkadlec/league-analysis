@@ -47,7 +47,6 @@ class PlayerLeague(Base):
         {"schema": "core"},
     )
 
-    # Composite primary key using puuid + created_at
     puuid: Mapped[str] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="CASCADE"),
@@ -92,8 +91,6 @@ class PlayerLeague(Base):
         Integer, nullable=False, default=0, comment="Number of losses in this queue"
     )
 
-    # Relationships
-
     @property
     def win_rate(self) -> float:
         """Calculate win rate as a percentage."""
@@ -115,7 +112,6 @@ class PlayerLeague(Base):
         return self.tier.title()
 
 
-# Create composite indexes for common queries
 Index("idx_leagues_puuid_queue", PlayerLeague.puuid, PlayerLeague.queue_type)
 
 Index("idx_leagues_tier_rank", PlayerLeague.tier, PlayerLeague.rank)

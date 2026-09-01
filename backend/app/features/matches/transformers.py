@@ -61,7 +61,6 @@ class MatchDTOTransformer:
             Dictionary with participant data ready for database storage
         """
         data: dict[str, Any] = {
-            # Identity
             "participant_id": participant_dto.participant_id,
             "puuid": participant_dto.puuid,
             "game_name": participant_dto.game_name
@@ -70,19 +69,15 @@ class MatchDTOTransformer:
             "tag_line": participant_dto.tag_line or None,
             "profile_icon": participant_dto.profile_icon,
             "summoner_level": participant_dto.summoner_level,
-            # Team & Context
             "team_id": int(participant_dto.team_id),
             "team_position": _recognized_position(participant_dto.team_position)
             or _recognized_position(participant_dto.individual_position),
-            # Champion
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,
             "champion_level": participant_dto.champion_level,
             "champion_transform": participant_dto.champion_transform,
-            # Results
             "win": participant_dto.win,
             "remake": participant_dto.remake,
-            # KDA
             "kills": participant_dto.kills,
             "deaths": participant_dto.deaths,
             "assists": participant_dto.assists,
@@ -90,7 +85,6 @@ class MatchDTOTransformer:
             "largest_killing_spree": participant_dto.largest_killing_spree,
             "first_blood_kill": participant_dto.first_blood_kill,
             "first_tower_kill": participant_dto.first_tower_kill,
-            # Damage Dealt
             "total_damage_dealt": participant_dto.total_damage_dealt,
             "total_damage_dealt_to_champions": participant_dto.total_damage_dealt_to_champions,
             "physical_damage_dealt_to_champions": participant_dto.physical_damage_dealt_to_champions,
@@ -98,28 +92,23 @@ class MatchDTOTransformer:
             "true_damage_dealt_to_champions": participant_dto.true_damage_dealt_to_champions,
             "damage_dealt_to_objectives": participant_dto.damage_dealt_to_objectives,
             "damage_dealt_to_turrets": participant_dto.damage_dealt_to_turrets,
-            # Damage Taken
             "total_damage_taken": participant_dto.total_damage_taken,
             "physical_damage_taken": participant_dto.physical_damage_taken,
             "magic_damage_taken": participant_dto.magic_damage_taken,
             "true_damage_taken": participant_dto.true_damage_taken,
             "damage_self_mitigated": participant_dto.total_self_mitigated,
-            # Support
             "total_self_healing": participant_dto.total_self_healing,
             "total_healing": participant_dto.total_healing,
             "total_shielding": participant_dto.total_shielding,
-            # Vision
             "vision_score": int(participant_dto.vision_score or 0),
             "wards_placed": participant_dto.wards_placed,
             "wards_killed": participant_dto.wards_killed,
             "vision_wards_placed": participant_dto.vision_wards_placed,
             "vision_wards_bought": participant_dto.vision_wards_bought,
-            # Farming
             "total_minions_killed": participant_dto.total_minions_killed,
             "neutral_minions_killed": participant_dto.neutral_minions_killed,
             "gold_earned": participant_dto.gold_earned,
             "gold_spent": participant_dto.gold_spent,
-            # Items
             "item0": participant_dto.item0,
             "item1": participant_dto.item1,
             "item2": participant_dto.item2,
@@ -130,24 +119,19 @@ class MatchDTOTransformer:
             "items_purchased": participant_dto.items_purchased,
             "consumables_purchased": participant_dto.consumables_purchased,
             "role_bound_item": participant_dto.role_bound_item,
-            # Spells
             "summoner1_id": participant_dto.summoner1_id,
             "summoner1_casts": participant_dto.summoner1_casts,
             "summoner2_id": participant_dto.summoner2_id,
             "summoner2_casts": participant_dto.summoner2_casts,
-            # Objectives
             "turret_kills": participant_dto.turret_kills,
             "inhibitor_kills": participant_dto.inhibitor_kills,
             "objectives_stolen": participant_dto.objectives_stolen,
-            # Time
             "time_spent_dead": participant_dto.time_spent_dead,
             "time_played": participant_dto.time_played,
-            # JSON Data
             "runes": participant_dto.runes,
             "advanced_stats": participant_dto.advanced_stats,
         }
 
-        # Advanced Stats (Challenges)
         challenges = participant_dto.advanced_stats
 
         data.update(
@@ -161,7 +145,6 @@ class MatchDTOTransformer:
             }
         )
 
-        # Safe fallback for game name
         if not data["game_name"]:
             data["game_name"] = "Unknown Player"
 

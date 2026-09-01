@@ -24,8 +24,6 @@ from sqlalchemy.orm import DeclarativeBase, MappedColumn, mapped_column
 # `None` but is not the SQL NULL that `IS NULL` finds.
 ABSENT_AS_NULL_JSONB = JSONB(none_as_null=True)
 
-# Create a base class for declarative models using SQLAlchemy 2.0 style
-# Use a custom naming convention for constraints and indexes
 convention = {
     # `%(column_0_label)s` would render the schema too (`ix_auth_users_email`),
     # which is not the spelling the migrations created.
@@ -40,7 +38,6 @@ convention = {
 
 metadata = MetaData(naming_convention=convention)
 
-# Type annotation map for Python → SQL type mapping
 type_annotation_map = {
     str: String(),
     int: Integer(),

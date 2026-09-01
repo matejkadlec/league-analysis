@@ -122,7 +122,6 @@ class PlayerService:
         Raises:
             PlayerNotFoundError: If no stored player carries the PUUID.
         """
-        # Query database only
         result = await self.db.execute(select(Player).where(Player.puuid == puuid))
         player = result.scalar_one_or_none()
 
@@ -240,8 +239,6 @@ class PlayerService:
             )
             for item in top_players
         ]
-
-    # === Player Tracking Methods for Automated Jobs ===
 
     async def discover_player(
         self,
