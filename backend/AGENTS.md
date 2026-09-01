@@ -35,8 +35,9 @@ Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
   and other bare string statements are read as docstrings too. Deferral markers
   (`TODO`, "for now") and backwards-compatibility markers are rejected in
   comments and docstrings alike. `scripts/check_comments.py` is the gate;
-  `alembic/` is deliberately outside it, because revisions are immutable
-  historical records whose prose narrates legacy transitions by design.
+  `alembic/versions/` is deliberately outside it, because revisions are
+  immutable historical records whose prose narrates legacy transitions by
+  design — `alembic/env.py` is live config and is checked.
 
 ## Commands
 
@@ -46,7 +47,7 @@ uv run pytest              # Focused backend regression suite
 uv run python scripts/migrate.py upgrade head
 uv run ruff check app tests scripts
 uv run ruff format --check --exclude '*.md' app tests scripts
-uv run python scripts/check_comments.py app tests scripts
+uv run python scripts/check_comments.py app tests scripts alembic/env.py
 uv run python scripts/check_tests.py tests
 uv run pyright
 uv run bandit --quiet --recursive app scripts --severity-level medium --confidence-level medium --skip B104

@@ -7,6 +7,7 @@ issue, newest last:
 
 ## Open
 
+- 2026-09-01 backend/app/features/auth/users/user_cookie_consent.py: the `consent_level` column's DDL comment says "chosen by the user on this browser", but the table keys on `user_id` alone — one row per account, applied on every browser. Fixing it means a comment-only migration since column comments are schema the validator compares.
 - 2026-09-01 test.sh: the API-contract step is the only gate step that needs real Settings env — `scripts/dump_openapi.py` imports `app.main`, which constructs `Settings()` at import time, so a box without `backend/.env` fails that one step while every other step provisions its own env. Dummy `POSTGRES_*`/`ENVIRONMENT` values suffice; the step could export them itself.
 
 ## Findings that did not survive measurement

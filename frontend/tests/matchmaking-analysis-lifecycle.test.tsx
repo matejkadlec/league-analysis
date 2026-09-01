@@ -244,7 +244,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(observedPlayersPerSecond(samples)).toBeNull();
 
     // Sixty-plus seconds later the burst has aged out of the window and
-    // only the cold pace remains: 12 players over 60s.
+    // only the cold pace remains: 6 players over the trailing 60s.
     samples = appendThroughputSample(samples, t0 + 40_000, 406);
     samples = appendThroughputSample(samples, t0 + 70_000, 409);
     samples = appendThroughputSample(samples, t0 + 100_000, 412);

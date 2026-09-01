@@ -212,7 +212,7 @@ export function useCookieConsent() {
       setStatus("hidden");
 
       if (isAuthenticated && user?.id) {
-        // Best-effort: only a sign-in this instance survives to see retries it.
+        // Best-effort: only a sign-in seen by this same instance retries it.
         // After a reload `choiceOwnerRef` is null, so the account is re-asked.
         await syncConsentForUser(user.id, nextConsent).catch(() => {});
       }

@@ -30,3 +30,13 @@ export const AcceptedBareDelimiters = () => (
     <span>delimiters</span>
   </div>
 );
+
+export const MustFlagClosingBraceBelow = () => (
+  <div>
+    {/* oxlint-disable-next-line house/no-long-comments */}
+    {/* MUST flag: a container whose closing brace sits on the next line is */}
+    {/* still a container, so these three prose lines are one block even
+        when the last comment spills its brace down. */}
+    <span>brace-below</span>
+  </div>
+);

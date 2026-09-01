@@ -162,3 +162,19 @@ def test_an_over_ceiling_string_in_a_nested_block_is_reported() -> None:
     source = 'with open("x") as fh:\n    """Summary.\n\n    one\n    two\n    three\n    """\n    fh.read()\n'
     reported = check_source(source)
     assert len(reported) == 1
+
+
+def test_a_marker_after_a_trailing_directive_is_still_reported() -> None:
+    messages = _messages("x = 1  # noqa: E501  temporary until the fix\n")
+    assert any("no-deferral-comments" in message for message in messages)
+
+
+def test_an_uppercase_noqa_is_a_directive_too() -> None:
+    source = "\n".join(["# one", "# NOQA: F401", "# two", "value = 1"])
+    assert check_source(source) == []
+
+
+def test_an_over_ceiling_tstring_statement_is_reported() -> None:
+    source = 'x = 1\nt"""Summary.\n\none {x}\ntwo\nthree\n"""'
+    reported = check_source(source)
+    assert len(reported) == 1

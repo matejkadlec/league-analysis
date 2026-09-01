@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { ExecutionStatusBadge } from "@/features/jobs/components/execution-status-badge";
 import type { JobStatus } from "@/lib/core/schemas";
 
-// The three surfaces that show an execution status each write this colour
-// ladder out in full, so they drift silently unless something reads the badge.
+// Five job surfaces render this badge, and the per-status colour ladder
+// lives only in it, so nothing else pins these colours.
 
 
 function badgeFor(status: JobStatus) {

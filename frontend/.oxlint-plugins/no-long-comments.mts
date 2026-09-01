@@ -25,16 +25,54 @@ type Block = {
 
 type SourceCode = {
   lines: readonly string[];
+  ast: unknown;
   getAllComments: () => readonly Comment[];
   getTokenBefore: (
     comment: Comment,
     options: { includeComments: boolean },
   ) => { value?: string; loc: { end: Position } } | null;
-  getTokenAfter: (
-    comment: Comment,
-    options: { includeComments: boolean },
-  ) => { value?: string; loc: { start: Position } } | null;
 };
+
+type Span = { start: Position; end: Position };
+
+// A JSX comment is the sole occupant of its expression container, so those
+// containers' spans are what separates `{/* why */}` from trailed code.
+const emptyJsxContainers = (root: unknown): Span[] => {
+  const spans: Span[] = [];
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (node === null || typeof node !== "object") return;
+    const record = node as Record<string, unknown> & { loc?: Span };
+    const expression = record.expression as { type?: unknown } | undefined;
+    if (
+      record.type === "JSXExpressionContainer" &&
+      expression?.type === "JSXEmptyExpression" &&
+      record.loc
+    ) {
+      spans.push(record.loc);
+    }
+    for (const key of Object.keys(record)) {
+      if (key !== "loc" && key !== "range" && key !== "parent") {
+        visit(record[key]);
+      }
+    }
+  };
+  visit(root);
+  return spans;
+};
+
+const atOrBefore = (a: Position, b: Position) =>
+  a.line < b.line || (a.line === b.line && a.column <= b.column);
+
+const isContained = (spans: Span[], comment: Comment) =>
+  spans.some(
+    (span) =>
+      atOrBefore(span.start, comment.loc.start) &&
+      atOrBefore(comment.loc.end, span.end),
+  );
 
 type Context = {
   options?: readonly ({ maxLines?: number } | undefined)[];
@@ -43,19 +81,15 @@ type Context = {
 };
 
 // `foo(); // why` starts its own block: an aside cannot extend the run above
-// it. Only `{comment}` — braces hugging both ends — is a container, not code.
-const isTrailing = (sourceCode: SourceCode, comment: Comment) => {
+// it. A comment filling its own JSX expression container is not trailed code.
+const isTrailing = (
+  sourceCode: SourceCode,
+  comment: Comment,
+  containers: Span[],
+) => {
+  if (isContained(containers, comment)) return false;
   const before = sourceCode.getTokenBefore(comment, { includeComments: false });
-  if (before == null || before.loc.end.line !== comment.loc.start.line) {
-    return false;
-  }
-  const after = sourceCode.getTokenAfter(comment, { includeComments: false });
-  const contained =
-    before.value === "{" &&
-    before.loc.end.column === comment.loc.start.column &&
-    after?.value === "}" &&
-    after.loc.start.column === comment.loc.end.column;
-  return !contained;
+  return before != null && before.loc.end.line === comment.loc.start.line;
 };
 
 // Prose, not span: bare delimiter lines and bridged directive lines carry no
@@ -78,13 +112,13 @@ const proseLines = (sourceCode: SourceCode, block: Block) => {
 const isDirective = (comment: Comment) =>
   /^\s*(?:oxlint|eslint)-(?:disable|enable)/.test(comment.value);
 
-const blocksOf = (sourceCode: SourceCode) => {
+const blocksOf = (sourceCode: SourceCode, containers: Span[]) => {
   const blocks: Block[] = [];
   const directiveLines = new Set<number>();
   let open: Block | null = null;
   for (const comment of sourceCode.getAllComments()) {
     if (isDirective(comment)) {
-      if (isTrailing(sourceCode, comment)) {
+      if (isTrailing(sourceCode, comment, containers)) {
         // A trailing directive shares its line with code, and code breaks
         // the run; only a standalone directive line is bridged over.
         open = null;
@@ -99,7 +133,8 @@ const blocksOf = (sourceCode: SourceCode) => {
       }
       continue;
     }
-    let joins = open !== null && !isTrailing(sourceCode, comment);
+    let joins =
+      open !== null && !isTrailing(sourceCode, comment, containers);
     if (joins && open !== null) {
       for (
         let line = open.end.loc.end.line + 1;
@@ -154,7 +189,8 @@ export const noLongCommentsRule = {
     return {
       Program() {
         const maxLines = context.options?.[0]?.maxLines ?? DEFAULT_MAX_LINES;
-        for (const block of blocksOf(context.sourceCode)) {
+        const containers = emptyJsxContainers(context.sourceCode.ast);
+        for (const block of blocksOf(context.sourceCode, containers)) {
           const lineCount = proseLines(context.sourceCode, block);
           if (lineCount <= maxLines) continue;
           context.report({

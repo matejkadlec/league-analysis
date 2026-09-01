@@ -18,7 +18,9 @@ MAX_PROSE_LINES = 2
 # records whose prose narrates legacy/compat transitions by design.
 DEFAULT_PATHS = ("app", "tests", "scripts", "alembic/env.py")
 
-DIRECTIVE = re.compile(r"^#\s*(noqa\b|type:\s*ignore|ruff:|mypy:|pyright:|pylint:)")
+DIRECTIVE = re.compile(
+    r"^#\s*((?i:noqa)\b|type:\s*ignore|ruff:|mypy:|pyright:|pylint:)"
+)
 
 DEFERRAL = re.compile(
     r"\b(TODO|FIXME|XXX)\b|\bhack(y|ish)?\b|for now\b|\btemporar(y|ily)\b"
@@ -182,10 +184,10 @@ def stray_string_docs(tree: ast.Module) -> list[tuple[int, str]]:
 
 
 def _string_text(value: ast.expr) -> str | None:
-    """The text of a plain or formatted string expression, else None."""
+    """The text of a plain, formatted, or template string expression."""
     if isinstance(value, ast.Constant) and isinstance(value.value, str):
         return value.value
-    if isinstance(value, ast.JoinedStr):
+    if isinstance(value, ast.JoinedStr | ast.TemplateStr):
         return "".join(
             part.value
             if isinstance(part, ast.Constant) and isinstance(part.value, str)
@@ -242,6 +244,11 @@ def doc_texts(tree: ast.Module) -> list[tuple[int, str]]:
 def check_source(source: str) -> list[tuple[int, str]]:
     """Return every `(line, message)` the four checks find in one file."""
     found: list[tuple[int, str]] = []
+    # Markers are scanned over every comment token, not per block: a trailing
+    # directive is dropped from block grouping but can still carry a marker.
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == tokenize.COMMENT:
+            found.extend(marker_hits(token.start[0], token.string))
     for block in comment_blocks(source):
         # A tool directive is machinery, not prose, but it stays in the run so
         # it cannot split one thought into two blocks under the ceiling.
@@ -249,8 +256,6 @@ def check_source(source: str) -> list[tuple[int, str]]:
         if len(prose) > MAX_PROSE_LINES:
             message = LONG_MESSAGE.format(count=len(prose), ceiling=MAX_PROSE_LINES)
             found.append((block[0].start[0], message))
-        for token in block:
-            found.extend(marker_hits(token.start[0], token.string))
     tree = ast.parse(source)
     found.extend(long_docstrings(tree))
     found.extend(stray_string_docs(tree))

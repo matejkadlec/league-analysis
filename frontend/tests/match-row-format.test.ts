@@ -10,8 +10,8 @@ import {
 } from "@/features/matches/match-row-format";
 
 /**
- * These four are pure and only reachable through a full `MatchRow` render in
- * `match-row.test.tsx`, which cannot move the clock or omit a participant.
+ * Pure helpers behind the match row; a full render cannot move the clock or
+ * omit a participant, so their edges are pinned here directly.
  */
 
 type Participant = NonNullable<MatchWithPlayerData["player_participant"]>;
