@@ -118,7 +118,6 @@ async def update_job_configuration(
         if not job:
             _raise_job_not_found(job_id)
 
-        # Keep APScheduler in sync with DB changes immediately.
         from .scheduler import sync_job_configuration
 
         await sync_job_configuration(job.id)
@@ -375,7 +374,6 @@ async def trigger_test_run(
             detail=f"Job '{job.name}' is not active and cannot be tested",
         )
 
-    # Check if a test run is already active (negative key = test)
     test_runtime_key = runtime_control_key(job.id, test_run=True)
     if is_runtime_job_running(test_runtime_key):
         return JobTriggerResponse(
@@ -388,7 +386,6 @@ async def trigger_test_run(
         _set_scheduled_job_suspended(job.id, suspended=True)
 
     test_instance = _create_test_job_instance(job)
-    # Store suspend_regular flag so test completion can resume the scheduler
     test_instance.suspend_regular = suspend_regular
     background_tasks.add_task(
         _run_test_job_with_cleanup,

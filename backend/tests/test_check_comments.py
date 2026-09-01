@@ -118,3 +118,17 @@ def test_a_declared_name_announcing_an_old_path_is_a_hit() -> None:
 
 def test_a_deprecated_decorator_is_a_hit() -> None:
     assert len(check_source("@warnings.deprecated('x')\ndef read() -> None: ...")) == 1
+
+
+LONG_ATTRIBUTE_DOCSTRING = 'X = 1\n"""Summary.\n\none\ntwo\nthree\n"""'
+ATTRIBUTE_DOCSTRING_AT_CEILING = 'X = 1\n"""Summary.\n\none\ntwo\n"""'
+
+
+def test_an_attribute_docstring_past_the_ceiling_is_reported() -> None:
+    reported = check_source(LONG_ATTRIBUTE_DOCSTRING)
+    assert len(reported) == 1
+    assert "3 lines of prose past its summary" in reported[0][1]
+
+
+def test_an_attribute_docstring_at_the_ceiling_passes() -> None:
+    assert check_source(ATTRIBUTE_DOCSTRING_AT_CEILING) == []

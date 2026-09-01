@@ -29,5 +29,4 @@ class BoundedLogCapture:
         return event_dict
 
 
-# Global log capture instance with bounded memory (max 1000 entries)
 job_log_capture = BoundedLogCapture(maxlen=1000)

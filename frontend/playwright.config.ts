@@ -2,8 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  // 60s is what the suite needs; specs used to override this with their own
-  // `test.setTimeout(60_000)`.
+  // 60s: the populated-fixture specs drive a production build on a shared Pi
+  // runner, where a full page walk regularly passes 30s.
   timeout: 60_000,
   expect: {
     // The default 5s makes a web-first assertion give up long before a test
@@ -31,7 +31,7 @@ export default defineConfig({
     command: "npm run start:standalone",
     env: {
       // Only reaches dynamic routes; prerendered pages bake it in at build
-      // time, so test.sh pins the build too. `blockUpstreamRequests` can't help: that fetch is server-side.
+      // time, so test.sh pins the build too.
       DDRAGON_VERSION: "16.15.1",
       // Keep in step with `run_frontend_build` in test.sh.
       NEXT_DEPLOYMENT_ID: "gate-local",

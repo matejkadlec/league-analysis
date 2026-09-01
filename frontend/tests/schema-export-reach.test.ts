@@ -29,7 +29,7 @@ const PAIRED_BY_THE_CONTRACT_TEST = new Set([
   "UserProfileUpdateSchema",
 ]);
 
-/** `export const|function|type|interface|class|enum <Name>`, at line start. */
+/** Line-anchored so a nested `export` inside a type body is not counted. */
 const EXPORTED_NAME = /^export\s+(?:const|function|type|interface|class|enum)\s+([A-Za-z0-9_]+)/gm;
 
 function schemaModules(): string[] {
@@ -49,10 +49,6 @@ function exportedNames(): Map<string, string> {
   return names;
 }
 
-/**
- * This file is left out of the scan: the allowance above names schemas in
- * order to exempt them, which would read as reaching them.
- */
 /** Source with comments removed, so prose about a schema is not a use. */
 function code(path: string): string {
   return readFileSync(path, "utf8")
@@ -60,6 +56,10 @@ function code(path: string): string {
     .replace(/\/\/.*/g, "");
 }
 
+/**
+ * This file is left out of the scan: the allowance above names schemas in
+ * order to exempt them, which would read as reaching them.
+ */
 function everySource(): string[] {
   const self = "tests/schema-export-reach.test.ts";
   return [...new Set([...allSourceFiles(), ...allTestFiles()])]

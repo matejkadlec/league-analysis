@@ -6,7 +6,11 @@
 const DEFAULT_MAX_LINES = 2;
 
 type Position = { line: number; column: number };
-type Comment = { type: string; loc: { start: Position; end: Position } };
+type Comment = {
+  type: string;
+  value: string;
+  loc: { start: Position; end: Position };
+};
 type Block = { type: string; start: Comment; end: Comment };
 
 type SourceCode = {
@@ -46,14 +50,23 @@ const proseLines = (sourceCode: SourceCode, block: Block) => {
   return count;
 };
 
+// A disable/enable directive is machinery, not prose: it is never reported,
+// and it breaks the run so it cannot glue two real comments into one block.
+const isDirective = (comment: Comment) =>
+  /^\s*(?:oxlint|eslint)-(?:disable|enable)/.test(comment.value);
+
+// Consecutive comment lines are ONE block regardless of `//` vs `/* */`
+// spelling; otherwise a JSDoc directly over a `//` run would dodge the ceiling.
 const blocksOf = (sourceCode: SourceCode) => {
   const blocks: Block[] = [];
   let open: Block | null = null;
   for (const comment of sourceCode.getAllComments()) {
+    if (isDirective(comment)) {
+      open = null;
+      continue;
+    }
     const joins =
       open !== null &&
-      open.type === "Line" &&
-      comment.type === "Line" &&
       comment.loc.start.line === open.end.loc.end.line + 1 &&
       !isTrailing(sourceCode, comment);
     if (joins && open !== null) {

@@ -274,6 +274,3 @@ export function validatedPatch<T>(
     api.patch(url, data, config),
   );
 }
-
-// Feature endpoint functions live with their features (e.g.
-// features/players/player-api.ts); this module stays the generic client.

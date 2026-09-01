@@ -46,8 +46,6 @@ export const UserCookieConsentResponseSchema = z.object({
   consented_at: z.string(),
 });
 
-// `settings` mixes a card's fixed values with its mutable ones, so a write may
-// send back only the fields the write contract accepts.
 /** The three analytical cards the settings API answers for, by its own ids. */
 export const CardIdSchema = z.enum([
   "profile.top-champions",
@@ -59,6 +57,8 @@ export type CardId = z.infer<typeof CardIdSchema>;
 export const CardPreferenceSchema = z.object({
   cardId: CardIdSchema,
   version: z.literal(1),
+  // Mixes a card's fixed values with its mutable ones, so a write may send
+  // back only the fields the write contract accepts.
   settings: z.record(z.string(), z.unknown()),
   isDefault: z.boolean(),
   requiresRecovery: z.boolean().default(false),

@@ -279,7 +279,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     job = MatchFetcherJob(job_config_id=7)
     job.job_config = cast(JobConfiguration, SimpleNamespace(config_json={}))
     job.check_control_state = AsyncMock()
-    # Player resolution lives on PlayerTargetsMixin._load_tracked_puuids now; this test
+    # Player resolution lives on PlayerTargetsMixin._load_tracked_puuids; this test
     # is about rate-limit propagation, not about resolution.
     monkeypatch.setattr(
         MatchFetcherJob,

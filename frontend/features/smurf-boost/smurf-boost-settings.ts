@@ -1,8 +1,4 @@
 import type { CardId } from "@/lib/core/schemas";
-/**
- * The backend owns these ranges but exposes no endpoint describing them, so
- * the form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
- */
 
 /** Typed against the API's own card-id enum, so a rename fails here. */
 export const SMURF_BOOST_CARD_ID: CardId = "profile.smurf-boost-detection";
@@ -18,6 +14,10 @@ export interface ThresholdField {
   integer: boolean;
 }
 
+/**
+ * The backend owns these ranges but exposes no endpoint describing them, so
+ * the form carries its own copy; `tests/smurf-boost-settings.test.ts` pins it.
+ */
 export const THRESHOLD_FIELDS = [
   {
     name: "recentWindowSize",

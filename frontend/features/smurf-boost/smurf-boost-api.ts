@@ -51,7 +51,7 @@ export async function getSmurfBoostPresets(
   );
 }
 
-// Here only while the smurf-boost card is the sole consumer; move them when shared.
+// Card-preference reads live with the one card that uses them.
 export async function getCardPreferences(
   signal?: AbortSignal,
 ): Promise<ApiResponse<CardPreference[]>> {

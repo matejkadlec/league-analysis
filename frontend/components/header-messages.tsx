@@ -283,8 +283,8 @@ export function HeaderMessages() {
     return null;
   }
 
-  // Admin messages, based only on the backend-owned state for the effective
-  // generation.
+  // Admin-only, and read off `credential_status` alone -- the backend owns
+  // that verdict, keyed by `health_revision`.
   const credentialBanner = isAdmin
     ? CREDENTIAL_BANNERS[serviceStatus?.credential_status ?? ""]
     : undefined;

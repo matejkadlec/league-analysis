@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Get the project root (4 levels up from this file: backend/app/core/config.py -> root)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=ENV_FILE)
@@ -152,7 +151,6 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
 
-        # Enforce minimum length (32 chars = 256 bits)
         if len(v) < 32:
             if is_production:
                 raise ValueError(
@@ -171,20 +169,17 @@ class Settings(BaseSettings):
         return v
 
     model_config = SettingsConfigDict(
-        env_file=str(ENV_FILE),  # Use absolute path to .env file
+        env_file=str(ENV_FILE),
         case_sensitive=False,
-        env_prefix="",  # No prefix for environment variables
-        extra="ignore",  # Ignore extra fields (like frontend env vars in shared .env)
+        env_prefix="",
+        extra="ignore",
         env_ignore_empty=True,  # `FOO=` is unset, not the empty string
     )
 
 
 @cache
 def get_global_settings() -> Settings:
-    """Get the process-wide settings instance, built on first use.
-
-    Postgres fields have no defaults, so pydantic-settings reports all missing ones.
-    """
+    """Get the process-wide settings instance, built on first use."""
     # The five postgres fields arrive via env/env_file; pyright only sees the
     # generated __init__ signature.
     return Settings()  # pyright: ignore[reportCallIssue]

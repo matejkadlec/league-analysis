@@ -13,10 +13,6 @@ export interface ScopeAggregates {
 }
 
 /**
- * The "All" scope must NOT be recomputed here: the card shows its stored
- * aggregates, so that figure never drifts from history.
- */
-/**
  * A selection whose aggregates are gone snaps back to "all", so the Select
  * and captions can never label the stored All-scope figures as a slice.
  */
@@ -31,8 +27,8 @@ export function effectiveScope(
 }
 
 /**
- * Mean with 10% trimmed from each end. Mirrors the backend's `trimmed_mean`,
- * down to the fixtures duplicated across both test suites.
+ * Mean with 10% trimmed from each end, a floor'd count: under ten values
+ * nothing is trimmed. Mirrors the backend's `trimmed_mean`.
  */
 export function trimmedMean(values: number[]): number {
   const k = Math.floor(values.length * 0.1);
@@ -40,6 +36,10 @@ export function trimmedMean(values: number[]): number {
   return kept.reduce((sum, v) => sum + v, 0) / kept.length;
 }
 
+/**
+ * The two headline averages for one solo/duo scope. The "All" scope must NOT
+ * come through here: the card shows its stored figure, which never drifts.
+ */
 export function scopeAggregates(
   perMatch: MatchmakingPerMatch[],
   scope: Exclude<MatchScope, "all">,

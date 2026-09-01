@@ -308,9 +308,9 @@ def _build_scheduler(settings: Settings) -> SchedulerLike:
     }
 
     job_defaults = {
-        "coalesce": True,  # Combine multiple missed runs into one
-        "max_instances": 1,  # Only one instance of each job at a time
-        "misfire_grace_time": 60,  # Allow 60 seconds grace for missed jobs
+        "coalesce": True,
+        "max_instances": 1,
+        "misfire_grace_time": 60,
     }
 
     return AsyncIOScheduler(
@@ -599,7 +599,7 @@ async def _check_and_run_overdue_jobs() -> None:
             error=str(e),
             error_type=type(e).__name__,
         )
-        # Don't raise - this is not critical for scheduler startup
+        # An overdue-job sweep is not critical to scheduler startup.
 
 
 async def _load_and_schedule_jobs() -> None:
@@ -654,7 +654,7 @@ async def _load_and_schedule_jobs() -> None:
             error=str(e),
             error_type=type(e).__name__,
         )
-        # Don't raise - scheduler can still run manually triggered jobs
+        # The scheduler can still run manually triggered jobs.
 
 
 def shutdown_scheduler() -> None:

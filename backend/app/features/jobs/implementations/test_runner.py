@@ -25,7 +25,7 @@ TEST_PUUID = (
 )
 
 _MAX_ITERATIONS = 60  # 1 hour (60 x 1-minute intervals)
-_WAIT_SECONDS = 60  # seconds between API call batches
+_WAIT_SECONDS = 60
 
 
 async def _interruptible_wait(job: BaseJob, db: AsyncSession, seconds: int) -> None:
@@ -68,7 +68,7 @@ class _TestRunnerJob(BaseJob):
     keeps none of the answers. Subclasses supply a label and `call_endpoints`.
     """
 
-    #: Human name used in this job's log lines, e.g. "Test Match Fetcher".
+    # Human name used in this job's log lines, e.g. "Test Match Fetcher".
     label: str
 
     # Set by the test-trigger endpoint to record whether it paused the regular
@@ -123,13 +123,11 @@ class _TestRunnerJob(BaseJob):
                         iteration=iteration + 1,
                         error=str(e),
                     )
-                    break  # stop on first failure
+                    break
 
-                # Wait 60s before next iteration (skip wait on last iteration)
                 if iteration < _MAX_ITERATIONS - 1:
                     await _interruptible_wait(self, db, _WAIT_SECONDS)
 
-        # Test runs never create/update data records
         self.metrics["records_created"] = 0
         self.metrics["records_updated"] = 0
 

@@ -317,7 +317,8 @@ class MatchService:
         if not matches.matches:
             return self._create_empty_stats_response(puuid)
 
-        # Get all participants for these matches at once (fixes N+1 query problem)
+        # One `IN` for the page: per-match lookups here are N+1 against every
+        # row the page shows.
         match_ids = [m.match_id for m in matches.matches]
         participants_stmt = select(MatchParticipant).where(
             MatchParticipant.match_id.in_(match_ids),
@@ -335,7 +336,6 @@ class MatchService:
         total_matches = len(matches.matches)
         avg_kda = calculate_kda(totals.kills, totals.deaths, totals.assists)
 
-        # total_matches is guaranteed > 0 (checked for empty matches above)
         return MatchStatsResponse(
             puuid=puuid,
             total_matches=total_matches,

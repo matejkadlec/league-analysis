@@ -13,11 +13,6 @@ import {
 } from "../smurf-boost-vocabulary";
 import { cn } from "@/lib/core/utils";
 
-/**
- * The specification requires the disclaimer plain and permanent: never a
- * tooltip, never collapsed.
- */
-
 // Escalation order. Each reading wears its band's dot from the shared ladder,
 // so this scale and the result card cannot colour a band differently.
 const READING_SCALE = [
@@ -37,6 +32,10 @@ function DotRow({ count, className }: { count: number; className: string }) {
   );
 }
 
+/**
+ * The specification requires the disclaimer plain and permanent: never a
+ * tooltip, never collapsed.
+ */
 export function SmurfBoostExplanationCard() {
   return (
     <Card id="smurf-boost-explanation">

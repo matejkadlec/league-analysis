@@ -121,8 +121,8 @@ export function MatchSideColumn({
             {participant.kills} / {participant.deaths} / {participant.assists}
           </span>
         ) : emptyKdaFallback ? (
-          // text-foreground/75 like the other row text: this fallback sits on
-          // the same win/loss tint that failed 4.5:1 under muted-foreground.
+          // text-foreground/75: on this win/loss tint muted-foreground failed
+          // 4.5:1, and the axe fixtures never serve an empty KDA to catch it.
           <span className="text-xs text-foreground/75">—</span>
         ) : null}
       </div>

@@ -1,11 +1,12 @@
-import { readdirSync, readFileSync } from "node:fs";
-
-import { describe, expect, it } from "vitest";
-
 /**
  * LGA-101's size floor, read from source rather than a render: it has to hold
  * for every line, not the handful a browser test samples.
  */
+
+import { readdirSync, readFileSync } from "node:fs";
+
+import { describe, expect, it } from "vitest";
+
 /**
  * Directories are read rather than listed, since a hand-kept list goes stale;
  * `player-selector.tsx` belongs to neither and is named explicitly.

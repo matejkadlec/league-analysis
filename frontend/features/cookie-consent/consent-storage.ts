@@ -8,8 +8,8 @@ export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
 /**
- * Owned here rather than by each writer: `match-history-preferences.ts` imports
- * this module, so the other direction would be a cycle.
+ * Every optional-storage key the app writes lives here, not with its writer:
+ * `match-history-preferences.ts` imports this module, so the reverse cycles.
  */
 export const HEADER_MESSAGES_CLOSED_STORAGE_KEY = "header_messages_closed:v1";
 export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
@@ -17,6 +17,7 @@ export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
 export const MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY =
   "league_analysis_match_history_queue_filters";
 
+/** Withdrawing consent erases exactly this list. */
 const OPTIONAL_STORAGE_KEYS = [
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,

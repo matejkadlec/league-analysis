@@ -20,11 +20,8 @@ SPECIAL_CHARACTER_PATTERN = r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]"
 EMAIL_CHANGE_CODE_LENGTH = 6
 """Digits in an email-change verification code.
 
-Lives here rather than beside the generator in `service.py` because the
-request pattern below is built from it and `service.py` imports this module,
-not the other way round. Three copies of `6` used to exist -- this pattern,
-the generator's zero-padding, and the range it drew from -- and the range was
-the one that did not move with the constant.
+Lives here rather than beside the generator in `service.py`: the request
+pattern below is built from it, and `service.py` imports this module.
 """
 
 DISPLAY_NAME_MIN_LENGTH = 3
@@ -42,13 +39,8 @@ DisplayName = Annotated[
 ]
 """Letters, marks, underscores and spaces, starting and ending on a letter.
 
-The settings form has always enforced exactly this, and the API enforced none
-of it, so `PATCH /auth/me` accepted any 1-128 character string from anything
-that was not the form. Pydantic renders all three constraints into the OpenAPI
-document, which is what `display-name-alignment.test.ts` reads back to hold the
-two copies of the rule equal. `strip_whitespace` is the one part that does not
-appear there -- it is a transform, not a constraint -- so a client that does
-not trim gets the same stored value as the form, which does.
+Pydantic publishes these constraints (not `strip_whitespace`, a transform) to
+OpenAPI, which `frontend/tests/display-name-alignment.test.ts` reads back.
 """
 
 

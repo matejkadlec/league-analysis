@@ -115,5 +115,3 @@ Index("idx_users_email_is_active", User.email, User.is_active)
 # Only `created_at` needs this; `last_login` and `locked_until` carry
 # `index=True`, so repeating them here would build a second index on each.
 Index("idx_users_created_at", User.created_at)
-
-# Ensure consent mapper is registered even when this module is imported directly.

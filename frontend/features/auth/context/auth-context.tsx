@@ -31,7 +31,7 @@ import type { User, LoginRequest, AuthContextType } from "../types";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Every auth request goes through the Next.js rewrite, on both sides of
-// hydration. The branch that used to be here chose between "" and "".
+// hydration, so the base is empty by construction.
 const API_BASE_URL = "";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -60,12 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
-    // Must not raise `isLoading`: consumers unmount their whole subtree while
-    // it is true, so a re-check would blank the settings page mid-edit.
-
-    // `forceRecheck` in `auth-gate.tsx` drives the re-render instead.
+    // Must not raise `isLoading`: consumers unmount their subtree while it is
+    // true. `forceRecheck` in `auth-gate.tsx` drives the re-render instead.
     const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: "include",
@@ -94,7 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       let response = await fetchCurrentUser();
 
-      // If fetch failed (network error), don't remove token - backend may be down
+      // A fetch that never landed says nothing about the session, so the hint
+      // cookie stays: the backend may simply be restarting.
       if (!response) {
         setIsLoading(false);
         return;
@@ -164,9 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (credentials: LoginRequest) => {
       setIsLoading(true);
       try {
-        // OAuth2 password flow requires form-data format
         const formData = new URLSearchParams();
-        formData.append("username", credentials.email); // OAuth2 uses 'username' field
+        formData.append("username", credentials.email); // OAuth2 names this field `username`
         formData.append("password", credentials.password);
         if (credentials.captchaToken) {
           formData.append("captcha_token", credentials.captchaToken);

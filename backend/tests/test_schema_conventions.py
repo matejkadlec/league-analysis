@@ -12,6 +12,8 @@ import pytest
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Table
 
 from app.core.models import Base
+from app.core.riot_api.constants import Platform
+from app.core.runs import values_in_sql
 from app.model_registry import import_all_models
 
 import_all_models()
@@ -108,17 +110,21 @@ def test_every_platform_column_is_bounded_by_both_check_constraints(
     Both halves are needed: lowercase alone admits a region that does not exist,
     the value list alone admits `EUW1`.
     """
-    declared = {
-        constraint.name
+    predicates = {
+        constraint.name: str(constraint.sqltext)
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint) and isinstance(constraint.name, str)
     }
-    required = {
-        f"ck_{table.name}_platform_is_lowercase",
-        f"ck_{table.name}_platform_supported",
-    }
+    lowercase = f"ck_{table.name}_platform_is_lowercase"
+    supported = f"ck_{table.name}_platform_supported"
 
-    assert sorted(required - declared) == [], (
+    assert sorted({lowercase, supported} - set(predicates)) == [], (
         f"{table.fullname}.platform is unconstrained; {table.fullname} declares "
-        f"{sorted(declared)}"
+        f"{sorted(predicates)}"
     )
+    assert predicates[lowercase] == "platform = lower(platform)", (
+        f"{lowercase} reads {predicates[lowercase]!r}, which does not case-fold"
+    )
+    assert predicates[supported] == values_in_sql(
+        "platform", [platform.value for platform in Platform]
+    ), f"{supported} reads {predicates[supported]!r}, not the Platform vocabulary"

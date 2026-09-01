@@ -1035,7 +1035,7 @@ class BaseJob(ABC):
                 error=str(retry_error),
                 error_type=type(retry_error).__name__,
             )
-            # Don't raise - we want the job to complete even if logging fails
+            # The job should complete even if logging its completion fails.
 
         return False
 

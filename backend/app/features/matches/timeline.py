@@ -154,7 +154,8 @@ class MatchTimeline(Base):
         },
     )
 
-    # Composite PK requested by product requirements.
+    # One row per (match, participant): `replace_match_timeline_rows` swaps a
+    # match's rows wholesale.
     match_id: Mapped[str] = mapped_column(
         String(20),
         ForeignKey("core.matches.match_id", ondelete="CASCADE"),

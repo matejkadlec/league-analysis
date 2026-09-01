@@ -13,6 +13,10 @@ import { cn } from "@/lib/core/utils";
 export const LEGAL_LINK_CLASS =
   "underline transition-colors duration-300 hover:text-[#cfa93a]";
 
+/**
+ * Shared by both footers so they cannot disagree about the year or the set of
+ * legal pages they link to.
+ */
 export function LegalNotice({
   className,
   children,

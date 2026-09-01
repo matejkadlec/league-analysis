@@ -24,6 +24,8 @@ def iter_error_chain(error: Exception) -> Iterator[Exception]:
         seen.add(id(current))
         yield current
 
+        # `__cause__` only, never `__context__` or a hand-rolled chain: every
+        # predicate below is calibrated against `raise ... from`.
         current = (
             current.__cause__ if isinstance(current.__cause__, Exception) else None
         )

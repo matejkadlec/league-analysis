@@ -81,7 +81,7 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
 
     job = PlayerUpdaterJob(job_config_id=7)
     job.check_control_state = AsyncMock()
-    # Player resolution lives on PlayerTargetsMixin._load_tracked_puuids now; this test
+    # Player resolution lives on PlayerTargetsMixin._load_tracked_puuids; this test
     # is about surviving a recoverable per-player error, not about resolution.
     monkeypatch.setattr(
         PlayerUpdaterJob,

@@ -59,11 +59,9 @@ export interface PlayerContextState {
 }
 
 /**
- * Routes every API call these pages make. Returns the mutable state the specs
- * assert on: a route handler runs in the driver and cannot hand a value back.
+ * Routes every API call these pages make; returns mutable state because a
+ * route handler cannot hand one back. Specs enter via `startAtPlayerOverview`.
  */
-// Module-private: every spec goes through `startAtPlayerOverview`, which is
-// the install plus the viewport, the visit and the consent click.
 async function installPlayerContextMocks(
   page: Page,
   { currentPuuid = CURRENT_PUUID }: { currentPuuid?: string } = {},

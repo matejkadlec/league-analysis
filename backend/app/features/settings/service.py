@@ -67,7 +67,9 @@ class SettingsService:
                 category="riot_api",
                 is_sensitive=True,
                 created_at=setting.added_at,
-                updated_at=setting.added_at,  # fallback
+                # The settings row has no update stamp; `added_at` is the only
+                # timestamp stored.
+                updated_at=setting.added_at,
             )
 
         return None
@@ -197,7 +199,8 @@ class SettingsService:
             )
 
         except RiotAPIError as e:
-            # Handle different status codes - all these exceptions are aliases to RiotAPIError
+            # All of these are RiotAPIError aliases, so the status is the only
+            # discriminator.
             if e.status_code == 401:
                 logger.warning(
                     "riot_api_key_validation_failed", error="401", details=str(e)

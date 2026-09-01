@@ -44,8 +44,8 @@ export default defineConfig({
         "**/*.config.*",
         "next-env.d.ts",
       ],
-      // Measured: statements 92.22, branches 86.83, functions 88.80, lines
-      // 92.32. Labelled -- reading four bare numbers by position invents drift.
+      // Measured 2026-08-31, reproducible across seeds: statements 92.22,
+      // branches 86.83, functions 88.80, lines 92.32. Labelled, not positional.
       thresholds: {
         // Nothing but a code change moves these, so they sit just under the
         // measured figures. Ratchet them.

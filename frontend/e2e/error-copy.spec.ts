@@ -19,8 +19,8 @@ const player = trackedPlayer(NOW, {
 });
 
 async function signIn(page: Page) {
-  // Routes are gated on an httpOnly cookie, not localStorage: without it the
-  // middleware redirects and the page renders nothing.
+  // Routes are gated on an httpOnly cookie, not localStorage: without it
+  // `proxy.ts` redirects and the page renders nothing.
   await seedAuthenticatedSession(page);
   await blockUpstreamRequests(page);
 

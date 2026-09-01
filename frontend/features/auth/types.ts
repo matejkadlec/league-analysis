@@ -20,11 +20,9 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  // Awaited, not fire-and-forget: only the server can revoke, and the
-  // "can't reach the server" escape hatch needs to know when it answered.
   /**
-   * Ends the session. Without the flag an unreachable server leaves local
-   * state intact; pass it only from a control a person just used.
+   * Awaited, not fire-and-forget: only the server can revoke. Without the flag
+   * an unreachable server leaves local state intact -- pass it from a click.
    */
   logout: (options?: {
     evenIfTheServerCannotBeReached?: boolean;

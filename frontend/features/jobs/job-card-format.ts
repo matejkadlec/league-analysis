@@ -27,14 +27,13 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
   style: "narrow",
 });
 
-// Both clamp toward "Just now": clock skew could make a fresh run read as
-// future, or an overdue run read as history.
-
 /**
  * `direction` is all that separates the two clocks: -1 elapsed, +1 upcoming.
  * The clamp stays on `diffMins` so neither crosses into the other's side.
  */
 function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
+  // Both clocks clamp toward "Just now": skew could make a fresh run read as
+  // future, or an overdue run read as history.
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) {
     return narrowRelativeFormatter.format(direction * diffMins, "minute");

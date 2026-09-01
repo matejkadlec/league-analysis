@@ -266,7 +266,6 @@ class AuthService(EmailChangeMixin, TokenLifecycleMixin):
         user = await self.get_user_by_email_case_insensitive(email)
 
         # Always hash password to prevent timing attacks
-        # If user doesn't exist, hash against a dummy value
         if not user:
             await verify_password(password, DUMMY_PASSWORD_HASH)
             logger.warning("login_failed", reason="unknown_email", email=email)

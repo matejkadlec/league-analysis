@@ -21,7 +21,8 @@ export function usePlayerLeague(puuid: string) {
         ),
       ),
     retry: false,
-    // A rank moves on the order of a match; `handleRefreshAll` invalidates this key.
+    // A rank moves on the order of a match; `PLAYER_DERIVED_SYNC_ROOTS` in
+    // `use-player-sync-run.ts` is what retires this key after an update.
     staleTime: 60000,
   });
 }

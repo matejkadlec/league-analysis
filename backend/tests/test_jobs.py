@@ -99,11 +99,11 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     assert response.success is True
     assert response.is_paused is paused
     assert control_module.get_runtime_control_snapshot(-7)["is_paused"] is paused
-    # The concurrent scheduled run's own flag is untouched — the flags can
-    # no longer interfere, which is the point of moving pause off the row.
+    # The concurrent scheduled run's own flag is untouched: the two flags
+    # cannot interfere.
     assert control_module.get_runtime_control_snapshot(7)["is_paused"] is False
     assert ("paused" if paused else "resumed") in response.message
-    # Pause is runtime state now: nothing to persist.
+    # Pause is runtime state: nothing to persist.
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
@@ -360,6 +360,8 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
 
     assert constructed == [(7, "system")]
     assert len(scheduled) == 1
+    # Both sides come from outside the entry: comparing `func`/`run_date` to
+    # themselves let a catch-up be queued a year out, green.
     assert scheduled[0]["func"] == instances[0].run
     run_date = scheduled[0]["run_date"]
     assert isinstance(run_date, datetime)

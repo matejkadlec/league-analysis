@@ -323,7 +323,6 @@ class RiotAPIClient:
         evidence_at = datetime.now(UTC)
         response = await self.session.request(method, url)
 
-        # Track all API requests (successful or failed) - every HTTP call counts
         if self.request_callback:
             self.request_callback("requests_made", 1)
 
@@ -387,7 +386,7 @@ class RiotAPIClient:
         if isinstance(error, RateLimitError):
             return  # "Rate limit hit" was already logged when the 429 landed.
         if isinstance(error, NullResponseBodyError):
-            return  # Retried silently, as the old loop did; exhaustion logs.
+            return  # Retried silently; exhaustion logs.
         if isinstance(error, TimeoutError | httpx.RequestError):
             logger.warning(
                 "riot_api_network_retry",
@@ -634,7 +633,7 @@ class RiotAPIClient:
         url = self.endpoints.league_entries_by_puuid(puuid, platform)
         response: dict[str, Any] | list[dict[str, Any]] = await self._make_request(url)
 
-        # API returns a list of league entries (can be empty if unranked)
+        # Empty is a real answer: an unranked player has no entries.
         if not isinstance(response, list):
             raise RiotAPIError(
                 f"Expected list response for league entries, got {type(response)}"

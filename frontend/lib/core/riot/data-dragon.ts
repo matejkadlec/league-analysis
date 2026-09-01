@@ -1,7 +1,4 @@
-/**
- * Data Dragon CDN utilities: Riot's official CDN for game assets like champion
- * icons, item images and summoner spell icons.
- */
+/** Riot CDN asset URLs, versioned from the manifest the layout resolves. */
 
 // Used only when Riot's version manifest cannot be reached. The root layout
 // normally resolves the latest version and provides it to client code.
@@ -40,10 +37,6 @@ export function getProfileIconFallbackUrl(
   return `${getVersionedBaseUrl(version)}/img/profileicon/29.png`;
 }
 
-/**
- * Reverse mapping from Data Dragon format to display name.
- * Maps internal names (e.g., "MissFortune") to proper display names (e.g., "Miss Fortune").
- */
 const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   Kaisa: "Kai'Sa",
   Khazix: "Kha'Zix",
@@ -189,9 +182,7 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
   },
 };
 
-/**
- * Get the URL for a keystone rune icon by keystone ID.
- */
+/** Keystone icon URL by ID, or null when the ID is unmapped. */
 export function getKeystoneIconUrlById(keystoneId: number): string | null {
   const iconPath = KEYSTONE_MAP[keystoneId]?.iconPath;
   if (!iconPath) {

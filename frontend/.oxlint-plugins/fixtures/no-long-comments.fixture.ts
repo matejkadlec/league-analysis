@@ -69,3 +69,18 @@ export const secondRun = 8;
 // one
 // two
 export const trailingAfterRun = 9; // why
+
+// MUST flag: a JSDoc directly over a `//` line is one three-line block —
+// switching comment spelling mid-thought does not restart the count.
+
+/* oxlint-disable-next-line house/no-long-comments */
+/**
+ * one
+ * two
+ */
+// three
+export const mixedJsdocThenLine = 10;
+
+// Accepted: the directive above broke the run, so this block and the
+// MUST-flag explanation above it were never glued together by it.
+export const afterDirectiveBreak = 11;

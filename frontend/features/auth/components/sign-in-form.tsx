@@ -136,7 +136,6 @@ export function SignInForm() {
     reValidateMode: "onSubmit",
   });
 
-  // Watch form values to enable/disable submit button
   // oxlint-disable-next-line react/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const email = form.watch("email");
   const password = form.watch("password");

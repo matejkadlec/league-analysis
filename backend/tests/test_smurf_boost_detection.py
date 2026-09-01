@@ -199,9 +199,6 @@ def _family(result: Any, family: str) -> Any:
     return next(item for item in result.families if item.family == family)
 
 
-# === Exact statistics, pinned so a library swap cannot change a threshold's meaning ===
-
-
 @pytest.mark.parametrize(
     ("successes", "trials", "expected"),
     [(9, 10, 0.5958), (23, 30, 0.5907), (24, 30, 0.6269), (27, 30, 0.7438)],
@@ -209,7 +206,10 @@ def _family(result: Any, family: str) -> Any:
 def test_wilson_lower_bound_matches_the_specified_estimator(
     successes: int, trials: int, expected: float
 ) -> None:
-    """The small-sample guard is the exact interval the thresholds assume."""
+    """The small-sample guard is the exact interval the thresholds assume.
+
+    Pinned exactly, so a library swap cannot change what a threshold means.
+    """
     assert wilson_lower_bound(successes, trials) == pytest.approx(expected, abs=5e-5)
 
 
@@ -729,6 +729,18 @@ FIELD_TO_SIGNAL = {
 }
 
 
+def test_field_to_signal_covers_every_signal_and_threshold_field() -> None:
+    """A dropped entry would shrink both saturation walks below without failing."""
+    from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
+
+    fields = SmurfBoostDetectionMutableSettingsWriteV1.model_fields
+
+    assert set(FIELD_TO_SIGNAL.values()) == set(SIGNAL_SATURATIONS)
+    assert set(FIELD_TO_SIGNAL) == {
+        name for name in fields if name.endswith("_threshold")
+    }
+
+
 def test_every_bounded_range_stays_below_its_saturation() -> None:
     """A range top at or above saturation would divide by zero or invert."""
     from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
@@ -817,8 +829,8 @@ def test_the_detection_card_is_in_the_approved_catalog() -> None:
     assert _CARD_FIXED_SETTINGS_V1[card] == {"queue_id": RANKED_SOLO_QUEUE_ID}
 
 
-#: Every threshold the detection card accepts, spelled the one way the write
-#: contract allows; single-threshold cases override one key rather than restate it.
+# Every threshold the detection card accepts, spelled the one way the write
+# contract allows; single-threshold cases override one key rather than restate it.
 _VALID_DETECTION_PAYLOAD: dict[str, Any] = {
     "recentWindowSize": 20,
     "baselineWindowSize": 60,

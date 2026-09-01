@@ -55,8 +55,8 @@ def test_timeline_rows_tolerate_missing_game_version() -> None:
             }
         ),
     )
-    # `rows == [] or ...` was the assertion here, which an empty return
-    # satisfies -- the opposite of tolerating the missing version.
+    # `len(rows) == 1`, not `rows == [] or ...`: an empty return would satisfy
+    # the weaker form.
     assert len(rows) == 1
     assert rows[0]["match_id"] == "EUN1_1"
 

@@ -503,8 +503,11 @@ def test_the_analyzed_players_win_flag_rides_per_match() -> None:
     assert [entry.get("win") for entry in per_match] == [True, False, None]
 
 
-"""Parsed out of this file by frontend/tests/scope-aggregates.test.ts, so an
-edit here is checked against the client's trimmedMean too."""
+"""Parsed out of this file by frontend/tests/scope-aggregates.test.ts.
+
+n=10 is the smallest input that trims; the n=5 case is asymmetric on purpose,
+so a trim applied below ten values fails.
+"""
 TRIM_FIXTURES: list[tuple[list[float], float]] = [
     ([0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625),
     ([0.0, 0.5, 0.5, 0.5, 0.9], 0.48),

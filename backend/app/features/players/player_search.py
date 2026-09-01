@@ -42,18 +42,14 @@ def parse_search_query(query: str) -> tuple[SearchType, str | None, str | None]:
         Tuple of (search_type, game_name, tag_line)
     """
     if query.startswith("#"):
-        # Tag-only search: "#EUNE"
         return "tag", None, query[1:].strip()
 
     if "#" in query:
-        # Full ID search: "John Doe#EUNE"
         if query.count("#") == 1:
             game_name, tag_line = query.split("#", 1)
             return "full_id", game_name.strip(), tag_line.strip()
-        # Multiple # - treat as invalid, search everything
         return "all", None, None
 
-    # Name search: "John Doe"
     return "name", query.strip(), None
 
 
@@ -92,7 +88,6 @@ def build_player_search_query(
     platform_filter = [Player.platform == platform.value] if platform else []
 
     if search_type == "full_id" and game_name and tag_line:
-        # Search for exact or partial Full ID (GameName # TagLine)
         return select(Player).where(
             *platform_filter,
             or_(
@@ -111,7 +106,6 @@ def build_player_search_query(
             Player.tag_line.ilike(f"%{tag_line}%"),
         )
 
-    # name or all - search game names
     search_term = game_name if game_name else query_lower
     return select(Player).where(
         *platform_filter,
@@ -161,7 +155,6 @@ def _closest_field_distance(
         if player.tag_line
         else player.game_name.lower()
     )
-    # (applies?, query, target)
     candidates = [
         (
             bool(player.game_name) and search_type in ("name", "all"),

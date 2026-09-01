@@ -7,7 +7,6 @@ import { extname, join } from "node:path";
  */
 const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
 
-/** Every `.ts`/`.tsx` file under `directory`, recursively. */
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);

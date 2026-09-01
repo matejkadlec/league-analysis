@@ -40,8 +40,8 @@ class TagConfig(TypedDict):
     ]
     check: NotRequired[Literal["never", "often"]]
     check_deficit: NotRequired[bool]
-    # Two evaluators used to share one `target` key holding either a team id
-    # or a damage school, so neither consumer could be type-checked.
+    # Two keys, not one `target`: a key holding either a team id or a damage
+    # school leaves neither consumer type-checkable.
     target_damage_type: NotRequired[Literal["magic", "physical"]]
     target_team: NotRequired[TeamId]
 

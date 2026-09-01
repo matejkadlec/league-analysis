@@ -57,10 +57,16 @@ const EXPECTED_TEARDOWN_SELECTOR_COUNT = 11;
 const EXPECTED_EDGE_SELECTOR_COUNT = 4;
 
 /**
- * Blocks that set `no-restricted-imports` without the barrel list; a third one
- * must be argued.
+ * The only blocks that may set `no-restricted-imports` without the barrel
+ * list, named: the five hint-reading pages, then the edge's own allowlist.
  */
-const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 2;
+const EXPECTED_HINT_READING_PAGES = [
+  "app/license/page.tsx",
+  "app/sign-in/page.tsx",
+  "app/privacy-policy/page.tsx",
+  "app/cookie-policy/page.tsx",
+  "app/join-us/page.tsx",
+];
 
 /**
  * Every opt-out spelled out, so an added one has to be argued here first.
@@ -172,14 +178,18 @@ describe("the oxlint config's shared teardown rules", () => {
     );
 
     const blocks = blocksSetting("no-restricted-imports");
-    const carrying = blocks.filter((block) =>
-      (optionsOf(block, "no-restricted-imports")[1].patterns ?? []).some(
-        (pattern) => (pattern.group ?? []).includes("@/features/*/*"),
-      ),
+    const exempt = blocks.filter(
+      (block) =>
+        !(optionsOf(block, "no-restricted-imports")[1].patterns ?? []).some(
+          (pattern) => (pattern.group ?? []).includes("@/features/*/*"),
+        ),
     );
-    expect(carrying.length).toBe(
-      blocks.length - EXPECTED_BARREL_EXEMPT_BLOCK_COUNT,
-    );
+
+    // Named rather than counted: swapping which block skips the list leaves a
+    // count of two intact, with no written intent to contradict.
+    expect(exempt).toHaveLength(2);
+    expect(exempt[0]?.files).toEqual(EXPECTED_HINT_READING_PAGES);
+    expect(exempt[1]?.rules?.["house/edge-isolation-syntax"]).toBe("error");
   });
 
   it("keeps every selector it is supposed to keep", () => {
@@ -202,8 +212,8 @@ describe("the oxlint config's shared teardown rules", () => {
 
     const edge = EDGE_ISOLATION_SYNTAX.map((rule) => rule.selector);
     expect(edge.length).toBe(EXPECTED_EDGE_SELECTOR_COUNT);
-    // Static import, dynamic import, re-export, member `fetch` -- an audit
-    // walked past an earlier version through each of the last three.
+    // Static import, dynamic import, re-export, member `fetch` -- each is a
+    // separate way to reach a module the allowlist never sees.
     expect(edge.some((s) => s.startsWith("ImportDeclaration"))).toBe(true);
     expect(edge).toContain("ImportExpression");
     expect(edge.some((s) => s.includes("ExportAllDeclaration"))).toBe(true);

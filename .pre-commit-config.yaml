@@ -118,7 +118,8 @@ repos:
       # active vs admin — and every spelling type-checks identically.
       - id: forbid-restated-user-dependency
         name: Routes take CurrentUserDep/AdminUserDep, not Annotated[User, ...]
-        entry: 'Annotated\[\s*User\s*,\s*Depends\('
+        # Both restatement spellings: Annotated and the classic default form.
+        entry: 'Annotated\[\s*User\s*,\s*Depends\(|:\s*User\s*=\s*Depends\('
         language: pygrep
         args: [--multiline]
         files: '^backend/app/.*\.py$'
@@ -128,7 +129,9 @@ repos:
       # a literal spelled at a call site mislabels that job log row.
       - id: forbid-riot-path-literals
         name: Riot API path literals live in core/riot_api/endpoints.py
-        entry: '["'']/(?:lol|riot)/'
+        # Path-shape anchored, not quote anchored: a full-URL or f-string
+        # spelling ("https://.../lol/..." or f"{base}/lol/...") counts too.
+        entry: '/(?:lol|riot|tft|val)/[a-z-]+/v\d+/'
         language: pygrep
         files: '^backend/app/.*\.py$'
         exclude: '^backend/app/core/riot_api/endpoints\.py$'

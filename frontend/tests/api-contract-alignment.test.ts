@@ -120,7 +120,7 @@ const API_PREFIX = "/api/v1";
 
 /**
  * The calls that name a path. The bare `fetch` sites in auth predate the
- * validated client and are exempt from the no-raw-fetch hook.
+ * validated client and are exempt from the `forbid-direct-fetch` hook.
  */
 const CALL_SITE =
   /(validatedGet|validatedPost|validatedPut|validatedPatch|validatedDelete|api\.(?:get|post|put|patch|delete)|fetch)\s*(?:<[^>]*>)?\s*\(/g;
@@ -544,6 +544,10 @@ describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", (
       size?.schema.maximum,
       "the executions `size` parameter has no maximum",
     ).toBeTypeOf("number");
+    expect(
+      size?.schema.minimum,
+      "the executions `size` parameter has no minimum",
+    ).toBeTypeOf("number");
 
     expect(
       EXECUTIONS_PAGE_SIZE,
@@ -552,7 +556,7 @@ describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", (
     expect(
       EXECUTIONS_PAGE_SIZE,
       "EXECUTIONS_PAGE_SIZE is below the `size` minimum the router accepts",
-    ).toBeGreaterThanOrEqual(Number(size?.schema.minimum ?? 1));
+    ).toBeGreaterThanOrEqual(Number(size?.schema.minimum));
   });
 
   const pairs = Object.entries(exportedSchemas).flatMap(([name, value]) => {

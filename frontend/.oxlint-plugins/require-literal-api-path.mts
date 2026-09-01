@@ -1,5 +1,5 @@
-// Two scanners find this app's requests by regex-matching the URL argument at
-// the call site, so a path they cannot read is a path nothing checks.
+// Two scanners find this app's requests by regex-matching the URL argument of
+// a `validated*` call, so a path they cannot read there is a path unchecked.
 
 type Node = {
   type: string;

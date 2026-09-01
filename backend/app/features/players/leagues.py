@@ -118,9 +118,6 @@ Index("idx_leagues_tier_rank", PlayerLeague.tier, PlayerLeague.rank)
 
 Index("idx_leagues_tier_lp", PlayerLeague.tier, PlayerLeague.league_points)
 
-# `idx_leagues_puuid_created` used to sit here: the primary key spelled again
-# with DESC, which a btree already serves by scanning backwards.
-
 
 def solo_duo_league_entry(
     league_entries: Sequence[LeagueEntryDTO],

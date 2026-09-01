@@ -61,7 +61,7 @@ class TagEngine:
                     display_name=result.get("display_name", config["display_name"]),
                 )
 
-        # Remove main_champion if otp is present (otp is stricter, takes precedence)
+        # `otp` is the stricter claim of the two, so it wins.
         if "otp" in detected_tags and "main_champion" in detected_tags:
             del detected_tags["main_champion"]
 
@@ -96,7 +96,6 @@ class PlaystyleAnalysisService:
             logger.info("playstyle_analysis_no_match_data", puuid=puuid)
             return await self._save_empty_analysis(puuid)
 
-        # Fetch Matches for context - eagerly load participants to avoid lazy load issues
         match_ids = [p.match_id for p in participants]
         stmt_matches = (
             select(Match)
@@ -162,7 +161,7 @@ class PlaystyleAnalysisService:
                 "summary_stats": insert_analysis.excluded.summary_stats,
                 "status": insert_analysis.excluded.status,
                 # `onupdate` does not fire for a Core-level upsert, so the
-                # timestamp is set here exactly as the update path used to.
+                # timestamp is set here.
                 "updated_at": current_time,
             },
         ).returning(PlaystyleAnalysis)

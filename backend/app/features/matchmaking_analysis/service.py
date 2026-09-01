@@ -922,7 +922,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         """Resolve one participant's Solo/Duo rank once per run.
 
         Snapshot-first: a `player_leagues` row near the run's reference time is
-        reused without an API call. A failed read degrades to UNRANKED.
+        reused without an API call. A failed read is UNRANKED; auth errors re-raise.
         """
         if p_puuid in self._rank_values:
             return

@@ -139,6 +139,39 @@ def long_docstrings(tree: ast.Module) -> list[tuple[int, str]]:
     return found
 
 
+def stray_string_docs(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return over-ceiling bare string statements (PEP 257 attribute docstrings).
+
+    `ast.get_docstring` sees only a body's first statement, so prose parked in
+    a string after an assignment would otherwise escape the ceiling entirely.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        ):
+            continue
+        # `body[0]` is the docstring slot `long_docstrings` already covers.
+        for statement in node.body[1:]:
+            if not (
+                isinstance(statement, ast.Expr)
+                and isinstance(statement.value, ast.Constant)
+                and isinstance(statement.value.value, str)
+            ):
+                continue
+            prose = docstring_prose(statement.value.value)
+            if prose > MAX_PROSE_LINES:
+                found.append(
+                    (
+                        statement.lineno,
+                        LONG_DOCSTRING_MESSAGE.format(
+                            count=prose, ceiling=MAX_PROSE_LINES
+                        ),
+                    )
+                )
+    return found
+
+
 def compat_names(tree: ast.Module) -> list[tuple[int, str]]:
     """Return declared names that announce a legacy or deprecated thing.
 
@@ -183,6 +216,7 @@ def check_source(source: str) -> list[tuple[int, str]]:
                 )
     tree = ast.parse(source)
     found.extend(long_docstrings(tree))
+    found.extend(stray_string_docs(tree))
     found.extend(
         (line, COMPAT_NAME_MESSAGE.format(name=name))
         for line, name in compat_names(tree)

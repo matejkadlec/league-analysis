@@ -18,8 +18,8 @@ export type SessionRefresh =
   /** The server answered, but not about validity (a 5xx, a rate limit); never
    *  a refusal status. */
   | { outcome: "unavailable"; status: number }
-  /** Nothing was learned; `cause` carries the thrown value, for reporting
-   *  only. */
+  /** Nothing was learned -- unreachable, timed out, or about a session already
+   *  ended; `cause` carries any thrown value, for reporting only. */
   | { outcome: "unreachable"; cause?: unknown };
 
 /**
