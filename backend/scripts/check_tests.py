@@ -204,6 +204,12 @@ def main(argv: list[str]) -> int:
     roots = [Path(argument) for argument in argv] or [
         Path(name) for name in DEFAULT_PATHS
     ]
+    # A vanished root must fail loudly: silently scanning nothing reads green.
+    missing = [root for root in roots if not root.exists()]
+    if missing:
+        for root in missing:
+            print(f"ERROR: root does not exist: {root}", file=sys.stderr)
+        return 1
     reported = 0
     for path in python_files(roots):
         for line, message in check_source(path.read_text(encoding="utf-8")):

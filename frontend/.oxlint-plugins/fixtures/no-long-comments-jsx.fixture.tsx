@@ -44,7 +44,8 @@ export const MustFlagClosingBraceBelow = () => (
 
 export const AcceptedBraceBelow = () => (
   <div>
-    {/* one prose line, brace parked below, still not trailed code */
+    {/* two prose lines at the ceiling, brace parked below, so a rewrite
+        that charges the container's span instead reports three. */
     }
     <span>accepted-brace-below</span>
   </div>

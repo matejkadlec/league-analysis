@@ -4,7 +4,7 @@ Every fixture is a string literal rather than real comments, so this file
 stays clean under the rules it exercises.
 """
 
-from scripts.check_comments import check_source
+from scripts.check_comments import check_source, main
 
 RUN_OF_THREE = "\n".join(f"# line {index}" for index in range(3))
 RUN_OF_TWO = "\n".join(f"# line {index}" for index in range(2))
@@ -178,3 +178,7 @@ def test_an_over_ceiling_tstring_statement_is_reported() -> None:
     source = 'x = 1\nt"""Summary.\n\none {x}\ntwo\nthree\n"""'
     reported = check_source(source)
     assert len(reported) == 1
+
+
+def test_a_missing_root_fails_the_run() -> None:
+    assert main(["does_not_exist_anywhere"]) == 1
