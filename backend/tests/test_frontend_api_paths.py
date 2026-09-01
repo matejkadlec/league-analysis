@@ -20,7 +20,8 @@ FRONTEND = REPO_ROOT / "frontend"
 API_PREFIX = "/api/v1"
 
 # Directories with no request in them, plus the two that would drown the walk.
-SKIPPED_DIRS = {"node_modules", ".next", "coverage", "tests", "e2e"}
+# `.oxlint-plugins` holds lint fixtures whose unreadable paths are the point.
+SKIPPED_DIRS = {"node_modules", ".next", "coverage", "tests", "e2e", ".oxlint-plugins"}
 
 # The wrappers' own definitions, which name every helper without calling one.
 API_MODULE = FRONTEND / "lib" / "core" / "http" / "api.ts"

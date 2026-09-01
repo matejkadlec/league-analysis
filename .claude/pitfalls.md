@@ -216,18 +216,15 @@ the `pitfall-check` agent.
 
 - **A backend test reads frontend source, so refactoring a URL literal breaks
   the gate from the other language.** `backend/tests/test_frontend_api_paths.py`
-  walks `frontend/` and regex-matches `validated(Get|Post|Put|Delete|Patch)(`
-  call sites, then asserts every URL it finds is a route `app` actually answers.
-  The two halves deploy separately and agree on nothing but strings, and every
-  frontend test that touches an API module mocks it, so a mistyped path stays
-  green until it 404s in a browser — hence the scan. The consequence for
-  refactoring: hoisting a path behind a constant, threading it through a
-  helper, or building it by interpolation makes the literal invisible to the
-  regex, and the check silently stops covering that call. A frontend-only
-  cleanup can therefore fail `./test.sh -b`, which is the last place anyone
-  looks. Keep `validatedPost("/jobs/…")` URL arguments inline as literals at
-  the call site, and when a decomposition step wants to move one, move the
-  whole call.
+  regex-matches `validated(Get|Post|Put|Delete|Patch)(` call sites under
+  `frontend/` and asserts every URL it finds is a route `app` answers;
+  `calledApiPaths()` in `frontend/tests/api-contract-alignment.test.ts` reads
+  the same literals. The `validated*` path argument is now guarded at the call
+  site by the `house/require-literal-api-path` oxlint rule. What stays
+  uncovered: the `api.get`/`fetch` spellings the frontend scan also matches,
+  and moving a caller into a directory either scan skips — both make the call
+  invisible with nothing reporting it, and a frontend-only cleanup then fails
+  `./test.sh -b`, which is the last place anyone looks.
 
 ## Root-level TS tooling needs the repo-root `tsconfig.json`
 

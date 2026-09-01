@@ -19,8 +19,8 @@ repos:
   # Secret *values* in any file type. The filename hook below only blocks
   # credential-shaped paths, and detect-private-key only matches PEM blocks,
   # so neither catches an API key pasted into a doc, JSON, or test fixture.
-  # Scans the staged diff only; the tracked history is clean as of v8.30.1,
-  # so no .gitleaksignore is needed.
+  # Scans the staged diff only; the tracked history is clean as of v8.30.1.
+  # .gitleaksignore carries only local-ref fingerprints, not tracked content.
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
@@ -73,6 +73,14 @@ repos:
         language: pygrep
         files: '^backend/app/features/.*\.py$'
 
+      # A name forwarded here runs the feature's router and service on any
+      # submodule import, so a package `__init__.py` stays docstring-only.
+      - id: forbid-feature-init-imports
+        name: feature __init__.py stays import-free (no re-exports)
+        entry: '^\s*(?:from|import)\s'
+        language: pygrep
+        files: '^backend/app/features/(?:[a-z_]+/)*__init__\.py$'
+
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
       # schema is a runtime action no hook can see.
@@ -81,6 +89,14 @@ repos:
         entry: 'metadata\.create_all'
         language: pygrep
         files: \.py$
+
+      # The `ck` convention substitutes an explicit name into
+      # `ck_%(table_name)s_%(constraint_name)s`, so a `ck_` prefix doubles.
+      - id: forbid-ck-prefixed-constraint-name
+        name: CheckConstraint names stay bare (the convention adds ck_)
+        entry: 'name=["'']ck_'
+        language: pygrep
+        files: '^backend/app/.*\.py$'
 
       # `Field(None, description=...)` passes the default positionally, and
       # Pyright's dataclass_transform handling does not recognise that as a
@@ -97,6 +113,25 @@ repos:
         language: pygrep
         args: [--multiline]
         files: '^backend/.*\.py$'
+
+      # A restated Annotated form can bind the wrong dependency — plain vs
+      # active vs admin — and every spelling type-checks identically.
+      - id: forbid-restated-user-dependency
+        name: Routes take CurrentUserDep/AdminUserDep, not Annotated[User, ...]
+        entry: 'Annotated\[\s*User\s*,\s*Depends\('
+        language: pygrep
+        args: [--multiline]
+        files: '^backend/app/.*\.py$'
+        exclude: '^backend/app/features/auth/dependencies\.py$'
+
+      # The client hands the path template it called to `_record_api_call`, so
+      # a literal spelled at a call site mislabels that job log row.
+      - id: forbid-riot-path-literals
+        name: Riot API path literals live in core/riot_api/endpoints.py
+        entry: '["'']/(?:lol|riot)/'
+        language: pygrep
+        files: '^backend/app/.*\.py$'
+        exclude: '^backend/app/core/riot_api/endpoints\.py$'
 
       # All data fetching goes through TanStack Query over the validated
       # client in lib/core. axios itself belongs to that client and its

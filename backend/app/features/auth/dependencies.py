@@ -80,8 +80,8 @@ async def get_current_admin_user(
     return current_user
 
 
-# Spelled once, matching `JobServiceDep`, so routes never restate the
-# `Annotated[User, Depends(...)]` form.
+# Spelled once, matching `JobServiceDep`; gate forbid-restated-user-dependency
+# keeps routes off the raw `Annotated[User, Depends(...)]` form.
 CurrentUserDep = Annotated[User, Depends(get_current_active_user)]
 AdminUserDep = Annotated[User, Depends(get_current_admin_user)]
 

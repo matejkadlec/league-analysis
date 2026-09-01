@@ -49,8 +49,8 @@ class Settings(BaseSettings):
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
         ]
 
-    # Must precede `jwt_secret_key`: pydantic validates in declaration order and
-    # `validate_jwt_secret` reads it from `info.data`. Defaulting would hide absence.
+    # Must precede `jwt_secret_key` (the validator reads it from `info.data`) and
+    # carry no default. Gate: tests/test_settings_jwt_secret.py.
     environment: Literal["dev", "test", "production"]
 
     jwt_secret_key: str = Field(

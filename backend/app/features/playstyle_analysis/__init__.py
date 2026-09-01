@@ -1,5 +1,3 @@
-"""Playstyle Analysis feature module.
+"""Playstyle Analysis feature module."""
 
-NOTE: Imports are intentionally minimal to avoid circular dependencies.
-Import directly from submodules when needed (e.g., from .router import router).
-"""
+# No re-exports; enforced by forbid-feature-init-imports (see auth/__init__.py).

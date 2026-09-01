@@ -3,7 +3,7 @@ import { z } from "zod";
 import { LobbyTierSchema } from "./riot";
 import { splitRunOnLifecycle } from "./run-lifecycle";
 
-/** The backend's `MIN_MATCH_COUNT`/`MAX_MATCH_COUNT`, and the start card's. */
+/** Held equal to the API by tests/api-contract-alignment.test.ts. */
 export const MIN_MATCH_COUNT = 10;
 export const MAX_MATCH_COUNT = 100;
 

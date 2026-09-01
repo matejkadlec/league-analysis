@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -45,16 +49,41 @@ describe("scopeAggregates", () => {
   });
 });
 
+const here = dirname(fileURLToPath(import.meta.url));
+const LIFECYCLE_TEST = join(
+  here,
+  "../../backend/tests/test_matchmaking_analysis_lifecycle.py",
+);
+
 /**
- * Duplicated in the backend lifecycle test, both must stay identical. The
- * n=5 fixture is asymmetric so trimming below ten values would fail it.
+ * The table is the backend's; read it rather than copy it, so an edit there
+ * either holds here too or fails.
  */
-const TRIM_FIXTURES: Array<[number[], number]> = [
-  [[0.0, 0.4, 0.45, 0.5, 0.5, 0.5, 0.55, 0.55, 0.6, 1.0], 0.50625],
-  [[0.0, 0.5, 0.5, 0.5, 0.9], 0.48],
-];
+function backendTrimFixtures(): Array<[number[], number]> {
+  const source = readFileSync(LIFECYCLE_TEST, "utf8");
+
+  const block = /TRIM_FIXTURES[^=]*=\s*\[([\s\S]*?)\n\]/.exec(source);
+  if (!block?.[1]) throw new Error("TRIM_FIXTURES not found in the backend");
+
+  return [...block[1].matchAll(/\(\s*\[([^\]]*)\]\s*,\s*([0-9.]+)\s*\)/g)].map(
+    ([, values, expected]): [number[], number] => [
+      (values ?? "").split(",").map(Number),
+      Number(expected),
+    ],
+  );
+}
+
+const TRIM_FIXTURES = backendTrimFixtures();
 
 describe("trimmedMean", () => {
+  it("reads a plausible fixture table out of the backend test", () => {
+    // Signal first: a parse that silently returned nothing, or dropped the
+    // ten-value row that is the only one long enough to trim, is vacuous.
+    expect(TRIM_FIXTURES.length).toBeGreaterThanOrEqual(2);
+    expect(TRIM_FIXTURES[0]?.[0]).toHaveLength(10);
+    expect(TRIM_FIXTURES.every(([, expected]) => expected > 0)).toBe(true);
+  });
+
   it.each(TRIM_FIXTURES)("averages %j to %d", (values, expected) => {
     expect(trimmedMean(values)).toBeCloseTo(expected, 10);
   });
@@ -78,7 +107,10 @@ describe("trimmedMean", () => {
       enemy_avg: 0.5,
     }));
 
-    expect(scopeAggregates(perMatch, "duo")?.teamAvg).toBeCloseTo(0.50625, 10);
+    expect(scopeAggregates(perMatch, "duo")?.teamAvg).toBeCloseTo(
+      TRIM_FIXTURES[0]![1],
+      10,
+    );
   });
 });
 

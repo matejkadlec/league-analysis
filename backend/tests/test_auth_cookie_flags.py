@@ -118,7 +118,8 @@ def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
     )
     assert "path=/;" in hint or hint.endswith("path=/")
     assert "samesite=lax" in hint
-    # The names the frontend proxy and the axios client spell out too.
+    # test_frontend_cookie_names.py holds these three to the frontend hint module
+    # and the published cookie policy.
     assert ACCESS_TOKEN_COOKIE_NAME == "league_analysis_access_token"
     assert REFRESH_TOKEN_COOKIE_NAME == "league_analysis_refresh_token"
 

@@ -14,8 +14,8 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Inlined: this file must not import the application graph that just threw.
-    // The literal path must match `CLIENT_ERROR_REPORT_PATH`, the beacon `reportClientError` uses.
+    // Inlined: this file must not import the application graph that just
+    // threw. app-shell-boundaries.test.tsx pins the literal to the route.
     void fetch("/client-error-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

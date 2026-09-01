@@ -1,0 +1,4 @@
+# A harness checkpoint ref (refs/t3/checkpoints/...) snapshotted a test fixture
+# that briefly used a high-entropy string; the fixture is low-entropy now, but
+# the local history pass still sees that unpushed snapshot. Not a credential.
+b450da2fd98ff5b883341335cde7326fbc402ffc:backend/tests/test_settings_jwt_secret.py:generic-api-key:18

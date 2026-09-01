@@ -37,11 +37,12 @@ function jobExecutionsInfiniteQueryKey() {
   return ["job-executions-infinite"] as const;
 }
 
-const EXECUTIONS_PAGE_SIZE = 20;
+/** Bounded against the router by tests/api-contract-alignment.test.ts. */
+export const EXECUTIONS_PAGE_SIZE = 20;
 
 /**
- * Fixed-size pages, because the backend caps `size` at 100; the failure
- * envelope is re-thrown, since returned as data it truncates to page 1.
+ * Fixed-size pages; the failure envelope is re-thrown, since returned as data
+ * it truncates to page 1.
  */
 export function jobExecutionsInfiniteQueryOptions() {
   return infiniteQueryOptions({

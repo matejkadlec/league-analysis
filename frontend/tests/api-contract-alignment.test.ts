@@ -4,8 +4,13 @@ import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { EXECUTIONS_PAGE_SIZE } from "@/features/jobs/jobs-query";
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/riot/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
+import {
+  MAX_MATCH_COUNT,
+  MIN_MATCH_COUNT,
+} from "@/lib/core/schemas/matchmaking";
 
 import { allSourceFiles, allTestFiles } from "./support/source-scan-support";
 
@@ -489,6 +494,65 @@ describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", (
     );
 
     expect(rejected).toEqual([]);
+  });
+
+  /**
+   * A widened window 422s the Start button, a narrowed one hides runs the
+   * backend accepts; the two numbers are hand-copied and nothing else pairs them.
+   */
+  it("bounds the match count exactly as the analysis request declares", () => {
+    const request = resolve(apiSchemas.MatchmakingAnalysisRequest, apiSchemas);
+    const matchCount = resolve(
+      (request.properties as Record<string, unknown> | undefined)?.match_count,
+      apiSchemas,
+    );
+    // Signal first: a constraint that vanished, or a renamed field, must fail
+    // here rather than compare undefined against undefined.
+    expect(
+      matchCount.minimum,
+      "MatchmakingAnalysisRequest.match_count declares no minimum",
+    ).toBeTypeOf("number");
+    expect(
+      matchCount.maximum,
+      "MatchmakingAnalysisRequest.match_count declares no maximum",
+    ).toBeTypeOf("number");
+
+    expect(
+      Number(matchCount.minimum),
+      "MIN_MATCH_COUNT differs from the API's match_count minimum",
+    ).toBe(MIN_MATCH_COUNT);
+    expect(
+      Number(matchCount.maximum),
+      "MAX_MATCH_COUNT differs from the API's match_count maximum",
+    ).toBe(MAX_MATCH_COUNT);
+  });
+
+  /**
+   * The page size is a backend ceiling copied by hand: outside the router's
+   * `size` bounds every page of the executions list 422s.
+   */
+  it("asks the executions endpoint for a page size it accepts", () => {
+    const executions = document.paths[
+      `${API_PREFIX}/jobs/executions/all`
+    ] as
+      | { get?: { parameters?: { name: string; schema: JsonSchema }[] } }
+      | undefined;
+    const size = executions?.get?.parameters?.find((p) => p.name === "size");
+    // Signal first: a renamed parameter, or one that lost its bounds, would
+    // leave the page size compared against undefined and pass.
+    expect(
+      size?.schema.maximum,
+      "the executions `size` parameter has no maximum",
+    ).toBeTypeOf("number");
+
+    expect(
+      EXECUTIONS_PAGE_SIZE,
+      "EXECUTIONS_PAGE_SIZE is above the `size` maximum the router accepts",
+    ).toBeLessThanOrEqual(Number(size?.schema.maximum));
+    expect(
+      EXECUTIONS_PAGE_SIZE,
+      "EXECUTIONS_PAGE_SIZE is below the `size` minimum the router accepts",
+    ).toBeGreaterThanOrEqual(Number(size?.schema.minimum ?? 1));
   });
 
   const pairs = Object.entries(exportedSchemas).flatMap(([name, value]) => {

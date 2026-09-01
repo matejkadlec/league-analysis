@@ -10,6 +10,7 @@ import { noLongCommentsRule } from "./no-long-comments.mts";
 import { noSpreadInputInQueryKeyRule } from "./no-spread-input-in-query-key.mts";
 import { requireCnForClassnameCompositionRule } from "./require-cn-for-classname-composition.mts";
 import { requireFetchTimeoutRule } from "./require-fetch-timeout.mts";
+import { requireLiteralApiPathRule } from "./require-literal-api-path.mts";
 import { requireQueryKeyFactoryRule } from "./require-query-key-factory.mts";
 import { requireQuerySignalRule } from "./require-query-signal.mts";
 import {
@@ -31,6 +32,7 @@ export default {
     "require-cn-for-classname-composition":
       requireCnForClassnameCompositionRule,
     "require-fetch-timeout": requireFetchTimeoutRule,
+    "require-literal-api-path": requireLiteralApiPathRule,
     "require-query-key-factory": requireQueryKeyFactoryRule,
     "require-query-signal": requireQuerySignalRule,
     "session-teardown-syntax": sessionTeardownSyntaxRule,

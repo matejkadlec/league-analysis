@@ -79,7 +79,7 @@ class JSONBody(Protocol):
 class APICallRecord:
     """Record of an individual API call."""
 
-    endpoint: str  # Template like "/lol/match/v5/matches/{matchId}"
+    endpoint: str  # An endpoints.py path template, placeholders unsubstituted
     region: str
     params: dict[str, str] = field(
         default_factory=dict[str, str]

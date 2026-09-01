@@ -113,6 +113,7 @@ export default defineConfig({
     "house/no-spread-input-in-query-key": "error",
     "house/require-cn-for-classname-composition": "error",
     "house/require-fetch-timeout": "error",
+    "house/require-literal-api-path": "error",
     "house/require-query-key-factory": "error",
     "house/require-query-signal": "error",
 
@@ -168,6 +169,9 @@ export default defineConfig({
         // A test reads back a payload it serialized itself, so there is no
         // foreign shape for a schema to stand between.
         "house/no-raw-json-parse": "off",
+        // Neither path scanner reads `tests/` or `e2e/`, so a request built
+        // from a variable here has no coverage to lose.
+        "house/require-literal-api-path": "off",
       },
     },
     // The repo-wide import guard. Every later block that sets this rule
@@ -274,6 +278,10 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/fixtures/require-fetch-timeout.fixture.ts"],
       rules: { "house/require-fetch-timeout": "error" },
+    },
+    {
+      files: [".oxlint-plugins/fixtures/require-literal-api-path.fixture.ts"],
+      rules: { "house/require-literal-api-path": "error" },
     },
     {
       files: [".oxlint-plugins/fixtures/require-query-signal.fixture.ts"],

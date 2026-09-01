@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { paginationFields } from "./common";
 
-// The three enums must match backend enum values.
 export const JobTypeSchema = z.enum(["MATCH_FETCHER", "PLAYER_UPDATER"]);
 
 export const JobStatusSchema = z.enum([

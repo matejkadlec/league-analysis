@@ -715,26 +715,45 @@ def test_partial_window_coverage_lowers_confidence() -> None:
     assert result.confidence_band == "medium"
 
 
+# The tunable threshold of each signal, for the two things that set one: the
+# write model's range and every shipped preset.
+FIELD_TO_SIGNAL = {
+    "a1_step_change_threshold": "A1",
+    "a2_win_rate_surge_threshold": "A2",
+    "a3_novel_champion_threshold": "A3",
+    "a4_performance_threshold": "A4",
+    "b1_win_rate_delta_threshold": "B1",
+    "b2_consistency_shift_threshold": "B2",
+    "b3_bimodality_threshold": "B3",
+    "b4_drop_threshold": "B4",
+}
+
+
 def test_every_bounded_range_stays_below_its_saturation() -> None:
     """A range top at or above saturation would divide by zero or invert."""
     from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
 
-    field_to_signal = {
-        "a1_step_change_threshold": "A1",
-        "a2_win_rate_surge_threshold": "A2",
-        "a3_novel_champion_threshold": "A3",
-        "a4_performance_threshold": "A4",
-        "b1_win_rate_delta_threshold": "B1",
-        "b2_consistency_shift_threshold": "B2",
-        "b3_bimodality_threshold": "B3",
-        "b4_drop_threshold": "B4",
-    }
     fields = SmurfBoostDetectionMutableSettingsWriteV1.model_fields
-    for field_name, signal_id in field_to_signal.items():
+    for field_name, signal_id in FIELD_TO_SIGNAL.items():
         upper = next(
             item.le for item in fields[field_name].metadata if hasattr(item, "le")
         )
         assert upper < SIGNAL_SATURATIONS[signal_id], field_name
+
+
+def test_every_preset_threshold_stays_below_its_saturation() -> None:
+    """The same rule as above, read off the shipped presets directly.
+
+    A preset threshold at or above saturation makes the magnitude ramp divide by
+    zero or by a negative number for every viewer on that preset.
+    """
+    for preset_name, preset in PRESETS.items():
+        for field_name, signal_id in FIELD_TO_SIGNAL.items():
+            saturation = SIGNAL_SATURATIONS[signal_id]
+            assert preset[field_name] < saturation, (
+                f"{preset_name}.{field_name} is {preset[field_name]}, at or past "
+                f"signal {signal_id}'s saturation of {saturation}"
+            )
 
 
 def test_family_weights_sum_to_one() -> None:

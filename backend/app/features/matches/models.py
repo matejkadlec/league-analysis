@@ -28,8 +28,8 @@ class Match(Base):
 
     __tablename__ = "matches"
     __table_args__: Final = (
-        # Same canonical spelling as `core.players.platform`, so the two never
-        # silently disagree in a comparison; bare because `ck` already prefixes it.
+        # `test_every_platform_column_is_bounded_by_both_check_constraints`
+        # requires both on any table with `platform`; bare, as `ck` prefixes.
         CheckConstraint(
             "platform = lower(platform)",
             name="platform_is_lowercase",
@@ -49,7 +49,6 @@ class Match(Base):
     )
 
     match_id: Mapped[str] = mapped_column(
-        # Same width as the two tables that reference it.
         String(20),
         primary_key=True,
         comment="Unique match identifier from Riot API",
@@ -160,8 +159,8 @@ class Match(Base):
     participants: Mapped[list[MatchParticipant]] = relationship(lazy="raise")
 
 
-# No `index=True` on these columns: a btree on (a, b) already serves lookups on
-# (a). `game_mode`/`game_type` carry it because no composite leads with either.
+# No `index=True` where a composite below leads with the column, which
+# `test_no_indexed_column_is_already_led_by_a_composite` enforces everywhere.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)

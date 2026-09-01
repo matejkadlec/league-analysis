@@ -92,8 +92,8 @@ RANK_SPAN_TARGET_DAYS: Final[float] = 30.0
 CONFIDENCE_MEDIUM: Final[float] = 0.50
 CONFIDENCE_HIGH: Final[float] = 0.80
 
-# Every threshold must sit strictly below its signal's saturation, or the
-# magnitude ramp divides by zero or by a negative number.
+# Every threshold stays strictly below its signal's saturation; the two
+# `_stays_below_its_saturation` tests hold the ranges and these presets to it.
 PRESET_CONSERVATIVE: Final[str] = "conservative"
 PRESET_BALANCED: Final[str] = "balanced"
 PRESET_SENSITIVE: Final[str] = "sensitive"

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import packageJson from "../package.json";
 import oxlintConfig from "../oxlint.config.mts";
+import housePlugin from "../.oxlint-plugins/index.mts";
 import {
   FEATURE_BARREL_IMPORTS,
   SESSION_TEARDOWN_IMPORTS,
@@ -76,7 +77,16 @@ const EXPECTED_EXEMPTIONS: Record<string, string[][]> = {
     ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
     [".oxlint-plugins/**"],
   ],
+  // Both path scanners skip `tests/` and `e2e/`; anywhere else a request built
+  // from a variable leaves their coverage without saying so.
+  "house/require-literal-api-path": [["tests/**", "e2e/**"]],
 };
+
+/**
+ * A floor under the extraction below, not a census: it only has to prove the
+ * walk found rules before the comparison calls them all present.
+ */
+const MINIMUM_HOUSE_RULES = 10;
 
 type Override = {
   files?: string[];
@@ -96,6 +106,22 @@ const blocksSetting = (rule: string): Override[] =>
 
 const blocksTurningOff = (rule: string): Override[] =>
   overrides.filter((block) => block.rules?.[rule] === "off");
+
+/** Every setting the config gives each `house/<rule>`, top level and overrides. */
+const houseRuleSettings = (prefix: string): Map<string, unknown[]> => {
+  const settings = new Map<string, unknown[]>();
+  const blocks = [
+    (oxlintConfig.rules ?? {}) as Record<string, unknown>,
+    ...overrides.map((block) => block.rules ?? {}),
+  ];
+  for (const rules of blocks) {
+    for (const [rule, setting] of Object.entries(rules)) {
+      if (!rule.startsWith(prefix)) continue;
+      settings.set(rule, [...(settings.get(rule) ?? []), setting]);
+    }
+  }
+  return settings;
+};
 
 const optionsOf = (block: Override, rule: string) =>
   block.rules?.[rule] as [string, { patterns?: Pattern[] }];
@@ -234,6 +260,28 @@ describe("the oxlint config's shared teardown rules", () => {
     const rules = oxlintConfig.rules as Record<string, unknown>;
     expect(rules["typescript/no-floating-promises"]).toBe("error");
     expect(rules["typescript/no-misused-promises"]).toBe("error");
+  });
+
+  it("names every house rule the plugin registers, and registers every one it names", () => {
+    // Against `index.mts`, the other half of the pair: oxlint neither fails on
+    // a rule name it cannot resolve nor on a registered rule nobody enables.
+    const prefix = `${housePlugin.meta.name}/`;
+    const registered = Object.keys(housePlugin.rules);
+    const named = houseRuleSettings(prefix);
+    expect(registered.length).toBeGreaterThanOrEqual(MINIMUM_HOUSE_RULES);
+    expect(named.size).toBeGreaterThanOrEqual(MINIMUM_HOUSE_RULES);
+
+    expect([...named.keys()].sort()).toEqual(
+      registered.map((rule) => `${prefix}${rule}`).sort(),
+    );
+    for (const [rule, settings] of named) {
+      const enabled = settings.some(
+        (setting) =>
+          setting === "error" ||
+          (Array.isArray(setting) && setting[0] === "error"),
+      );
+      expect(enabled, `${rule} is turned off everywhere it is named`).toBe(true);
+    }
   });
 
   it("runs the session guards on application code at all", () => {

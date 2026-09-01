@@ -16,8 +16,8 @@ import { useManualRunOutcome } from "./use-manual-run-outcome";
 
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
-// The mutationFn stays at each call site because the backend's
-// test_frontend_api_paths.py reads the `validatedPost` URL literal there.
+// The mutationFn stays at each call site: `house/require-literal-api-path`
+// keeps every `validatedPost` URL where the path scanners can read it.
 function useControlMutation<TArg = void>(
   request: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
   success: {

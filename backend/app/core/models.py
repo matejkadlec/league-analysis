@@ -29,8 +29,8 @@ convention = {
     # which is not the spelling the migrations created.
     "ix": "ix_%(table_name)s_%(column_0_name)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
-    # An explicit `name=` on a CheckConstraint is substituted *into* this
-    # template, so spell those bare or they come out `ck_<table>_ck_<table>_...`.
+    # An explicit `name=` is substituted *into* this template, so it must be
+    # spelled bare. Gate: forbid-ck-prefixed-constraint-name.
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",

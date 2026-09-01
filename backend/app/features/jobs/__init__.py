@@ -1,4 +1,3 @@
 """Jobs feature - Background job management and execution."""
 
-# Deliberately no re-exports; see `app/features/auth/__init__.py`. Import from
-# the submodule (e.g. `from .scheduler import ...`).
+# No re-exports; enforced by forbid-feature-init-imports (see auth/__init__.py).
