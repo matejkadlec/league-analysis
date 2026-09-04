@@ -103,7 +103,7 @@ async def test_http_exception_rollback_logs_debug_not_warning() -> None:
 async def test_unexpected_rollback_still_logs_warning() -> None:
     manager, _session = _session_with_fake_factory()
 
-    with capture_logs() as logs, pytest.raises(ValueError):
+    with capture_logs() as logs, pytest.raises(ValueError, match="connection gone"):
         async with manager.get_session():
             raise ValueError("connection gone")
 

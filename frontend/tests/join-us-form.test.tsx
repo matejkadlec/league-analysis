@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Toast = ReturnType<typeof import("@/lib/core/hooks").useToast>;
@@ -64,7 +65,7 @@ vi.mock("@marsidev/react-turnstile", () => ({
 }));
 
 import { JoinUsForm } from "@/features/auth/components/join-us-form";
-import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/utils/join-us-message";
+import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/join-us-message";
 import type { AuthContextType } from "@/features/auth/types";
 
 const LONG_ENOUGH = "a".repeat(300);
@@ -215,11 +216,12 @@ describe("what the join-us form refuses to send", () => {
   });
 
   it("submits once the captcha comes back", async () => {
+    const user = userEvent.setup();
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
 
-    fireEvent.click(submitButton());
+    await user.click(submitButton());
 
     await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
     expect(validatedPost.mock.calls[0]?.[1]).toBe("/auth/join-us/contact");
@@ -255,11 +257,12 @@ describe("what happens after the send", () => {
     // A Turnstile token is single-use. Leaving the solved token in state means
     // the next submission sends one the server has already consumed, rejected
     // for a reason the sender cannot see.
+    const user = userEvent.setup();
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
 
-    fireEvent.click(submitButton());
+    await user.click(submitButton());
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
     expect(valueOf("Body")).toBe("");
@@ -270,12 +273,13 @@ describe("what happens after the send", () => {
   it("keeps the message the sender wrote when the send fails", async () => {
     // It is at least 300 characters and they typed it once. Clearing it on
     // failure is the difference between "try again" and "write it again".
+    const user = userEvent.setup();
     validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
 
-    fireEvent.click(submitButton());
+    await user.click(submitButton());
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(valueOf("Body")).toBe(LONG_ENOUGH);
@@ -286,12 +290,13 @@ describe("what happens after the send", () => {
     // The token was spent on the attempt that failed. Without the reset the
     // form still holds it, the button is still enabled, and every retry is
     // rejected by the server for reusing it.
+    const user = userEvent.setup();
     validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
 
-    fireEvent.click(submitButton());
+    await user.click(submitButton());
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(turnstileReset).toHaveBeenCalledTimes(1);
@@ -302,12 +307,13 @@ describe("what happens after the send", () => {
   it("shows the failure on the page as well as in a toast", async () => {
     // The toast disappears. The alert is what is still there when the sender
     // looks back at the form wondering whether it went.
+    const user = userEvent.setup();
     validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
 
-    fireEvent.click(submitButton());
+    await user.click(submitButton());
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(screen.getByRole("alert").textContent).toBeTruthy();

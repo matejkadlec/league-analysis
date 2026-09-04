@@ -171,17 +171,63 @@ function calledApiPaths(): Map<string, string[]> {
   return calls;
 }
 
-/**
- * The helpers whose next argument is an options bag, by HTTP method. The body
- * verbs take the same bag one slot later, after the body; reaching past an
- * arbitrary body expression is not attempted, so their query names go unread.
- */
+/** The helpers that can carry a query, by HTTP method. */
 const QUERY_HELPERS = new Map([
   ["validatedGet", "get"],
   ["validatedDelete", "delete"],
+  ["validatedPost", "post"],
+  ["validatedPut", "put"],
+  ["validatedPatch", "patch"],
   ["api.get", "get"],
   ["api.delete", "delete"],
+  ["api.post", "post"],
+  ["api.put", "put"],
+  ["api.patch", "patch"],
 ]);
+
+/** Those taking the bag one slot later, after the body. */
+const BODY_HELPERS = new Set([
+  "validatedPost",
+  "validatedPut",
+  "validatedPatch",
+  "api.post",
+  "api.put",
+  "api.patch",
+]);
+
+type Skipped =
+  | { kind: "argument"; rest: string }
+  | { kind: "end" }
+  | { kind: "unreadable" };
+
+/**
+ * Step over the argument after `source`'s leading comma, to reach a body
+ * verb's options bag. `unreadable` is a bracket or quote that never closed,
+ * which must not read as "sends nothing".
+ */
+function skipArgument(source: string): Skipped {
+  const separator = /^\s*,\s*/.exec(source);
+  if (!separator) return { kind: "end" };
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = separator[0].length; i < source.length; i += 1) {
+    const char = source[i];
+    if (quote !== null) {
+      if (char === "\\") i += 1;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "(" || char === "[" || char === "{") depth += 1;
+    else if (char === ")" || char === "]" || char === "}") {
+      if (depth === 0) return { kind: "end" };
+      depth -= 1;
+    } else if (char === "," && depth === 0) {
+      return { kind: "argument", rest: source.slice(i) };
+    }
+  }
+  return { kind: "unreadable" };
+}
 
 /** The object literal that follows a path argument, or null if there is none. */
 function optionsObjectAfter(source: string): string | null {
@@ -266,8 +312,8 @@ function paramsInsideOptions(bag: string): {
  */
 function calledQueryParams(): QueryCall[] {
   const calls: QueryCall[] = [];
-  for (const file of allSourceFiles()) {
-    const source = readFileSync(file, "utf8");
+  for (const sourceFile of allSourceFiles()) {
+    const source = readFileSync(sourceFile, "utf8");
     for (const match of source.matchAll(CALL_SITE)) {
       const method = QUERY_HELPERS.get(match[1] ?? "");
       if (!method) continue;
@@ -282,7 +328,17 @@ function calledQueryParams(): QueryCall[] {
       const names = new Set(
         [...apiPath.matchAll(/[?&]([a-zA-Z_]\w*)=/g)].map((m) => m[1] as string),
       );
-      const after = window.slice(literal.index + literal[0].length);
+      const key = `${method} ${normalizeCallPath(apiPath)}`;
+      const file = relative(process.cwd(), sourceFile);
+      const afterPath = window.slice(literal.index + literal[0].length);
+      const skipped = BODY_HELPERS.has(match[1] ?? "")
+        ? skipArgument(afterPath)
+        : ({ kind: "argument", rest: afterPath } as const);
+      if (skipped.kind === "unreadable") {
+        calls.push({ key, names, file, resolved: false });
+        continue;
+      }
+      const after = skipped.kind === "argument" ? skipped.rest : "";
       const bag = optionsObjectAfter(after);
       const inner = bag ? paramsInsideOptions(bag) : null;
       const body = inner?.object ?? null;
@@ -303,9 +359,9 @@ function calledQueryParams(): QueryCall[] {
         }
       }
       calls.push({
-        key: `${method} ${normalizeCallPath(apiPath)}`,
+        key,
         names,
-        file: `${relative(process.cwd(), file)}`,
+        file,
         // A params argument this cannot read is not the same as no params: a
         // ternary of two object literals reads as sending nothing, which
         // passes. A trailing comma before `)` is not an argument.
@@ -388,13 +444,13 @@ describe.skipIf(openApiPath === undefined)("zod against the OpenAPI contract", (
 
     const called = calledQueryParams();
     // Signal first: an extractor that stopped resolving call sites would pass
-    // by having nothing to compare.
-    expect(called.length).toBeGreaterThanOrEqual(28);
+    // by having nothing to compare. 53 today, the body verbs included.
+    expect(called.length).toBeGreaterThanOrEqual(53);
     // Sites found is the wrong number to guard on: a site whose argument the
     // extractor cannot read is still counted, contributes no names, and
     // compares nothing. Count the names that actually got compared.
     const compared = called.reduce((total, call) => total + call.names.size, 0);
-    expect(compared).toBeGreaterThanOrEqual(20);
+    expect(compared).toBeGreaterThanOrEqual(26);
 
     const problems: string[] = [];
     for (const { key, names, file, resolved } of called) {

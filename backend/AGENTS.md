@@ -45,6 +45,24 @@ The authoritative gate runs dependency sync from `uv.lock` before these checks.
 Tests are network-free and receive safe test-only environment values from the
 gate; they must not depend on a real Riot API key or production credentials.
 
+`tests/integration/` is the one exception, and it is opt-in: each file carries
+`@pytest.mark.integration` and `@pytest.mark.enable_socket`, and the session
+fixture builds a throwaway `lga_integration_tests_<uuid>` database from the
+`POSTGRES_*` environment, migrates it with `scripts/migrate.py upgrade head`,
+and hands out sessions inside a rolled-back outer transaction. It exists for
+the claims a compiled statement cannot make -- an `ON CONFLICT` target with no
+unique index behind it, JSONB `None` versus SQL NULL versus JSON `null`, a
+native enum with no `ALTER TYPE`, a server default, a trigger. With no
+PostgreSQL reachable it skips rather than fails, so `../test.sh -b` on a
+developer host is unaffected; run it for real with
+`docker compose -f compose.gate.yml run --rm gate -b`.
+
+A test states a rule the code must satisfy, never a copy of the code's current
+value, and its falsifiability is proven by mutating the production code rather
+than by reading it. `scripts/check_tests.py` and Ruff's `PT` rules enforce the
+mechanical part; the standard itself is in
+[`../docs/quality-checks.md`](../docs/quality-checks.md#what-makes-a-test-worth-keeping).
+
 ## Safety Boundaries
 
 Never call `Base.metadata.create_all()` for application schemas. Create a

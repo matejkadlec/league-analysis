@@ -201,7 +201,7 @@ async def test_player_refresh_uses_the_shared_writer_guard(
             player, cast(RiotAPIClient, object())
         )
 
-    guard.assert_awaited_once()
+    guard.assert_awaited_once_with(player_service.db)
 
 
 async def test_match_storage_rechecks_maintenance_before_each_write(
@@ -219,4 +219,4 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
     with pytest.raises(RiotWriterMaintenanceActiveError):
         await service._reprocess_match(cast(MatchDTO, SimpleNamespace()))
 
-    guard.assert_awaited_once()
+    guard.assert_awaited_once_with(service.db)

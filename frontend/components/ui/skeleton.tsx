@@ -6,6 +6,9 @@ function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
+      // Named so the e2e harness can wait for every gated card to have
+      // resolved, which is what it means for a populated page to be ready.
+      data-slot="skeleton"
       className={cn(
         "relative overflow-hidden rounded-md bg-muted/40",
         "before:absolute before:inset-0 before:-translate-x-full",

@@ -34,7 +34,7 @@ import { useTurnstileCaptcha } from "./use-turnstile-captcha";
 import {
   JOIN_US_BODY_MAX_LENGTH,
   JOIN_US_BODY_MIN_LENGTH,
-} from "../utils/join-us-message";
+} from "../join-us-message";
 
 const SUBJECT_OPTIONS: { value: JoinUsSubject; label: string }[] = [
   { value: "full_stack_developer", label: "Full-Stack Developer" },

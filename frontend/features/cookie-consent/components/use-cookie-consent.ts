@@ -18,7 +18,7 @@ import {
   notifyCookieConsentUpdated,
   readCookieConsentFromBrowser,
   writeCookieConsent,
-} from "../utils/consent-storage";
+} from "../consent-storage";
 
 type ConsentReconciliation =
   | { outcome: "adopt"; consent: CookieConsentState }

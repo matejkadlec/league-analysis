@@ -171,7 +171,7 @@ export function useJobCardControls(
         JobControlActionResponseSchema,
         `/jobs/${job.id}/stop`,
         undefined,
-        { params: force ? { force: true } : undefined },
+        { params: { ...(force && { force: true }) } },
       ),
     {
       title: `${job.name} stop requested`,
@@ -190,7 +190,7 @@ export function useJobCardControls(
           JobTriggerResponseSchema,
           `/jobs/${job.id}/test`,
           undefined,
-          { params: suspendRegular ? { suspend_regular: true } : undefined },
+          { params: { ...(suspendRegular && { suspend_regular: true }) } },
         ),
       ),
     onSuccess: (response) => {

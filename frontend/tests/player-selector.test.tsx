@@ -27,7 +27,7 @@ vi.mock("@/lib/core/hooks", () => ({
 }));
 
 import { PlayerSelector } from "@/features/players/components/player-selector";
-import { RIOT_ID_SEARCH_MAX_LENGTH } from "@/features/players/utils/riot-id";
+import { RIOT_ID_SEARCH_MAX_LENGTH } from "@/features/players/riot-id";
 import type { Player } from "@/lib/core/schemas";
 
 type SelectPlayer = ComponentProps<typeof PlayerSelector>["onPlayerSelected"];

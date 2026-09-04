@@ -118,9 +118,9 @@ describe("the one button that does five different things", () => {
 
     await waitFor(() => {
       expect(requestedPaths()).toEqual(["/jobs/7/stop"]);
-      // No `force=false` either: the param is absent unless it is asked for,
-      // matching the URL the request used to carry.
-      expect(validatedPost.mock.calls[0]?.[3]?.params).toBeUndefined();
+      // No `force=false` either: the bag is empty unless the force is asked
+      // for, so axios sends no query string at all.
+      expect(validatedPost.mock.calls[0]?.[3]?.params).toEqual({});
     });
   });
 

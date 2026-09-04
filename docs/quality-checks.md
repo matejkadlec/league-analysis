@@ -27,7 +27,12 @@ so it is safe to call from the main checkout or any worktree.
   builds both production images, runs the Compose migration service,
   health-checks the stack, and performs a real dump and restore. It is
   deliberately outside `./test.sh`, which must stay fast enough to run during
-  implementation.
+  implementation. One failure class does not need the build to find, though:
+  an import reaching a path `.dockerignore` removes fails `next build` inside
+  the image and nothing anywhere else, because `./test.sh` builds in the full
+  repository where every import resolves. `scripts/check-docker-context-imports.sh`
+  decides that from the two files alone, in under a second, so the answer
+  arrives at commit time rather than sixteen CI minutes later.
 - **The Playwright suite is inside the gate, and runs against the production
   build.** It used to sit outside because provisioning a pinned browser was not
   deterministic; `gate.Dockerfile` now installs the Chromium matching the
@@ -114,6 +119,67 @@ so it is safe to call from the main checkout or any worktree.
   secrets.** They follow the normal workflow: rebase on current `master`, run
   the complete gate, wait for required checks and review, merge through the
   protected path.
+
+## What makes a test worth keeping
+
+Coverage measures execution, not verification. A test can run a line and prove
+nothing about it, and a generator writing tests to a coverage number optimises
+for exactly that gap — so the standard below is the thing being enforced, and
+the gate steps after it are only the mechanical part anyone could automate.
+
+**The test is: does the assertion state a rule the code must satisfy, or does
+it mirror the code's current value?** `<ProtectedRoute requireAdmin>` on the
+admin page is a rule; `padding: 12px` is a value. Two families are deleted on
+sight:
+
+- **Tautological** — the expectation is re-derived from the implementation, so
+  no change to the data can break it.
+- **Source-echo** — the test reads a file and asserts it contains a literal
+  copied out of that same file. It fails only when someone edits the file, and
+  the fix is always to update the copy.
+
+Deliberately *not* on that list, because all three state rules: whole-tree
+policy scans with allowlists, cross-boundary alignment checks (frontend zod
+against backend Pydantic), and assertions on runtime artifacts — compiled SQL,
+built URLs, rendered DOM.
+
+**Falsifiability is proven by mutation, never by reading.** Reading shows only
+that an assertion passes today. Back up the production file, apply the
+regression the test claims to guard, run that one test, restore. A test that
+survives its own mutation is dead; one that fails is load-bearing. This is not
+a formality — it has repeatedly reversed the verdict in both directions, and
+`.claude/pitfalls.md` records the bytecode-caching trap that makes a
+same-length mutation report a false pass.
+
+## What the gate enforces mechanically
+
+Each of these exists because a specific shape of test survived review.
+
+- **`house/meaningful-tests`** (oxlint, `tests/**` and `e2e/**`) — a test whose
+  every assertion is a mock-call matcher, and a bare `toThrow()`, which every
+  error satisfies including the `TypeError` from the bug.
+- **`house/no-fire-event-click`** — `fireEvent` for actions a user performs.
+  `fireEvent` dispatches one event straight at the node, so it passes on a
+  control that is disabled, `display:none`, or under `pointer-events: none`;
+  `user-event` performs the real sequence and checks reachability on the way.
+  Proven here: a test drove a button production renders `hidden`.
+- **`expect.requireAssertions`** and `scripts/check_tests.py` — the runtime and
+  AST halves of "this test asserts something". The Python script is the
+  backend's counterpart to `meaningful-tests`; nothing else in the backend gate
+  asks whether a test can fail.
+- **Ruff `PT`** — `pytest.raises(ValueError)` with no `match=` is the shape a
+  generator reaches for on every error path, and it passes on the `ValueError`
+  a bug raises as readily as the one the test names. `PT018` splits
+  `assert a and b`, where one half can rot unnoticed.
+- **`strict_xfail`** — an `xfail` that starts passing is otherwise silent.
+- **Randomised order** (`sequence.shuffle`) — an order-dependent test passes
+  only because another test ran first, and nothing else can see one.
+
+Mutation testing is the general form of all of this and is deliberately *not*
+in the gate: whole-repo runs are an overnight job on this hardware. Run it
+per-diff when a slice's tests deserve auditing —
+[`.claude/test-research-2026-08-29.md`](../.claude/test-research-2026-08-29.md)
+records the tooling, the costs and what was rejected.
 
 ## Stable check names
 

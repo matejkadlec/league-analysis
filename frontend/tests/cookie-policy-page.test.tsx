@@ -32,7 +32,7 @@ import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
 } from "@/lib/session/auth-state-cookie";
-import { COOKIE_CONSENT_VERSION } from "@/features/cookie-consent/utils/consent-storage";
+import { COOKIE_CONSENT_VERSION } from "@/features/cookie-consent/consent-storage";
 
 const jar = new Map<string, string>();
 

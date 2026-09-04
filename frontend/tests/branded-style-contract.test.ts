@@ -35,7 +35,7 @@ const HAND_ROLLED_GRADIENTS = new Map([
     "a separator that fades out at both ends, not a surface",
   ],
   [
-    "features/players/utils/rank-colors.ts",
+    "features/players/rank-colors.ts",
     "Riot's own Challenger rank colours, which are a gradient by definition",
   ],
 ]);

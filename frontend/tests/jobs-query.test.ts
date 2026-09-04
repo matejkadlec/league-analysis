@@ -1,14 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HttpResponse, http, type JsonBodyType } from "msw";
+import { beforeEach, describe, expect, it } from "vitest";
 
-const { validatedGet } = vi.hoisted(() => ({
-  validatedGet: vi.fn<typeof import("@/lib/core/http/api").validatedGet>(),
-}));
-
-vi.mock("@/lib/core/http/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/core/http/api")>()),
-  validatedGet,
-}));
+import { apiRoute } from "./support/api-route";
+import { server } from "./support/msw-server";
 
 import {
   invalidateJobsData,
@@ -42,24 +37,44 @@ function executionList(count: number, total: number): JobExecutionListResponse {
   };
 }
 
+/** The query string of every request the API actually received. */
+const received: Record<string, string>[] = [];
+
+/** Serve one route, and only that route: a request to any other path reaches
+ * no handler, and `onUnhandledRequest: "error"` fails it. */
+function serve(path: string, body: JsonBodyType) {
+  server.use(
+    http.get(apiRoute(path), ({ request }) => {
+      received.push(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json(body);
+    }),
+  );
+}
+
+function retryFreeClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
 describe("the jobs surface's four caches", () => {
-  beforeEach(() => validatedGet.mockReset());
+  beforeEach(() => {
+    received.length = 0;
+  });
 
   it("lists every configuration, running or not, on the promised cadence", async () => {
     // The page header counts down JOBS_REFRESH_INTERVAL_MS; `active_only:
     // false` is what keeps retired jobs visible to the admin at all.
-    validatedGet.mockResolvedValue({ success: true, data: [] });
+    serve("/jobs/", []);
     const options = jobsQueryOptions();
-    const queryClient = new QueryClient();
+    const queryClient = retryFreeClient();
 
+    // The cadence itself, not just agreement with the constant: every
+    // `refetchInterval` below is built from this import, so identity alone
+    // survives the interval dropping to two seconds.
+    expect(JOBS_REFRESH_INTERVAL_MS).toBe(15_000);
     expect(options.refetchInterval).toBe(JOBS_REFRESH_INTERVAL_MS);
     await queryClient.fetchQuery(options);
 
-    expect(validatedGet).toHaveBeenCalledTimes(1);
-    expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/");
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
-      active_only: false,
-    });
+    expect(received).toEqual([{ active_only: "false" }]);
     expect(queryClient.getQueryData(["jobs"])).toEqual([]);
   });
 
@@ -69,58 +84,45 @@ describe("the jobs surface's four caches", () => {
       active_jobs: 2,
       running_executions: 1,
     };
-    validatedGet.mockResolvedValue({ success: true, data: status });
+    serve("/jobs/status/overview", status);
     const options = jobStatusQueryOptions();
-    const queryClient = new QueryClient();
+    const queryClient = retryFreeClient();
 
     expect(options.refetchInterval).toBe(JOBS_REFRESH_INTERVAL_MS);
     await queryClient.fetchQuery(options);
 
-    expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/status/overview");
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toBeUndefined();
+    // Nothing narrows the strip: it reports the scheduler, not a selection.
+    expect(received).toEqual([{}]);
     expect(queryClient.getQueryData(["job-status"])).toEqual(status);
   });
 
   it("asks for one job's five most recent scheduled runs, and only once it has an id", async () => {
     // A card with id 0 has nothing to request, and `execution_type:
     // REGULAR` keeps test runs out of the schedule's own history.
-    validatedGet.mockResolvedValue({
-      success: true,
-      data: executionList(5, 5),
-    });
+    serve("/jobs/7/executions", executionList(5, 5));
     const options = jobRecentExecutionsQueryOptions(7);
-    const queryClient = new QueryClient();
+    const queryClient = retryFreeClient();
 
     expect(jobRecentExecutionsQueryOptions(0).enabled).toBe(false);
     expect(options.enabled).toBe(true);
     await queryClient.fetchQuery(options);
 
-    expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/7/executions");
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
-      page: 1,
-      size: 5,
-      execution_type: "REGULAR",
-    });
+    expect(received).toEqual([
+      { page: "1", size: "5", execution_type: "REGULAR" },
+    ]);
     expect(queryClient.getQueryData(["job-executions", 7])).toEqual(
       executionList(5, 5),
     );
   });
 
   it("scrolls every job's executions in fixed-size pages and stops at the end", async () => {
-    validatedGet.mockResolvedValue({
-      success: true,
-      data: executionList(20, 21),
-    });
+    serve("/jobs/executions/all", executionList(20, 21));
     const options = jobExecutionsInfiniteQueryOptions();
-    const queryClient = new QueryClient();
+    const queryClient = retryFreeClient();
 
     const result = await queryClient.fetchInfiniteQuery(options);
 
-    expect(validatedGet.mock.calls[0]?.[1]).toBe("/jobs/executions/all");
-    expect(validatedGet.mock.calls[0]?.[2]?.params).toEqual({
-      page: 1,
-      size: 20,
-    });
+    expect(received).toEqual([{ page: "1", size: "20" }]);
     expect(result.pages).toHaveLength(1);
     expect(options.initialPageParam).toBe(1);
     // One more run exists than page 1 holds, so the next scroll asks for page
@@ -158,15 +160,13 @@ describe("the jobs surface's four caches", () => {
   it("re-throws the failure envelope rather than caching it as page 1", async () => {
     // Returned as data, a failure reads as "20 executions and done" and
     // silently truncates the list; thrown, it reaches the error state.
-    validatedGet.mockResolvedValue({
-      success: false,
-      error: {
-        message: "The League Analysis service could not complete the request.",
-        kind: "service",
-        status: 503,
-      },
-    });
-    const queryClient = new QueryClient();
+    server.use(
+      http.get(
+        apiRoute("/jobs/executions/all"),
+        () => new HttpResponse(null, { status: 503 }),
+      ),
+    );
+    const queryClient = retryFreeClient();
 
     await expect(
       queryClient.fetchInfiniteQuery(jobExecutionsInfiniteQueryOptions()),

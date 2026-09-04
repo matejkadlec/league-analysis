@@ -141,10 +141,9 @@ describe("Match History controls", () => {
       expect(hasDetailedRequest({ queues: "440", start: 0 })).toBe(true),
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ranked Solo/Duo" }),
-      { shiftKey: true },
-    );
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("button", { name: "Ranked Solo/Duo" }));
+    await user.keyboard("{/Shift}");
     await waitFor(() =>
       expect(hasDetailedRequest({ queues: "420,440", start: 0 })).toBe(true),
     );
@@ -253,6 +252,7 @@ describe("Match History controls", () => {
     // This query sets `silenceErrorToast`, so the card below is the only thing
     // telling the viewer anything went wrong. The network-shaped rejection also
     // pins the component's own `retry` predicate.
+    const user = userEvent.setup();
     const networkFailure = new axios.AxiosError("Network Error");
     validatedGet.mockReset();
     validatedGet.mockRejectedValue(networkFailure);
@@ -265,7 +265,7 @@ describe("Match History controls", () => {
     ).toBeNull();
 
     validatedGet.mockClear();
-    fireEvent.click(retry);
+    await user.click(retry);
 
     await waitFor(() => expect(validatedGet).toHaveBeenCalled());
 

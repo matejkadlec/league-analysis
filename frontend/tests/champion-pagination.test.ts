@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CHAMPIONS_PER_PAGE,
   getChampionPage,
   pageForChampionDataSource,
-} from "../features/profile/utils/champion-pagination";
+} from "../features/profile/champion-pagination";
 
 describe("Top Champions pagination", () => {
   it("uses a fixed five-row page size across first, middle, and partial-final pages", () => {
     const champions = Array.from({ length: 12 }, (_, index) => index + 1);
 
-    expect(CHAMPIONS_PER_PAGE).toBe(5);
     expect(getChampionPage(champions, 0)).toMatchObject({
       items: [1, 2, 3, 4, 5],
       page: 0,

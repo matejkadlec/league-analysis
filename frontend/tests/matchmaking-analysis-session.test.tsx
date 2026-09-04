@@ -45,6 +45,22 @@ import { renderWithQueryClient } from "./support/render-support";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 
+// A run stored as complete but carrying no results is rewritten to `failed`
+// by the schema, so a fixture meant to be completed has to carry a payload.
+const RESULTS = {
+  team_avg_winrate: 0.5,
+  enemy_avg_winrate: 0.5,
+  matches_analyzed: 10,
+};
+
+function completedRun(): MatchmakingAnalysisResponse {
+  return analysis("completed", {
+    progress: 100,
+    results: RESULTS,
+    completed_at: createdAt,
+  });
+}
+
 // Parsed through the real schema so a fixture the API could never send fails
 // here rather than agreeing with a mock's stale shape.
 function analysis(
@@ -138,6 +154,7 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("starts a run with the match count and end date the form collected", async () => {
+    const user = userEvent.setup();
     startMatchmakingAnalysis.mockReturnValue(
       new Promise<ApiResponse<MatchmakingAnalysisResponse>>(() => undefined),
     );
@@ -147,11 +164,11 @@ describe("the matchmaking analysis session", () => {
     // The start card's controls are the session's own state; changing them
     // here proves the wiring that carries the form into the start request.
     // A date input is set whole, not typed digit by digit.
-    fireEvent.click(screen.getByRole("button", { name: "20" }));
+    await user.click(screen.getByRole("button", { name: "20" }));
     fireEvent.change(screen.getByLabelText("Last day to include (optional)"), {
       target: { value: "2026-08-01" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Start Analysis" }));
+    await user.click(screen.getByRole("button", { name: "Start Analysis" }));
 
     await waitFor(() => {
       expect(startMatchmakingAnalysis).toHaveBeenCalledWith(
@@ -169,7 +186,7 @@ describe("the matchmaking analysis session", () => {
   });
 
   it("offers a fresh run once the latest one is finished", async () => {
-    renderSession(analysis("completed", { progress: 100 }));
+    renderSession(completedRun());
 
     expect(
       await screen.findByRole("button", { name: "Run New Analysis" }),
@@ -179,6 +196,32 @@ describe("the matchmaking analysis session", () => {
       screen.queryByRole("button", { name: "Cancel Analysis" }),
     ).toBeNull();
     expect(getMatchmakingAnalysisStatus).not.toHaveBeenCalled();
+  });
+
+  it("stops polling once the watched run ends badly", async () => {
+    // A run the backend failed keeps its watch id, so `refetchInterval` is the
+    // only thing that can end the poll -- a completed run stops anyway when
+    // the query goes disabled. Only waiting past the 3s interval sees it.
+    answerStatusWith(analysis("failed", { error_code: "no_matches_analyzed" }));
+
+    renderSession(analysis("in_progress"));
+
+    // The watch is over once the session offers a new run rather than a cancel.
+    expect(
+      await screen.findByRole("button", { name: "Run New Analysis" }),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(getMatchmakingAnalysisStatus).toHaveBeenCalled();
+    });
+    const callsOnceFinished = getMatchmakingAnalysisStatus.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 3_500));
+
+    expect(getMatchmakingAnalysisStatus).toHaveBeenCalledTimes(
+      callsOnceFinished,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Cancel Analysis" }),
+    ).toBeNull();
   });
 
   it("ends the watch quietly when the watched run disappears", async () => {

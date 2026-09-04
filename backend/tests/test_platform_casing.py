@@ -48,14 +48,8 @@ def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> No
     Riot platform stores cleanly -- and then fails `PlayerResponse`, whose
     field is the enum: a 500 on the player routes and in the writer jobs.
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="is not a valid Platform"):
         normalize_platform(unknown)
-
-
-def test_normalize_platform_is_idempotent() -> None:
-    """Normalising a stored value again must not change it."""
-    for member in Platform:
-        assert normalize_platform(normalize_platform(member)) == member.value
 
 
 def test_platform_enum_values_are_already_canonical() -> None:

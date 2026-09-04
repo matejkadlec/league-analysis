@@ -2,11 +2,8 @@ import axios, { type AxiosError } from "axios";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import {
-  apiErrorMessage,
-  normalizeApiError,
-} from "../lib/core/http/api-error";
-import { playerTrackingFailureKind } from "../features/players/utils/tracking-feedback";
+import { apiErrorMessage, normalizeApiError } from "../lib/core/http/api-error";
+import { playerTrackingFailureKind } from "../features/players/tracking-feedback";
 
 function axiosError(
   status: number | undefined,
@@ -35,18 +32,27 @@ describe("API error presentation", () => {
     [400, { detail: "Internal server error updating settings" }],
     [500, { detail: "SQLAlchemy stack trace at /api/v1/settings" }],
     [503, { message: "RiotAPIError: provider response included RGAPI-secret" }],
-  ])("does not expose raw technical response text for HTTP %s", (status, data) => {
-    const result = normalizeApiError(axiosError(status, data));
+  ])(
+    "does not expose raw technical response text for HTTP %s",
+    (status, data) => {
+      const result = normalizeApiError(axiosError(status, data));
 
-    expect(result.message).not.toMatch(
-      /internal server|sqlalchemy|stack trace|\/api\/|riotapierror|rgapi-secret/i,
-    );
-  });
+      expect(result.message).not.toMatch(
+        /internal server|sqlalchemy|stack trace|\/api\/|riotapierror|rgapi-secret/i,
+      );
+    },
+  );
 
   it.each([
     ["a string detail", { detail: "Traceback (most recent call last)" }],
-    ["a structured detail", { detail: { code: "sqlalchemy.exc.OperationalError" } }],
-    ["a top-level field", { error_code: "at Object.<anonymous> (/app/main.py)" }],
+    [
+      "a structured detail",
+      { detail: { code: "sqlalchemy.exc.OperationalError" } },
+    ],
+    [
+      "a top-level field",
+      { error_code: "at Object.<anonymous> (/app/main.py)" },
+    ],
   ])("refuses to carry %s through as an error code", (_label, data) => {
     // Widening `SAFE_CODE_PATTERN` to `/.*/` kept all 353 tests green. `code` is
     // the field callers branch on and `reportApiError` logs, so prose arriving in
@@ -82,9 +88,7 @@ describe("API error presentation", () => {
 
   it("recognizes an exact legacy string detail as an error code", () => {
     expect(
-      normalizeApiError(
-        axiosError(503, { detail: "RIOT_API_KEY_INVALID" }),
-      ),
+      normalizeApiError(axiosError(503, { detail: "RIOT_API_KEY_INVALID" })),
     ).toMatchObject({
       kind: "service",
       code: "RIOT_API_KEY_INVALID",
@@ -131,7 +135,9 @@ describe("API error presentation", () => {
   it("classifies authentication, authorization, not-found and conflict paths", () => {
     expect(normalizeApiError(axiosError(401, {})).kind).toBe("authentication");
     expect(normalizeApiError(axiosError(403, {})).kind).toBe("authorization");
-    expect(normalizeApiError(axiosError(404, { detail: "Player not found" }))).toMatchObject({
+    expect(
+      normalizeApiError(axiosError(404, { detail: "Player not found" })),
+    ).toMatchObject({
       kind: "not-found",
       message: "Player not found",
     });
@@ -168,6 +174,34 @@ describe("API error presentation", () => {
     });
   });
 
+  it("keeps a backend message of exactly the length limit, and drops one over", () => {
+    // 240 is the limit, so only these two lengths separate `>` from `>=`.
+    // Over it the viewer gets the generic sentence instead of a wall of text.
+    const atLimit = "a".repeat(240);
+    const overLimit = "a".repeat(241);
+
+    expect(
+      normalizeApiError(axiosError(400, { detail: atLimit })).message,
+    ).toBe(atLimit);
+    expect(
+      normalizeApiError(axiosError(400, { detail: overLimit })).message,
+    ).not.toContain("aaa");
+  });
+
+  it("reads a connect timeout as a timeout, not as an unknown failure", () => {
+    // Axios reports a read timeout as ECONNABORTED and a connect timeout as
+    // ETIMEDOUT. This error's message says nothing about time, so the branch
+    // is the only thing that can classify it.
+    const connectTimeout = normalizeApiError(
+      axiosError(undefined, undefined, "ETIMEDOUT"),
+    );
+
+    expect(connectTimeout).toMatchObject({
+      kind: "timeout",
+      code: "REQUEST_TIMEOUT",
+    });
+  });
+
   it("uses a feature-specific fallback for unexpected and service failures", () => {
     const service = normalizeApiError(
       axiosError(500, { detail: "Internal server error" }),
@@ -179,5 +213,66 @@ describe("API error presentation", () => {
         "Player tracking could not be updated. Please try again later.",
       ),
     ).toBe("Player tracking could not be updated. Please try again later.");
+  });
+  it("sanitizes the message inside details, not only the top-level one", () => {
+    // `details.detail` is handed to callers whole. Cleaning only the message
+    // the toast shows leaves the same text one property deeper, where the
+    // credential dialog and `reportApiError` both read it.
+    const result = normalizeApiError(
+      axiosError(409, {
+        detail: {
+          code: "ACCOUNT_LOCKED",
+          message: "SQLAlchemy OperationalError at /api/v1/auth/sign-in",
+        },
+      }),
+    );
+
+    expect(result.details?.detail.message).toBeUndefined();
+    expect(result.message).not.toMatch(/sqlalchemy|\/api\//i);
+  });
+
+  it("attaches no structured details when the server sent a plain string", () => {
+    // Parsing an unguarded string through the schema yields a truthy `{}`,
+    // which reads downstream as "structured detail present but empty" rather
+    // than as the legacy string shape it actually is.
+    const stringDetail = normalizeApiError(
+      axiosError(409, { detail: "That name is already taken." }),
+    );
+    const structured = normalizeApiError(
+      axiosError(409, { detail: { code: "NAME_TAKEN" } }),
+    );
+
+    expect(stringDetail.details).toBeUndefined();
+    expect(stringDetail.message).toBe("That name is already taken.");
+    expect(structured.details).toBeDefined();
+  });
+
+  it("shows a structured message only when a code vouches for it", () => {
+    // The code is what marks a message as one this API defines. Without it any
+    // uncoded `detail.message` a backend or proxy returns is rendered verbatim.
+    const uncoded = normalizeApiError(
+      axiosError(429, { detail: { message: "Slow down, friend." } }),
+    );
+    const coded = normalizeApiError(
+      axiosError(429, {
+        detail: { code: "RATE_LIMITED", message: "Slow down, friend." },
+      }),
+    );
+
+    expect(uncoded.message).toBe(
+      "Too many requests. Please wait a moment and try again.",
+    );
+    expect(coded.message).toBe("Slow down, friend.");
+  });
+
+  it("always words a 401 as an expired session", () => {
+    // The viewer is about to be signed out, so this copy has to match what the
+    // sign-in page then tells them; a backend phrasing contradicts it.
+    const result = normalizeApiError(
+      axiosError(401, { detail: "Bearer token rejected by the proxy." }),
+    );
+
+    expect(result.message).toBe("Your session expired. Please sign in again.");
+    expect(result.kind).toBe("authentication");
   });
 });

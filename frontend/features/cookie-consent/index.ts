@@ -8,4 +8,4 @@ export {
   readOptionalStorage,
   requestCookieConsentPreferences,
   writeOptionalStorage,
-} from "./utils/consent-storage";
+} from "./consent-storage";

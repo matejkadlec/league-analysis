@@ -63,6 +63,7 @@ GATE_HOOKS = (
     "forbid-icon-library-objective-icons",
     "forbid-nextjs-middleware",
     "check-docs-links",
+    "check-docker-context-imports",
 )
 
 # Local hooks ./test.sh already runs as steps of its own, against the locked

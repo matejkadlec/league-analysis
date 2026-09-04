@@ -36,7 +36,7 @@ vi.mock("@/lib/core/hooks", () => ({
 }));
 
 import { useMatchmakingAnalysisMutations } from "@/features/matchmaking/components/use-matchmaking-analysis-mutations";
-import type { AnalysisUiAction } from "@/features/matchmaking/components/matchmaking-analysis-state";
+import type { AnalysisUiAction } from "@/features/matchmaking/matchmaking-analysis-state";
 import {
   matchmakingAnalysisQueryKey,
   matchmakingHistoryQueryKey,
@@ -144,6 +144,38 @@ describe("starting a matchmaking analysis", () => {
       "Matchmaking analysis started",
       expect.anything(),
     );
+  });
+
+  it("clears this player's run without emptying the whole cache", async () => {
+    // `removeQueries` called with no key drops every query the app holds. The
+    // test above cannot see that, because it only ever seeds this player --
+    // the wipe and the targeted removal leave identical state behind.
+    const started = run({ progress: 55 });
+    startMatchmakingAnalysis.mockResolvedValue({ success: true, data: started });
+    const { result, queryClient } = renderMutations();
+    const otherPlayer = run({ progress: 90 });
+    queryClient.setQueryData(matchmakingStatusQueryKey("player-puuid"), run());
+    queryClient.setQueryData(
+      matchmakingStatusQueryKey("other-puuid"),
+      otherPlayer,
+    );
+    queryClient.setQueryData(matchmakingHistoryQueryKey("other-puuid"), [
+      otherPlayer,
+    ]);
+
+    await act(async () => {
+      result.current.startMutation.mutate();
+    });
+
+    expect(
+      queryClient.getQueryState(matchmakingStatusQueryKey("player-puuid")),
+    ).toBeUndefined();
+    expect(
+      queryClient.getQueryData(matchmakingStatusQueryKey("other-puuid")),
+    ).toBe(otherPlayer);
+    expect(
+      queryClient.getQueryData(matchmakingHistoryQueryKey("other-puuid")),
+    ).toEqual([otherPlayer]);
   });
 
   it("reports a refused start on the card and leaves the caches empty", async () => {

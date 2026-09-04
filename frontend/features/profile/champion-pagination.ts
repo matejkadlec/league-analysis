@@ -1,4 +1,6 @@
-export const CHAMPIONS_PER_PAGE = 5;
+// Module-private: the page size is observable through `getChampionPage`,
+// which is what the tests assert against.
+const CHAMPIONS_PER_PAGE = 5;
 
 export interface ChampionPaginationState {
   dataSourceKey: string;

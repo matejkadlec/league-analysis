@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { renderWithQueryClient } from "./support/render-support";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -482,12 +483,19 @@ describe("the last matchmaking analysis result", () => {
   it("offers a way back to the latest run from a picked one", async () => {
     // Selection is the page's state, so without this control a viewer who
     // opened an old run has nothing on screen that returns them to the latest.
+    const user = userEvent.setup();
     const PICKED = new Date(2026, 1, 9, 10, 0).toISOString();
     getMatchmakingAnalysisStatus.mockResolvedValue(completed(EVEN, PICKED));
     const { queryClient } = renderResults(PICKED);
 
-    await waitFor(() => expect(screen.getByText("Show latest")).toBeTruthy());
-    fireEvent.click(screen.getByText("Show latest"));
+    // The loading card carries a "Show latest" of its own, so waiting on that
+    // text alone hands back a button the loaded card is about to replace.
+    await screen.findByText(/Based on \d+ ranked matches/);
+
+    // The state the control belongs to: an old run on screen is the only
+    // thing there is to come back from.
+    expect(screen.getByText("Selected Analysis Result")).toBeTruthy();
+    await user.click(screen.getByText("Show latest"));
 
     expect(showLatest).toHaveBeenCalledTimes(1);
     queryClient.clear();

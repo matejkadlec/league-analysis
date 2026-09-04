@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRunInterval } from "@/features/jobs/components/job-card-format";
+import { formatRunInterval } from "@/features/jobs/job-card-format";
 
 describe("formatRunInterval", () => {
   it("formats the resolved interval as English", () => {

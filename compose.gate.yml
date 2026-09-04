@@ -54,6 +54,13 @@ services:
       JWT_SECRET_KEY: league-analysis-gate-jwt-secret-32-characters
       ENVIRONMENT: test
       DEBUG: "false"
+      # Pinned so the gate and a developer's host agree. The container
+      # inherits Debian's UTC while this host runs BST, and `lib/core/format.ts`
+      # formats in local time on purpose -- so the two were one
+      # timezone-sensitive assertion away from a failure that reproduces on
+      # only one of them. Verified no current test depends on the offset: the
+      # whole frontend suite passes under TZ=Pacific/Kiritimati (UTC+14).
+      TZ: UTC
     # Run as the invoking user so npm, uv and Next.js write build output the
     # host can still read and delete. CI exports these from `id`.
     user: "${LGA_GATE_UID:-1000}:${LGA_GATE_GID:-1000}"

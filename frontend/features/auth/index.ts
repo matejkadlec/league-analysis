@@ -7,4 +7,4 @@ export {
   DISPLAY_NAME_MAX_LENGTH,
   DISPLAY_NAME_MIN_LENGTH,
   DISPLAY_NAME_PATTERN,
-} from "./utils/display-name";
+} from "./display-name";

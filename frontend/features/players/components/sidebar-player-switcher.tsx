@@ -12,7 +12,7 @@ import {
 import { PlayerSelector } from "../components/player-selector";
 import { TrackedPlayersList } from "../components/tracked-players-list";
 import { usePlayerContext } from "../context/player-context";
-import { formatRiotId } from "../utils/riot-id";
+import { formatRiotId } from "../riot-id";
 import type { Player } from "@/lib/core/schemas";
 
 interface SidebarPlayerSwitcherProps {

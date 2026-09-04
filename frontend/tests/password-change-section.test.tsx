@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { UserEvent } from "@testing-library/user-event";
 
 import { renderWithQueryClient } from "./support/render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -63,8 +65,8 @@ function changeButton(): HTMLButtonElement {
   }) as HTMLButtonElement;
 }
 
-function submit(): void {
-  fireEvent.click(changeButton());
+async function submit(user: UserEvent): Promise<void> {
+  await user.click(changeButton());
 }
 
 /** What the API hands back when it refuses with a structured code. */
@@ -92,13 +94,14 @@ describe("changing an account password", () => {
   });
 
   it("will not send a new password that was typed differently twice", async () => {
+    const user = userEvent.setup();
     // The repeat field exists because this value cannot be read back. Send a
     // mistyped one and the account's password becomes a string nobody knows.
     // The server cannot see the two fields differ, so the check belongs here.
     const queryClient = renderSection();
 
     fill({ current: CURRENT, next: STRONG, repeat: "Str0ng!Pas" });
-    submit();
+    await submit(user);
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPost).not.toHaveBeenCalled();
@@ -110,13 +113,14 @@ describe("changing an account password", () => {
   });
 
   it("will not send a password that does not meet the stated requirements", async () => {
+    const user = userEvent.setup();
     // The requirements are printed under the field, so a refusal here is the
     // one the person can act on. Sending it instead spends a round trip to be
     // told the same thing in a toast that does not name the rule.
     const queryClient = renderSection();
 
     fill({ current: CURRENT, next: "weakpass", repeat: "weakpass" });
-    submit();
+    await submit(user);
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled());
     expect(validatedPost).not.toHaveBeenCalled();
@@ -126,6 +130,7 @@ describe("changing an account password", () => {
   });
 
   it("puts a wrong current password on the field, not in a toast", async () => {
+    const user = userEvent.setup();
     // This is the field to correct, and it is the one case where the server
     // knows something the form cannot. A toast would vanish while the person
     // is still looking at three filled-in inputs wondering which one was wrong.
@@ -133,7 +138,7 @@ describe("changing an account password", () => {
     const queryClient = renderSection();
 
     fill({ current: "wrong-one", next: STRONG, repeat: STRONG });
-    submit();
+    await submit(user);
 
     expect(
       await screen.findByText("Current password is invalid."),
@@ -144,6 +149,7 @@ describe("changing an account password", () => {
   });
 
   it("clears every field and re-hides them once the password has changed", async () => {
+    const user = userEvent.setup();
     // Two of these inputs can be switched to plain text, and this section
     // lives on a settings page that stays open. Leaving the new password
     // visible after a change leaves it on screen for whoever walks past.
@@ -156,13 +162,13 @@ describe("changing an account password", () => {
     fill({ current: CURRENT, next: STRONG, repeat: STRONG });
     const reveal = () =>
       screen.getAllByRole("button", { name: "Show password" });
-    fireEvent.click(reveal()[0]!);
-    fireEvent.click(reveal()[0]!);
+    await user.click(reveal()[0]!);
+    await user.click(reveal()[0]!);
     expect(
       screen.getAllByRole("button", { name: "Hide password" }),
     ).toHaveLength(2);
 
-    submit();
+    await submit(user);
 
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
 
@@ -183,6 +189,7 @@ describe("changing an account password", () => {
   });
 
   it("stops a second submit while the first is still in flight", async () => {
+    const user = userEvent.setup();
     // The button's `disabled` is what holds this shut, not the handler's own
     // pending check -- a disabled button never delivers the click, so this
     // stays green with that check deleted.
@@ -199,15 +206,15 @@ describe("changing an account password", () => {
     // Held rather than re-queried: while the request is in flight the button
     // relabels itself, and this is the same element a person would jab at.
     const button = changeButton();
-    fireEvent.click(button);
+    await user.click(button);
 
     await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
     // What actually holds the second click off, and what the person sees:
     // the button says the change is under way and refuses the press.
     expect(button.disabled).toBe(true);
     expect(button.textContent).toContain("Changing...");
-    fireEvent.click(button);
-    fireEvent.click(button);
+    await user.click(button);
+    await user.click(button);
 
     expect(validatedPost).toHaveBeenCalledTimes(1);
 

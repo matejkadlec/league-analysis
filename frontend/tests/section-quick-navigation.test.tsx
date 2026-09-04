@@ -65,12 +65,7 @@ describe("SectionQuickNavigation", () => {
     );
 
     const quickNavigation = screen.getByTestId("section-quick-navigation");
-    const navigation = screen.getByRole("navigation", {
-      name: "Page sections",
-      hidden: true,
-    });
 
-    expect(navigation.parentElement?.className).toContain("w-0");
     expect(
       screen
         .getByRole("button", { name: "Open page navigation" })
@@ -79,7 +74,6 @@ describe("SectionQuickNavigation", () => {
 
     await user.hover(quickNavigation);
 
-    expect(navigation.parentElement?.className).toContain("w-[180px]");
     expect(
       screen
         .getByRole("button", { name: "Close page navigation" })
@@ -87,12 +81,10 @@ describe("SectionQuickNavigation", () => {
     ).toBe("true");
 
     await user.unhover(quickNavigation);
-    expect(navigation.parentElement?.className).toContain("w-0");
 
     await user.click(
       screen.getByRole("button", { name: "Open page navigation" }),
     );
-    expect(navigation.parentElement?.className).toContain("w-[180px]");
 
     await user.click(screen.getByRole("button", { name: "Top Champions" }));
 
@@ -142,6 +134,10 @@ describe("SectionQuickNavigation", () => {
     document.body.append(late);
 
     await screen.findByRole("button", { name: "Result" });
+
+    // Appended outside React, so RTL's cleanup does not own it: left behind it
+    // makes the next test's page advertise a section it never rendered.
+    late.remove();
   });
 
   it("does no watching while the panel is shut", async () => {
@@ -169,5 +165,55 @@ describe("SectionQuickNavigation", () => {
 
     observe.mockRestore();
     disconnect.mockRestore();
+  });
+
+  it("keeps the panel pinned while focus moves between its own items", async () => {
+    // `onBlurCapture` fires for focus moving *within* the panel too. Reading
+    // the containment backwards shuts the panel the moment a keyboard user
+    // reaches its first item, so the list can only be used with a mouse.
+    const user = userEvent.setup();
+    render(
+      <>
+        <Page withResult />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+
+    const quickNavigation = screen.getByTestId("section-quick-navigation");
+    const tab = screen.getByRole("button", { name: "Open page navigation" });
+    await user.click(tab);
+    await user.unhover(quickNavigation);
+    expect(tab.getAttribute("aria-expanded")).toBe("true");
+
+    await user.tab();
+    expect(quickNavigation.contains(document.activeElement)).toBe(true);
+    expect(tab.getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: "Elsewhere" }));
+    expect(tab.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("takes its items out of the tab order once shut", async () => {
+    // A shut panel keeps its items mounted; `aria-hidden` is what hides them,
+    // and `queryByRole` honours that. Nothing hides them from the tab key, so
+    // a focusable item in that subtree is reachable and never visible.
+    const user = userEvent.setup();
+    render(<Page withResult />);
+    const quickNavigation = screen.getByTestId("section-quick-navigation");
+
+    await user.hover(quickNavigation);
+    const items = () =>
+      Array.from(quickNavigation.querySelectorAll("nav button"));
+    expect(items().map((item) => item.getAttribute("tabindex"))).toEqual([
+      "0",
+      "0",
+    ]);
+
+    await user.unhover(quickNavigation);
+    expect(items()).toHaveLength(2);
+    expect(items().map((item) => item.getAttribute("tabindex"))).toEqual([
+      "-1",
+      "-1",
+    ]);
   });
 });

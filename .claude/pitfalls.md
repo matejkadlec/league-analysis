@@ -240,3 +240,16 @@ mapping; every frontend step in `test.sh` cds into `frontend/` first, so it is
 never the build config. It must stay strict JSON — a `//` comment in it makes
 desloppify's parser fall back to no mapping, silently restoring the false
 positives.
+
+## `networkidle` cannot settle on a page the app shell polls
+
+`page.waitForLoadState("networkidle")` waits for 500ms of network quiet, and
+the shell refetches service status every 15s and the tracked-player list every
+10s on every route. Whether that quiet ever arrives inside the timeout is a
+property of the clock and of how loaded the runner is, not of the page — on a
+busy pi5ram16 it does not, and the whole populated-route suite times out at
+once on specs that have nothing to do with the change under test. Two PRs in a
+row failed exactly six specs this way and passed on a bare re-run. Wait for the
+content instead: `gotoPopulatedRoute` gates on the route's `ready` anchor and
+then on zero `[data-slot="skeleton"]`, which is what "this page has finished
+loading" actually means here.

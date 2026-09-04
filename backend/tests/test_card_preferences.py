@@ -213,9 +213,10 @@ def test_card_preference_model_declares_the_migration_index() -> None:
     """Autogeneration metadata retains the reviewed user/update ordering index."""
     table = UserCardPreference.__table__
     assert isinstance(table, Table)
-    assert {index.name for index in table.indexes} == {
-        "ix_user_card_preferences_user_updated"
-    }
+    assert {
+        index.name: tuple(column.name for column in index.columns)
+        for index in table.indexes
+    } == {"ix_user_card_preferences_user_updated": ("user_id", "updated_at")}
 
 
 class _Result:

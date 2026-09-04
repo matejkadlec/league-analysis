@@ -1,18 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { unwrapOr404 } from "@/lib/core/http/api";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { Medal, Shield, Swords, TrendingUp } from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
-
-import {
-  getLatestCompletedMatchmakingAnalysis,
-  getMatchmakingAnalysisStatus,
-} from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -31,7 +24,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getRankColors, rankValueToDisplay } from "@/features/players";
-import { matchmakingResultsQueryKey } from "../matchmaking-query";
 import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
 import { formatRunEndDate } from "../run-type";
 import {
@@ -46,6 +38,7 @@ import {
   type SidePerformance,
 } from "../scope-aggregates";
 import { TierDistribution } from "./tier-distribution";
+import { useShownMatchmakingAnalysis } from "./use-shown-matchmaking-analysis";
 
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
@@ -140,21 +133,7 @@ export function MatchmakingAnalysisResults({
     data: shownAnalysis,
     isLoading,
     error,
-  } = useQuery({
-    // The picked run is part of the cache identity, and the factory stays the
-    // prefix `invalidateMatchmakingRun` refreshes.
-    queryKey: [...matchmakingResultsQueryKey(puuid), selectedCreatedAt],
-    queryFn: async ({ signal }) => {
-      return unwrapOr404(
-        selectedCreatedAt
-          ? await getMatchmakingAnalysisStatus(puuid, selectedCreatedAt, signal)
-          : await getLatestCompletedMatchmakingAnalysis(puuid, signal),
-        null,
-      );
-    },
-    retry: false,
-    staleTime: 30000,
-  });
+  } = useShownMatchmakingAnalysis(puuid, selectedCreatedAt);
   const cardTitle = selectedCreatedAt
     ? "Selected Analysis Result"
     : "Last Analysis Result";

@@ -20,10 +20,9 @@ from sqlalchemy import (
 from sqlalchemy import (
     Numeric as SQLDecimal,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.models import Base
+from app.core.models import ABSENT_AS_NULL_JSONB, Base
 from app.core.riot_api.constants import TEAM_IDS, TEAM_POSITIONS
 from app.core.runs import ints_in_sql, nullable_values_in_sql
 
@@ -244,7 +243,7 @@ class MatchParticipant(Base):
 
     # JSON Data
     runes: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment=(
             "Full Perks/Runes JSON data structure.\n"
@@ -255,7 +254,7 @@ class MatchParticipant(Base):
         ),
     )
     advanced_stats: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment=(
             "Full Challenges JSON data structure from Riot API.\n"

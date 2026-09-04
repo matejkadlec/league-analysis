@@ -15,7 +15,7 @@ import {
   getMatchOutcome,
   winsStat,
   type SideStatHighlight,
-} from "./match-row-format";
+} from "../match-row-format";
 import {
   MatchSideColumn,
   MatchSideStats,

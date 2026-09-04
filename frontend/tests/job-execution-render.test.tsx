@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-api-calls";
@@ -70,7 +71,8 @@ describe("the API calls transcript", () => {
     expect(screen.queryByText("MatchId: EUN1_1")).toBeNull();
   });
 
-  it("opens and closes the range detail from its own expander", () => {
+  it("opens and closes the range detail from its own expander", async () => {
+    const user = userEvent.setup();
     // Expansion state lives inside the component (the dialog remounts it
     // per execution), so the behavior under test is the round trip: click
     // opens the detail, click again closes it.
@@ -82,11 +84,11 @@ describe("the API calls transcript", () => {
     });
     renderCalls([entry]);
 
-    fireEvent.click(screen.getByRole("button"));
+    await user.click(screen.getByRole("button"));
     expect(screen.getByText("Collapse")).toBeTruthy();
     expect(screen.getByText(/\(400 total calls\)/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button"));
+    await user.click(screen.getByRole("button"));
     expect(screen.queryByText(/\(400 total calls\)/)).toBeNull();
   });
 

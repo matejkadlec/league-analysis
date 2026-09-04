@@ -110,20 +110,46 @@ reportPrivateUsage = "none"
 # key rotates, and passing or failing on live data. A test that genuinely
 # needs a socket must say so with @pytest.mark.enable_socket.
 addopts = [
-    "--strict-config",
-    "--strict-markers",
     "-ra",
     "--disable-socket",
     # asyncio builds every event loop's self-pipe from an AF_UNIX socketpair,
     # so blocking that blocks every async test. It reaches no network.
     "--allow-unix-socket",
 ]
+# With `asyncio_mode = "auto"`, one await that never resolves hangs the run
+# until CI's 90-minute job timeout kills it, naming no test. 60s is far above
+# the whole suite's 33s, so it can only fire on a genuine hang.
+timeout = 60
+timeout_method = "thread"
 asyncio_mode = "auto"
+# pytest 9's umbrella, replacing `--strict-config` / `--strict-markers` in
+# `addopts` and a standalone `strict_xfail`. It turns on all four strictness
+# options at once, and the fourth is the one that was missing:
+# `strict_parametrization_ids` caught eleven duplicate ids in
+# `test_timestamp_columns.py`, where every table's `created_at` and
+# `updated_at` case shared one name.
+# As ini options rather than `addopts` deliberately: pytest 9.0 silently
+# ignored these two when they arrived through `addopts` (#14442, fixed by the
+# 9.1.1 pinned here -- verified by probe, an unknown marker still errors).
+# A strictness flag that can go quiet is worth spelling the safe way.
+strict = true
+# `strict` includes `strict_markers`, so an unregistered marker is a collection
+# error. `enable_socket` is registered by pytest-socket's own `pytest_configure`;
+# only this tier's own marker needs a line here.
+markers = [
+    "integration: needs the PostgreSQL the gate starts; skips when none answers",
+]
 filterwarnings = [
     "error",
     "ignore:'asyncio.iscoroutinefunction' is deprecated.*:DeprecationWarning:slowapi.extension",
 ]
 testpaths = ["tests"]
+# pytest-randomly shuffles within each module and reseeds `random` per test, so
+# a test that only passes because another ran first is found by machine rather
+# than by hand. `conftest.py` already had to reset one process-global by hand;
+# this is what finds the next one. Proven over 20 seeds before adopting -- a
+# gate that fails on a seed would be a flaky gate. The failing seed is printed
+# in the header, so any failure is reproducible with `-p randomly --randomly-seed=N`.
 
 [tool.ruff]
 target-version = "py314"
@@ -143,7 +169,28 @@ select = [
     "C4",
     "LOG",
     "N",
+    # The test suite's own hygiene. Most of PT is already true here by
+    # convention, so it costs nothing to keep passing; the two rules that earn
+    # it are PT011 and PT018. `pytest.raises(ValueError)` with no `match=` is
+    # the shape a generator reaches for on every error path, and it passes on
+    # the `ValueError` a bug raises as readily as the one the test names.
+    # `assert a and b` hides a half that can rot silently. `raises-require-
+    # match-for` stays at its default list: the 31 `pytest.raises(HTTPException)`
+    # sites discriminate on `excinfo.value.status_code`, which is a better
+    # assertion than a message regex, and adding HTTPException would force the
+    # worse one.
+    "PT",
     "PTH",
+    # `mock.assert_called` without the parentheses is an attribute access: it
+    # is always truthy, asserts nothing, and reads exactly like the call that
+    # would have checked something. PGH005 is the only rule that sees it.
+    "PGH",
+    # Three assertions that cannot fail, from `PL`. Selected individually
+    # because the rest of `PL` is style -- PLR2004 alone would report every
+    # numeric literal a test compares against, which is most of them.
+    "PLR0124",
+    "PLR0133",
+    "PLW0129",
     "RUF",
     "SIM",
     "TID",
@@ -189,10 +236,12 @@ dev = [
     # diagnostics, and a gate that calls itself deterministic cannot have its
     # type checker tighten underneath it on an unrelated commit.
     "pyright==1.1.411",
-    "ruff==0.16.4",
+    "ruff==0.16.5",
     "vulture>=2.16",
     "xenon>=0.9.3",
     "pytest-socket>=0.7.0",
+    "pytest-randomly>=4.1.0",
+    "pytest-timeout>=2.4.0",
     "pytest-cov>=7.0.0",
 ]
 
@@ -201,13 +250,14 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
-# A floor, not a target. Measured 2026-08-28: 73.5% with branch coverage on
-# (8,602 statements, 1,614 branches). The branch figure is the honest one,
-# because a half-tested `if` is half-tested. The floor sits well under the
-# measurement so ordinary fluctuations do not flip the gate; ratchet it up as
-# coverage grows. It is armed by the `--cov` flags in test.sh; a bare
-# `pytest` stays fast.
-fail_under = 70
+# A floor, not a target. Measured 2026-08-30: 78.53% with branch coverage on
+# (8,624 statements, 1,620 branches), and 78.30% on a host with no PostgreSQL,
+# where the integration tier skips. The branch figure is the honest one,
+# because a half-tested `if` is half-tested. The floor sits ~2 points under the
+# measurement so ordinary fluctuations do not flip the gate; ratchet it on the
+# way out of every batch, or it stops catching anything. It is armed by the
+# `--cov` flags in test.sh; a bare `pytest` stays fast.
+fail_under = 76
 show_missing = true
 
 [tool.vulture]

@@ -6,7 +6,7 @@ import {
   DISPLAY_NAME_MAX_LENGTH,
   DISPLAY_NAME_MIN_LENGTH,
   DISPLAY_NAME_PATTERN,
-} from "@/features/auth/utils/display-name";
+} from "@/features/auth/display-name";
 
 /**
  * The display-name rule exists on both sides, so something has to hold it

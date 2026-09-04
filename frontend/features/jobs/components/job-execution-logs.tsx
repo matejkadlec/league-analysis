@@ -6,7 +6,7 @@ import {
   detailedLogKey,
   formatJobTimestamp,
   logFieldText,
-} from "./job-execution-format";
+} from "../job-execution-format";
 import { cn } from "@/lib/core/utils";
 
 // The row renders these three in its own header, so listing them again as

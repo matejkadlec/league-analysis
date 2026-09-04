@@ -17,12 +17,14 @@ const PHONE = { width: 390, height: 844 };
 // still costing the reader a swipe, so surfaces that should reflow are measured
 // one by one and each asserted present.
 test.describe("player pages on a phone", () => {
-  test.use({ viewport: PHONE });
+  // A viewport alone leaves a desktop user agent, a mouse and no touch, so
+  // these specs could not catch a hover-only affordance on a phone -- and
+  // this app has them (`track-player-button` swaps its label on group-hover).
+  test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   for (const route of POPULATED_ROUTES) {
     const { name, reflowSurfaces } = route;
     test(`${name} never scrolls the page sideways`, async ({ page }) => {
-      test.setTimeout(60_000);
       // The readiness gate inside waits for populated content, so the
       // measurement cannot land on the loading skeletons, which are narrow
       // by construction and would pass whatever the real content does.

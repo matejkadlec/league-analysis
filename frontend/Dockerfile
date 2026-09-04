@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.26
-FROM node:26.7.0-bookworm-slim AS dependencies
+FROM node:26.8.1-bookworm-slim AS dependencies
 
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NPM_CONFIG_AUDIT=false \
@@ -36,7 +36,7 @@ RUN set -eu; \
     : "${NEXT_DEPLOYMENT_ID:?must be passed as a build arg}"; \
     npm run build
 
-FROM node:26.7.0-bookworm-slim AS runtime
+FROM node:26.8.1-bookworm-slim AS runtime
 
 ARG NEXT_DEPLOYMENT_ID
 ENV NODE_ENV=production \

@@ -13,7 +13,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.models import Base, created_at_column, updated_at_column
+from app.core.models import (
+    ABSENT_AS_NULL_JSONB,
+    Base,
+    created_at_column,
+    updated_at_column,
+)
 
 
 class AnalysisStatus(str, PyEnum):
@@ -114,7 +119,7 @@ class PlaystyleAnalysis(Base):
     )
 
     summary_stats: Mapped[SummaryStats | None] = mapped_column(
-        JSONB,
+        ABSENT_AS_NULL_JSONB,
         nullable=True,
         comment="Summary statistics, NULL when the player had no matches",
     )

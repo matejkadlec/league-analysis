@@ -9,7 +9,7 @@ import {
   canUseOptionalStorage,
   readCookieConsentFromBrowser,
   writeCookieConsent,
-} from "../features/cookie-consent/utils/consent-storage";
+} from "../features/cookie-consent/consent-storage";
 
 function setConsentCookie(value: string) {
   document.cookie = `${COOKIE_CONSENT_COOKIE_NAME}=${encodeURIComponent(value)}; path=/`;
@@ -71,6 +71,10 @@ describe("what counts as consent", () => {
     expect(writes[0]).toContain("Path=/");
     expect(writes[0]).toContain("SameSite=Lax");
     expect(writes[0]).toContain(`Max-Age=${COOKIE_CONSENT_MAX_AGE_SECONDS}`);
+    // The retention the comment above claims is protected. Without it the
+    // `Max-Age` check only proves the cookie and the constant agree, which
+    // holds just as well at sixty seconds.
+    expect(COOKIE_CONSENT_MAX_AGE_SECONDS).toBe(60 * 60 * 24 * 180);
     expect(written.version).toBe(COOKIE_CONSENT_VERSION);
 
     vi.restoreAllMocks();

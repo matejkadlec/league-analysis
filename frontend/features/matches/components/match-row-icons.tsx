@@ -23,7 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { switchTarget, type MatchSideParticipant } from "./match-row-format";
+import { switchTarget, type MatchSideParticipant } from "../match-row-format";
 
 /**
  * Names a wordless icon on hover and on keyboard focus. Focus is the caller's

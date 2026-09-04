@@ -11,7 +11,7 @@ import {
   ANALYSIS_CARD_TRANSITION,
   ANALYSIS_PROGRESS_TRANSITION,
   type UIPhase,
-} from "./matchmaking-analysis-state";
+} from "../matchmaking-analysis-state";
 
 interface MatchmakingAnalysisActiveCardProps {
   analyzedPlayerLabel: string;

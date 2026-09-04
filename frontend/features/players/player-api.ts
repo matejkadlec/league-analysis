@@ -51,8 +51,14 @@ export type DiscoverPlayerParams = Record<"game_name" | "tag_line", string> & {
 export async function discoverPlayer(
   params: DiscoverPlayerParams,
 ): Promise<ApiResponse<Player>> {
-  // The endpoint reads its arguments from the query string, not a body.
+  // The endpoint reads its arguments from the query string, not a body. Named
+  // one by one rather than spread: the contract test reads the names off this
+  // literal, and a `{ params }` shorthand hides all three from it.
   return validatedPost(PlayerSchema, "/players/discover", undefined, {
-    params,
+    params: {
+      game_name: params.game_name,
+      tag_line: params.tag_line,
+      platform: params.platform,
+    },
   });
 }

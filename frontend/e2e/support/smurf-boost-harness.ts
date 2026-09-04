@@ -221,10 +221,6 @@ export async function installSmurfBoostMocks(
 
   await seedAuthenticatedSession(page);
   await blockUpstreamRequests(page);
-  await page.addInitScript(() => {
-    localStorage.setItem("theme", "dark");
-  });
-
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;

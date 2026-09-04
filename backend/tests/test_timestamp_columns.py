@@ -23,6 +23,18 @@ TIMESTAMP_COLUMNS: list[tuple[str, Column[Any]]] = [
 ]
 
 
+def _case_id(value: object) -> str:
+    """Name a case by its table and column, so no two cases share an id.
+
+    The column half used to render empty, so the test taking both columns gave
+    eleven tables two cases each called `auth.users-` -- unselectable by node
+    id, and a failure that could not say which column broke.
+    """
+    if isinstance(value, str):
+        return value
+    return value.name if isinstance(value, Column) else ""
+
+
 def test_the_helpers_are_actually_in_use() -> None:
     """Guard the guard: an empty collection would pass every test below."""
     created = [c for _, c in TIMESTAMP_COLUMNS if c.name == "created_at"]
@@ -35,7 +47,7 @@ def test_the_helpers_are_actually_in_use() -> None:
 @pytest.mark.parametrize(
     ("table_name", "column"),
     [(t, c) for t, c in TIMESTAMP_COLUMNS if c.name == "updated_at"],
-    ids=lambda value: value if isinstance(value, str) else "",
+    ids=_case_id,
 )
 def test_updated_at_advances_on_update(table_name: str, column: Column[Any]) -> None:
     assert column.onupdate is not None, f"{table_name}.updated_at lost onupdate"
@@ -44,7 +56,7 @@ def test_updated_at_advances_on_update(table_name: str, column: Column[Any]) -> 
 @pytest.mark.parametrize(
     ("table_name", "column"),
     [(t, c) for t, c in TIMESTAMP_COLUMNS if c.name == "created_at"],
-    ids=lambda value: value if isinstance(value, str) else "",
+    ids=_case_id,
 )
 def test_created_at_never_moves(table_name: str, column: Column[Any]) -> None:
     assert column.onupdate is None, f"{table_name}.created_at gained onupdate"
@@ -53,7 +65,7 @@ def test_created_at_never_moves(table_name: str, column: Column[Any]) -> None:
 @pytest.mark.parametrize(
     ("table_name", "column"),
     TIMESTAMP_COLUMNS,
-    ids=lambda value: value if isinstance(value, str) else "",
+    ids=_case_id,
 )
 def test_every_stamp_is_defaulted_and_tz_aware(
     table_name: str, column: Column[Any]

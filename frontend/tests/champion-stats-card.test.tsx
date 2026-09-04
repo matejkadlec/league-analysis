@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { ChampionStatsCard } from "@/features/profile/components/champion-stats-card";
@@ -63,14 +64,15 @@ function visibleRanks(container: HTMLElement): string[] {
 
 
 describe("the top champions card", () => {
-  it("returns to the first page when the data behind it changes", () => {
+  it("returns to the first page when the data behind it changes", async () => {
     // The page number lives in component state and the component is not remounted
     // when the player changes, which is the only reason `dataSourceKey` is a prop.
     // The second list must be longer than the page reached in the first.
+    const user = userEvent.setup();
     const { container, rerender } = renderCard(twelve(), "player-a");
 
-    fireEvent.click(next());
-    fireEvent.click(next());
+    await user.click(next());
+    await user.click(next());
     expect(visibleRanks(container)).toEqual(["11", "12"]);
 
     const twenty = Array.from({ length: 20 }, (_, index) =>
@@ -87,42 +89,45 @@ describe("the top champions card", () => {
     expect(screen.getByRole("status").textContent).toContain("1–5 of 20");
   });
 
-  it("numbers champions by their place in the whole list, not on the page", () => {
+  it("numbers champions by their place in the whole list, not on the page", async () => {
     // The rank is what makes this a ranking rather than five rows. Restart it
     // per page and the second page opens with another "1", which reads as the
     // best champion twice.
+    const user = userEvent.setup();
     const { container } = renderCard(twelve());
 
-    fireEvent.click(next());
+    await user.click(next());
 
     expect(visibleRanks(container)).toEqual(["6", "7", "8", "9", "10"]);
   });
 
-  it("stops at both ends", () => {
+  it("stops at both ends", async () => {
     // Both buttons stay in the layout and only change state, so a wrong
     // comparison is invisible until someone clicks past the end and the card
     // empties.
+    const user = userEvent.setup();
     renderCard(twelve());
 
     expect(isDisabled(previous())).toBe(true);
     expect(isDisabled(next())).toBe(false);
 
-    fireEvent.click(next());
+    await user.click(next());
     expect(isDisabled(previous())).toBe(false);
     expect(isDisabled(next())).toBe(false);
 
-    fireEvent.click(next());
+    await user.click(next());
     expect(isDisabled(next())).toBe(true);
   });
 
-  it("counts the page it is showing out of the whole list", () => {
+  it("counts the page it is showing out of the whole list", async () => {
     // `startIndex` is zero-based and the label is not, and the last page is
     // short. Both are places to be off by one in front of the reader.
+    const user = userEvent.setup();
     renderCard(twelve());
     expect(screen.getByRole("status").textContent).toContain("1–5 of 12");
 
-    fireEvent.click(next());
-    fireEvent.click(next());
+    await user.click(next());
+    await user.click(next());
     expect(screen.getByRole("status").textContent).toContain("11–12 of 12");
   });
 

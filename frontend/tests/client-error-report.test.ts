@@ -1,12 +1,10 @@
 // @vitest-environment node
 
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "@/app/client-error-report/route";
+import { proxy } from "@/proxy";
 import {
   CLIENT_ERROR_REPORT_PATH,
   ClientErrorReportSchema,
@@ -104,12 +102,17 @@ describe("the client-error beacon", () => {
 });
 
 describe("the proxy and the reporter agree on the path", () => {
-  it("is the literal isStaticOrInternal allows through without a session", () => {
-    const proxy = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "..", "proxy.ts"),
-      "utf8",
+  it("lets the beacon through without a session instead of redirecting it", () => {
+    // The beacon fires precisely when the app is broken, which includes being
+    // signed out. Run through the real `proxy` rather than read out of its
+    // source: the path only has to be reachable, not spelled any one way.
+    const response = proxy(
+      new NextRequest(
+        new URL(CLIENT_ERROR_REPORT_PATH, "http://localhost:3000"),
+      ),
     );
-    expect(CLIENT_ERROR_REPORT_PATH).toBe("/client-error-report");
-    expect(proxy).toContain(`pathname === "${CLIENT_ERROR_REPORT_PATH}"`);
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 });

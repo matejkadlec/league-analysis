@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseRiotId } from "../features/players/utils/riot-id";
+import { parseRiotId } from "../features/players/riot-id";
 
 describe("parseRiotId", () => {
   it("parses and trims a valid Riot ID", () => {

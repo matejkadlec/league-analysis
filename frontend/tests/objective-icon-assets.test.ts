@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { RIOT_OBJECTIVE_ICON_SOURCES } from "@/features/matches/components/objective-icon-assets";
+import { RIOT_OBJECTIVE_ICON_SOURCES } from "@/features/matches/objective-icon-assets";
 import {
   OBJECTIVE_DEFINITIONS,
   type ObjectiveId,
-} from "@/features/matches/components/objective-definitions";
+} from "@/features/matches/objective-definitions";
 
 // `objective-icons.tsx` special-cases the turret and indexes everything else
 // by its own id, so this is the map's lookup contract.

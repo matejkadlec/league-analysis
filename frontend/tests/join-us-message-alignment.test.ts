@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   JOIN_US_BODY_MAX_LENGTH,
   JOIN_US_BODY_MIN_LENGTH,
-} from "@/features/auth/utils/join-us-message";
+} from "@/features/auth/join-us-message";
 
 /**
  * The two halves of the rule live in different places on the backend, so they

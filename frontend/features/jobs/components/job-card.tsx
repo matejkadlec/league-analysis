@@ -25,8 +25,8 @@ import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
   formatLastRun,
   formatRunInterval,
-} from "./job-card-format";
-import { formatDuration } from "./job-execution-format";
+} from "../job-card-format";
+import { formatDuration } from "../job-execution-format";
 import { jobRecentExecutionsQueryOptions } from "../jobs-query";
 import { cn } from "@/lib/core/utils";
 import { useJobCardControls } from "./use-job-card-controls";

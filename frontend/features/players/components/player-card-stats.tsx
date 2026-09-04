@@ -2,7 +2,7 @@ import type { MatchStatsResponse, Player } from "@/lib/core/schemas";
 
 import { formatKDA } from "@/lib/core/format";
 
-import { formatDate } from "./player-card-format";
+import { formatDate } from "../player-card-format";
 
 interface PlayerCardStatsProps {
   player: Player;

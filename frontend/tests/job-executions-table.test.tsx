@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { JobExecutionsTable } from "@/features/jobs/components/job-executions-table";
@@ -74,7 +75,8 @@ describe("the job executions table", () => {
     ).toBeTruthy();
   });
 
-  it("hands the clicked row's whole execution to the details dialog owner", () => {
+  it("hands the clicked row's whole execution to the details dialog owner", async () => {
+    const user = userEvent.setup();
     const clicked = execution({ id: 41 });
     const onSelectExecution = vi.fn<SelectExecution>();
     renderTable([clicked], onSelectExecution);
@@ -83,7 +85,7 @@ describe("the job executions table", () => {
     // in it -- so the name being clicked names the run whose details open.
     const row = screen.getByText("Match Fetcher");
     expect(row.closest("tr")?.textContent).toContain("Riot API requests: 3");
-    fireEvent.click(row);
+    await user.click(row);
 
     expect(onSelectExecution).toHaveBeenCalledTimes(1);
     // The object identity is what the dialog reads (`detailed_logs` included);

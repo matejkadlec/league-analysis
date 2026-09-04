@@ -30,10 +30,13 @@ import {
 } from "../matchmaking-query";
 import { gapVerdict } from "../gap-verdict";
 import { formatRunType } from "../run-type";
+import { useShownMatchmakingAnalysis } from "./use-shown-matchmaking-analysis";
 
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
   analyzedPlayerLabel: string;
+  /** An explicit pick out of this card; null while the result card shows the
+      latest completed run on its own. */
   selectedCreatedAt: string | null;
   onSelect: (createdAt: string | null) => void;
 }
@@ -192,6 +195,15 @@ export function MatchmakingAnalysisHistory({
   const queryClient = useQueryClient();
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
+  // Highlight what the result card is showing, not only what was clicked here.
+  // Landing on a player displays their latest completed run without any pick,
+  // and an unmarked history then hides which row that run is.
+  const { data: shownAnalysis } = useShownMatchmakingAnalysis(
+    puuid,
+    selectedCreatedAt,
+  );
+  const shownCreatedAt = selectedCreatedAt ?? shownAnalysis?.created_at ?? null;
+
   const { data, isLoading, error } = useQuery({
     queryKey: matchmakingHistoryQueryKey(puuid),
     queryFn: async ({ signal }) => {
@@ -288,7 +300,7 @@ export function MatchmakingAnalysisHistory({
               key={item.created_at}
               item={item}
               isDeleting={deletingIds.has(item.created_at)}
-              isSelected={item.created_at === selectedCreatedAt}
+              isSelected={item.created_at === shownCreatedAt}
               onDelete={handleDelete}
               onSelect={onSelect}
             />
@@ -326,7 +338,7 @@ export function MatchmakingAnalysisHistory({
             <TableBody>
               {data.items.map((item) => {
                 const isDeleting = deletingIds.has(item.created_at);
-                const isSelected = item.created_at === selectedCreatedAt;
+                const isSelected = item.created_at === shownCreatedAt;
 
                 return (
                   <TableRow

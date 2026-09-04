@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Montserrat } from "next/font/google";
 import localFont from "next/font/local";
+// Montserrat comes from npm, not `next/font/google`: that loader fetches from
+// fonts.googleapis.com during `next build` with no offline fallback, so one
+// lost request failed the whole production build once (#266, #267).
+import "@fontsource-variable/montserrat";
+import "@fontsource-variable/montserrat/wght-italic.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { SidebarNav } from "@/components/sidebar-nav";
@@ -11,13 +15,6 @@ import { ToastHost } from "@/components/toast-host";
 import { resolveDDragonVersion } from "@/lib/core/riot/data-dragon-version";
 import { SHOULD_ALLOW_INDEXING, SITE_URL } from "@/lib/core/site-url";
 import { cn } from "@/lib/core/utils";
-
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
-  style: ["normal", "italic"],
-  variable: "--font-sans",
-});
 
 const leagueFont = localFont({
   src: "./fonts/League.otf",
@@ -65,11 +62,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={cn(
-          montserrat.variable,
-          leagueFont.variable,
-          "font-sans antialiased",
-        )}
+        className={cn(leagueFont.variable, "font-sans antialiased")}
       >
         <Providers ddragonVersion={ddragonVersion}>
           <HeaderMessages />

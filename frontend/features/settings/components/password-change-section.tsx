@@ -24,7 +24,7 @@ import {
   USER_QUERY_KEY,
   isPasswordStrong,
   settingsErrorDetail,
-} from "../utils/settings-helpers";
+} from "../settings-helpers";
 
 /**
  * A password field with its own show/hide toggle. Local to this file: two

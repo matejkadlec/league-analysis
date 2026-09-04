@@ -8,7 +8,7 @@ import type { JobExecutionApiCall } from "@/lib/core/schemas";
 import {
   formatApiCallParamLabel,
   formatJobTimestamp,
-} from "./job-execution-format";
+} from "../job-execution-format";
 
 interface JobExecutionApiCallsProps {
   startedAt: string;

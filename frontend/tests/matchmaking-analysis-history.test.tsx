@@ -3,21 +3,30 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MatchmakingApi = typeof import("@/features/matchmaking/matchmaking-api");
 type AppToast = typeof import("@/lib/core/hooks").appToast;
 
-const { getMatchmakingAnalysisHistory, deleteMatchmakingAnalysisRecord, toast } =
+const {
+  getMatchmakingAnalysisHistory,
+  getLatestCompletedMatchmakingAnalysis,
+  deleteMatchmakingAnalysisRecord,
+  toast,
+} =
   vi.hoisted(() => ({
     getMatchmakingAnalysisHistory:
       vi.fn<MatchmakingApi["getMatchmakingAnalysisHistory"]>(),
+    // The card shares this query with the result card, to highlight the run
+    // that card is showing. Unmocked it would reach the network.
+    getLatestCompletedMatchmakingAnalysis:
+      vi.fn<MatchmakingApi["getLatestCompletedMatchmakingAnalysis"]>(),
     deleteMatchmakingAnalysisRecord:
       vi.fn<MatchmakingApi["deleteMatchmakingAnalysisRecord"]>(),
     toast: {
@@ -33,6 +42,7 @@ vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
     typeof import("@/features/matchmaking/matchmaking-api")
   >()),
   getMatchmakingAnalysisHistory,
+  getLatestCompletedMatchmakingAnalysis,
   deleteMatchmakingAnalysisRecord,
 }));
 
@@ -76,6 +86,27 @@ function answerWith(items: (typeof AHEAD | typeof BEHIND)[]) {
   });
 }
 
+/** The completed run the result card falls back to when nothing is picked. */
+function latestCompleted(createdAt: string) {
+  getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
+    success: true,
+    data: {
+      puuid: PUUID,
+      status: "completed",
+      progress: 10,
+      total_puuids: 10,
+      requests_saved: 0,
+      created_at: createdAt,
+      params: { match_count: 10, end_date: null },
+      results: {
+        team_avg_winrate: 0.523,
+        enemy_avg_winrate: 0.491,
+        matches_analyzed: 10,
+      },
+    },
+  });
+}
+
 const select = vi.fn<(createdAt: string | null) => void>();
 
 function renderHistory(selectedCreatedAt: string | null = null) {
@@ -101,10 +132,12 @@ async function table() {
 describe("the matchmaking analysis history card", () => {
   beforeEach(() => {
     getMatchmakingAnalysisHistory.mockReset();
+    getLatestCompletedMatchmakingAnalysis.mockReset();
     deleteMatchmakingAnalysisRecord.mockReset();
     Object.values(toast).forEach((fn) => fn.mockReset());
     select.mockReset();
     answerWith([AHEAD, BEHIND]);
+    latestCompleted(AHEAD.created_at);
   });
 
   afterEach(() => {
@@ -210,6 +243,7 @@ describe("the matchmaking analysis history card", () => {
     // The results panel beside this card is a separate query keyed on the
     // same player. Nothing else invalidates it, so without this the analysis
     // someone just deleted stays on screen as the current result.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -261,7 +295,7 @@ describe("the matchmaking analysis history card", () => {
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(1));
     const remove = (await table()).getAllByTitle("Delete this analysis");
-    fireEvent.click(remove[0]!);
+    await user.click(remove[0]!);
 
     // The click starts a 300ms fade before the request goes out.
     await waitFor(
@@ -287,6 +321,7 @@ describe("the matchmaking analysis history card", () => {
     // The row fades out the moment the button is clicked and comes back when
     // the request fails. Without the message that is all the viewer sees: a
     // row that flickered and stayed, with no sign the delete was refused.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: false,
       error: {
@@ -299,7 +334,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory();
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled(), {
       timeout: 2000,
@@ -312,11 +347,12 @@ describe("the matchmaking analysis history card", () => {
   it("hands the picked run's timestamp to the result card", async () => {
     // The row is the only way into an older analysis. Send the wrong
     // timestamp and the card opposite shows a run nobody asked for.
+    const user = userEvent.setup();
     const queryClient = renderHistory();
 
     const rows = await table();
     const older = rows.getByText("3.3.2026 12:05 AM");
-    fireEvent.click(older);
+    await user.click(older);
 
     expect(older.getAttribute("title")).toBe(
       "Show this analysis in the result card",
@@ -339,9 +375,28 @@ describe("the matchmaking analysis history card", () => {
     queryClient.clear();
   });
 
+  it("marks the run the result card fell back to, with nothing picked", async () => {
+    // Choosing a player shows their latest completed run without any pick
+    // here. Highlighting only an explicit pick left that card and this one
+    // disagreeing about which run was on screen.
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    await waitFor(() =>
+      expect(
+        rows.getByText("4.3.2026 2:07 PM").getAttribute("aria-current"),
+      ).toBe("true"),
+    );
+    expect(
+      rows.getByText("3.3.2026 12:05 AM").getAttribute("aria-current"),
+    ).toBeNull();
+    queryClient.clear();
+  });
+
   it("deletes a row without also opening it", async () => {
     // The delete button sits inside the row that selects on click. Without
     // stopping that bubble, removing a record displays it on the way out.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -349,7 +404,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory();
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(
       () => expect(deleteMatchmakingAnalysisRecord).toHaveBeenCalled(),
@@ -366,6 +421,7 @@ describe("the matchmaking analysis history card", () => {
   it("lets go of the picked run once it is deleted", async () => {
     // The result card asks for the picked run by timestamp; leaving a deleted
     // one selected leaves that card reporting a 404 forever.
+    const user = userEvent.setup();
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
       data: { message: "deleted" },
@@ -373,7 +429,7 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory(AHEAD.created_at);
 
     const rows = await table();
-    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+    await user.click(rows.getAllByTitle("Delete this analysis")[0]!);
 
     await waitFor(() => expect(toast.success).toHaveBeenCalled(), {
       timeout: 2000,
