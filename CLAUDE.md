@@ -17,7 +17,7 @@ Deep topic docs live in [`docs/`](docs/README.md).
   project. Verify the `LGA-` prefix before every Jira write.
 
 Nothing else about how work gets delivered is prescribed. Branches, commits,
-PR grouping, and when to validate are your judgment.
+and PR grouping are your judgment.
 
 Runtime traps that no gate catches are listed in
 [`.claude/pitfalls.md`](.claude/pitfalls.md). Running the `pitfall-check`
@@ -30,3 +30,11 @@ catch it instead.
 - `./run.sh` — backend 8000, frontend 3000 (logs in `logs/`)
 - `./test.sh -f` / `./test.sh -b` — scoped gates; `./test.sh` — full gate
 - Docs-only changes: `git diff --check`
+
+## Verifying your work
+
+Before reporting a change done, run the scoped gate for what you touched
+(`./test.sh -f`, `-b`, or `-r`) and paste its final summary lines; run the
+full `./test.sh` before a PR. If a gate fails, fix the code, not the test —
+never skip, delete, or xfail a failing test to get green. Then run the
+`pitfall-check` agent on the diff.
