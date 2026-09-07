@@ -236,7 +236,7 @@ dev = [
     # diagnostics, and a gate that calls itself deterministic cannot have its
     # type checker tighten underneath it on an unrelated commit.
     "pyright==1.1.411",
-    "ruff==0.16.5",
+    "ruff==0.16.6",
     "vulture>=2.16",
     "xenon>=0.9.3",
     "pytest-socket>=0.7.0",
