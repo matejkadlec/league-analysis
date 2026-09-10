@@ -14,7 +14,6 @@
 ./test.sh -f          # Repository plus frontend
 ./test.sh -b          # Repository plus backend
 ./test.sh -r          # Repository only, for documentation-only changes
-./deploy/container-qa.sh   # Production image build and runtime validation
 ```
 
 The focused modes shorten implementation feedback. They never substitute for
@@ -23,16 +22,6 @@ so it is safe to call from the main checkout or any worktree.
 
 ## Decisions
 
-- **Production packaging is verified by building it.** `deploy/container-qa.sh`
-  builds both production images, runs the Compose migration service,
-  health-checks the stack, and performs a real dump and restore. It is
-  deliberately outside `./test.sh`, which must stay fast enough to run during
-  implementation. One failure class does not need the build to find, though:
-  an import reaching a path `.dockerignore` removes fails `next build` inside
-  the image and nothing anywhere else, because `./test.sh` builds in the full
-  repository where every import resolves. `scripts/check-docker-context-imports.sh`
-  decides that from the two files alone, in under a second, so the answer
-  arrives at commit time rather than sixteen CI minutes later.
 - **The Playwright suite is inside the gate, and runs against the production
   build.** It used to sit outside because provisioning a pinned browser was not
   deterministic; `gate.Dockerfile` now installs the Chromium matching the
@@ -67,8 +56,7 @@ so it is safe to call from the main checkout or any worktree.
   asynchronously and open fix pull requests; the bespoke differential CI audit
   they replaced was removed in 2026-08.
 - **Bandit excludes B104 and nothing else.** The direct local entry point binds
-  WSL and LAN interfaces on purpose. Production process and network hardening
-  is LGA-10.
+  WSL and LAN interfaces on purpose.
 - **Pre-commit stays static and lockfile-backed.** Local backend hooks use
   `uv run --locked` and `always_run`, so they cannot rewrite `uv.lock` mid-
   commit or skip a deletion-only change. They do not run pytest (needs the
@@ -88,33 +76,12 @@ so it is safe to call from the main checkout or any worktree.
   `./test.sh -b`.
 - **Tests never need a real Riot API key, network access, or a real database
   password.** CI and local runs pass explicit safe test-only values.
-- **The gate runs on pi5ram16, not on GitHub's hardware.** Actions minutes are
-  billed only for GitHub-hosted runners -- self-hosted usage is free -- and
-  this account's included minutes were nearly spent while the runner that
-  deploys sat idle between merges. The Pi is also the more honest host: it is
-  aarch64, so `deploy/container-qa.sh` now builds and boots the architecture
-  production actually serves instead of amd64 images that never ship. The
-  costs are real and accepted: four cores rather than eight, and one runner
-  shared with the deploy workflow, so a merge queues behind a gate already in
-  flight. Runs are cheap despite the hardware: measured on the box, the gate
-  image is 49s cold and 1s warm, and the whole gate is ~3 minutes, because the
-  Dockerfile copies only `.python-version` and the repository arrives as a
-  bind mount -- so nothing short of a toolchain bump invalidates the daemon's
-  layer cache. That cache is why the cleanup step filters on `unused-for`
-  rather than `until`, which would discard it weekly however often it was
-  used. The cleanup runs because the CI host is the production host, and it
-  touches only dangling images and untouched cache -- never volumes, which is
-  where production's database lives.
-- **CI always runs the complete gate.** `./test.sh -r` exists for local
-  documentation-only feedback, but CI does not try to detect that case: a
-  required check that skips itself has to be wired through every step, and
-  that complexity buys nothing now that the runner costs no minutes. The
-  deploy workflow does skip documentation, through `paths-ignore`, because it
-  is not a required check.
-- **Deploy runs are serialised, never cancelled.** The deploy workflow uses
-  `cancel-in-progress: false` on the pi5ram16 runner, because interrupting a
-  host mutation is less safe than queueing it. Quality runs are cancelled when
-  superseded. Deployment does not repeat the quality gate.
+- **Pull-request checks run on disposable GitHub-hosted ARM64 runners.**
+  The disposable test container runs without application credentials.
+  Remove repository access to self-hosted runners before changing visibility;
+  a contributor can modify workflow files in their own pull request.
+- **CI always runs the complete gate.** Documentation-only local feedback may
+  use `./test.sh -r`; publication does not trigger deployment.
 - **Dependabot pull requests are never auto-merged and never receive real
   secrets.** They follow the normal workflow: rebase on current `master`, run
   the complete gate, wait for required checks and review, merge through the
@@ -148,9 +115,6 @@ that an assertion passes today. Back up the production file, apply the
 regression the test claims to guard, run that one test, restore. A test that
 survives its own mutation is dead; one that fails is load-bearing. This is not
 a formality — it has repeatedly reversed the verdict in both directions, and
-`.claude/pitfalls.md` records the bytecode-caching trap that makes a
-same-length mutation report a false pass.
-
 ## What the gate enforces mechanically
 
 Each of these exists because a specific shape of test survived review.
@@ -174,12 +138,6 @@ Each of these exists because a specific shape of test survived review.
 - **`strict_xfail`** — an `xfail` that starts passing is otherwise silent.
 - **Randomised order** (`sequence.shuffle`) — an order-dependent test passes
   only because another test ran first, and nothing else can see one.
-
-Mutation testing is the general form of all of this and is deliberately *not*
-in the gate: whole-repo runs are an overnight job on this hardware. Run it
-per-diff when a slice's tests deserve auditing —
-[`.claude/test-research-2026-08-29.md`](../.claude/test-research-2026-08-29.md)
-records the tooling, the costs and what was rejected.
 
 ## Stable check names
 

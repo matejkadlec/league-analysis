@@ -26,7 +26,7 @@ export default async function PrivacyPolicyPage() {
       </h2>
       <p className="leading-relaxed">
         We collect and process League of Legends player data through the Riot
-        Games API, including summoner names, match history, performance
+        Games API, including Riot IDs, match history, performance
         statistics, and rank information. This data is used solely for the
         purpose of providing analysis and insights within the application.
       </p>
@@ -48,9 +48,11 @@ export default async function PrivacyPolicyPage() {
         Data Storage and Security
       </h2>
       <p className="leading-relaxed">
-        All data is stored securely and is only accessible to authenticated
-        users of the application. We do not share, sell, or distribute your data
-        to third parties.
+        Your installation stores account details, password hashes, session
+        records, preferences, and collected game information in its database.
+        Its operator controls access, backups, and retention. Requests to Riot
+        Games and any configured email or security services are processed by
+        those providers.
       </p>
 
       <h2 className="text-2xl font-semibold mt-6 mb-3">Cookies and Storage</h2>
@@ -70,16 +72,18 @@ export default async function PrivacyPolicyPage() {
 
       <h2 className="text-2xl font-semibold mt-6 mb-3">Your Rights</h2>
       <p className="leading-relaxed">
-        You have the right to request deletion of your tracked player data at
-        any time through the application interface. Public match data from the
-        Riot Games API cannot be deleted as it is publicly available
-        information.
+        You can stop tracking a player in the application. This removes the
+        tracking relationship; it does not erase the account or all stored
+        match records. For access or deletion requests, contact the operator
+        of your installation. Data being available from Riot does not by itself
+        make our stored copy exempt from applicable deletion requirements.
       </p>
 
       <h2 className="text-2xl font-semibold mt-6 mb-3">Contact</h2>
       <p className="leading-relaxed">
         If you have any questions or concerns about our privacy practices,
-        please contact the application administrators.
+        please contact the operator of your installation. For this portfolio
+        project, contact mat.kadlec@email.cz.
       </p>
 
       <p className="leading-relaxed text-sm mt-8 text-center">

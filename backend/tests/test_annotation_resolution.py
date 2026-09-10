@@ -44,6 +44,6 @@ def test_module_annotations_resolve_at_runtime(module_name: str) -> None:
     assert unresolvable == [], (
         f"{module_name} has annotations that cannot be evaluated at runtime. "
         "Import the name normally instead of under `if TYPE_CHECKING:` — "
-        "see .claude/pitfalls.md history and app/core/riot_api/"
+        "see app/core/riot_api/"
         "credential_vocabulary.py for the cycle-breaking pattern."
     )

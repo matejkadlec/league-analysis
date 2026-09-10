@@ -48,7 +48,7 @@ const useFormField = () => {
   const itemContext = React.useContext(FormItemContext);
   const { getFieldState, formState } = useFormContext();
 
-  // PATCHED (see components/CLAUDE.md): upstream tests `!fieldContext`, which
+  // PATCHED (see components/AGENTS.md): upstream tests `!fieldContext`, which
   // is never true because the context defaults to `{}`. Checking the field
   // name first is what makes the message the developer actually sees.
   if (!fieldContext.name) {
@@ -113,7 +113,7 @@ const FormControl = React.forwardRef<
 >(({ ...props }, ref) => {
   const { error, formItemId, formMessageId } = useFormField();
 
-  // PATCHED (see components/CLAUDE.md): describe the control only by the
+  // PATCHED (see components/AGENTS.md): describe the control only by the
   // message on screen -- upstream names ids `FormMessage` may never render.
   // Known gap: static helper children need their own labelled element.
   const describedBy = error?.message ? formMessageId : undefined;

@@ -123,12 +123,9 @@ by role and accessible name before test id. A test states a rule the code must
 satisfy, never a copy of its current value; the standard is in
 [`../docs/quality-checks.md`](../docs/quality-checks.md#what-makes-a-test-worth-keeping).
 
-The production image is defined by `Dockerfile`, installs with `npm ci`, builds
-the Next standalone output, and runs `server.js` as non-root UID/GID 10001.
-`NEXT_PUBLIC_API_URL` is the browser-visible backend origin baked at build
-time; `API_INTERNAL_URL` is the server-side rewrite destination and points to
-the private Compose backend service. Normal `npm run dev` and repository
-`./run.sh` keep their localhost defaults and never require Docker.
+`NEXT_PUBLIC_API_URL` is the browser-visible API origin; `API_INTERNAL_URL`
+controls the local request forwarding destination. The normal launcher keeps
+both processes on localhost.
 
 ## Related Docs
 
@@ -145,3 +142,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+Privacy copy must distinguish stopping player tracking from account/data erasure
+and must not claim that publicly available Riot data is exempt from deletion
+requirements. Instance operators own retention and provider disclosures.

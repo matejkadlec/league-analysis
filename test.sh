@@ -171,7 +171,7 @@ run_backend_deptry() {
 }
 
 run_backend_xenon() {
-  "$repository_root/scripts/run-xenon.sh"
+  "$repository_root/tools/run-xenon.sh"
 }
 
 run_frontend_install() {
@@ -272,11 +272,10 @@ run_step 'Repository hygiene' run_repository_hygiene
 # Secret scanning and the architecture rules used to run only from
 # .githooks/pre-commit, which every developer has to opt into. These two steps
 # are what makes them true of master rather than of one machine.
-run_step 'Secret scan' "$repository_root/scripts/run-gitleaks.sh"
-run_step 'Repository architecture rules' "$repository_root/scripts/run-local-precommit-hooks.sh"
-run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
-run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
-run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test-postgres-backup-retention.sh"
+run_step 'Secret scan' "$repository_root/tools/run-gitleaks.sh"
+run_step 'Repository architecture rules' "$repository_root/tools/run-local-precommit-hooks.sh"
+run_step 'ShellCheck' "$repository_root/tools/run-shellcheck.sh"
+run_step 'GitHub workflow syntax' "$repository_root/tools/run-actionlint.sh"
 
 # Ordering rule for everything below: cheapest failure first. Measured on this
 # box, `ruff check` and `ruff format --check` are ~1s each while the frontend
@@ -287,7 +286,7 @@ run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test
 # gate, and nothing cheap sits behind them.
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091
-  source "$repository_root/scripts/use-project-node.sh"
+  source "$repository_root/tools/use-project-node.sh"
   run_step 'Frontend deterministic install' run_frontend_install
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck

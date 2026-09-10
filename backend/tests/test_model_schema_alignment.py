@@ -147,7 +147,7 @@ def test_every_orm_backed_response_schema_is_paired() -> None:
     """
     # Schemas that read from an ORM object but are not one table's shape:
     # envelopes, sub-objects assembled in Python, and the parked playstyle
-    # package (see its CLAUDE.md).
+    # package.
     not_one_table = {
         "ChampionStatsItem",
         "ChampionStatsResponse",

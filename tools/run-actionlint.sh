@@ -12,7 +12,7 @@ fi
 if [[ -z "$actionlint_binary" ]]; then
   cache_directory="${XDG_CACHE_HOME:-$HOME/.cache}/league-analysis/actionlint-${expected_version}"
   actionlint_binary="$cache_directory/actionlint"
-  "$repository_root/scripts/install-actionlint.sh" "$cache_directory" >/dev/null
+  "$repository_root/tools/install-actionlint.sh" "$cache_directory" >/dev/null
 fi
 
 [[ -x "$actionlint_binary" ]] || {

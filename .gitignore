@@ -1,8 +1,8 @@
 # Environment variables
 .env
+.env.*
+!.env.example
 .worktree-local-file.*
-deploy/*.env
-!deploy/*.env.example
 
 # Python
 __pycache__/
@@ -25,7 +25,7 @@ frontend/.cache/
 frontend/tsconfig.tsbuildinfo
 
 # Logs
-logs/*.log
+logs/
 *.log
 
 # IDEs
@@ -58,9 +58,6 @@ backend/dist/
 backend/build/
 frontend/build/
 
-# Claude Code linked worktrees
-.claude/worktrees/
-
 # Local agent tooling state
 .zcode/
 .desloppify/
@@ -72,3 +69,19 @@ untracked/
 # Stryker mutation testing (ad-hoc, never committed)
 frontend/reports/
 frontend/.stryker-tmp/
+
+# Private database exports and key material
+*.dump
+*.backup
+*.sql.gz
+*.sql.zst
+*.pem
+*.key
+
+# Local agent configuration and working notes
+.agents/
+.codex/
+
+# Local database exports
+*.sql.dump
+*.dump.sql

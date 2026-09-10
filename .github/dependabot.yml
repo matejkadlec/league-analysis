@@ -63,7 +63,7 @@ updates:
           - "minor"
           - "patch"
 
-  # Watches the postgres pins in compose.gate.yml and compose.production.yml.
+  # Watches the disposable test database pin in compose.gate.yml.
   - package-ecosystem: "docker-compose"
     directory: "/"
     target-branch: "master"
@@ -97,57 +97,6 @@ updates:
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
-      - "docker"
-    groups:
-      minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/backend"
-    target-branch: "master"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:45"
-      timezone: "Europe/Prague"
-    open-pull-requests-limit: 2
-    labels:
-      - "dependencies"
-      - "backend"
-      - "docker"
-    # backend/pyproject.toml and backend/.python-version own the supported
-    # Python line. Keep stable patch updates automated until 3.15 is adopted.
-    ignore:
-      - dependency-name: "python"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-major"
-    groups:
-      minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/frontend"
-    target-branch: "master"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "07:00"
-      timezone: "Europe/Prague"
-    open-pull-requests-limit: 2
-    labels:
-      - "dependencies"
-      - "frontend"
       - "docker"
     groups:
       minor-and-patch:

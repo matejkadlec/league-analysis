@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  // shadcn/ui primitives are vendored, not written here: `components/CLAUDE.md`
+  // shadcn/ui primitives are vendored, not written here: `components/AGENTS.md`
   // forbids hand-editing them, so an export the CLI shipped and this app does
   // not use is not something to delete. Everything else must be reachable --
   // `deadcode` includes `exports`, so a barrel re-export nobody imports fails

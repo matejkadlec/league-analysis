@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mechanizes two docs/CLAUDE.md rules that were previously prose only:
+# Mechanizes two docs/AGENTS.md rules that were previously prose only:
 #   - relative links only, and every linked target must exist
 #   - a new docs/ topic file must be added to docs/README.md in the same change
 # Runs over the whole tracked corpus rather than the staged subset, because a
@@ -79,10 +79,10 @@ if [ -f "$docs_index" ]; then
   done < <(grep -o '](<\?[^)>]*>\?)' "$docs_index" | sed 's/^](<\?//; s/>\?)$//')
 
   while IFS= read -r topic_file; do
-    # README.md is the index itself; CLAUDE.md/AGENTS.md are agent
+    # README.md is the index itself; AGENTS.md contains agent
     # instructions, not topic documents.
     case "$(basename "$topic_file")" in
-      README.md | CLAUDE.md | AGENTS.md) continue ;;
+      README.md | AGENTS.md) continue ;;
     esac
 
     if [ -z "${indexed_paths["$topic_file"]+set}" ]; then

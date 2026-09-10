@@ -1,131 +1,133 @@
 # League Analysis
 
-League Analysis is a private, actively developed full-stack League of Legends
-analytics application. It combines authenticated player tracking, match and
-timeline ingestion, rank history, playstyle signals, matchmaking-quality
-analysis, and administrator-managed background jobs.
+![Python](https://img.shields.io/badge/Python-3.14.7-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-19.2.8-61DAFB?logo=react&logoColor=black)
+![Next.js](https://img.shields.io/badge/Next.js-16.3.3-000000?logo=nextdotjs&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.141.1-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![Status](https://img.shields.io/badge/Development-paused-orange)
 
-This README is the entry point for contributors with authorized repository
-access. Detailed architecture, operations, integration, database, and workflow
-guidance is indexed in [`docs/README.md`](docs/README.md).
+**A closer look at your League of Legends games.**
 
-## Architecture
+League Analysis brings match history, ranked progress, and playing habits into
+one place. Follow players, revisit past games, and explore how their performance
+changes over time.
 
-| Area | Current basis |
-| --- | --- |
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, TanStack Query, Zod |
-| Backend | Python 3.14, FastAPI, SQLAlchemy, Pydantic, APScheduler |
-| Data | PostgreSQL 18 with reviewed Alembic revisions |
-| External integration | Riot Games API |
-| Tooling | Node 26.7.0, npm 12.0.2, uv, GitHub Actions |
+This is a personal portfolio project maintained by **Matěj Kadlec**.
+Development is currently paused. The repository presents the work and lets
+interested readers explore it on their own computer; ongoing support and new
+features are not promised.
 
-The supported local development flow is non-Docker. Production packaging and
-the pi5ram16 deployment are repository-owned but remain an explicit, separate
-path; see [the deployment guide](docs/deployment.md) and do not substitute
-container commands for the local workflow below.
+## What you can explore
 
-## Prerequisites
+- **Player overview:** recent results, favourite champions, roles, and ranked progress.
+- **Match history:** browse past games and inspect each player's contribution.
+- **Playstyle analysis:** explore patterns across a player's completed matches.
+- **Matchmaking analysis:** compare teams using recorded match statistics and visible ranks.
+- **Performance changes:** compare a player's recent games with their earlier games.
+- **Player tracking:** keep selected players together and refresh their match information.
 
-Use a WSL development environment with:
+The experimental analysis describes patterns in recorded games. It does not
+reveal Riot's hidden matchmaking rating or prove cheating, smurfing, boosting,
+or who was playing an account.
 
-- Git and authorized SSH access to this private repository;
-- Node 26.7.0 through NVM and npm 12.0.2;
-- Python 3.14.7 and uv;
-- an already-provisioned PostgreSQL 18 database and role matching the
-  non-secret `POSTGRES_DB` and `POSTGRES_USER` configuration values;
-- a root `.env` file from the authorized private configuration source.
+## Try it on your computer
 
-Never paste, commit, or share `.env` values. The file is ignored and must stay
-outside source control. Explicit process environment variables take precedence
-over its values; see [the local-environment guidance](docs/project-overview.md#local-environment)
-for the configuration boundary.
+Setup currently requires a few command-line steps. You will need Linux or
+Windows with WSL, Git, [Node.js](https://nodejs.org/) through NVM,
+[uv](https://docs.astral.sh/uv/getting-started/installation/), and a running
+[PostgreSQL 18](https://www.postgresql.org/download/) server. Install `lsof` and
+`iproute2` as well; the launcher uses them to check local ports.
 
-## Set up a fresh checkout
+### 1. Download and install
 
 ```bash
-git clone git@github.com:matejkadlec/league-analysis.git
+git clone https://github.com/matejkadlec/league-analysis.git
 cd league-analysis
-
-nvm install 26.7.0
-nvm use 26.7.0
+nvm install
+nvm use
 npm install --global npm@12.0.2 --ignore-scripts
-
 (cd frontend && npm ci)
 (cd backend && uv sync --frozen --all-groups)
-git config core.hooksPath .githooks
+cp .env.example .env
+chmod 600 .env
 ```
 
-The last command points Git at the tracked `.githooks/pre-commit` wrapper, which
-runs the configured pre-commit checks; see
-[project overview](docs/project-overview.md#git-hooks-and-worktrees).
+Python 3.14.7 and Node 26.8.1 are pinned in the repository. `uv` can install the
+required Python version automatically.
 
-## Database and local application
+### 2. Create your local database
 
-Point the private root `.env` at the verified local PostgreSQL database. The
-migration command creates application schemas, not the database or role, so
-provision that target before applying the reviewed schema revisions:
+Use a PostgreSQL server configured to listen only on localhost (the usual
+Linux default). On a typical Linux/WSL PostgreSQL installation:
+
+```bash
+sudo -u postgres createuser --pwprompt league_analysis
+sudo -u postgres createdb --owner=league_analysis league_analysis_local_dev
+```
+
+Use a randomly generated hexadecimal database password (letters a–f and digits)
+to avoid reserved characters in the application's connection URL. Open `.env`, enter that password as
+`POSTGRES_PASSWORD`, and replace `JWT_SECRET_KEY` with a new random value:
+
+```bash
+(cd backend && uv run python -c 'import secrets; print(secrets.token_hex(32))')
+```
+
+Keep `.env` private. Use a fresh local database, not someone else's database
+export. No accounts, passwords, player database, or Riot API key are supplied.
+
+### 3. Create your local administrator and start
 
 ```bash
 (cd backend && uv run python scripts/migrate.py upgrade head)
+(cd backend && uv run python scripts/reconcile_admin_account.py \
+  --database league_analysis_local_dev \
+  --email you@example.com --display-name "Your Name" --apply)
 ./run.sh
 ```
 
-`./run.sh` starts the frontend at <http://localhost:3000> and the backend at
-<http://localhost:8000>; API documentation is available at
-<http://localhost:8000/api>. Use `./run.sh 3001 8001` for alternate local ports.
-`run.sh` requires `lsof` and `ss` and stops existing TCP listeners on its
-selected frontend and backend ports before starting: `./run.sh` clears 3000/8000,
-`./run.sh 3001` clears 3001/8000, and `./run.sh 3001 8001` clears 3001/8001.
-`ss` covers WSL cases where `lsof` does not report a listener.
-This terminates any local process listening on those ports. The full command,
-log locations, and restart behavior are documented in
-[project overview](docs/project-overview.md#local-environment).
+The administrator command asks for your chosen password without displaying it.
+It is restricted to the named local development database. Open
+**[localhost:3000](http://localhost:3000)** and sign in with that account.
 
-Alembic revisions in [`backend/alembic/versions/`](backend/alembic/versions/)
-are the schema authority. For a populated local database without an Alembic
-marker, follow the explicit [safe adoption process](docs/database.md#source-of-truth)
-instead of resetting or recreating schemas.
+The launcher stops anything already listening on ports 3000 and 8000. Use
+`./run.sh 3001 8001` if those ports are occupied by another project. More setup
+and troubleshooting details are in the [project guide](docs/project-overview.md).
 
-## Riot API development key
+### 4. Connect your own Riot API key
 
-Obtain a Riot development key through the authorized Riot Developer Portal.
-Development keys expire every 24 hours. Configure it only through the Settings
-page, which is the sole place the key is ever entered; never put the key in a
-commit, issue, documentation example, or chat message. The key handling,
-routing, rate limits, and endpoint constraints are maintained in
-[`docs/riot-api.md`](docs/riot-api.md).
+For private experimentation, obtain a development key from the
+[Riot Developer Portal](https://developer.riotgames.com/), then save it in the
+app's administrator **Settings** page. Development keys expire after 24 hours.
+Without a valid key, live player lookup and match collection are unavailable;
+a fresh database starts without match data.
 
-Ordinary local quality checks do not require a real Riot API key.
+Use your own credentials and follow Riot's registration and key-use rules.
+Offering a running app to the public requires the appropriate Riot approval and
+production key; a public GitHub repository does not provide that approval.
+See [Riot's policies](https://developer.riotgames.com/policies/general) and the
+[release notes](docs/public-release.md) before hosting a public service.
 
-## Validation
+## For readers interested in the code
 
-Run these commands from the repository root:
+The interface uses React and Next.js. Python and FastAPI handle accounts,
+analysis, and data collection, with PostgreSQL storing the results.
 
-```bash
-./test.sh -f  # repository and frontend feedback gate
-./test.sh -b  # repository and backend feedback gate
-./test.sh     # complete pre-pull-request quality gate
-```
-
-The complete gate runs deterministic installs, linting, type checks, frontend
-and backend regression tests, the production frontend build, static security
-analysis, ShellCheck, workflow checks, migration validation, and repository
-tooling regressions. Local success is not GitHub check success. See
-[`docs/quality-checks.md`](docs/quality-checks.md) for the current boundary.
-
-When Docker Compose v2 is intentionally available, the separate
-`./deploy/container-qa.sh` command builds and health-checks a disposable stack
-without reading the native `.env` or database.
-
-## Further reading
-
-- [Project overview and local operation](docs/project-overview.md)
-- [Database and migration workflow](docs/database.md)
+- [Architecture and development setup](docs/project-overview.md)
 - [Riot API integration](docs/riot-api.md)
-- [Quality checks and CI](docs/quality-checks.md)
-- [Production containers and pi5ram16 deployment](docs/deployment.md)
-- [AI/Jira/GitHub delivery flow](docs/ai-development-flow.md)
+- [Quality checks](docs/quality-checks.md) — run `./test.sh` for the complete gate
+- [Documentation index](docs/README.md)
+- [Security reporting](SECURITY.md)
 
-## License
+## License and Riot Games notice
 
-**All Rights Reserved** © 2026 League Analysis.
+Source is available for inspection under the existing
+[All Rights Reserved license](LICENSE). Public visibility does not grant an
+open-source license or permission to redistribute the code. Riot game data,
+artwork, and trademarks remain subject to Riot's terms.
+
+League Analysis isn't endorsed by Riot Games and doesn't reflect the views or
+opinions of Riot Games or anyone officially involved in producing or managing
+Riot Games properties. Riot Games, and all associated properties are trademarks
+or registered trademarks of Riot Games, Inc.

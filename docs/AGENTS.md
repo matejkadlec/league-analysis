@@ -25,8 +25,7 @@ document.
 
 ## Required Co-Updates
 
-Topic documents record durable invariants, rationale, external-system and
-production facts, and operational procedures — they do not mirror code.
+Topic documents record durable invariants, rationale, external-system facts, and operational procedures — they do not mirror code.
 Mechanical facts (schema columns, endpoint lists, module inventories, route
 tables, code flow narration) live in the code and its authoritative sources;
 do not add them to a topic document, and do not reintroduce deleted mirrors.
@@ -34,7 +33,7 @@ do not add them to a topic document, and do not reintroduce deleted mirrors.
 - The root guide's rule that runtime behavior changes update the matching
   authoritative document and scoped guide in the same task is satisfied as
   follows: when the change alters a durable invariant, a decision's rationale,
-  an externally observed provider/production fact, or an operational procedure
+  an externally observed provider fact, or an operational procedure
   the document records, update the document with it; a change that leaves all
   of those unchanged satisfies the rule with no documentation edit, because
   the documents no longer mirror mechanical detail.
@@ -51,7 +50,7 @@ do not add them to a topic document, and do not reintroduce deleted mirrors.
   invariant, recovery contract, interlock, or failure-classification rule.
 - Cookie/storage behavior changes update
   [`cookie-consent-compliance.md`](cookie-consent-compliance.md), the applicable
-  policy UI, and [`../backend/COOKIE_CONSENT_AGENTS.md`](../backend/COOKIE_CONSENT_AGENTS.md).
+  policy UI, and the nearest applicable `AGENTS.md`.
 - Documents frozen as historical snapshots (dated reviews and audits) are never
   updated to reflect current state; add a supersession note at most.
 - Date externally observed facts and cite their source so a reader knows when
@@ -65,6 +64,8 @@ do not add them to a topic document, and do not reintroduce deleted mirrors.
   commands verified in the tree.
 - Distinguish authoritative source files from explanatory documentation.
 - Use relative links for repository files and ensure every linked target exists.
+- Public source publication and its Riot/security boundaries belong in
+  [`public-release.md`](public-release.md).
 - Keep public project copy in the root [`README.md`](../README.md); keep
   engineering detail here.
 

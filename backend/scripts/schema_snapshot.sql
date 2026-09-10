@@ -31,17 +31,3 @@ WHERE connamespace IN (
     SELECT oid FROM pg_namespace WHERE nspname IN ('auth', 'core', 'jobs', 'public')
 )
 AND NOT convalidated;
-
-SELECT
-    'admin|mat.kadlec@email.cz|'
-    || count(*) || '|'
-    || count(*) FILTER (WHERE is_active AND is_admin AND email_verified)
-FROM auth.users
-WHERE lower(email) = 'mat.kadlec@email.cz';
-
-SELECT
-    'admin|marek.hovadik@seznam.cz|'
-    || count(*) || '|'
-    || count(*) FILTER (WHERE is_active AND is_admin AND email_verified)
-FROM auth.users
-WHERE lower(email) = 'marek.hovadik@seznam.cz';

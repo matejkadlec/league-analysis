@@ -320,7 +320,7 @@ echo ""
 # Check if frontend dependencies are installed
 cd "$SCRIPT_DIR/frontend"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/scripts/use-project-node.sh"
+source "$SCRIPT_DIR/tools/use-project-node.sh"
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
     npm install
