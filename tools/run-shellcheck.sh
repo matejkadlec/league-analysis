@@ -12,7 +12,7 @@ fi
 if [[ -z "$shellcheck_binary" ]]; then
   cache_directory="${XDG_CACHE_HOME:-$HOME/.cache}/league-analysis/shellcheck-${shellcheck_version}"
   shellcheck_binary="$cache_directory/shellcheck"
-  "$repository_root/scripts/install-shellcheck.sh" "$cache_directory" >/dev/null
+  "$repository_root/tools/install-shellcheck.sh" "$cache_directory" >/dev/null
 fi
 
 [[ -x "$shellcheck_binary" ]] || {

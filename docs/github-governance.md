@@ -34,9 +34,7 @@ decision only after a compatible signing and recovery process is documented.
 The required check context is the stable job name in
 [`quality-checks.yml`](../.github/workflows/quality-checks.yml). It covers the
 deterministic quality, security, migration, workflow, and repository-tooling
-checks. Since LGA-10 landed the production Docker artifacts, the gate also
-builds and health-checks the isolated production containers; Docker checks are
-part of that stable context, not a separate required context. Dependency
+checks in an isolated test container. Dependency
 advisories are watched by GitHub's native Dependabot alerts and security
 updates instead of a CI job (decision recorded in
 [`quality-checks.md`](quality-checks.md)).

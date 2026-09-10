@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Web app for comprehensive analysis of League of Legends players, matches and more."
 authors = [
     { name = "Matěj Kadlec", email = "mat.kadlec@email.cz" },
-    { name = "Marek Hovadík", email = "marek.hovadik@seznam.cz" },
 ]
 dependencies = [
     "alembic>=1.19.1",

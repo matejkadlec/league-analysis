@@ -45,14 +45,14 @@ On startup, recovery marks executions orphaned in `RUNNING`/`PAUSED`
 still be owned, and because the start route attaches to an existing active
 row, an orphan would permanently block that player's updates. This step is
 mandatory — failure raises `StartupRecoveryError` and stops the application
-rather than serving with rows no worker owns. Production containers use
-`restart: unless-stopped`, so a failed recovery gets a clean retry.
+rather than serving with rows no worker owns. Resolve the recovery error
+before restarting the application.
 
 `core.matchmaking_analyses` has the **opposite** contract: startup never
 cancels it. A worker interrupted by shutdown deliberately leaves its run
 active so the next explicit `start_analysis` reattaches and resumes with
 completed progress intact; writing a terminal row would discard that work on
-every deployment. Explicit user cancellation is unaffected — it commits the
+every restart. Explicit user cancellation is unaffected — it commits the
 `cancelled` row before cancelling the worker.
 
 Pause is runtime-only: each run carries its own flag on its in-memory
@@ -61,7 +61,7 @@ dies with the run — nothing is persisted and nothing needs a startup reset.
 The `job_configurations.is_paused` column is dormant, kept only until its
 drop gets its own migration.
 Shutdown stops APScheduler with `wait=False` — it stops future dispatches but
-never drains long-running Riot work, so a deployment has a bounded shutdown
+never drains long-running Riot work, so the application has a bounded shutdown
 instead of waiting through provider rate-limit windows.
 
 APScheduler opens its persistent store paused, discards stale triggers, and

@@ -1,7 +1,6 @@
 # Toolchain for ./test.sh. This image exists so the gate runs against one set
 # of pinned tools locally and in CI, instead of a workflow reassembling them
-# step by step on a runner. It is never deployed; production images are
-# backend/Dockerfile and frontend/Dockerfile.
+# step by step on a runner. It is only a disposable test environment.
 #
 # Every pinned tool below is named by a `FROM`, never by `COPY --from=<image>`.
 # Dependabot reads `FROM` lines only: this file's node pin has been bumped for
@@ -44,9 +43,7 @@ COPY --from=shellcheck /bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=actionlint /usr/local/bin/actionlint /usr/local/bin/actionlint
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 
-# uv, and the Python it resolves from .python-version. Keep the version in step
-# with backend/Dockerfile: `.githooks/pre-commit` runs the host's uv, so three
-# copies of the same tool decide whether a hook and the gate agree.
+# uv resolves Python from .python-version. Local hooks use the same lockfile.
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     UV_LINK_MODE=copy \

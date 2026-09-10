@@ -23,11 +23,8 @@ Two applications live at the repository root: `backend/` (FastAPI; domain
 features under `app/features/<name>/`, shared infrastructure under
 `app/core/`, reviewed schema revisions under `alembic/versions/`) and
 `frontend/` (Next.js App Router; `app/`, `components/`, `features/`, and
-`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`
-(release shipping), `backup/` (database backup, restore, and mirror
-operations), `run.sh`, and `test.sh` (the mandatory pre-publication gate). The
-current
-file inventory is the tree itself; this document records only the boundaries
+`lib/core/`). Repository tooling lives in `tools/` and `.githooks/`, with `run.sh` and
+`test.sh` as its entry points. The current file inventory is the tree itself; this document records only the boundaries
 that constrain changes.
 
 ### Backend
@@ -163,25 +160,7 @@ other local process you need to keep running.
 
 Changing `.env` requires a restart.
 
-Docker is not a prerequisite for this native workflow. Explicit container
-packaging/health validation uses `./deploy/container-qa.sh`; it creates an
-isolated disposable stack and never reads the root `.env` or native database.
-
-## Production Deployment
-
-The repository owns production Dockerfiles, `compose.production.yml`, the
-locked deployment script, and the `pi5ram16` GitHub Actions workflow. The stack
-exposes the Next.js frontend on host port `8097`, FastAPI on `8098`, and keeps
-PostgreSQL 18 internal-only. A one-shot migration service completes before
-backend startup; backend readiness includes a database round trip, and
-frontend startup waits for that readiness.
-
-Production deployment consumes a private mode-`0600` host environment under
-`$HOME/.local/share/league-analysis`; no complete runtime environment or secret
-belongs in this repository. Deployment is serialized and bounded by migration
-and health, but never drains or waits for normal application background jobs.
-See [`deployment.md`](deployment.md) for the complete topology, explicit local
-container QA, host bootstrap, diagnostics, and LGA-16 rollback boundary.
+Docker is optional and is used only for disposable quality checks.
 
 ## Git hooks and worktrees
 
@@ -211,7 +190,7 @@ reset, or delete an owner-created worktree without explicit authorization.
 Git materializes only tracked files into a new worktree, and root `.env` is
 ignored, so a new worktree starts without local configuration. Copy it
 explicitly at creation time, as above. Copy that one file only — never a
-directory, deployment credential, or provider bundle. A worktree created without
+directory or provider credential bundle. A worktree created without
 the copy is not broken: the backend fails at startup with a configuration error
 until the file is present.
 
@@ -221,17 +200,9 @@ longer needed; inspect dirty state and PR/merge state first.
 
 ## Agent Instruction Files
 
-Repository skills in [`.agents/skills/`](../.agents/skills/) are the
-authoritative workflow procedures (`flow1`, `flow2`, `qa1`, `qa2`);
-[`ai-development-flow.md`](ai-development-flow.md) is the short human-facing
-lifecycle index. Together with the `AGENTS.md` files, they are the canonical
-guides for non-Claude agents.
-
-Claude Code does not use them. `CLAUDE.md` files are self-contained Claude
-Code guides — trimmed hard-rules-and-pointers entry points that never
-reference or mirror `AGENTS.md` — and they prescribe no delivery workflow
-beyond keeping Jira accurate and not duplicating tickets. Linked worktrees
-created under `.claude/worktrees/` are ignored and never published.
+Generic `AGENTS.md` files describe shared conventions. [SKILLS.md](../SKILLS.md)
+indexes reusable workflows. Machine-specific skills and agent settings are
+excluded from version control.
 
 ## Quality and Verification
 

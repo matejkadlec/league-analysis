@@ -5,7 +5,6 @@
 #   docker compose -f compose.gate.yml down -v              # tear down
 #
 # CI runs the same command, so a green run here means the same thing there.
-# Production packaging is not built by this file; that is deploy/container-qa.sh.
 #
 # From a linked git worktree, .git is a file pointing at the main repository, so
 # the gate's `git ls-files` calls need that directory at its own absolute path:

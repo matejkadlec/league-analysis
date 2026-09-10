@@ -63,8 +63,7 @@ GATE_HOOKS = (
     "forbid-icon-library-objective-icons",
     "forbid-nextjs-middleware",
     "check-docs-links",
-    "check-docker-context-imports",
-)
+    )
 
 # Local hooks ./test.sh already runs as steps of its own, against the locked
 # project rather than through pre-commit. Naming them, instead of ignoring
@@ -107,7 +106,7 @@ if unclassified or missing:
         print(
             f"ERROR: local hook '{hook_id}' is not claimed by a gate step; add "
             f"it to GATE_HOOKS or to COVERED_BY_A_GATE_STEP in "
-            f"scripts/run-local-precommit-hooks.sh.",
+            f"tools/run-local-precommit-hooks.sh.",
             file=sys.stderr,
         )
     for hook_id in missing:

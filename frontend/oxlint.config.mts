@@ -242,7 +242,7 @@ export default defineConfig({
       files: ["lib/session/token-manager.ts", "features/auth/context/auth-context.tsx"],
       rules: { "no-restricted-imports": "off" },
     },
-    // Vendored shadcn primitives, which `components/CLAUDE.md` forbids
+    // Vendored shadcn primitives, which `components/AGENTS.md` forbids
     // hand-editing. A primitive's heading takes its content from the call
     // site, which is where the rule would have to look.
     {

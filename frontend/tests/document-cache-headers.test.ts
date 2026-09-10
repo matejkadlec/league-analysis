@@ -61,40 +61,8 @@ describe("document cache headers", () => {
   });
 });
 
-describe("the production image passes the commit as the deployment id", () => {
+describe("local build identity", () => {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-  it("requires NEXT_DEPLOYMENT_ID at image build and keeps it at runtime", () => {
-    const dockerfile = readFileSync(
-      join(repoRoot, "frontend/Dockerfile"),
-      "utf8",
-    );
-    expect(dockerfile).toMatch(/ARG NEXT_DEPLOYMENT_ID\b/);
-    expect(dockerfile).toMatch(
-      /: "\$\{NEXT_DEPLOYMENT_ID:\?must be passed as a build arg\}"/,
-    );
-    // The runtime stage re-declares the ARG; a builder-only ARG dies at FROM.
-    // Found by stage name, not by base image: a pinned Node version here fails
-    // on every bump, and -1 from indexOf silently sliced the whole file away.
-    const runtimeStageStart = dockerfile.search(/^FROM \S+ AS runtime$/m);
-    expect(runtimeStageStart).toBeGreaterThan(-1);
-    const runtimeStage = dockerfile.slice(runtimeStageStart);
-    expect(runtimeStage).toMatch(/ARG NEXT_DEPLOYMENT_ID\b/);
-    expect(runtimeStage).toMatch(/NEXT_DEPLOYMENT_ID=\$NEXT_DEPLOYMENT_ID/);
-  });
-
-  it("feeds Compose's image tag to both the build and the running container", () => {
-    const compose = readFileSync(
-      join(repoRoot, "compose.production.yml"),
-      "utf8",
-    );
-    expect(compose).toMatch(
-      /NEXT_DEPLOYMENT_ID: \$\{LGA_IMAGE_TAG:-production\}/,
-    );
-    expect(
-      compose.match(/NEXT_DEPLOYMENT_ID: \$\{LGA_IMAGE_TAG:-production\}/g),
-    ).toHaveLength(2);
-  });
 
   it("pins the same deployment id on the gate build and the Playwright server", () => {
     const testSh = readFileSync(join(repoRoot, "test.sh"), "utf8");

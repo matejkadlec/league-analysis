@@ -36,7 +36,7 @@ JSONB_ABSENCE_REVISION = (
 # fixture writes.
 _JSON_NULL_EXECUTION_MARKER = "seeded for the JSON null normalisation"
 PROJECT_ROOT = BACKEND_ROOT.parent
-SNAPSHOT_SQL = PROJECT_ROOT / "backup" / "postgres-snapshot.sql"
+SNAPSHOT_SQL = Path(__file__).with_name("schema_snapshot.sql")
 EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
 EXPECTED_POSTGRES_MAJOR = 18
 POSTGRES_CLIENT_PROGRAMS = ("pg_dump", "pg_restore", "psql")

@@ -7,7 +7,7 @@
 > for tables, columns, enums, indexes, and constraints.
 >
 > **Maintenance:** Update this document only when a durable invariant, a
-> decision's rationale, an external or production fact, or an operational
+> decision's rationale, an external provider fact, or an operational
 > procedure changes. Mechanical schema changes belong in a reviewed Alembic
 > revision, not here.
 
@@ -24,17 +24,11 @@
   reversal is required.
 - Apply reviewed revisions only through
   `backend/scripts/migrate.py` (`uv run python scripts/migrate.py upgrade head`).
-  It holds a session-scoped PostgreSQL advisory lock so two application
-  containers cannot race migrations. `../run.sh` runs it before starting
-  backend writers and cancels startup on failure; the production Compose
-  contract runs it in a one-shot `migrate` service that must succeed before
-  the backend starts. Deploying a stale feature-branch image is forbidden —
-  the pi5ram16 workflow deploys the exact current `master` revision so every
-  referenced migration is present.
-- A new revision also updates `backend/alembic/expected-head.txt`, the
-  reviewed head pin that the Pi restore tooling reads without a Python
-  environment. The backend test gate replays the full chain on a clean
-  isolated database and fails if the migrated database is not at that pin.
+  It holds a session-scoped advisory lock so concurrent commands cannot race.
+  `../run.sh` runs it before starting backend writers and cancels startup on
+  failure.
+- A new revision also updates `backend/alembic/expected-head.txt`. The backend
+  gate replays the chain on an isolated database and verifies that head.
 
 ## Durable Data Invariants
 
@@ -120,9 +114,7 @@ because these values drive staleness decisions.
   half of the history filter — was true for a run that kept none. All nine
   nullable JSONB columns are declared with `ABSENT_AS_NULL_JSONB`
   (`backend/app/core/models.py`), and revision `20260829_0034` rewrote the rows
-  already stored the other way: 22 in production, all in
-  `jobs.job_executions.detailed_logs`, the one column that held both spellings
-  of absence at once.
+  already stored as JSON `null` to SQL `NULL`.
 - `core.riot_api_keys` holds at most one row (revision `20260820_0019`). Past
   keys are secrets with no diagnostic value, and the surviving row's `id` is
   what `riot_credential_health.db_key_id` binds to, so replacing the key
@@ -206,23 +198,8 @@ Never point this command at production, a shared environment, a remote host,
 or a database whose identity cannot be proven. Restore the verified backup
 instead of attempting an ad-hoc reversal.
 
-## Data Authority: Pi Is Authoritative
+## Local data
 
-The Pi database `league_analysis` on pi5ram16 is authoritative; LGA-79 moved it
-there from `league_analysis_local_dev` and that transfer is complete.
-
-The data flow is strictly one-way:
-`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed
-daily. The local database is **disposable** — the mirror may overwrite
-any local rows — and there is no local-to-Pi write path. Details:
-[`deployment.md`](deployment.md#recurring-pi-to-local-mirror).
-
-### Pi backups: intended, not verified as installed
-
-The documented intent is one private custom-format backup at
-`00:00 Europe/Prague` retaining the seven newest successful daily archives,
-installed via `backup/install-pi-postgres-backup-timer.sh` with isolated
-restore verification. **The timer is not currently installed on pi5ram16** —
-verify installation before relying on automatic backups. Contract and
-diagnostics:
-[`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).
+Each installation owns its database. Keep local backups private and use reviewed
+migrations when updating an existing installation. No remote database mirror is
+part of the project.
