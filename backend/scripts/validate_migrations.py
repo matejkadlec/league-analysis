@@ -17,6 +17,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, Connection, create_engine, inspect, text
+from structlog.testing import capture_logs
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 # Every child process talks to PostgreSQL over TCP or runs Alembic against it;
@@ -1095,12 +1096,28 @@ async def verify_expired_key_turns_health_missing(database: str) -> None:
         # have to be able to resolve their relationships.
         import_all_models()
 
-        async with db_manager.get_session() as session:
-            credential, snapshot = await synchronize_riot_credential_health(session)
-            remaining = (
-                await session.execute(text("SELECT COUNT(*) FROM core.riot_api_keys"))
-            ).scalar_one()
+        # The expiry warning is part of the behaviour under test, so it is
+        # asserted here rather than printed into the gate output.
+        with capture_logs() as logs:
+            async with db_manager.get_session() as session:
+                credential, snapshot = await synchronize_riot_credential_health(session)
+                remaining = (
+                    await session.execute(
+                        text("SELECT COUNT(*) FROM core.riot_api_keys")
+                    )
+                ).scalar_one()
 
+        expiry_warnings = [
+            entry
+            for entry in logs
+            if entry["event"] == "riot_api_key_age_limit_reached"
+            and entry["log_level"] == "warning"
+        ]
+        if len(expiry_warnings) != 1:
+            raise RuntimeError(
+                "the expired Riot key was not reported exactly once "
+                f"({len(expiry_warnings)} riot_api_key_age_limit_reached warnings)"
+            )
         if credential is not None:
             raise RuntimeError("an expired Riot key was still handed to a client")
         if snapshot.status.value != "missing":
