@@ -204,7 +204,9 @@ class SmurfBoostDetectionService:
             )
         )
         count, earliest, latest = result.one()
-        if count < 2 or earliest is None or latest is None:
+        # MIN and MAX are NULL only over zero non-NULL timestamps, which the
+        # count rules out before either is read.
+        if count < 2:
             return None
         return (latest - earliest).total_seconds() / 86400.0
 

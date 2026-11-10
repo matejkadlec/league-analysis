@@ -66,7 +66,7 @@ describe("TrackPlayerButton", () => {
   it("presents tracked state and exposes the untrack action", async () => {
     renderButton(true);
 
-    const button = screen.getByRole("button", { name: "Untrack player" });
+    const button = screen.getByRole("button", { name: "Tracked, untrack player" });
     expect(button.getAttribute("data-tracking-state")).toBe("tracked");
 
     await userEvent.click(button);
@@ -76,7 +76,7 @@ describe("TrackPlayerButton", () => {
   it("presents untracked state and exposes the track action", async () => {
     renderButton(false);
 
-    const button = screen.getByRole("button", { name: "Track player" });
+    const button = screen.getByRole("button", { name: "Untracked, track player" });
     expect(button.getAttribute("data-tracking-state")).toBe("untracked");
     expect(screen.getByText("Untracked")).not.toBeNull();
 
@@ -92,7 +92,7 @@ describe("TrackPlayerButton", () => {
     queryClient.setQueryData(["player", "player-1"], { puuid: "player-1" });
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 
-    await userEvent.click(screen.getByRole("button", { name: "Track player" }));
+    await userEvent.click(screen.getByRole("button", { name: "Untracked, track player" }));
 
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
@@ -113,7 +113,7 @@ describe("TrackPlayerButton", () => {
     });
     renderButton(true);
 
-    const button = screen.getByRole("button", { name: "Untrack player" });
+    const button = screen.getByRole("button", { name: "Tracked, untrack player" });
     await userEvent.click(button);
 
     await waitFor(() =>
