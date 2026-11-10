@@ -193,7 +193,7 @@ class JobService:
     # === Job Execution Operations ===
 
     # The execution filters apply to two different selects — the row query
-    # (`Select[tuple[JobExecution]]`) and its count query (`Select[tuple[int]]`)
+    # (`Select[JobExecution]`) and its count query (`Select[int]`)
     # — so the helper hands the caller back the same select type it was given.
     def _apply_execution_filters[SelectT: Select[Any]](
         self,

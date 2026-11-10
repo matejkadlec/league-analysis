@@ -62,7 +62,7 @@ RUN set -eux; \
 # step with the one backend/pyproject.toml locks for .githooks/pre-commit.
 RUN set -eux; \
     uv venv --python 3.14 /opt/pre-commit; \
-    VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.6.2; \
+    VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.7.0; \
     ln --symbolic /opt/pre-commit/bin/pre-commit /usr/local/bin/pre-commit; \
     chmod -R a+rX /opt/pre-commit; \
     pre-commit --version

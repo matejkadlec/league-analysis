@@ -32,7 +32,7 @@ import_all_models()
 # Registered by the decorator, never called by name -- SQLAlchemy reaches it
 # through the dialect when it renders the DDL below.
 @compiles(JSONB, "sqlite")
-def _render_jsonb_as_json(  # pyright: ignore[reportUnusedFunction]
+def _render_jsonb_as_json(
     _type: JSONB, _compiler: GenericTypeCompiler, **_kw: Any
 ) -> str:
     """Let the Postgres models build on SQLite.
