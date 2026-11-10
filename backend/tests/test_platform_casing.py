@@ -15,7 +15,7 @@ from app.features.players.models import Player
 from app.features.players.player_search import build_player_search_query
 
 
-def _bound_platform(statement: Select[tuple[Player]]) -> str | None:
+def _bound_platform(statement: Select[Player]) -> str | None:
     """Return the platform value a compiled lookup actually compares against."""
     for value in statement.compile().params.values():
         if isinstance(value, str) and value.lower() in {

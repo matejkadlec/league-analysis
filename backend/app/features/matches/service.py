@@ -50,9 +50,9 @@ logger = structlog.get_logger(__name__)
 
 
 def restrict_participants_to_queues(
-    query: Select[tuple[MatchParticipant]],
+    query: Select[MatchParticipant],
     queue_ids: Sequence[int] | None,
-) -> Select[tuple[MatchParticipant]]:
+) -> Select[MatchParticipant]:
     """Filter a participant query by queue, joining the match row only if asked.
 
     The champion and lane aggregates read participants, so the queue lives one
