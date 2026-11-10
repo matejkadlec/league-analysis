@@ -97,12 +97,14 @@ export function TrackPlayerButton({
       )}
       onClick={handleToggleTracking}
       disabled={isLoading}
+      // The name leads with the visible state so it contains the visible
+      // label (WCAG 2.5.3), then says what activating the toggle does.
       aria-label={
         isLoading
           ? "Updating player tracking status"
           : isTracked
-            ? "Untrack player"
-            : "Track player"
+            ? "Tracked, untrack player"
+            : "Untracked, track player"
       }
       data-tracking-state={isTracked ? "tracked" : "untracked"}
     >

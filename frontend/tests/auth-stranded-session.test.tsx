@@ -368,7 +368,9 @@ describe("giving up on a session", () => {
     Object.defineProperty(document, "cookie", {
       configurable: true,
       get: () => "",
-      set: (value: string) => written.push(value),
+      set: (value: string) => {
+        written.push(value);
+      },
     });
 
     try {
