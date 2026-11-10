@@ -53,7 +53,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Python 3.14.7 and Node 26.8.1 are pinned in the repository. `uv` can install the
+Python 3.14.7 and Node 26.8.2 are pinned in the repository. `uv` can install the
 required Python version automatically.
 
 ### 2. Create your local database

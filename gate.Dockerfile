@@ -8,11 +8,11 @@
 FROM koalaman/shellcheck:v0.11.0 AS shellcheck
 FROM rhysd/actionlint:1.7.12 AS actionlint
 FROM zricethezav/gitleaks:v8.30.1 AS gitleaks
-FROM ghcr.io/astral-sh/uv:0.12.7 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
 
 # Node comes from the base image, so .nvmrc is not consulted here. Keep the two
 # in step when bumping Node.
-FROM node:26.8.1-bookworm
+FROM node:26.8.2-bookworm
 
 # The base image bundles npm 11.19.0, which frontend/package.json rejects
 # through devEngines. Install the pinned npm rather than relaxing that check.
@@ -62,7 +62,7 @@ RUN set -eux; \
 # step with the one backend/pyproject.toml locks for .githooks/pre-commit.
 RUN set -eux; \
     uv venv --python 3.14 /opt/pre-commit; \
-    VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.6.2; \
+    VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.7.0; \
     ln --symbolic /opt/pre-commit/bin/pre-commit /usr/local/bin/pre-commit; \
     chmod -R a+rX /opt/pre-commit; \
     pre-commit --version
@@ -77,7 +77,7 @@ RUN set -eux; \
 # at build time is hidden at run time.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN set -eux; \
-    npx --yes playwright@1.62.1 install --with-deps chromium; \
+    npx --yes playwright@1.65.0 install --with-deps chromium; \
     rm -rf /var/lib/apt/lists/*; \
     chmod -R a+rX /opt/playwright
 

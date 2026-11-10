@@ -28,7 +28,9 @@ dependencies = [
     "python-multipart>=0.0.32",
     "rapidfuzz>=3.14.5",
     "slowapi>=0.1.10",
-    "sqlalchemy>=2.0.52",
+    # The extra is what installs greenlet. SQLAlchemy 2.1 stopped pulling it in
+    # by default, and without it every async engine fails at import.
+    "sqlalchemy[asyncio]>=2.0.52",
     "structlog>=26.1.0",
     "uvicorn[standard]>=0.52.3",
     "starlette>=1.6.0",
@@ -121,6 +123,10 @@ addopts = [
 timeout = 60
 timeout_method = "thread"
 asyncio_mode = "auto"
+# Every async fixture here is function-scoped, so this is what the unset option
+# already resolved to. Leaving it unset is a deprecation warning, and since
+# pytest 9.2 applies `filterwarnings` before plugins configure, that is fatal.
+asyncio_default_fixture_loop_scope = "function"
 # pytest 9's umbrella, replacing `--strict-config` / `--strict-markers` in
 # `addopts` and a standalone `strict_xfail`. It turns on all four strictness
 # options at once, and the fourth is the one that was missing:
@@ -234,8 +240,8 @@ dev = [
     # Pinned exactly, like ruff: a Pyright release can add strict-mode
     # diagnostics, and a gate that calls itself deterministic cannot have its
     # type checker tighten underneath it on an unrelated commit.
-    "pyright==1.1.411",
-    "ruff==0.16.6",
+    "pyright==1.1.414",
+    "ruff==0.17.4",
     "vulture>=2.16",
     "xenon>=0.9.3",
     "pytest-socket>=0.7.0",

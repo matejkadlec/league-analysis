@@ -179,10 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           formData.append("captcha_token", credentials.captchaToken);
         }
 
+        // Only the deadline aborts this controller, so an aborted signal means
+        // the request timed out.
         const abortController = new AbortController();
-        let didTimeout = false;
         const timeoutId = setTimeout(() => {
-          didTimeout = true;
           abortController.abort();
         }, LOGIN_REQUEST_TIMEOUT_MS);
 
@@ -203,8 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               payload = await response.json();
             } catch (error) {
               if (
-                getLoginRequestError(error, didTimeout).code ===
-                "REQUEST_TIMEOUT"
+                getLoginRequestError(error, abortController.signal.aborted)
+                  .code === "REQUEST_TIMEOUT"
               ) {
                 throw error;
               }
@@ -214,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           await response.json();
         } catch (error) {
-          throw getLoginRequestError(error, didTimeout);
+          throw getLoginRequestError(error, abortController.signal.aborted);
         } finally {
           clearTimeout(timeoutId);
         }
