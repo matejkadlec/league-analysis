@@ -176,16 +176,17 @@ export function useCookieConsent() {
     }
 
     const userId = user.id;
-    let cancelled = false;
+    const cancellation = new AbortController();
+    const isCancelled = () => cancellation.signal.aborted;
 
     const applyReconciliation = async () => {
       const reconciliation = await reconcileConsentForAccount(
         userId,
         () => choiceOwnerRef.current,
         syncConsentForUser,
-        () => cancelled,
+        isCancelled,
       );
-      if (cancelled || reconciliation.outcome === "keep") {
+      if (isCancelled() || reconciliation.outcome === "keep") {
         return;
       }
 
@@ -199,7 +200,7 @@ export function useCookieConsent() {
     void applyReconciliation();
 
     return () => {
-      cancelled = true;
+      cancellation.abort();
     };
   }, [isAuthenticated, syncConsentForUser, user?.id]);
 

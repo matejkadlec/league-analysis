@@ -16,7 +16,9 @@ test.describe.configure({ mode: "parallel" });
 // user finds this control by the label a screen reader announces, and a
 // locator that survives a restyle is the one worth asserting through.
 const trackingToggle = (page: Page) =>
-  page.getByRole("button", { name: /^(Track|Untrack) player$/ });
+  page.getByRole("button", {
+    name: /^(Tracked, untrack|Untracked, track) player$/,
+  });
 
 const detailedMatchesRequest = (
   page: Page,
