@@ -86,7 +86,7 @@ def build_player_search_query(
     query_lower: str,
     game_name: str | None,
     tag_line: str | None,
-) -> Select[tuple[Player]]:
+) -> Select[Player]:
     """Build SQLAlchemy query based on search type."""
     # `platform` arrives as the enum, whose values are the one spelling the
     # column is allowed to hold (`ck_players_platform_is_lowercase`), so an
