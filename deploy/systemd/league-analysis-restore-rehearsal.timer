@@ -1,0 +1,12 @@
+# Installed for the lga-deploy account by deploy/provision-server.sh; enabled
+# by hand once the first run of its service has passed (docs/deployment.md).
+[Unit]
+Description=League Analysis: monthly restore rehearsal
+
+[Timer]
+OnCalendar=*-*-02 04:30:00 Europe/Prague
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

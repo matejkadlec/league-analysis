@@ -26,7 +26,10 @@ grep -Fqx "version: $shellcheck_version" <<< "$version_output" || {
 }
 
 mapfile -d '' -t shell_sources < <(
-  git -C "$repository_root" ls-files --cached --others --exclude-standard -z -- '*.sh' '.githooks/*'
+  # The production commands carry no extension: they are installed under
+  # /usr/local/libexec by name.
+  git -C "$repository_root" ls-files --cached --others --exclude-standard -z -- \
+    '*.sh' '.githooks/*' 'deploy/league-analysis-*'
 )
 [[ ${#shell_sources[@]} -gt 0 ]] || {
   printf 'ERROR: no tracked shell sources were found.\n' >&2

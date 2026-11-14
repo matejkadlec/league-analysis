@@ -1,0 +1,93 @@
+name: Deploy
+
+# Deploys master to https://league.matejkadlec.cz once the Quality Checks
+# workflow has passed for the pushed commit. The SSH key in the `production`
+# environment can only run the forced command deploy/league-analysis-deploy on
+# the server, which takes nothing but a commit of master and fetches the source
+# itself. "Run workflow" redeploys the current master. docs/deployment.md is
+# the documentation.
+
+on:
+  workflow_run:
+    workflows: [Quality Checks]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    # The server builds both images under its own CPU ceiling.
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://league.matejkadlec.cz
+    env:
+      COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+      SITE_URL: https://league.matejkadlec.cz
+    steps:
+      - name: Deploy the commit over SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          # Secrets rather than variables: this repository's logs are public,
+          # and a step's variables are printed in them.
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_HOST_KEY: ${{ secrets.DEPLOY_SSH_HOST_KEY }}
+          SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_HOST" && -n "$SSH_USER" && "$SSH_HOST_KEY" == ssh-ed25519\ * ]]
+          port="${SSH_PORT:-22}"
+
+          install -d -m 0700 "$RUNNER_TEMP/ssh"
+          (umask 077 && printf '%s\n' "$SSH_PRIVATE_KEY" >"$RUNNER_TEMP/ssh/key")
+          if [[ "$port" == "22" ]]; then
+            printf '%s %s\n' "$SSH_HOST" "$SSH_HOST_KEY" >"$RUNNER_TEMP/ssh/known_hosts"
+          else
+            printf '[%s]:%s %s\n' "$SSH_HOST" "$port" "$SSH_HOST_KEY" >"$RUNNER_TEMP/ssh/known_hosts"
+          fi
+
+          ssh -T -F /dev/null \
+            -i "$RUNNER_TEMP/ssh/key" -p "$port" \
+            -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+            "$SSH_USER@$SSH_HOST" "deploy $COMMIT"
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/ssh"
+
+      # Through Cloudflare and the tunnel, as a visitor arrives: the sign-in
+      # page from the interface, and an anonymous 401 that only the API itself
+      # gives, which proves the interface reaches it.
+      - name: Check the public site
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            page="$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$SITE_URL/sign-in" || true)"
+            api="$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$SITE_URL/api/v1/auth/me" || true)"
+            if [[ "$page" == "200" && "$api" == "401" ]]; then
+              echo "The site is healthy."
+              exit 0
+            fi
+            echo "Attempt $attempt: sign-in page $page, API $api; retrying ..."
+            sleep 5
+          done
+          exit 1

@@ -1,0 +1,464 @@
+#!/usr/bin/env bash
+# Deploys one commit of League Analysis on the production host.
+#
+# Installed root-owned as /usr/local/libexec/league-analysis-deploy by
+# deploy/provision-server.sh and run by the unprivileged `lga-deploy` account
+# with its own rootless Docker daemon. docs/deployment.md describes the whole
+# arrangement.
+#
+# It is the forced command of the GitHub Actions SSH key, which can therefore
+# only ask for:
+#
+#   deploy <40-hex commit>    build and start that commit; it must be on master
+#   status                    print the deployed commit, the containers and the
+#                             backup evidence
+#
+# An administrator can run more on the host, and may name another branch:
+#
+#   sudo -u lga-deploy /usr/local/libexec/league-analysis-deploy <operation>
+#
+#   init <commit> [<branch>]      first deployment only: create the PostgreSQL
+#                                 volume and migrate the empty database
+#   deploy <commit> [<branch>]    deploy, or roll back to, anything pushed
+#   status
+#   account <arguments>           create or update an account; the password is
+#                                 read from a hidden prompt (see --help)
+#
+# The source always comes from the public repository over HTTPS, never from the
+# SSH client. A release that does not become healthy is replaced by the
+# previous one again.
+set -euo pipefail
+umask 077
+export PATH=/usr/local/bin:/usr/bin:/bin
+export LC_ALL=C
+
+readonly ACCOUNT=lga-deploy
+readonly REPOSITORY=https://github.com/matejkadlec/league-analysis.git
+readonly DEFAULT_BRANCH=master
+readonly ROOT=/srv/league-analysis
+readonly CONFIG=/etc/league-analysis
+readonly PROJECT=league-analysis
+readonly COMPOSE_FILE=compose.production.yml
+readonly POSTGRES_CONTAINER=league-analysis-postgres
+readonly BACKEND_CONTAINER=league-analysis-backend
+readonly BACKEND_IMAGE=league-analysis-backend
+readonly FRONTEND_IMAGE=league-analysis-frontend
+# What a commit must change for the running containers to differ.
+readonly DEPLOYED_PATHS=(backend frontend "$COMPOSE_FILE")
+readonly PRE_DEPLOY_DUMPS_KEPT=3
+
+log() { printf '[deploy] %s\n' "$*"; }
+die() {
+  printf '[deploy] error: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ "$(id -un)" == "$ACCOUNT" ]] || die "must run as $ACCOUNT"
+
+#------------------------------------------------------------------------------
+# Request: from the SSH client (strict) or from an administrator's arguments
+#------------------------------------------------------------------------------
+
+operation=""
+commit=""
+branch="$DEFAULT_BRANCH"
+automated=false
+account_arguments=()
+
+require_commit_and_branch() {
+  (($# == 1 || $# == 2)) || die "usage: $operation <40-hex commit> [<branch>]"
+  commit="$1"
+  branch="${2:-$DEFAULT_BRANCH}"
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "the commit must be a full lowercase SHA-1"
+  [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$branch" != *..* ]] || die "invalid branch name"
+}
+
+if (($# == 0)); then
+  automated=true
+  request="${SSH_ORIGINAL_COMMAND:-}"
+  if [[ "$request" == "status" ]]; then
+    operation=status
+  elif [[ "$request" =~ ^deploy\ ([0-9a-f]{40})$ ]]; then
+    operation=deploy
+    commit="${BASH_REMATCH[1]}"
+  else
+    die "expected 'deploy <40-hex commit>' or 'status'"
+  fi
+else
+  operation="$1"
+  shift
+  case "$operation" in
+    status)
+      (($# == 0)) || die "usage: status"
+      ;;
+    init | deploy)
+      require_commit_and_branch "$@"
+      ;;
+    account)
+      account_arguments=("$@")
+      ;;
+    *)
+      die "unknown operation"
+      ;;
+  esac
+fi
+
+#------------------------------------------------------------------------------
+# Environment: the account's rootless Docker daemon, git without user settings
+#------------------------------------------------------------------------------
+
+export HOME="/home/$ACCOUNT"
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
+export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0
+cd "$ROOT"
+
+readonly GIT_DIR_PATH="$ROOT/repository"
+readonly RELEASES="$ROOT/releases"
+readonly STATE="$ROOT/state"
+readonly PRE_DEPLOY_DUMPS="$ROOT/backups/pre-deploy"
+# The commit whose images and Compose file are running.
+readonly CURRENT_FILE="$STATE/current-release"
+readonly PREVIOUS_FILE="$STATE/previous-release"
+# The newest commit the running release is known to serve. It is ahead of
+# current-release after a commit that changed none of DEPLOYED_PATHS.
+readonly DEPLOYED_FILE="$STATE/deployed-commit"
+readonly INPUTS_FILE="$STATE/current-inputs"
+# Written by `init`. Without it a deploy refuses, so a missing or replaced
+# volume can never be answered by starting on an empty database.
+readonly INITIALIZED_FILE="$STATE/database-initialized"
+
+read_release() {
+  local value=""
+  [[ -f "$1" ]] && value="$(<"$1")"
+  [[ "$value" =~ ^[0-9a-f]{40}$ ]] && printf '%s' "$value"
+  return 0
+}
+
+write_state() {
+  printf '%s\n' "$2" >"$1.new"
+  mv -- "$1.new" "$1"
+}
+
+tunnel_enabled() { [[ -s "$CONFIG/cloudflared-token" ]]; }
+
+# compose <release> <arguments...>: Docker Compose on that release's file. The
+# two variables the file reads are set here and nowhere else; the tunnel
+# connector is part of the stack only once the owner has stored its token.
+compose() {
+  local release="$1"
+  shift
+  local profile=()
+  tunnel_enabled && profile=(--profile tunnel)
+  RELEASE="$release" LGA_CONFIG_DIRECTORY="$CONFIG" docker compose \
+    --project-name "$PROJECT" \
+    --project-directory "$RELEASES/$release" \
+    --file "$RELEASES/$release/$COMPOSE_FILE" \
+    "${profile[@]}" "$@"
+}
+
+container_running() {
+  [[ "$(docker inspect --format '{{.State.Running}}' "$1" 2>/dev/null)" == "true" ]]
+}
+
+# A fixed container name alone could belong to anything; require this
+# project's own Compose labels before acting on it.
+require_project_container() {
+  local name="$1" service="$2" labels
+  labels="$(docker inspect --format \
+    '{{index .Config.Labels "com.docker.compose.project"}}/{{index .Config.Labels "com.docker.compose.service"}}' \
+    "$name" 2>/dev/null)" || die "there is no container $name"
+  [[ "$labels" == "$PROJECT/$service" ]] || die "$name is not the $service service of $PROJECT"
+}
+
+# Waits for the lock instead of failing at once: a scheduled backup holds it
+# for about a minute and must not fail a deployment that arrives meanwhile.
+exec 9>"$STATE/operation.lock"
+flock --wait 900 9 || die "another deployment or backup is still running"
+
+current="$(read_release "$CURRENT_FILE")"
+deployed="$(read_release "$DEPLOYED_FILE")"
+[[ -n "$deployed" ]] || deployed="$current"
+
+#------------------------------------------------------------------------------
+# status
+#------------------------------------------------------------------------------
+
+print_evidence() {
+  local name="$1" file="$STATE/backups/$1"
+  if [[ -f "$file" ]]; then
+    printf '%s: %s\n' "$name" "$(tr '\n' ' ' <"$file")"
+  else
+    printf '%s: none recorded\n' "$name"
+  fi
+}
+
+if [[ "$operation" == "status" ]]; then
+  [[ -n "$current" ]] || die "nothing is deployed yet"
+  log "deployed commit: $deployed"
+  [[ "$deployed" == "$current" ]] || log "running release: $current (nothing deployed has changed since)"
+  compose "$current" ps --all --format '{{.Service}}: {{.State}} {{.Health}}'
+  print_evidence last-backup
+  print_evidence last-check
+  print_evidence last-rehearsal
+  exit 0
+fi
+
+#------------------------------------------------------------------------------
+# account: the application's own account command, inside the running API
+#------------------------------------------------------------------------------
+
+if [[ "$operation" == "account" ]]; then
+  require_project_container "$BACKEND_CONTAINER" backend
+  container_running "$BACKEND_CONTAINER" || die "the API container is not running"
+  terminal=()
+  [[ -t 0 ]] && terminal=(--tty)
+  exec docker exec --interactive "${terminal[@]}" "$BACKEND_CONTAINER" \
+    python scripts/account.py "${account_arguments[@]}"
+fi
+
+#------------------------------------------------------------------------------
+# init and deploy: fetch the branch, check the commit, unpack it
+#------------------------------------------------------------------------------
+
+for private_file in postgres.env backend.env; do
+  [[ -f "$CONFIG/$private_file" && ! -L "$CONFIG/$private_file" ]] ||
+    die "$CONFIG/$private_file is missing; run deploy/provision-server.sh"
+  [[ "$(stat -c '%a' "$CONFIG/$private_file")" == "600" ]] ||
+    die "$CONFIG/$private_file must have mode 0600"
+done
+
+[[ -d "$GIT_DIR_PATH/objects" ]] || git init --quiet --bare "$GIT_DIR_PATH"
+git_repository() { git --git-dir "$GIT_DIR_PATH" "$@"; }
+
+log "fetching $branch"
+git_repository fetch --quiet --no-tags --force "$REPOSITORY" "refs/heads/$branch:refs/deploy/branch"
+git_repository cat-file -e "$commit^{commit}" 2>/dev/null || die "commit $commit is not on $branch"
+git_repository merge-base --is-ancestor "$commit" refs/deploy/branch || die "commit $commit is not on $branch"
+
+# Two pushes in quick succession can arrive out of order; automation never
+# goes back in history.
+if $automated && [[ -n "$deployed" && "$commit" != "$deployed" ]] &&
+  git_repository merge-base --is-ancestor "$commit" "$deployed" 2>/dev/null; then
+  log "a newer commit ($deployed) is already deployed; nothing to do"
+  exit 0
+fi
+
+inputs_of() {
+  local path
+  for path in "${DEPLOYED_PATHS[@]}"; do
+    git_repository rev-parse --verify --quiet "$1:$path" || die "commit $1 has no $path"
+  done | sha256sum | cut -d ' ' -f 1
+}
+inputs="$(inputs_of "$commit")"
+
+stack_healthy() {
+  local states
+  states="$(compose "$1" ps --format '{{.Service}}={{.State}}/{{.Health}}' 2>/dev/null)" || return 1
+  grep -Fqx 'postgres=running/healthy' <<<"$states" &&
+    grep -Fqx 'backend=running/healthy' <<<"$states" &&
+    grep -Fqx 'frontend=running/healthy' <<<"$states" || return 1
+  ! tunnel_enabled || grep -Fqx 'cloudflared=running/healthy' <<<"$states"
+}
+
+# A commit that changed nothing the containers are built from (documentation,
+# tests, CI) is served by the running release already. Restarting the API for
+# it would only interrupt the jobs running inside that process.
+if $automated && [[ "$operation" == "deploy" && -n "$current" && -f "$INPUTS_FILE" &&
+  "$(<"$INPUTS_FILE")" == "$inputs" ]] && stack_healthy "$current"; then
+  write_state "$DEPLOYED_FILE" "$commit"
+  log "commit $commit changes nothing that is deployed; release $current keeps running"
+  exit 0
+fi
+
+incoming=""
+cleanup() { [[ -z "$incoming" ]] || rm -rf -- "$incoming"; }
+trap cleanup EXIT
+
+if [[ ! -d "$RELEASES/$commit" ]]; then
+  # The private (0700) directory protects the release on the host; the files
+  # inside keep the usual 0644/0755 modes, because the image builds copy the
+  # modes and the applications run unprivileged.
+  incoming="$(mktemp -d "$RELEASES/.incoming.XXXXXXXX")"
+  git_repository -c tar.umask=0022 archive --format=tar "$commit" |
+    tar -x -C "$incoming" --no-same-owner --preserve-permissions
+  [[ -f "$incoming/$COMPOSE_FILE" && -f "$incoming/backend/Dockerfile" && -f "$incoming/frontend/Dockerfile" ]] ||
+    die "the commit has no $COMPOSE_FILE or production Dockerfiles"
+  mv -- "$incoming" "$RELEASES/$commit"
+  incoming=""
+fi
+
+#------------------------------------------------------------------------------
+# The PostgreSQL volume. Its name is written in the Compose file and nowhere
+# else; Compose's own resolved configuration is where it is read from. That
+# output also carries the private environment files, so it only ever goes
+# through the filter below, never to the terminal.
+#------------------------------------------------------------------------------
+
+volume_name="$(
+  compose "$commit" config --format json |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["volumes"]["postgres_data"]["name"])'
+)"
+[[ "$volume_name" =~ ^[a-z0-9][a-z0-9_.-]+$ ]] || die "cannot read the PostgreSQL volume name from $COMPOSE_FILE"
+volume_exists() { docker volume inspect "$volume_name" >/dev/null 2>&1; }
+
+postgres_query() {
+  docker exec --user postgres "$POSTGRES_CONTAINER" sh -ceu \
+    'exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --command "$1"' \
+    -- "$1"
+}
+
+applied_revision() {
+  postgres_query "SELECT CASE WHEN to_regclass('public.alembic_version') IS NULL THEN '' ELSE (SELECT version_num FROM public.alembic_version) END"
+}
+
+if [[ "$operation" == "init" ]]; then
+  [[ -z "$current" && ! -e "$INITIALIZED_FILE" ]] ||
+    die "this host has been initialized already; init is for the first deployment only"
+  ! volume_exists || die "the volume $volume_name exists already; refusing to initialize over it"
+
+  log "building $commit"
+  compose "$commit" build
+
+  log "creating the PostgreSQL volume $volume_name"
+  docker volume create "$volume_name" >/dev/null
+  log "starting PostgreSQL and migrating the empty database"
+  compose "$commit" up --detach --wait --wait-timeout 180 postgres
+  [[ -z "$(applied_revision)" ]] || die "the new database is not empty"
+  compose "$commit" run --rm --no-deps migrate
+  revision="$(applied_revision)"
+  [[ -n "$revision" ]] || die "the migration left no Alembic revision"
+  write_state "$INITIALIZED_FILE" "$(date --utc +%Y-%m-%dT%H:%M:%SZ) $volume_name $revision"
+  log "initialized at Alembic revision $revision; PostgreSQL is running, the API is not"
+  log "import data now if you intend to, then run: deploy $commit${branch:+ $branch}"
+  exit 0
+fi
+
+#------------------------------------------------------------------------------
+# deploy: refuse an uninitialized or missing database before touching anything
+#------------------------------------------------------------------------------
+
+[[ -e "$INITIALIZED_FILE" ]] ||
+  die "this host has not been initialized; an administrator must run: init <commit>"
+volume_exists ||
+  die "the PostgreSQL volume $volume_name is missing; refusing to start on an empty database"
+
+log "building $commit"
+compose "$commit" build
+
+pre_deploy_dump=""
+dump_database() {
+  local target
+  install -d -m 0700 "$PRE_DEPLOY_DUMPS"
+  target="$PRE_DEPLOY_DUMPS/$(date --utc +%Y%m%dT%H%M%SZ)-before-${commit:0:12}.dump"
+  docker exec --user postgres "$POSTGRES_CONTAINER" sh -ceu \
+    'exec pg_dump --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --format=custom --no-password' \
+    >"$target.partial"
+  docker exec --interactive --user postgres "$POSTGRES_CONTAINER" pg_restore --list \
+    <"$target.partial" >/dev/null
+  mv -- "$target.partial" "$target"
+  pre_deploy_dump="$target"
+  log "pre-deployment dump: $target ($(stat -c '%s' "$target") bytes)"
+}
+
+# Before anything is replaced when PostgreSQL is up, which is the normal case.
+if container_running "$POSTGRES_CONTAINER"; then
+  require_project_container "$POSTGRES_CONTAINER" postgres
+  dump_database
+fi
+log "starting PostgreSQL"
+compose "$commit" up --detach --wait --wait-timeout 180 postgres
+[[ -n "$(applied_revision)" ]] ||
+  die "the database in $volume_name is empty although this host was initialized; refusing to migrate it"
+[[ -n "$pre_deploy_dump" ]] || dump_database
+
+#------------------------------------------------------------------------------
+# deploy: stop the old API completely, start the release, keep the previous
+# one when the new one is not healthy
+#------------------------------------------------------------------------------
+
+# The job runtime lives in the API process. The old container must be gone
+# before any new one starts, on a deployment and on a rollback alike, so two
+# job runners never overlap. `docker stop` waits for the container's own
+# stop_grace_period and then kills it.
+stop_api() {
+  if docker inspect "$BACKEND_CONTAINER" >/dev/null 2>&1; then
+    require_project_container "$BACKEND_CONTAINER" backend
+    docker stop "$BACKEND_CONTAINER" >/dev/null
+    ! container_running "$BACKEND_CONTAINER" || die "the API container did not stop"
+  fi
+}
+
+# What the container health checks cannot see: the path a browser takes, from
+# the interface through its rewrite to the API. An anonymous session answers
+# 401 from the API itself; a broken route answers anything else.
+verify_route() {
+  compose "$1" exec --no-TTY frontend node -e \
+    "fetch('http://127.0.0.1:3000/api/v1/auth/me').then((r) => process.exit(r.status === 401 ? 0 : 1)).catch(() => process.exit(1))"
+}
+
+start() {
+  compose "$1" up --detach --wait --wait-timeout 300 --remove-orphans && verify_route "$1"
+}
+
+# The previous release without its migration: its revisions end before the
+# database's, and Alembic refuses a database that is ahead of it.
+restore() {
+  local services=(postgres backend frontend)
+  tunnel_enabled && services+=(cloudflared)
+  compose "$1" up --detach --wait --wait-timeout 300 --no-deps "${services[@]}" && verify_route "$1"
+}
+
+log "stopping the running API"
+stop_api
+log "starting $commit"
+if ! start "$commit"; then
+  log "the new release did not become healthy; its last log lines:"
+  compose "$commit" ps --all --format '{{.Service}}: {{.State}} {{.Health}}' >&2 || true
+  compose "$commit" logs --no-color --tail 60 migrate backend frontend >&2 || true
+  if [[ -n "$current" && "$current" != "$commit" && -d "$RELEASES/$current" ]]; then
+    log "restoring $current"
+    stop_api
+    restore "$current" || die "the previous release could not be restored"
+    rm -rf -- "${RELEASES:?}/$commit"
+    docker image rm "$BACKEND_IMAGE:$commit" "$FRONTEND_IMAGE:$commit" >/dev/null 2>&1 || true
+    log "the database schema is not reversed by a rollback; the state before this deployment is in $pre_deploy_dump"
+    die "deployment failed; $current is running again"
+  fi
+  die "deployment failed"
+fi
+
+if [[ "$commit" != "$current" ]]; then
+  [[ -z "$current" ]] || write_state "$PREVIOUS_FILE" "$current"
+  write_state "$CURRENT_FILE" "$commit"
+fi
+write_state "$DEPLOYED_FILE" "$commit"
+write_state "$INPUTS_FILE" "$inputs"
+previous="$(read_release "$PREVIOUS_FILE")"
+
+#------------------------------------------------------------------------------
+# deploy: keep only the running release and the one before it
+#------------------------------------------------------------------------------
+
+for directory in "$RELEASES"/*/; do
+  name="$(basename "$directory")"
+  [[ "$name" =~ ^[0-9a-f]{40}$ ]] || continue
+  [[ "$name" == "$commit" || "$name" == "$previous" ]] || rm -rf -- "$directory"
+done
+for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+  while read -r tag; do
+    [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || continue
+    [[ "$tag" == "$commit" || "$tag" == "$previous" ]] || docker image rm "$image:$tag" >/dev/null 2>&1 || true
+  done < <(docker image ls --format '{{.Tag}}' "$image")
+done
+docker image prune --force >/dev/null 2>&1 || true
+docker builder prune --force --filter until=168h >/dev/null 2>&1 || true
+mapfile -t dumps < <(find "$PRE_DEPLOY_DUMPS" -maxdepth 1 -type f -name '*.dump' | sort --reverse)
+for dump in "${dumps[@]:$PRE_DEPLOY_DUMPS_KEPT}"; do
+  rm -f -- "$dump"
+done
+find "$PRE_DEPLOY_DUMPS" -maxdepth 1 -type f -name '*.partial' -delete
+
+log "deployed $commit"
+compose "$commit" ps --all --format '{{.Service}}: {{.State}} {{.Health}}'

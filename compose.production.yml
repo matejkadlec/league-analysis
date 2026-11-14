@@ -1,0 +1,222 @@
+# Production stack: PostgreSQL, the one-shot migration, the API, the interface
+# and the Cloudflare Tunnel connector. docs/deployment.md is its documentation.
+#
+# No port is published on the host. The tunnel is the only way in and reaches
+# the interface as http://frontend:3000; the interface forwards /api/v1 to the
+# API over the internal network. The connector runs only with `--profile tunnel`.
+#
+# deploy/league-analysis-deploy is how production runs this file. It sets the
+# two variables read here, RELEASE (the commit) and LGA_CONFIG_DIRECTORY (the
+# private configuration directory). Nothing else is interpolated: every name
+# below is a literal, so no environment variable can point the stack elsewhere.
+name: league-analysis
+
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 256
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-backend: &backend
+  <<: *hardening
+  image: league-analysis-backend:${RELEASE:?set RELEASE to the commit being deployed}
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  env_file:
+    - ${LGA_CONFIG_DIRECTORY:?set LGA_CONFIG_DIRECTORY to the private configuration directory}/postgres.env
+    - ${LGA_CONFIG_DIRECTORY}/backend.env
+  environment:
+    ENVIRONMENT: production
+    DEBUG: "false"
+    LOG_LEVEL: INFO
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: league_analysis
+    POSTGRES_USER: league_analysis
+    CORS_ORIGINS: https://league.matejkadlec.cz
+    # The two internal networks below. Uvicorn takes the client address from
+    # X-Forwarded-For only when the peer is on one of them, and skips their
+    # addresses when reading the header, so the address Cloudflare appended is
+    # the one rate limits and the access log see.
+    FORWARDED_ALLOW_IPS: 10.111.0.0/24,10.111.1.0/24
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf9d97663600538c294c5
+    # Fixed, so backup and restore tooling addresses exactly this container.
+    container_name: league-analysis-postgres
+    restart: unless-stopped
+    # The official entrypoint starts as root to fix the data directory's
+    # ownership, then drops to the postgres user; these five capabilities are
+    # exactly that step.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    read_only: true
+    env_file:
+      - ${LGA_CONFIG_DIRECTORY}/postgres.env
+    environment:
+      POSTGRES_DB: league_analysis
+      POSTGRES_USER: league_analysis
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m
+    shm_size: 128m
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      start_interval: 2s
+    mem_limit: 1g
+    cpus: 1.5
+    networks: [database]
+
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["python", "scripts/migrate.py", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    networks: [database]
+
+  backend:
+    <<: *backend
+    build:
+      context: ./backend
+    # Fixed, so a second API container cannot exist beside this one under any
+    # project name: the scheduler and the job runtime run inside this process.
+    container_name: league-analysis-backend
+    restart: unless-stopped
+    # Longer than Uvicorn's own graceful-shutdown bound in backend/Dockerfile,
+    # so the process ends by itself and is killed only if it hangs.
+    stop_grace_period: 45s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+      start_interval: 2s
+    mem_limit: 1g
+    cpus: 1.5
+    networks: [application, database]
+
+  frontend:
+    <<: *hardening
+    build:
+      context: ./frontend
+      args:
+        API_INTERNAL_URL: http://backend:8000
+        NEXT_PUBLIC_API_URL: https://league.matejkadlec.cz
+        NEXT_PUBLIC_SITE_URL: https://league.matejkadlec.cz
+        NEXT_PUBLIC_ALLOW_INDEXING: "false"
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ""
+        NEXT_DEPLOYMENT_ID: ${RELEASE}
+    image: league-analysis-frontend:${RELEASE}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    environment:
+      API_INTERNAL_URL: http://backend:8000
+      NEXT_DEPLOYMENT_ID: ${RELEASE}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /app/.next/cache:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0700
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/sign-in').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      start_interval: 2s
+    mem_limit: 512m
+    cpus: 1.0
+    networks: [edge, application]
+
+  cloudflared:
+    <<: *hardening
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    restart: unless-stopped
+    read_only: true
+    # Root only inside the deployment account's rootless user namespace (no
+    # authority on the host); needed to read the mode-0600 token file.
+    user: "0:0"
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/run/secrets/cloudflared-token"]
+    secrets:
+      - source: cloudflared_token
+        target: cloudflared-token
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    stop_grace_period: 30s
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    mem_limit: 128m
+    cpus: 0.5
+    networks: [edge]
+
+secrets:
+  cloudflared_token:
+    file: ${LGA_CONFIG_DIRECTORY}/cloudflared-token
+
+networks:
+  # The connector and the interface. The API is not on it.
+  edge:
+    name: league-analysis-edge
+    ipam:
+      config:
+        - subnet: 10.111.0.0/24
+  # The interface and the API.
+  application:
+    name: league-analysis-application
+    ipam:
+      config:
+        - subnet: 10.111.1.0/24
+  # The API, the migration and PostgreSQL; no route out.
+  database:
+    name: league-analysis-database
+    internal: true
+
+volumes:
+  # The only place this name is written. `external` makes Compose refuse to
+  # start when the volume is missing instead of creating an empty one; only
+  # `league-analysis-deploy init` creates it, and it reads the name from here.
+  postgres_data:
+    name: league-analysis-postgres-data
+    external: true

@@ -164,6 +164,25 @@ repos:
         always_run: true
         pass_filenames: false
 
+      # Node, npm, Python, uv and PostgreSQL are each pinned in several files
+      # (local development, the gate container, the production images).
+      # always_run because the file that fell behind is the one not staged.
+      - id: check-toolchain-pins
+        name: Toolchain versions agree across local, gate and production
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/tools/check-toolchain-pins.sh"'
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      # The frontend image type-checks whatever its build context holds, so an
+      # import of a path frontend/.dockerignore removes fails only that build.
+      - id: check-docker-context-imports
+        name: Frontend image build context imports resolve
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/tools/check-docker-context-imports.sh"'
+        language: system
+        always_run: true
+        pass_filenames: false
+
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.4
@@ -292,7 +311,7 @@ repos:
         name: ShellCheck
         entry: bash -c 'exec "$(git rev-parse --show-toplevel)/tools/run-shellcheck.sh"'
         language: system
-        files: \.sh$|^\.githooks/
+        files: \.sh$|^\.githooks/|^deploy/league-analysis-
         pass_filenames: false
 
       - id: actionlint

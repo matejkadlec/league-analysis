@@ -16,7 +16,8 @@ changes over time.
 This is a personal portfolio project maintained by **Matěj Kadlec**.
 Development is currently paused. The repository presents the work and lets
 interested readers explore it on their own computer; ongoing support and new
-features are not promised.
+features are not promised. The author's own installation is private and
+invitation-only.
 
 ## What you can explore
 
@@ -117,6 +118,7 @@ analysis, and data collection, with PostgreSQL storing the results.
 - [Architecture and development setup](docs/project-overview.md)
 - [Riot API integration](docs/riot-api.md)
 - [Quality checks](docs/quality-checks.md) — run `./test.sh` for the complete gate
+- [Production deployment](docs/deployment.md)
 - [Documentation index](docs/README.md)
 - [Security reporting](SECURITY.md)
 
