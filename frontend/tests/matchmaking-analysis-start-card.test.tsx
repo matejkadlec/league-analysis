@@ -118,6 +118,35 @@ describe("the matchmaking analysis start card", () => {
     expect(props.onStart).not.toHaveBeenCalled();
   });
 
+  it.each([
+    // UTC+14 is the latest clock on Earth; its day turns at 10:00 UTC. The
+    // API accepts up to that viewer's today, and the card must agree with it.
+    ["2026-11-15T09:59:00Z", "2026-11-15", "2026-11-16"],
+    ["2026-11-15T10:00:00Z", "2026-11-16", "2026-11-17"],
+  ])(
+    "at %s accepts %s as the last day and refuses %s",
+    (now, lastAllowed, firstRefused) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(now));
+      try {
+        renderCard({ endDate: lastAllowed });
+        expect(screen.queryByRole("alert")).toBeNull();
+        expect(
+          screen.getByRole("button", { name: "Start Analysis" }),
+        ).toHaveProperty("disabled", false);
+        cleanup();
+
+        renderCard({ endDate: firstRefused });
+        expect(screen.getByRole("alert")).toBeTruthy();
+        expect(
+          screen.getByRole("button", { name: "Start Analysis" }),
+        ).toHaveProperty("disabled", true);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("starts a run for a last day that has already happened", async () => {
     const user = userEvent.setup();
     const { props } = renderCard({ endDate: "2026-08-01" });

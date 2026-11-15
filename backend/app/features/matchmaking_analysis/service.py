@@ -101,9 +101,9 @@ MATCHES_FOR_WINRATE = 10
 # complete, or comparing against a month ago fails exactly when it matters.
 MIN_MATCHES_FLOOR = 5
 
-# A participant whose Riot reads failed (5xx, timeout, exhausted 429 -- not a
-# 404) keeps a win rate only over at least this many matches. The spine match
-# is always stored, so the fallback sample was often that one game: 0% or 100%.
+# A win rate whose own Riot reads failed (5xx, timeout, exhausted 429 -- not a
+# 404) is kept only over at least this many matches. The spine match is always
+# stored, so the fallback sample was often that one game: 0% or 100%.
 MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH = 5
 # Above this share of such participants the run fails as retryable instead of
 # completing. At or below it, it completes and persists the count.
@@ -244,10 +244,9 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         # policy counts them and `_sample_participant` attributes them.
         self.optional_fetch_failures: int = 0
         self._degraded_players: set[str] = set()
-        # Routing of the run's Riot calls, read from the analysed player's
-        # stored platform. Never the client's defaults: a rank asked of the
-        # wrong platform answers `200 []`, which reads as UNRANKED.
-        self._platform: Platform | None = None
+        # MATCH-V5 route of the run, from the analysed player's stored
+        # platform. Never the client's default: a call on the wrong route is
+        # answered, not refused.
         self._region: Region | None = None
         self._is_waiting_for_rate_limit: bool = False
         self._current_analysis_puuid: str | None = None
@@ -623,8 +622,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         result = await self.db.execute(
             select(Player.platform).where(Player.puuid == puuid)
         )
-        self._platform = Platform(normalize_platform(result.scalar_one()))
-        self._region = get_region_by_platform(self._platform)
+        self._region = get_region_by_platform(result.scalar_one())
 
     @property
     def _match_region(self) -> Region:
@@ -633,13 +631,14 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             raise RuntimeError("matchmaking analysis routing was not loaded")
         return self._region
 
-    def _refuse_a_mostly_degraded_run(self) -> None:
+    def _refuse_a_mostly_degraded_run(self, *, of_players: int | None = None) -> None:
         """Fail the run when Riot failures left too many participants unread.
 
-        Raised rather than persisted here: the background wrapper stores it as
-        a retryable `riot_service_error`, like any other Riot outage.
+        `of_players` is the most the run can still sample; passed mid-run, it
+        stops an outage early instead of grinding through the rest of the spine.
+        Raised, so the background wrapper stores a retryable `riot_service_error`.
         """
-        sampled = len(self._ally_rank_puuids | self._enemy_rank_puuids)
+        sampled = of_players or len(self._ally_rank_puuids | self._enemy_rank_puuids)
         degraded = len(self._degraded_players)
         if sampled and degraded / sampled > MAX_DEGRADED_PLAYER_SHARE:
             logger.warning(
@@ -809,6 +808,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             )
             if result:
                 spine_stats.append(result)
+            self._refuse_a_mostly_degraded_run(of_players=9 * len(spine_match_ids) + 1)
 
         return spine_stats
 

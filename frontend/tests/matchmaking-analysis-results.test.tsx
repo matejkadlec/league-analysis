@@ -404,7 +404,8 @@ describe("the last matchmaking analysis result", () => {
     );
     const { queryClient } = renderResults();
 
-    const notice = await screen.findByTestId("matchmaking-degraded-notice");
+    // A status, by role: a caption that must not interrupt a screen reader.
+    const notice = await screen.findByRole("status");
     expect(notice.textContent).toContain(
       "Riot data could not be loaded for 3 players in this run.",
     );

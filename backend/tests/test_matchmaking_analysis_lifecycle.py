@@ -1,6 +1,8 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
@@ -1055,3 +1057,194 @@ def test_a_lightly_degraded_run_completes_and_says_how_many_it_missed() -> None:
     )
 
     assert results.get("degraded_players") == within
+
+
+def _detail_failure_service(failure: Exception) -> MatchmakingAnalysisService:
+    """The match-ID list answers with ten games; every detail fetch fails.
+
+    Only the spine match is stored, so the real `_get_win_status` finds one row
+    and has to ask Riot for the other nine.
+    """
+    match_ids = ["EUN1_SPINE", *(f"EUN1_{index}" for index in range(9))]
+
+    async def execute(statement: ClauseElement) -> SimpleNamespace:
+        asked = set(_compiled_values(statement))
+        stored_win = True if "EUN1_SPINE" in asked else None
+        return SimpleNamespace(
+            tuples=lambda: SimpleNamespace(all=lambda: [("EUN1_SPINE", True)]),
+            scalar_one_or_none=lambda: stored_win,
+        )
+
+    riot_client = SimpleNamespace(
+        get_match_list_by_puuid=AsyncMock(
+            return_value=SimpleNamespace(match_ids=match_ids)
+        ),
+        get_match=AsyncMock(side_effect=failure),
+    )
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace(execute=execute)),
+        cast(RiotAPIClient, riot_client),
+        _USER_ID,
+    )
+    service._region = Region.EUROPE
+    service._mark_player_progress = AsyncMock()
+    return service
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [ServiceUnavailableError("upstream", status_code=503), RiotAPIError("timeout")],
+    ids=["503-after-retries", "network-timeout"],
+)
+async def test_failed_match_details_never_leave_a_one_match_winrate(
+    failure: Exception,
+) -> None:
+    """The other path to the same figure: the list arrives, the games do not."""
+    service = _detail_failure_service(failure)
+
+    winrate = await service._cached_player_winrate(
+        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
+    )
+
+    assert winrate is None
+    assert "ally" not in service._winrate_sample_ids
+    assert service.matches_analyzed == 0
+    assert service.optional_fetch_failures == 9
+
+
+_SPINE = [f"EUW1_{index}" for index in range(5)]
+
+
+@dataclass
+class _Run:
+    """One stubbed run and what it was seen to do."""
+
+    service: MatchmakingAnalysisService
+    results_written: list[object]
+    rank_platforms: list[Platform]
+    lobbies_read: list[str]
+
+
+def _lobby(match_id: str) -> list[tuple[str, int]]:
+    """The analysed player, four allies and five enemies nobody else meets."""
+    allies = [(f"{match_id}-ally-{slot}", 100) for slot in range(4)]
+    enemies = [(f"{match_id}-enemy-{slot}", 200) for slot in range(5)]
+    return [(_PUUID, 100), *allies, *enemies]
+
+
+def _run_service(
+    monkeypatch: pytest.MonkeyPatch,
+    unread: set[str],
+    lobby: Callable[[str], list[tuple[str, int]]] = _lobby,
+) -> _Run:
+    """A whole run over five stored spine matches, with Riot reads stubbed.
+
+    The subject is stored on EUNE and every spine match on EUW, and a read
+    fails for each player in `unread`.
+    """
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    written: list[object] = []
+    rank_platforms: list[Platform] = []
+    lobbies_read: list[str] = []
+
+    async def execute(statement: ClauseElement) -> SimpleNamespace:
+        results = (statement.compile().params or {}).get("results")
+        if results is not None:
+            written.append(results)
+        return SimpleNamespace(
+            scalar_one=lambda: "eun1", scalar_one_or_none=lambda: "completed"
+        )
+
+    database = SimpleNamespace(execute=execute, commit=AsyncMock())
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+
+    async def winrate(p_puuid: str, *_args: object) -> float:
+        if p_puuid in unread:
+            service.optional_fetch_failures += 1
+        return 0.5
+
+    async def rank(p_puuid: str, platform: Platform) -> None:
+        rank_platforms.append(platform)
+        service._rank_values[p_puuid] = None
+
+    async def participants(match_id: str) -> list[tuple[str, int]]:
+        lobbies_read.append(match_id)
+        return lobby(match_id)
+
+    service._get_analysis = AsyncMock(return_value=_analysis())
+    service._mark_analysis_in_progress = AsyncMock()
+    service._load_spine_match_ids = AsyncMock(return_value=list(_SPINE))
+    service._ensure_spine_matches_ready = AsyncMock(return_value=True)
+    service._initialize_progress_keys = AsyncMock()
+    service._get_game_start_timestamp = AsyncMock(return_value=1_786_100_000_000)
+    service._get_match_platform = AsyncMock(return_value=Platform.EUW1)
+    service._get_match_participants = AsyncMock(side_effect=participants)
+    service._get_win_status = AsyncMock(return_value=True)
+    service._cached_player_winrate = AsyncMock(side_effect=winrate)
+    service._cached_player_performance = AsyncMock(return_value=None)
+    service._cached_player_rank = AsyncMock(side_effect=rank)
+    return _Run(service, written, rank_platforms, lobbies_read)
+
+
+async def test_a_lightly_degraded_run_stores_its_count_and_ranks_by_match_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2 unread players of 46 is under the share: completed, and it says so."""
+    unread = {"EUW1_1-ally-0", "EUW1_3-enemy-2"}
+    run = _run_service(monkeypatch, unread)
+
+    await run.service._run_analysis(_PUUID, datetime.now(UTC))
+
+    (results,) = run.results_written
+    assert cast(dict[str, object], results)["degraded_players"] == 2
+    # Routed by the run itself, and ranks by where each match was played --
+    # EUW here -- not by the EUNE the analysed player is stored on.
+    assert run.service._region is Region.EUROPE
+    assert set(run.rank_platforms) == {Platform.EUW1}
+
+
+async def test_a_mostly_degraded_run_stops_early_and_stores_no_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nine unread players in the first match already decide a 46-player run.
+
+    Nothing is written as a result, and the other four spine matches are not
+    sampled: in an outage each of their reads would wait out its own retries.
+    """
+    unread = {puuid for puuid, _team in _lobby("EUW1_0")} - {_PUUID}
+    run = _run_service(monkeypatch, unread)
+
+    with pytest.raises(MatchmakingAnalysisRuntimeError) as caught:
+        await run.service._run_analysis(_PUUID, datetime.now(UTC))
+
+    assert caught.value.code == "riot_service_error"
+    assert run.results_written == []
+    assert run.lobbies_read == ["EUW1_0"]
+
+
+async def test_the_share_is_of_the_players_actually_met_not_of_the_most_possible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same nine others in all five matches: 2 unread of 10 is a fifth.
+
+    The mid-run check measures against the 46 a five-match spine could hold and
+    lets this through, so the refusal has to come from the one at the end.
+    """
+    run = _run_service(
+        monkeypatch,
+        {"EUW1_0-ally-0", "EUW1_0-enemy-0"},
+        lobby=lambda _match_id: _lobby("EUW1_0"),
+    )
+
+    with pytest.raises(MatchmakingAnalysisRuntimeError) as caught:
+        await run.service._run_analysis(_PUUID, datetime.now(UTC))
+
+    assert caught.value.code == "riot_service_error"
+    assert run.results_written == []
+    assert run.lobbies_read == _SPINE

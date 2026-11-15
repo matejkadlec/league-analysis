@@ -66,8 +66,12 @@ export function MatchmakingAnalysisStartCard({
   onEndDateChange,
   onStart,
 }: MatchmakingAnalysisStartCardProps) {
-  // Render must stay pure, so the clock is read once per mount.
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  // The last day the API accepts: today at the latest clock on Earth
+  // (UTC+14), so a viewer ahead of UTC can pick their own current day. Render
+  // must stay pure, so the clock is read once per mount.
+  const [today] = useState(() =>
+    new Date(Date.now() + 14 * 3_600_000).toISOString().slice(0, 10),
+  );
   const isPresetCount = (MATCH_COUNT_PRESETS as readonly number[]).includes(
     matchCount,
   );

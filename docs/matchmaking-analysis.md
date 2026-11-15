@@ -143,9 +143,11 @@ snapshot-first against `core.player_leagues`:
 
 Every Riot call of a run is routed explicitly, never by the client's defaults:
 MATCH-V5 by the region of the analysed player's stored platform, LEAGUE-V4 by
-the platform of the spine match the participant was met in. A rank asked of
-the wrong platform is not an error — Riot answers `200 []` — so a default
-route silently turns a whole lobby UNRANKED.
+the platform of the first spine match the participant is met in (ranks are
+cached per player for the run). A rank asked of the wrong platform is not an
+error — Riot answers `200 []` — so a default route silently turns a whole
+lobby UNRANKED, and a participant who has since left that platform still
+reads UNRANKED.
 
 Ranks are mapped to one LP-equivalent scalar
 (`tier_index × 400 + division × 100 + LP`; MASTER+ = `2800 + LP`) in
@@ -318,18 +320,25 @@ the `required` check) and terminates the run with
 
 **On an optional fetch only a `404` is "no data".** Any other failure (5xx
 after the client's own retries, a timeout, a 400, an exhausted 429 budget)
-still returns nothing to the caller, but is counted, and the participant it
-was for is **degraded**:
+still returns nothing to the caller, but is counted. A participant is
+**degraded** when such a failure happens while their win rate or rank is being
+read:
 
-- A degraded participant keeps a win rate only when it rests on at least 5
-  matches (`MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH`). The spine match is always
-  stored, so the old fallback was often that single game — 100% for the allies
-  of a won match and 0% for the enemies.
+- When the failed read belonged to the win rate (the match-ID list or a match
+  detail), the win rate is kept only if it rests on at least 5 matches
+  (`MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH`). The spine match is always stored,
+  so the old fallback was often that single game — 100% for the allies of a
+  won match and 0% for the enemies. A failed rank read alone leaves the win
+  rate as it is and shows the player UNRANKED.
 - The count is persisted as `results.degraded_players` and shown on the result
   card. Runs stored before the count existed carry no key, which is not zero.
-- When more than 10% of the sampled participants are degraded
+- When more than 10% of the participants are degraded
   (`MAX_DEGRADED_PLAYER_SHARE`), the run does not complete: it fails as a
-  retryable `riot_service_error`.
+  retryable `riot_service_error`. The check also runs after every spine match
+  against the most players the run can still sample, so an outage ends the run
+  early instead of after the whole spine.
+- A failure in the optional prefetch of a spine match belongs to no
+  participant; that match is fetched again as a required call.
 
 Because analysis status travels inside successful HTTP-200 polling bodies, the
 original Riot 401/403 can never reach the browser as an HTTP status. The
@@ -405,7 +414,7 @@ completion reaches 100% and triggers result/history refresh.
 | Player has <5 ranked matches in the window    | Fast start succeeds; background run becomes retryable `failed`  |
 | 5 ≤ found < requested (sparse backdated window) | Run completes over the found matches; `matches_requested` records the ask and `spine_matches_found` the reality, so the card can caption "8 of 30" |
 | League read empty for a participant           | Player counted UNRANKED; excluded from rank averages            |
-| Optional Riot read fails (not a 404)          | Participant counted degraded; win rate kept only over ≥ 5 matches; count shown on the card |
+| Optional Riot read fails (not a 404)          | Participant counted degraded; a win rate whose own read failed is kept only over ≥ 5 matches; count shown on the card |
 | More than 10% of participants degraded        | Run becomes retryable `failed` (`riot_service_error`)           |
 | End date after today                          | Start card refuses it; the API rejects a day past UTC+14's today |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |

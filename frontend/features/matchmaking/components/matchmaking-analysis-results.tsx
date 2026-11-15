@@ -274,8 +274,9 @@ export function MatchmakingAnalysisResults({
       <CardContent className="space-y-4">
         {degradedPlayers > 0 && (
           // The run completed, but not on everything it asked Riot for, and
-          // the figures below cannot show that on their own.
-          <Alert data-testid="matchmaking-degraded-notice">
+          // the figures below cannot show that on their own. A status, not an
+          // alert: it is a caption and must not interrupt on every mount.
+          <Alert role="status" data-testid="matchmaking-degraded-notice">
             <TriangleAlert className="h-4 w-4" />
             <AlertDescription>
               Riot data could not be loaded for {degradedPlayers}{" "}
