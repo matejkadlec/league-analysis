@@ -1187,12 +1187,20 @@ scheduler, migrations, authentication).
   tests; migrations, jobs, rate limiting, authentication and anything that could
   lose or corrupt data need tests for the edge cases.
 - **Running the application** on the agent's own instance: in a cloud session
-  `./run.sh` on its defaults is fine. On Matěj's machine, an agent never uses
-  3000 and 8000 (the launcher stops whatever listens there, which is usually his
-  own instance) nor 3100 (the gate's Playwright server): it picks two free ports
-  (`./run.sh 3201 8201`), and since a worktree's `.env` points at his local
-  database, it never starts a branch that adds an Alembic revision there without
-  asking him first.
+  `./run.sh` on its defaults is fine, because the session's database is its own.
+  On Matěj's machine an agent never starts the application against his local
+  database (`league_analysis_local_dev`, which a copied `.env` points at): every
+  backend start runs the job scheduler, whose startup recovery cancels his
+  running and paused job executions and his active player syncs, and two running
+  instances on one database are two job runners
+  ([Production Deployment](deployment.md#the-stack) explains why there must be
+  one). It also never uses ports 3000 and 8000 (the launcher stops whatever
+  listens there, usually his own instance) or 3100 (the gate's Playwright
+  server). When a check needs the running application there, the agent points
+  its worktree's `.env` at a database of its own (`POSTGRES_DB`), applies the
+  migrations to that one, starts `./run.sh 3201 8201`, and drops that database
+  afterwards; when it cannot create one, it asks Matěj instead of starting
+  anything.
 - Report evidence exactly: name each command that ran and passed. Never say
   "all checks passed" for a partial run. An external blocker is reported as one,
   never as a pass.
