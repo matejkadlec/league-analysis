@@ -21,7 +21,11 @@ import {
   renderTeamChampIcon,
 } from "./match-row-icons";
 
+/** Which half of the matchup a block belongs to; layout specs find it by this. */
+type MatchSide = "player" | "opponent";
+
 export function MatchSideStats({
+  side,
   kda,
   totalCs,
   csPerMinute,
@@ -29,6 +33,7 @@ export function MatchSideStats({
   killParticipation,
   highlight,
 }: {
+  side: MatchSide;
   kda: number;
   totalCs: number;
   csPerMinute: string;
@@ -41,7 +46,10 @@ export function MatchSideStats({
   // themselves do not say (WCAG 1.4.1) — it is a scan aid, not a state.
   const lead = (wins: boolean) => (wins ? " text-yellow-500" : "");
   return (
-    <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
+    <div
+      data-testid={`match-side-stats-${side}`}
+      className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:w-25 lg:shrink-0"
+    >
       <span className={lead(highlight.kda).trim()}>
         <span className="font-medium">{kda.toFixed(2)}</span> KDA
       </span>
@@ -64,12 +72,14 @@ export function MatchSideStats({
 }
 
 export function MatchSideColumn({
+  side,
   participant,
   ddragonVersion,
   emptyChampionFallback,
   emptyKdaFallback,
   onSelectPlayer,
 }: {
+  side: MatchSide;
   participant: MatchSideParticipant | null | undefined;
   ddragonVersion: string;
   emptyChampionFallback: boolean;
@@ -77,7 +87,10 @@ export function MatchSideColumn({
   onSelectPlayer: (puuid: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-48 lg:flex-none">
+    <div
+      data-testid={`match-side-column-${side}`}
+      className="flex min-w-0 flex-1 items-center gap-2 lg:w-48 lg:flex-none"
+    >
       {/* Below `lg` the two sides split one phone width, and the rune icons
           are the detail worth trading for a readable champion name. */}
       <div className="hidden lg:block">{renderRunes(participant?.runes)}</div>
@@ -144,7 +157,7 @@ export function MatchTeamCompositions({
   onSelectPlayer: (puuid: string) => void;
 }) {
   return (
-    <div className="flex w-37 flex-col items-center justify-center gap-0.5 lg:mr-1">
+    <div className="flex w-37 flex-col items-center justify-center gap-0.5">
       {teamComps ? (
         <>
           <div className="flex items-center gap-2">

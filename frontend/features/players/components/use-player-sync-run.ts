@@ -84,8 +84,8 @@ interface ProfileUpdateStart {
 
 /**
  * Start one player's profile update, or attach to the run already going.
- * Switching player has to start the *target* player's update before any hook
- * exists for that PUUID; seeding `player-sync-active` here lets it adopt it.
+ * Only an explicit user action calls this (LGA-133). Seeding
+ * `player-sync-active` lets every surface showing that player adopt the run.
  */
 export function usePlayerProfileUpdate({
   onStartRefused,

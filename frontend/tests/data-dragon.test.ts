@@ -4,12 +4,14 @@ import {
   getChampionIconUrl,
   getKeystoneIconUrlById,
   getKeystoneName,
+  KEYSTONE_MAP,
   getProfileIconFallbackUrl,
   getRuneStyleIconUrl,
   getSummonerSpellIconUrlById,
   getSummonerSpellName,
 } from "@/lib/core/riot/data-dragon";
 import { resolveDDragonVersion } from "@/lib/core/riot/data-dragon-version";
+import runesReforged from "./fixtures/runes-reforged-16.22.1.json";
 
 describe("Data Dragon version resolution", () => {
   it("uses Riot's latest valid manifest version", async () => {
@@ -163,6 +165,22 @@ describe("Data Dragon display names", () => {
     expect(getKeystoneName(8005)).toBe("Press the Attack");
     expect(getSummonerSpellName(4)).toBe("Flash");
     expect(getSummonerSpellName(14)).toBe("Ignite");
+  });
+
+  it("lists exactly Data Dragon's keystones, under their names and icons", () => {
+    // The vendored file is Riot's own `runesReforged.json` (en_US), unedited;
+    // a keystone is a rune in a tree's first slot. Refresh the file when Riot
+    // changes one, and this fails until the table follows (LGA-122).
+    const dataDragonKeystones = Object.fromEntries(
+      runesReforged.flatMap((tree) =>
+        (tree.slots[0]?.runes ?? []).map((rune) => [
+          rune.id,
+          { name: rune.name, iconPath: rune.icon },
+        ]),
+      ),
+    );
+
+    expect(KEYSTONE_MAP).toEqual(dataDragonKeystones);
   });
 
   it("has no name for an ID it has no icon for", () => {
