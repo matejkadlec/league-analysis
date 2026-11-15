@@ -38,6 +38,20 @@ describe("analysisFailureMessage", () => {
     );
   });
 
+  it("says a run was refused for too many unread players, not just that Riot failed", () => {
+    expect(
+      analysisFailureMessage(
+        failed(
+          "riot_service_error",
+          "Riot data could not be loaded for too many players in this analysis. Please try again later.",
+        ),
+      ),
+    ).toContain("too many players");
+    expect(analysisFailureMessage(failed("riot_service_error"))).toBe(
+      "Riot data could not be loaded for this analysis. Please try again.",
+    );
+  });
+
   it("names the two other refusals the backend can send", () => {
     expect(analysisFailureMessage(failed("player_not_in_match"))).toContain(
       "could not be verified",

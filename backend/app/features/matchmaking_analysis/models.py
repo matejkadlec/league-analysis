@@ -76,6 +76,9 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     per_match: NotRequired[list[MatchmakingPerMatchJSON]]
     player_ranks: NotRequired[dict[str, PlayerRankJSON]]
     rank_freshness: NotRequired[MatchmakingRankFreshnessJSON]
+    # Participants at least one Riot read failed for (not a 404). Absent on
+    # runs stored before the count existed, which is not the same as zero.
+    degraded_players: NotRequired[int]
 
 
 class MatchmakingAnalysis(Base):

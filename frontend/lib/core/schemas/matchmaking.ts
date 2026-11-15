@@ -79,6 +79,9 @@ export const MatchmakingAnalysisResultsSchema = z.object({
     .nullable()
     .optional(),
   rank_freshness: MatchmakingRankFreshnessSchema.nullable().optional(),
+  // Participants a Riot read failed for. Absent on runs stored before the
+  // count existed, which is not the same as zero.
+  degraded_players: z.number().int().min(0).nullable().optional(),
 });
 
 export const MatchmakingAnalysisStatusSchema = z.enum([

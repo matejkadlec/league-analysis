@@ -248,6 +248,8 @@ const matchmakingAnalysis = {
       enemy_avg: 0.55 - index * 0.01,
     })),
     rank_freshness: { period_accurate: 78, current_day: 13 },
+    // Non-zero, so the axe and reflow specs grade the degraded notice too.
+    degraded_players: 2,
   },
   created_at: NOW,
   started_at: NOW,

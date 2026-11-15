@@ -396,6 +396,36 @@ describe("the last matchmaking analysis result", () => {
     queryClient.clear();
   });
 
+  it("says how many players Riot could not be read for", async () => {
+    // A run that lost players to Riot failures used to render exactly like a
+    // clean one; the count is the only thing separating the two verdicts.
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({ ...EVEN, degraded_players: 3 } as never),
+    );
+    const { queryClient } = renderResults();
+
+    // A status, by role: a caption that must not interrupt a screen reader.
+    const notice = await screen.findByRole("status");
+    expect(notice.textContent).toContain(
+      "Riot data could not be loaded for 3 players in this run.",
+    );
+    queryClient.clear();
+  });
+
+  it.each([
+    ["a clean run", { degraded_players: 0 }],
+    ["a run stored before the count existed", {}],
+  ])("shows no degraded notice for %s", async (_label, extra) => {
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({ ...EVEN, ...extra } as never),
+    );
+    const { queryClient } = renderResults();
+
+    await waitFor(() => expect(screen.getByText("Teammates")).toBeTruthy());
+    expect(screen.queryByTestId("matchmaking-degraded-notice")).toBeNull();
+    queryClient.clear();
+  });
+
   it("captions a partial backdated window honestly, never as latest", async () => {
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue({
       success: true,
