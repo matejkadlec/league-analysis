@@ -1394,9 +1394,9 @@ request whose head is that branch as one batch.
   Visual batch only while that count is below three; otherwise select AI-only
   work. A `qa2` revision or a reconfirmation is not a new selection, so the limit
   never blocks it.
-- **Deploys:** while the latest Deploy run on `master` that ran its job did
-  not succeed (it failed, timed out or rolled back; `skipped` and `cancelled`
-  runs do not count), nothing merges ([`finalize-pr`](../.claude/skills/finalize-pr/SKILL.md), "After
+- **Deploys:** while the latest Deploy run on `master` whose job started did
+  not succeed (it failed, rolled back, or was cancelled midway; a `skipped` run
+  and a pending run a newer one replaced do not count), nothing merges ([`finalize-pr`](../.claude/skills/finalize-pr/SKILL.md), "After
   the merge"); batches may still be implemented and published.
 - Start another batch only while every cap allows it and the conflict map shows
   the branch safe, independent, and neither overlapping nor stacked on an

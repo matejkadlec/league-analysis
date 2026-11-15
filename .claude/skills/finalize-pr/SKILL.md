@@ -536,14 +536,19 @@ reading.
 - **Visual-review state.** The status of the pull request's tickets in Jira (see
   "Jira tickets"): a ticket in PENDING USER QA means a reconfirmation waits for
   Matěj's `qa1` or `qa2`.
-- **Deploy state.** The latest Deploy run on `master` that actually ran its job.
-  A run whose job condition was false (CI failed or was cancelled for that
-  commit) ends `skipped`, and a pending run that a newer one replaced ends
-  `cancelled`; neither says anything about production, so skip both:
-  `gh api "repos/matejkadlec/league-analysis/actions/workflows/deploy.yml/runs?branch=master&status=completed&per_page=30" --jq '[.workflow_runs[] | select(.conclusion != "skipped" and .conclusion != "cancelled")][0] | {id, head_sha, conclusion}'`.
-  Anything but `success` there (`failure`, `timed_out`) is a **deploy hold**:
-  production runs the previous release (or a failed one), and nothing merges
-  until a later Deploy run succeeds.
+- **Deploy state.** The latest Deploy run on `master` whose job started. List
+  the completed runs newest first
+  (`gh api "repos/matejkadlec/league-analysis/actions/workflows/deploy.yml/runs?branch=master&status=completed&per_page=30" --jq '.workflow_runs[] | {id, head_sha, conclusion}'`)
+  and pass over only the runs that never touched production: `skipped` (the
+  job's condition was false because CI failed or was cancelled for that
+  commit), and `cancelled` while its job had not started (a pending run a newer
+  one replaced: `gh api repos/matejkadlec/league-analysis/actions/runs/<id>/jobs`
+  shows the job with no `runner_name` and no steps). The first other run decides.
+  Anything but `success` there is a **deploy hold**, a `cancelled` run whose job
+  had started included (cancelled by hand, or stopped at its timeout, possibly
+  midway through the server's release): production runs the previous release, a
+  failed one or an unknown one, and nothing merges until a later Deploy run
+  succeeds.
 
 ## Loop
 
@@ -800,7 +805,7 @@ Check all of these on one fresh reading, in order:
    adds one. Either sends the run to step 2 of "Loop": the new head needs its
    checks, and a review pass unless "Which head is reviewed" keeps the earlier
    one.
-8. No deploy hold: the latest Deploy run on `master` that ran its job
+8. No deploy hold: the latest Deploy run on `master` whose job started
    succeeded ("Deploy state" in "Signals"). A failed or rolled-back deploy stops every
    merge until Matěj has dealt with it and a later Deploy run succeeds: go to
    "User needed".
@@ -881,8 +886,11 @@ gh api -X PUT repos/matejkadlec/league-analysis/pulls/<n>/merge -f merge_method=
      dispatch the deploy, and never touch the host.
    - **Skipped** (the job's condition was false): CI did not succeed for that
      commit; that is step 2.
-   - **Cancelled** (a newer Deploy run replaced it while it waited): follow the
-     newer run, which deploys a later `master` that contains this merge.
+   - **Cancelled before its job started** (a newer Deploy run replaced it while
+     it waited; its job has no `runner_name` and no steps): follow the newer
+     run, which deploys a later `master` that contains this merge.
+   - **Cancelled after its job started** (by hand, or at its timeout): treat it
+     as **Failure**; the server may have stopped midway.
 
 ## Stops
 
