@@ -644,7 +644,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             logger.warning(
                 "matchmaking_run_refused_as_degraded",
                 degraded_players=degraded,
-                players_sampled=sampled,
+                measured_against=sampled,
+                mid_run=of_players is not None,
             )
             raise MatchmakingAnalysisRuntimeError(
                 "riot_service_error",

@@ -43,8 +43,8 @@ every read; `NULL` = legacy = `{match_count: 10, end_date: null}`):
   played **on or before that day** (match-v5 `endTime` = exclusive next
   midnight UTC). This is what makes "run it for games a month back and compare
   against today" possible. A day that has not begun anywhere on Earth yet
-  (later than UTC+14's today) is rejected, and the start card refuses a day
-  after today before it is sent.
+  (later than UTC+14's today) is rejected by the API, and the start card
+  applies the same bound before anything is sent.
 
 The resumed worker re-reads params from the run row — a restarted process has
 no request payload.
@@ -338,7 +338,8 @@ read:
   against the most players the run can still sample, so an outage ends the run
   early instead of after the whole spine.
 - A failure in the optional prefetch of a spine match belongs to no
-  participant; that match is fetched again as a required call.
+  participant; that match is fetched again as a required call unless its
+  participants are already stored.
 
 Because analysis status travels inside successful HTTP-200 polling bodies, the
 original Riot 401/403 can never reach the browser as an HTTP status. The
@@ -416,7 +417,7 @@ completion reaches 100% and triggers result/history refresh.
 | League read empty for a participant           | Player counted UNRANKED; excluded from rank averages            |
 | Optional Riot read fails (not a 404)          | Participant counted degraded; a win rate whose own read failed is kept only over ≥ 5 matches; count shown on the card |
 | More than 10% of participants degraded        | Run becomes retryable `failed` (`riot_service_error`)           |
-| End date after today                          | Start card refuses it; the API rejects a day past UTC+14's today |
+| End date past UTC+14's today                  | Start card refuses it before sending; the API rejects it        |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
 | Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |
 | Riot 401/403 during **any** provider call     | Run terminates with `RIOT_API_KEY_INVALID`; global warning header appears |
