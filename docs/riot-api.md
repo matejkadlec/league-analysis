@@ -292,11 +292,13 @@ Riot ID (`game_name`/`tag_line`) refresh via ACCOUNT-V1 by-PUUID is the
 driven by `PlayerUpdaterJob`), together with SUMMONER-V4 icon/level refresh.
 The Match Fetcher deliberately does not update player profiles; it syncs
 matches, timelines, league snapshots, and conservative per-match LP
-observations. A remake is authoritative zero because Match-V5 marks it
-ineligible for progression. A win or loss gets a value only when exactly one
-progression match lies between the before/after LEAGUE-V4 observations, the
-win/loss counters advance by that result, the rank label is unchanged, and the
-LP sign agrees with the result.
+observations. A remake is authoritative zero. It is a fact about the match:
+every participant carries `gameEndedInEarlySurrender`. `eligibleForProgression`
+is a per-player marker Riot also clears in completed games and decides
+nothing. A win or loss gets a value only when exactly one progression match
+lies between the before/after LEAGUE-V4 observations, the win/loss counters
+advance by that result, the rank label is unchanged, and the LP sign agrees
+with the result.
 
 ---
 

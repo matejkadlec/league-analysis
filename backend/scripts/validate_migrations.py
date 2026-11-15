@@ -539,6 +539,141 @@ def validate_revision_0034_left_one_absent_value(database: str) -> None:
         )
 
 
+def _writable_columns(connection: Connection, table: str) -> str:
+    """One `core` table's column list without the generated columns.
+
+    PostgreSQL refuses a value for a generated column, so a row cannot be
+    copied with `SELECT *`.
+    """
+    return connection.execute(
+        text(
+            "SELECT string_agg(quote_ident(column_name), ', ' "
+            "ORDER BY ordinal_position) FROM information_schema.columns "
+            "WHERE table_schema = 'core' AND table_name = :table "
+            "AND is_generated = 'NEVER'"
+        ),
+        {"table": table},
+    ).scalar_one()
+
+
+def seed_rows_revision_0035_must_correct(database: str) -> None:
+    """Seed the two disagreements between a remake flag and its match.
+
+    Raw SQL at revision 0034, because no writer can store either any more:
+    `remake` now comes from the match. The completed game carries the flag and
+    the zero LP the old derivation gave it; the real remake has one row without.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE core.match_participants SET remake = true, "
+                    "lp_change = 0, lp_change_source = 'riot_match_remake', "
+                    "lp_change_reason = 'riot_eligible_for_progression_false' "
+                    "WHERE match_id = 'EUN1_VALIDATION' AND participant_id = 1"
+                )
+            )
+            # Copies of the rows already seeded, so this names no column an
+            # earlier revision could have left out of step with head.
+            match_columns = _writable_columns(connection, "matches")
+            participant_columns = _writable_columns(connection, "match_participants")
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_match ON COMMIT DROP AS "
+                    "SELECT * FROM core.matches WHERE match_id = 'EUN1_VALIDATION'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE remake_match SET match_id = 'EUN1_REMAKE', "
+                    "early_surrender = true, game_duration = 190"
+                )
+            )
+            connection.execute(
+                text(
+                    f"INSERT INTO core.matches ({match_columns}) "
+                    f"SELECT {match_columns} FROM remake_match"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_participants ON COMMIT DROP AS "
+                    "SELECT * FROM core.match_participants "
+                    "WHERE match_id = 'EUN1_VALIDATION' AND participant_id = 1"
+                )
+            )
+            copy_participant = text(
+                f"INSERT INTO core.match_participants ({participant_columns}) "
+                f"SELECT {participant_columns} FROM remake_participants"
+            )
+            connection.execute(
+                text("UPDATE remake_participants SET match_id = 'EUN1_REMAKE'")
+            )
+            connection.execute(copy_participant)
+            connection.execute(
+                text(
+                    "UPDATE remake_participants SET participant_id = 2, "
+                    "puuid = 'JSON_NULL_VALIDATION', remake = false, "
+                    "lp_change = NULL, lp_change_source = 'unavailable', "
+                    "lp_change_reason = 'league_observation_pending'"
+                )
+            )
+            connection.execute(copy_participant)
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
+    """Assert every remake flag agrees with its match after revision 0035.
+
+    The count is the invariant; the seeded rows make it non-vacuous and pin
+    which way each disagreement was settled, and what became of the zero LP.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            disagreeing = connection.execute(
+                text(
+                    "SELECT count(*) FROM core.match_participants AS participant "
+                    "JOIN core.matches AS match USING (match_id) "
+                    "WHERE participant.remake IS DISTINCT FROM match.early_surrender"
+                )
+            ).scalar_one()
+            seeded = [
+                tuple(row)
+                for row in connection.execute(
+                    text(
+                        "SELECT match_id, participant_id, remake, lp_change, "
+                        "lp_change_source, lp_change_reason "
+                        "FROM core.match_participants "
+                        "WHERE match_id IN ('EUN1_VALIDATION', 'EUN1_REMAKE') "
+                        "ORDER BY match_id, participant_id"
+                    )
+                ).all()
+            ]
+    finally:
+        engine.dispose()
+
+    if disagreeing:
+        raise RuntimeError(
+            f"revision 0035 left {disagreeing} participant row(s) whose remake "
+            "flag disagrees with the match's early_surrender"
+        )
+    expected = [
+        ("EUN1_REMAKE", 1, True, 0, "riot_match_remake", "riot_early_surrender"),
+        ("EUN1_REMAKE", 2, True, None, "unavailable", "league_observation_pending"),
+        ("EUN1_VALIDATION", 1, False, None, "unavailable", "remake_flag_corrected"),
+    ]
+    if seeded != expected:
+        raise RuntimeError(
+            "the rows seeded for revision 0035 were not corrected as reviewed: "
+            f"{seeded!r}"
+        )
+
+
 def validate_revision_0019_kept_one_bound_key(database: str) -> None:
     """Assert only the active key survived and health still points at it."""
     url = administration_url().set(database=database)
@@ -1160,9 +1295,12 @@ def main() -> int:
         validate_revision_0017_rewrote_the_seeded_basis(database)
         seed_riot_keys_revision_0019_must_collapse(database)
         seed_rows_revision_0034_must_normalise(database)
+        run_upgrade(database, "20260829_0034")
+        seed_rows_revision_0035_must_correct(database)
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0034_left_one_absent_value(database)
+        validate_revision_0035_mirrored_early_surrender(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)

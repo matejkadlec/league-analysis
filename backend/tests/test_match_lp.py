@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.match_lp import (
+    LP_REASON_REMAKE,
     LP_SOURCE_OBSERVED,
     LP_SOURCE_REMAKE,
     LP_SOURCE_UNAVAILABLE,
@@ -436,7 +437,7 @@ def test_a_missing_later_snapshot_is_named_as_such() -> None:
 def test_a_remake_is_initialized_as_a_certain_zero() -> None:
     """A remake's LP is known to be zero before any league snapshot arrives.
 
-    Riot marks it ineligible for progression, so nothing was won or lost.
+    The game ended in early surrender, so nothing was won or lost.
     Left pending, the next observation window sees an unattributed match and
     a real LP change from a different game can land on it.
     """
@@ -446,7 +447,7 @@ def test_a_remake_is_initialized_as_a_certain_zero() -> None:
 
     assert participant.lp_change == 0
     assert participant.lp_change_source == LP_SOURCE_REMAKE
-    assert participant.lp_change_reason == "riot_eligible_for_progression_false"
+    assert participant.lp_change_reason == LP_REASON_REMAKE
 
 
 @pytest.fixture

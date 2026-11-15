@@ -90,6 +90,13 @@ because these values drive staleness decisions.
   The source, stable reason, and snapshot timestamps preserve provenance.
   Historical or ambiguous values stay SQL `NULL`; they are never reconstructed
   from rank labels or shared across a fetched batch.
+- `core.match_participants.remake` mirrors `core.matches.early_surrender` for
+  every participant of the match. It used to store `NOT eligibleForProgression`,
+  which Riot also clears for individual players in completed games, so
+  full-length games were labelled Remake and left out of analyses. Revision
+  `20261115_0035` corrected the stored rows and returned the zero LP those rows
+  had been given to `unavailable` (`remake_flag_corrected`); the original flag
+  was never stored, so its downgrade restores only the column comment.
 - `core.matches` keeps both `game_creation_timestamp` and
   `game_start_timestamp` with a `game_start_timestamp_source` marker
   (`riot_game_start` vs `legacy_game_creation`), so the provenance of every
