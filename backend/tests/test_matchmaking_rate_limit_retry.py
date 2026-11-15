@@ -15,6 +15,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     NotFoundError,
     RateLimitError,
+    ServiceUnavailableError,
 )
 from app.features.matchmaking_analysis import rate_limit as rate_limit_module
 from app.features.matchmaking_analysis.errors import MatchmakingAnalysisRuntimeError
@@ -152,6 +153,7 @@ async def test_ten_rate_limits_exhaust_the_budget_and_answer_nothing(
     # burning up to MAX_RATE_LIMIT_WAIT seconds to reach the same answer.
     assert len(slept) == svc.MAX_RATE_LIMIT_ATTEMPTS - 1
     assert svc.api_calls_made == 0
+    assert svc.optional_fetch_failures == 1
 
 
 async def test_exhaustion_on_a_required_call_is_a_named_failure(
@@ -178,6 +180,25 @@ async def test_an_ordinary_riot_failure_is_not_retried(slept: list[float]) -> No
 
     assert result is None
     assert slept == []
+    # A 404 is "Riot has nothing here", which is data, not a failed read.
+    assert svc.optional_fetch_failures == 0
+
+
+async def test_a_failed_optional_call_is_counted_not_passed_off_as_no_data(
+    slept: list[float],
+) -> None:
+    """The caller gets None either way, so the count is the only difference
+    between a player without history and one Riot could not be asked about."""
+    svc, _ = _service()
+
+    result = await svc._api_call_with_retries(
+        _raises(ServiceUnavailableError("upstream", status_code=503)),
+        required=False,
+        operation="probe",
+    )
+
+    assert result is None
+    assert svc.optional_fetch_failures == 1
 
 
 @pytest.mark.parametrize(

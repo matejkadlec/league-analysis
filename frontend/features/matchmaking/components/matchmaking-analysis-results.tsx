@@ -3,10 +3,17 @@
 import { useState } from "react";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
-import { Medal, Shield, Swords, TrendingUp } from "lucide-react";
+import {
+  Medal,
+  Shield,
+  Swords,
+  TrendingUp,
+  TriangleAlert,
+} from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -235,6 +242,7 @@ export function MatchmakingAnalysisResults({
     : (results.enemy_tier_counts ?? null);
   const ranksAreRunWide = effectiveScope !== "all" && !scopedRanks;
   const freshness = results.rank_freshness ?? null;
+  const degradedPlayers = results.degraded_players ?? 0;
   const record = perMatch ? winLossRecord(perMatch, effectiveScope) : null;
   const gap = perMatch
     ? lobbyGap(
@@ -264,6 +272,19 @@ export function MatchmakingAnalysisResults({
         <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>
       <CardContent className="space-y-4">
+        {degradedPlayers > 0 && (
+          // The run completed, but not on everything it asked Riot for, and
+          // the figures below cannot show that on their own.
+          <Alert data-testid="matchmaking-degraded-notice">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertDescription>
+              Riot data could not be loaded for {degradedPlayers}{" "}
+              {degradedPlayers === 1 ? "player" : "players"} in this run.
+              Their win rate is left out unless enough of their matches were
+              already stored, and their rank may show as Unranked.
+            </AlertDescription>
+          </Alert>
+        )}
         {perMatch && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">

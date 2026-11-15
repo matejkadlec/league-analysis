@@ -29,7 +29,14 @@ from app.core.database import db_manager
 from app.core.db_session import rollback_quietly
 from app.core.enums import Division, Tier
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID, RANKED_SOLO_QUEUE_TYPE
+from app.core.riot_api.constants import (
+    RANKED_SOLO_QUEUE_ID,
+    RANKED_SOLO_QUEUE_TYPE,
+    Platform,
+    Region,
+    get_region_by_platform,
+    normalize_platform,
+)
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -93,6 +100,14 @@ MATCHES_FOR_WINRATE = 10
 # backdated run that finds only part of its requested window must still
 # complete, or comparing against a month ago fails exactly when it matters.
 MIN_MATCHES_FLOOR = 5
+
+# A participant whose Riot reads failed (5xx, timeout, exhausted 429 -- not a
+# 404) keeps a win rate only over at least this many matches. The spine match
+# is always stored, so the fallback sample was often that one game: 0% or 100%.
+MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH = 5
+# Above this share of such participants the run fails as retryable instead of
+# completing. At or below it, it completes and persists the count.
+MAX_DEGRADED_PLAYER_SHARE = 0.10
 
 # How close a stored league snapshot must sit to the run's reference time to be
 # reused instead of fetched: the last day for latest runs, two weeks around the
@@ -225,6 +240,15 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
         self.matches_analyzed: int = 0
+        # Optional Riot reads that failed rather than found nothing; the retry
+        # policy counts them and `_sample_participant` attributes them.
+        self.optional_fetch_failures: int = 0
+        self._degraded_players: set[str] = set()
+        # Routing of the run's Riot calls, read from the analysed player's
+        # stored platform. Never the client's defaults: a rank asked of the
+        # wrong platform answers `200 []`, which reads as UNRANKED.
+        self._platform: Platform | None = None
+        self._region: Region | None = None
         self._is_waiting_for_rate_limit: bool = False
         self._current_analysis_puuid: str | None = None
         self._current_analysis_created_at: datetime | None = None
@@ -542,6 +566,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         logger.info("Starting matchmaking analysis")
         self._reset_run_state(puuid, created_at)
         await self._load_run_params(puuid, created_at)
+        await self._load_run_routing(puuid)
         await self._mark_analysis_in_progress(puuid, created_at)
 
         try:
@@ -556,6 +581,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             spine_stats = await self._collect_match_averages(
                 puuid, created_at, spine_match_ids
             )
+            self._refuse_a_mostly_degraded_run()
             await self._finalize_completed_analysis(
                 puuid, created_at, spine_stats, spine_size=len(spine_match_ids)
             )
@@ -567,6 +593,8 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self.requests_saved = 0
         self.api_calls_made = 0
         self.matches_analyzed = 0
+        self.optional_fetch_failures = 0
+        self._degraded_players = set()
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
@@ -585,6 +613,45 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         params = MatchmakingAnalysisParams.model_validate(analysis.params or {})
         self.match_count = params.match_count
         self.end_date = params.end_date
+
+    async def _load_run_routing(self, puuid: str) -> None:
+        """Route the run by the analysed player's platform.
+
+        MATCH-V5 is region-scoped and LEAGUE-V4 platform-scoped, and neither
+        fails on the wrong route, so no call may fall back to a default.
+        """
+        result = await self.db.execute(
+            select(Player.platform).where(Player.puuid == puuid)
+        )
+        self._platform = Platform(normalize_platform(result.scalar_one()))
+        self._region = get_region_by_platform(self._platform)
+
+    @property
+    def _match_region(self) -> Region:
+        """The run's MATCH-V5 route; an unrouted call is a bug, not a default."""
+        if self._region is None:
+            raise RuntimeError("matchmaking analysis routing was not loaded")
+        return self._region
+
+    def _refuse_a_mostly_degraded_run(self) -> None:
+        """Fail the run when Riot failures left too many participants unread.
+
+        Raised rather than persisted here: the background wrapper stores it as
+        a retryable `riot_service_error`, like any other Riot outage.
+        """
+        sampled = len(self._ally_rank_puuids | self._enemy_rank_puuids)
+        degraded = len(self._degraded_players)
+        if sampled and degraded / sampled > MAX_DEGRADED_PLAYER_SHARE:
+            logger.warning(
+                "matchmaking_run_refused_as_degraded",
+                degraded_players=degraded,
+                players_sampled=sampled,
+            )
+            raise MatchmakingAnalysisRuntimeError(
+                "riot_service_error",
+                "Riot data could not be loaded for too many players in this "
+                "analysis. Please try again later.",
+            )
 
     @property
     def _spine_end_time_seconds(self) -> int | None:
@@ -734,7 +801,11 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 anchor=match_anchor,
             )
             result = await self._sample_spine_match(
-                puuid, created_at, match_id, match_anchor_seconds
+                puuid,
+                created_at,
+                match_id,
+                match_anchor_seconds,
+                await self._get_match_platform(match_id),
             )
             if result:
                 spine_stats.append(result)
@@ -773,6 +844,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             ),
             rank_period_accurate=self._rank_period_accurate,
             rank_current_day=self._rank_current_day,
+            degraded_players=len(self._degraded_players),
             analyzed_puuid=puuid,
         )
         self.requests_saved = max(
@@ -827,8 +899,13 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         analysis_created_at: datetime,
         match_id: str,
         end_time_seconds: int,
+        platform: Platform,
     ) -> SpineMatchStats | None:
-        """Process a single spine match: winrates and ranks for all participants."""
+        """Process a single spine match: winrates and ranks for all participants.
+
+        `platform` is the match's own: its ten players are ranked there, even
+        when the analysed player has since moved to another server.
+        """
         participants = await self._get_match_participants(match_id)
         if not participants:
             return None
@@ -848,7 +925,12 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             # once the whole spine is known.
             side = team if team_id == target_team else enemy
             await self._sample_participant(
-                side, p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
+                side,
+                p_puuid,
+                end_time_seconds,
+                platform,
+                analysis_puuid,
+                analysis_created_at,
             )
             if team_id == target_team:
                 self._ally_rank_puuids.add(p_puuid)
@@ -874,10 +956,12 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         side: SideSamples,
         p_puuid: str,
         end_time_seconds: int,
+        platform: Platform,
         analysis_puuid: str,
         analysis_created_at: datetime,
     ) -> None:
         """One participant's winrate, trailing form and rank, onto their side."""
+        failures_before = self.optional_fetch_failures
         wr = await self._cached_player_winrate(
             p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
         )
@@ -887,7 +971,11 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         perf = await self._cached_player_performance(p_puuid)
         if perf is not None:
             side.performances[p_puuid] = perf
-        await self._cached_player_rank(p_puuid)
+        await self._cached_player_rank(p_puuid, platform)
+        # Every read above is cached per player, so only the first encounter
+        # can fail and the set keeps the player for their later matches.
+        if self.optional_fetch_failures > failures_before:
+            self._degraded_players.add(p_puuid)
 
     async def _cached_player_winrate(
         self,
@@ -898,10 +986,28 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     ) -> float | None:
         if p_puuid in self._winrate_cache:
             return self._winrate_cache[p_puuid]
+        failures_before = self.optional_fetch_failures
         wr = await self._calculate_player_winrate(p_puuid, end_time_seconds)
+        if self.optional_fetch_failures > failures_before:
+            wr = self._winrate_unless_sample_is_thin(p_puuid, wr)
         self._winrate_cache[p_puuid] = wr
         await self._mark_player_progress(analysis_puuid, analysis_created_at, p_puuid)
         return wr
+
+    def _winrate_unless_sample_is_thin(
+        self, p_puuid: str, winrate: float | None
+    ) -> float | None:
+        """Drop a win rate a failed Riot read left resting on too few matches.
+
+        The sample is forgotten with it, so Recent Form cannot describe games
+        the win rate beside it no longer counts.
+        """
+        sample = self._winrate_sample_ids.get(p_puuid, [])
+        if len(sample) >= MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH:
+            return winrate
+        self.matches_analyzed -= len(sample)
+        self._winrate_sample_ids.pop(p_puuid, None)
+        return None
 
     async def _cached_player_performance(
         self, p_puuid: str
@@ -949,7 +1055,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     # Participant Ranks
     # ================================================================
 
-    async def _cached_player_rank(self, p_puuid: str) -> None:
+    async def _cached_player_rank(self, p_puuid: str, platform: Platform) -> None:
         """Resolve one participant's Solo/Duo rank once per run.
 
         Snapshot-first: a `player_leagues` row near the run's reference time is
@@ -971,7 +1077,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             return
 
         entries = await self._api_call_with_retries(
-            lambda: self._riot.get_league_entries_by_puuid(p_puuid),
+            lambda: self._riot.get_league_entries_by_puuid(p_puuid, platform=platform),
             required=False,
             operation="league entry fetch",
             target_puuid=p_puuid,
@@ -1201,6 +1307,13 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         )
         return result.scalar_one_or_none()
 
+    async def _get_match_platform(self, match_id: str) -> Platform:
+        """The platform a stored spine match was played on."""
+        result = await self.db.execute(
+            select(Match.platform).where(Match.match_id == match_id)
+        )
+        return Platform(normalize_platform(result.scalar_one()))
+
     async def _get_match_ids_for_player(
         self,
         puuid: str,
@@ -1242,6 +1355,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 count=count,
                 queue=RANKED_SOLO_QUEUE_ID,
                 end_time=end_time,
+                region=self._match_region,
             ),
             required=required,
             operation="match ID fetch",
@@ -1256,7 +1370,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     ) -> MatchDTO | None:
         """Fetch a single match from API. Returns MatchDTO or None."""
         return await self._api_call_with_retries(
-            lambda: self._riot.get_match(match_id),
+            lambda: self._riot.get_match(match_id, region=self._match_region),
             required=required,
             operation="match fetch",
             match_id=match_id,

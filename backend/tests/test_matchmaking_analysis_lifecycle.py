@@ -14,7 +14,15 @@ from starlette.requests import Request
 
 from app.core.enums import Division, Tier
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.errors import AuthenticationError, ForbiddenError
+from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.errors import (
+    AuthenticationError,
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    RiotAPIError,
+    ServiceUnavailableError,
+)
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
@@ -27,6 +35,8 @@ from app.features.matchmaking_analysis.schemas import (
 )
 from app.features.matchmaking_analysis.service import (
     HISTORICAL_RANK_WINDOW,
+    MAX_DEGRADED_PLAYER_SHARE,
+    MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH,
     RANK_SNAPSHOT_MAX_AGE,
     MatchmakingAnalysisService,
 )
@@ -322,6 +332,7 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
         cast(RiotAPIClient, riot_client),
         _USER_ID,
     )
+    service._region = Region.EUROPE
 
     with pytest.raises(ForbiddenError):
         await service._api_fetch_match_ids(_PUUID)
@@ -391,6 +402,7 @@ def _completion_results(
         player_ranks={},
         rank_period_accurate=0,
         rank_current_day=0,
+        degraded_players=0,
         analyzed_puuid="analyzed",
     )
 
@@ -765,7 +777,7 @@ async def test_a_fresh_snapshot_resolves_a_rank_without_a_league_call() -> None:
     )
     service._api_call_with_retries = AsyncMock()
 
-    await service._cached_player_rank("p1")
+    await service._cached_player_rank("p1", Platform.EUN1)
 
     assert service._rank_values["p1"] == rank_value("GOLD", "II", 40)
     assert service._rank_period_accurate == 1
@@ -781,7 +793,7 @@ async def test_a_live_read_near_the_backdated_window_counts_period_accurate() ->
     service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
     service._store_rank_snapshot = AsyncMock()
 
-    await service._cached_player_rank("p1")
+    await service._cached_player_rank("p1", Platform.EUN1)
 
     assert service._rank_period_accurate == 1
     assert service._rank_current_day == 0
@@ -795,7 +807,7 @@ async def test_a_live_read_far_from_the_backdated_window_counts_current_day() ->
     service._api_call_with_retries = AsyncMock(return_value=[_gold_entry()])
     service._store_rank_snapshot = AsyncMock()
 
-    await service._cached_player_rank("p1")
+    await service._cached_player_rank("p1", Platform.EUN1)
 
     assert service._rank_period_accurate == 0
     assert service._rank_current_day == 1
@@ -901,3 +913,145 @@ async def test_store_rank_snapshot_inserts_a_changed_rank(
     assert isinstance(inserted, Insert)
     assert "core.players" in str(inserted.compile())
     commit.assert_awaited_once()
+
+
+def _winrate_service(
+    stored_rows: list[tuple[str, bool]], list_error: Exception
+) -> MatchmakingAnalysisService:
+    """A routed service whose database holds `stored_rows` for the participant
+    and whose match-ID list call fails with `list_error`."""
+    stored = SimpleNamespace(tuples=lambda: SimpleNamespace(all=lambda: stored_rows))
+    riot_client = SimpleNamespace(
+        get_match_list_by_puuid=AsyncMock(side_effect=list_error)
+    )
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace(execute=AsyncMock(return_value=stored))),
+        cast(RiotAPIClient, riot_client),
+        _USER_ID,
+    )
+    service._region = Region.EUROPE
+    service._mark_player_progress = AsyncMock()
+    return service
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ServiceUnavailableError("upstream", status_code=503),
+        RiotAPIError("Request failed"),
+        BadRequestError("bad request", status_code=400),
+    ],
+    ids=["503-after-retries", "network-timeout", "400"],
+)
+async def test_a_transient_failure_never_yields_a_one_match_winrate(
+    failure: Exception,
+) -> None:
+    """A failed match-ID list leaves only the stored spine match to count.
+
+    That one game is a win for every ally of a won match and a loss for every
+    enemy, so the run used to report 100% against 0% and call itself complete.
+    """
+    service = _winrate_service([("EUN1_SPINE", True)], failure)
+
+    winrate = await service._cached_player_winrate(
+        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
+    )
+
+    assert winrate is None
+    assert "ally" not in service._winrate_sample_ids
+    assert service.matches_analyzed == 0
+
+
+async def test_a_failed_list_call_keeps_a_winrate_that_rests_on_enough_matches() -> (
+    None
+):
+    """The stated minimum, from the other side: enough stored games still count."""
+    rows = [
+        (f"EUN1_{index}", index % 2 == 0)
+        for index in range(MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH)
+    ]
+    service = _winrate_service(rows, ServiceUnavailableError("upstream"))
+
+    winrate = await service._cached_player_winrate(
+        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
+    )
+
+    assert winrate == pytest.approx(3 / 5)
+    assert service.matches_analyzed == MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH
+
+
+async def test_a_player_riot_has_no_history_for_is_not_a_failure() -> None:
+    """A 404 is an answer: the stored game is all there is, and it counts."""
+    service = _winrate_service([("EUN1_SPINE", True)], NotFoundError("no matches"))
+
+    winrate = await service._cached_player_winrate(
+        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
+    )
+
+    assert winrate == pytest.approx(1.0)
+    assert service.optional_fetch_failures == 0
+
+
+async def test_a_participant_whose_read_failed_is_counted_as_degraded() -> None:
+    service = _bare_service()
+
+    async def failing_winrate(*_args: object) -> None:
+        service.optional_fetch_failures += 1
+
+    service._cached_player_winrate = AsyncMock(side_effect=failing_winrate)
+    service._cached_player_performance = AsyncMock(return_value=None)
+    service._cached_player_rank = AsyncMock()
+    side = analysis_service_module.SideSamples({}, {})
+
+    await service._sample_participant(
+        side, "unread", 1, Platform.EUN1, _PUUID, datetime.now(UTC)
+    )
+    service._cached_player_winrate = AsyncMock(return_value=0.5)
+    await service._sample_participant(
+        side, "read", 1, Platform.EUN1, _PUUID, datetime.now(UTC)
+    )
+
+    assert service._degraded_players == {"unread"}
+
+
+def _service_with_degraded(degraded: int, sampled: int) -> MatchmakingAnalysisService:
+    service = _bare_service()
+    players = [f"p{index}" for index in range(sampled)]
+    service._ally_rank_puuids = set(players)
+    service._degraded_players = set(players[:degraded])
+    return service
+
+
+def test_a_degraded_run_is_not_stored_as_a_clean_completed_result() -> None:
+    """Past the agreed share the run fails as retryable instead of completing.
+
+    One more degraded participant than the share allows out of 91, the lobby
+    of a ten-match run.
+    """
+    over = int(91 * MAX_DEGRADED_PLAYER_SHARE) + 1
+    service = _service_with_degraded(over, 91)
+
+    with pytest.raises(MatchmakingAnalysisRuntimeError) as caught:
+        service._refuse_a_mostly_degraded_run()
+
+    assert caught.value.code == "riot_service_error"
+
+
+def test_a_lightly_degraded_run_completes_and_says_how_many_it_missed() -> None:
+    within = int(91 * MAX_DEGRADED_PLAYER_SHARE)
+    service = _service_with_degraded(within, 91)
+
+    service._refuse_a_mostly_degraded_run()
+    results = build_completion_results(
+        [_spine_stat()],
+        matches_analyzed=10,
+        matches_requested=10,
+        rank_summary=summarize_ranks(set(), set(), {}, {}),
+        player_ranks={},
+        rank_period_accurate=0,
+        rank_current_day=0,
+        degraded_players=len(service._degraded_players),
+        analyzed_puuid="analyzed",
+    )
+
+    assert results.get("degraded_players") == within

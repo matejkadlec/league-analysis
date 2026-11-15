@@ -186,6 +186,7 @@ def build_completion_results(
     player_ranks: dict[str, PlayerRankJSON],
     rank_period_accurate: int,
     rank_current_day: int,
+    degraded_players: int,
     analyzed_puuid: str,
 ) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
@@ -226,4 +227,5 @@ def build_completion_results(
             "period_accurate": rank_period_accurate,
             "current_day": rank_current_day,
         },
+        "degraded_players": degraded_players,
     }

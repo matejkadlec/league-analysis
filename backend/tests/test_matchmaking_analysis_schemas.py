@@ -1,16 +1,30 @@
 """The computed fields every matchmaking status/history response serialises."""
 
-from datetime import date
+import re
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from app.features.matchmaking_analysis.ranks import (
+    DUO_PARTNER_MIN_SHARED_MATCHES,
+    classify_duo_matches,
+)
 from app.features.matchmaking_analysis.schemas import (
+    MAX_MATCH_COUNT,
+    MIN_MATCH_COUNT,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisParams,
     MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisResults,
+)
+from app.features.matchmaking_analysis.service import (
+    MAX_DEGRADED_PLAYER_SHARE,
+    MIN_MATCHES_FLOOR,
+    MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH,
+    theoretical_max_requests,
 )
 
 
@@ -169,3 +183,71 @@ def test_params_round_trip_through_their_json_persistence_shape() -> None:
 
     assert params.match_count == 30
     assert params.end_date == date(2026, 7, 26)
+
+
+_DOCUMENTATION = (
+    Path(__file__).resolve().parents[2] / "docs" / "matchmaking-analysis.md"
+).read_text(encoding="utf-8")
+
+
+def test_the_documented_bounds_match_the_request_schema() -> None:
+    # The document said "5-30" for three months after the ceiling moved to 100,
+    # and the floor it quoted is the completion floor, a different rule.
+    assert f"spine size, {MIN_MATCH_COUNT} to {MAX_MATCH_COUNT} " in _DOCUMENTATION, (
+        "docs/matchmaking-analysis.md states other match-count bounds"
+    )
+    assert f"**Floor: {MIN_MATCHES_FLOOR} found matches**" in _DOCUMENTATION
+
+
+def test_the_documented_cost_table_matches_the_request_formula() -> None:
+    rows = re.findall(
+        r"^\| (\d+) \| ([\d,]+) \| [^|]+ \| (\d+) \|$", _DOCUMENTATION, re.MULTILINE
+    )
+
+    assert [int(size) for size, _, _ in rows] == [10, 30, MAX_MATCH_COUNT]
+    for size, requests, league_calls in rows:
+        spine = int(size)
+        assert int(requests.replace(",", "")) == theoretical_max_requests(spine)
+        assert int(league_calls) == 9 * spine + 1
+
+
+def test_the_documented_degradation_rules_match_the_constants() -> None:
+    assert (
+        f"rests on at least {MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH}\n  matches"
+        in _DOCUMENTATION
+    )
+    assert (
+        f"more than {MAX_DEGRADED_PLAYER_SHARE:.0%} of the sampled participants"
+        in _DOCUMENTATION
+    )
+
+
+def test_two_shared_matches_make_a_duo_even_across_a_hundred_match_spine() -> None:
+    # The documented rule, pinned at the largest run: the threshold does not
+    # scale with the spine, so one chance repeat in 100 games reads as a duo.
+    assert f"≥ {DUO_PARTNER_MIN_SHARED_MATCHES} spine matches" in _DOCUMENTATION
+    spine = [(f"m{index}", [f"stranger-{index}"]) for index in range(MAX_MATCH_COUNT)]
+    spine[3] = ("m3", ["met-twice"])
+    spine[97] = ("m97", ["met-twice"])
+
+    flags = classify_duo_matches(spine, analyzed_puuid="self")
+
+    assert [match_id for match_id, duo in flags.items() if duo] == ["m3", "m97"]
+
+
+def test_an_end_date_nobody_has_reached_yet_is_rejected() -> None:
+    # The input's `max` attribute stops the date picker, not the keyboard.
+    with pytest.raises(ValidationError, match="cannot be in the future"):
+        MatchmakingAnalysisRequest(
+            puuid="p-1", end_date=datetime.now(UTC).date() + timedelta(days=2)
+        )
+
+
+def test_today_is_a_valid_end_date_for_a_viewer_ahead_of_utc() -> None:
+    # 14 hours ahead is the latest clock on Earth; that viewer's "today" is
+    # at most UTC's tomorrow and must stay choosable.
+    local_today = (datetime.now(UTC) + timedelta(hours=14)).date()
+
+    request = MatchmakingAnalysisRequest(puuid="p-1", end_date=local_today)
+
+    assert request.end_date == local_today

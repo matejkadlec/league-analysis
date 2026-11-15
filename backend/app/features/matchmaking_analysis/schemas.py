@@ -1,6 +1,6 @@
 """Schemas for matchmaking analysis requests and responses."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -55,6 +55,19 @@ class MatchmakingAnalysisRequest(BaseModel):
         description="Analyze the matches played on or before this day (UTC); "
         "omit for the latest matches",
     )
+
+    @field_validator("end_date")
+    @classmethod
+    def _end_date_has_begun_somewhere(cls, value: date | None) -> date | None:
+        """Refuse a day no player has reached yet.
+
+        The bound is the latest "today" on Earth (UTC+14), not UTC's, so a
+        viewer ahead of UTC can still choose their own current day.
+        """
+        latest_today = (datetime.now(UTC) + timedelta(hours=14)).date()
+        if value is not None and value > latest_today:
+            raise ValueError("end_date cannot be in the future")
+        return value
 
 
 class MatchmakingAnalysisParams(BaseModel):
@@ -179,6 +192,11 @@ class MatchmakingAnalysisResults(BaseModel):
     rank_freshness: MatchmakingRankFreshness | None = Field(
         default=None,
         description="Rank snapshot provenance counts for the honesty caption",
+    )
+    degraded_players: int | None = Field(
+        default=None,
+        description="Participants a Riot read failed for; None on older runs",
+        ge=0,
     )
 
 

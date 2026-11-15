@@ -85,29 +85,46 @@ describe("the matchmaking analysis start card", () => {
     expect(customInput().value).toBe("25");
   });
 
-  it("warns about long runs only when one is configured", () => {
-    const { rerender } = renderCard({ matchCount: 20 });
-    const warning = /Larger runs analyze many more players/;
-    expect(screen.queryByText(warning)).toBeNull();
+  it.each([
+    // The cost table in docs/matchmaking-analysis.md: 100N + 2 requests
+    // through 100 requests / 120 s.
+    [10, "20 min"],
+    [30, "1 h"],
+    [100, "3 h 20 min"],
+  ])(
+    "states the cold-cache duration of a %i-match run before it starts",
+    (matchCount, duration) => {
+      // The largest run used to be described as "over an hour"; it is three.
+      renderCard({ matchCount });
 
-    const card = (matchCount: number) => (
-      <MatchmakingAnalysisStartCard
-        playerSelector={<input aria-label="Choose player for analysis" />}
-        analysisFailure={null}
-        startPending={false}
-        startLabel="Start Analysis"
-        matchCount={matchCount}
-        onMatchCountChange={vi.fn<(count: number) => void>()}
-        endDate={null}
-        onEndDateChange={vi.fn<(date: string | null) => void>()}
-        onStart={vi.fn<() => void>()}
-      />
+      expect(
+        screen.getByTestId("matchmaking-expected-duration").textContent,
+      ).toContain(`up to about ${duration} when`);
+    },
+  );
+
+  it("refuses a last day after today instead of sending it", async () => {
+    // `max` on a date input stops the picker, not the keyboard, and the
+    // backend then analysed "the matches before a day nobody has played".
+    const user = userEvent.setup();
+    const { props } = renderCard({ endDate: "2999-01-01" });
+
+    const start = screen.getByRole("button", { name: "Start Analysis" });
+    expect(screen.getByRole("alert").textContent).toBe(
+      "The last day to include cannot be after today.",
     );
-    rerender(card(30));
-    expect(screen.getByText(warning)).toBeTruthy();
+    expect(start).toHaveProperty("disabled", true);
+    await user.click(start);
+    expect(props.onStart).not.toHaveBeenCalled();
+  });
 
-    rerender(card(20));
-    expect(screen.queryByText(warning)).toBeNull();
+  it("starts a run for a last day that has already happened", async () => {
+    const user = userEvent.setup();
+    const { props } = renderCard({ endDate: "2026-08-01" });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Start Analysis" }));
+    expect(props.onStart).toHaveBeenCalledTimes(1);
   });
 
   it("shows the failure the last run left, and a start that cannot double-fire", async () => {

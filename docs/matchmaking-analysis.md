@@ -34,11 +34,17 @@ is a **3-percentage-point gap** (`winrateDiff >= 0.03` favorable,
 A run is parameterized (persisted in `matchmaking_analyses.params`, echoed on
 every read; `NULL` = legacy = `{match_count: 10, end_date: null}`):
 
-- **`match_count`** — spine size, 5–30 (UI presets 10/20/30, default 10).
+- **`match_count`** — spine size, 10 to 100 (UI presets 10/20/30 plus a Custom
+  input with the same bounds, default 10). The request is rejected outside
+  that range; the lower *completion* floor of 5 found matches is a different
+  rule (see Spine and anchors). The start card states the cold-cache duration
+  for the chosen count, from the cost table under Call and count accounting.
 - **`end_date`** — optional UTC day; the spine becomes the last N matches
   played **on or before that day** (match-v5 `endTime` = exclusive next
   midnight UTC). This is what makes "run it for games a month back and compare
-  against today" possible.
+  against today" possible. A day that has not begun anywhere on Earth yet
+  (later than UTC+14's today) is rejected, and the start card refuses a day
+  after today before it is sent.
 
 The resumed worker re-reads params from the run row — a restarted process has
 no request payload.
@@ -130,9 +136,16 @@ snapshot-first against `core.player_leagues`:
    players are never written here: Match Fetcher owns their snapshot cadence,
    and an analysis-time snapshot inside its before/after observation window
    would downgrade LP attribution to `counter_mismatch` (`match_lp.py`).
-3. A failed or empty league read degrades the player to **UNRANKED** (never
-   fails the run); UNRANKED players are excluded from the averages and
-   counted in their own tier bucket.
+3. An empty league read makes the player **UNRANKED**; UNRANKED players are
+   excluded from the averages and counted in their own tier bucket. A *failed*
+   read does the same and also counts the player as degraded (see Failure
+   Classification).
+
+Every Riot call of a run is routed explicitly, never by the client's defaults:
+MATCH-V5 by the region of the analysed player's stored platform, LEAGUE-V4 by
+the platform of the spine match the participant was met in. A rank asked of
+the wrong platform is not an error — Riot answers `200 []` — so a default
+route silently turns a whole lobby UNRANKED.
 
 Ranks are mapped to one LP-equivalent scalar
 (`tier_index × 400 + division × 100 + LP`; MASTER+ = `2800 + LP`) in
@@ -162,10 +175,13 @@ fallback.
 
 A spine match is classified **DuoQ** when any non-analyzed player appears on
 the analyzed player's team in ≥ 2 spine matches (`classify_duo_matches`,
-pure, zero API calls — computed from stored participants). Riot's match-v5
-carries no party data, so this is a deliberate co-occurrence heuristic; false
-positives are possible at small windows, and `per_match` retains the flags so
-the rule can be tightened later without refetching.
+pure, zero API calls — computed from stored participants). The threshold is
+2 whatever the spine size (`DUO_PARTNER_MIN_SHARED_MATCHES`). Riot's match-v5
+carries no party data, so this is a deliberate co-occurrence heuristic. False
+positives grow with the window, not shrink: the more spine matches, the more
+likely a stranger is met twice by chance, so a 100-match run over-classifies
+and removes those chance repeats from the ally averages. `per_match` retains
+the flags so the rule can be tightened later without refetching.
 
 ### Call and count accounting
 
@@ -180,8 +196,17 @@ With N spine matches (formulas in `theoretical_max_requests`):
   matches is the already-known spine match.
 - One league-v4 call per unique player: **9N + 1**.
 - Theoretical maximum without any DB cache: `(1 + 9N) + N + 81N + (9N + 1)`
-  — **1,002** at N=10, ~3,000 at N=30. `requests_saved` is this maximum minus
-  actual API calls made.
+  = **100N + 2**. `requests_saved` is this maximum minus actual API calls made.
+
+| N | Requests (100N + 2) | Cold duration at 100 requests / 120 s | LEAGUE-V4 calls (9N + 1) |
+| --- | --- | --- | --- |
+| 10 | 1,002 | about 20 min | 91 |
+| 30 | 3,002 | about 1 h | 271 |
+| 100 | 10,002 | about 3 h 20 min | 901 |
+
+The duration column is the development-key long window with nothing else
+spending the budget; a warm cache is much faster, and a concurrent update is
+slower. The start card shows the same figure for the chosen N.
 
 ---
 
@@ -249,7 +274,10 @@ If the server restarts mid-run, the analysis row remains active with
 with `started_at = NULL` — treat that state as resumable, not stranded. On the
 next explicit start, `start_analysis` attaches to the row, relaunches its
 worker, and preserves already-completed `puuid_progress` keys
-(`started_at` is set with `coalesce`, so the original start survives).
+(`started_at` is set with `coalesce`, so the original start survives). What
+survives is the progress display and the matches and rank snapshots already
+stored; the win-rate cache lived in the dead process, so the resumed worker
+walks the spine again and re-reads those players, mostly from the database.
 
 Startup recovery (`_cancel_orphaned_player_syncs` in the jobs scheduler)
 **deliberately excludes** `core.matchmaking_analyses`: this table has the
@@ -286,8 +314,22 @@ released and the in-process task deregistered on any crash.
 `ForbiddenError` re-raises even on optional cache-filling fetches
 (service.py `_api_fetch_match_ids` / `_api_fetch_match`: auth errors bypass
 the `required` check) and terminates the run with
-`error_code=RIOT_API_KEY_INVALID`. A `404` may be skipped **only** on optional
-fetches; required fetches propagate it.
+`error_code=RIOT_API_KEY_INVALID`. Required fetches propagate every failure.
+
+**On an optional fetch only a `404` is "no data".** Any other failure (5xx
+after the client's own retries, a timeout, a 400, an exhausted 429 budget)
+still returns nothing to the caller, but is counted, and the participant it
+was for is **degraded**:
+
+- A degraded participant keeps a win rate only when it rests on at least 5
+  matches (`MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH`). The spine match is always
+  stored, so the old fallback was often that single game — 100% for the allies
+  of a won match and 0% for the enemies.
+- The count is persisted as `results.degraded_players` and shown on the result
+  card. Runs stored before the count existed carry no key, which is not zero.
+- When more than 10% of the sampled participants are degraded
+  (`MAX_DEGRADED_PLAYER_SHARE`), the run does not complete: it fails as a
+  retryable `riot_service_error`.
 
 Because analysis status travels inside successful HTTP-200 polling bodies, the
 original Riot 401/403 can never reach the browser as an HTTP status. The
@@ -308,9 +350,12 @@ rate-limit error code. The analysis no longer yields to Player Updater or
 Match Fetcher — the limiter that arranged that was deleted with its table (see
 [riot-api.md](riot-api.md)).
 
-While waiting, the run stays active as `waiting_rate_limit` with
-`rate_limit_reset_at` set by the 429 wait helper; a later successful provider
-request returns it to `in_progress` and clears the timestamp.
+While this policy waits out a 429 that reached it, the run stays active as
+`waiting_rate_limit` with `rate_limit_reset_at` set by the wait helper; a later
+successful provider request returns it to `in_progress` and clears the
+timestamp. The Riot client's own sleeps — pacing itself inside a window it read
+from the response headers — happen below this policy and leave the run
+`in_progress`, so `waiting_rate_limit` under-reports the time spent waiting.
 
 **Clock caveat:** `rate_limit_reset_at` is one window's reset, not the run's,
 so it must **never be presented as an analysis completion clock**. The UI shows one continuous
@@ -359,12 +404,15 @@ completion reaches 100% and triggers result/history refresh.
 | --------------------------------------------- | --------------------------------------------------------------- |
 | Player has <5 ranked matches in the window    | Fast start succeeds; background run becomes retryable `failed`  |
 | 5 ≤ found < requested (sparse backdated window) | Run completes over the found matches; `matches_requested` records the ask and `spine_matches_found` the reality, so the card can caption "8 of 30" |
-| League read fails/empty for a participant     | Player counted UNRANKED; excluded from rank averages            |
+| League read empty for a participant           | Player counted UNRANKED; excluded from rank averages            |
+| Optional Riot read fails (not a 404)          | Participant counted degraded; win rate kept only over ≥ 5 matches; count shown on the card |
+| More than 10% of participants degraded        | Run becomes retryable `failed` (`riot_service_error`)           |
+| End date after today                          | Start card refuses it; the API rejects a day past UTC+14's today |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
 | Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |
 | Riot 401/403 during **any** provider call     | Run terminates with `RIOT_API_KEY_INVALID`; global warning header appears |
 | Riot 404 on an **optional** fetch             | That match/player is skipped; available data is used            |
-| Riot 404/failure on a **required** fetch      | Error propagates; run becomes `failed`                          |
+| Riot failure on a **required** fetch          | Error propagates; run becomes `failed`                          |
 | DB connection error                           | Exception propagates; run marked `failed`                       |
 | Browser reload during analysis                | Exact persisted run rehydrated; polling continues               |
 | Server restart during analysis                | Active record remains; next explicit start resumes it           |
