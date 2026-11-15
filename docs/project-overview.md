@@ -175,17 +175,18 @@ git config core.hooksPath .githooks
 `.githooks/pre-commit` runs the configured pre-commit checks through the
 backend's `uv` project. There is no other repository-managed hook.
 
-New `flow1` work normally starts after fetch/conflict inspection with a focused
-branch and sibling linked worktree:
+A `flow1` or `flow2` batch starts, once its Jira claim holds, on its own
+branch in a sibling linked worktree
+([AI development flow](ai-development-flow.md#branches-and-worktrees)):
 
 ```bash
 git fetch --prune origin
-git worktree add -b flow1/lga-43-batch-worktrees \
-  ../league-analysis-lga-43 origin/master
-cp .env ../league-analysis-lga-43/.env   # Only when the source checkout has one
+git worktree add -b fix/lga-108-match-history-fit \
+  ../league-analysis-worktrees/fix-lga-108-match-history-fit origin/master
+cp .env ../league-analysis-worktrees/fix-lga-108-match-history-fit/.env   # Only when the source checkout has one
 ```
 
-Use the actual selected Jira keys and short scope in place of the example.
+Use the batch's Jira keys and a short scope in place of the example.
 Separate planned pull requests use separate branches and worktrees. Never reuse,
 reset, or delete an owner-created worktree without explicit authorization.
 
@@ -196,14 +197,18 @@ directory or provider credential bundle. A worktree created without
 the copy is not broken: the backend fails at startup with a configuration error
 until the file is present.
 
-Keep worktrees needed for User QA or remediation. Cleanup is appropriate only
+Keep worktrees needed for a visual review or remediation. Cleanup is appropriate only
 after the branch is safely published, ownership is clear, and the worktree is no
 longer needed; inspect dirty state and PR/merge state first.
 
 ## Agent Instruction Files
 
-Generic `AGENTS.md` files describe shared conventions. [SKILLS.md](../SKILLS.md)
-indexes reusable workflows. Machine-specific skills and agent settings are
+Generic `AGENTS.md` files describe shared conventions. [`CLAUDE.md`](../CLAUDE.md)
+imports the root guide and adds what Claude Code sessions need: the delivery
+skills, git practice for parallel sessions and the status overview. The skills,
+the read-only reviewer agent and the hooks live in `.claude/`, and their rules
+in [AI development flow](ai-development-flow.md). [SKILLS.md](../SKILLS.md)
+indexes reusable workflows. Personal and machine-specific agent settings are
 excluded from version control.
 
 ## Quality and Verification
