@@ -47,6 +47,14 @@ public API via `index.ts`.
   typing burst produces only the final detailed-history request.
   Ranked Solo/Duo and 25 matches are the defaults; queue selection and page
   size persist only through consent-gated optional browser storage.
+- Choosing a player is navigation to stored data and never starts an update:
+  the sidebar search, the Tracked Players dialog and a participant icon in
+  Match History all behave the same (LGA-133). Only an explicit Update action
+  may start a sync; `e2e/player-context.spec.ts` counts the starts.
+- A Match History row never scrolls sideways. Below 84rem its blocks wrap as
+  siblings; from 84rem the match/matchup group and the teams/objectives group
+  keep desktop widths and share one line only when both fit, which a 1920px
+  viewport does. `e2e/match-history-layout.spec.ts` measures the three layouts.
 - Match History objective order, accessible labels, counts, and dedicated
   silhouettes and tuned visual sizes live in
   `matches/components/objective-icons.tsx`. Preserve the shared semantic
