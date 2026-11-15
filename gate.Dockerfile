@@ -11,11 +11,12 @@ FROM zricethezav/gitleaks:v8.30.1 AS gitleaks
 FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
 
 # Node comes from the base image, so .nvmrc is not consulted here. Keep the two
-# in step when bumping Node.
+# in step when bumping Node; tools/check-toolchain-pins.sh fails the gate when
+# they, or the production images, disagree.
 FROM node:26.8.2-bookworm
 
-# The base image bundles npm 11.19.0, which frontend/package.json rejects
-# through devEngines. Install the pinned npm rather than relaxing that check.
+# The base image bundles npm 11, which frontend/package.json rejects through
+# devEngines. Install the pinned npm rather than relaxing that check.
 RUN npm install --global npm@12.0.2 --ignore-scripts && npm --version
 
 # PostgreSQL 18 clients. validate_migrations.py runs pg_dump, pg_restore and

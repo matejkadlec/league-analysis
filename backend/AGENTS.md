@@ -86,6 +86,12 @@ hidden prompt or standard input, hashes through the shared
 `app.features.auth.passwords` Argon2id helpers and authenticates through
 `AuthService`, and refuses any database other than the exact loopback
 `league_analysis_local_dev` target.
+
+`scripts/account.py` is how every other account is made, production included:
+the API has no registration route and `tests/test_registration_closed.py`
+keeps it that way. It writes to whichever database the process is configured
+for, applies the API's own account rules, and takes the password from a hidden
+prompt or standard input, never an argument.
 ## Related Docs
 
 - [core/AGENTS.md](app/core/AGENTS.md) - Core infrastructure boundaries

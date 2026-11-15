@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DOCUMENT_CACHE_CONTROL,
   HASHED_STATIC_CACHE_CONTROL,
+  SECURITY_HEADERS,
 } from "../next.config";
 
 /**
@@ -29,11 +30,17 @@ describe("document cache headers", () => {
     expect(rules).toEqual([
       {
         source: "/",
-        headers: [{ key: "Cache-Control", value: documents }],
+        headers: [
+          { key: "Cache-Control", value: documents },
+          ...SECURITY_HEADERS,
+        ],
       },
       {
         source: "/:path*",
-        headers: [{ key: "Cache-Control", value: documents }],
+        headers: [
+          { key: "Cache-Control", value: documents },
+          ...SECURITY_HEADERS,
+        ],
       },
       {
         source: "/_next/static/:path*",
@@ -58,6 +65,36 @@ describe("document cache headers", () => {
     expect(nextConfig.deploymentId).toBe(
       "a28ef5fa87c37ccf1ce28e95db86615dbacb1552",
     );
+  });
+});
+
+describe("security headers", () => {
+  it("sends the browser hardening headers with every document", () => {
+    // Literal values, for the same reason as the cache header above.
+    expect(Object.fromEntries(SECURITY_HEADERS.map((h) => [h.key, h.value]))).toEqual({
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    });
+  });
+});
+
+describe("API rewrite", () => {
+  it("forwards the versioned API and nothing else of the backend", async () => {
+    vi.stubEnv("API_INTERNAL_URL", "http://backend:8000");
+    vi.resetModules();
+    const { default: nextConfig } = await import("../next.config");
+
+    // `/api/:path*` also matched `/api` itself, which is where the backend
+    // serves its interactive documentation.
+    expect(await nextConfig.rewrites?.()).toEqual([
+      {
+        source: "/api/v1/:path*",
+        destination: "http://backend:8000/api/v1/:path*",
+      },
+    ]);
   });
 });
 

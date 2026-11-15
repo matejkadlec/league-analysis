@@ -1,8 +1,9 @@
 # Security
 
 Development is paused. There is no guaranteed response time or supported
-production release. Do not use this portfolio project to host a public service
-without reviewing its security, privacy, and Riot requirements.
+production release. The author's own installation is private and login-only.
+Do not use this portfolio project to host a public service without reviewing
+its security, privacy, and Riot requirements.
 
 Report vulnerabilities privately to **mat.kadlec@email.cz**. Describe the
 problem and reproduction steps using invented data. Do not include passwords,

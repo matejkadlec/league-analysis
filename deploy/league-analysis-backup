@@ -1,0 +1,321 @@
+#!/usr/bin/env bash
+# Encrypted off-server backups of the production PostgreSQL database.
+#
+# Installed root-owned as /usr/local/libexec/league-analysis-backup by
+# deploy/provision-server.sh and run by the `lga-deploy` account, normally from
+# its systemd user timers (deploy/systemd/). docs/deployment.md describes the
+# storage, the schedule and what to do with a failure.
+#
+#   sudo -u lga-deploy /usr/local/libexec/league-analysis-backup <operation>
+#
+#   init        create the restic repository in the configured bucket (once)
+#   run         dump the database, validate the dump, upload it, apply retention
+#   check       the last backup is fresh, still exists remotely, and a sample
+#               of the repository's data reads back intact
+#   rehearse    restore the latest snapshot into a throwaway PostgreSQL and
+#               compare it with what the backup recorded
+#
+# Every operation records its outcome in /srv/league-analysis/state/backups/,
+# which `league-analysis-deploy status` prints. A failure replaces the earlier
+# success there, so old evidence never vouches for a broken backup.
+set -euo pipefail
+umask 077
+export PATH=/usr/local/bin:/usr/bin:/bin
+export LC_ALL=C
+
+readonly ACCOUNT=lga-deploy
+readonly ROOT=/srv/league-analysis
+readonly CONFIG=/etc/league-analysis
+readonly PROJECT=league-analysis
+readonly POSTGRES_CONTAINER=league-analysis-postgres
+readonly REHEARSAL_CONTAINER=league-analysis-restore-rehearsal
+readonly REHEARSAL_DATABASE=restore_rehearsal
+# restic groups snapshots by host and path, so both stay fixed.
+readonly BACKUP_HOST=league-analysis
+readonly STAGING="$ROOT/backups/scheduled"
+readonly REHEARSAL_STAGING="$ROOT/backups/rehearsal"
+readonly EVIDENCE="$ROOT/state/backups"
+readonly MAXIMUM_BACKUP_AGE_SECONDS=$((26 * 3600))
+readonly RETENTION=(--keep-daily 7 --keep-weekly 4 --keep-monthly 12)
+
+log() { printf '[backup] %s\n' "$*"; }
+die() {
+  printf '[backup] error: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ "$(id -un)" == "$ACCOUNT" ]] || die "must run as $ACCOUNT"
+(($# == 1)) || die "usage: $0 init|run|check|rehearse"
+readonly operation="$1"
+case "$operation" in
+  init | run | check | rehearse) ;;
+  *) die "unknown operation" ;;
+esac
+
+export HOME="/home/$ACCOUNT"
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
+export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
+cd "$ROOT"
+install -d -m 0700 "$EVIDENCE"
+
+#------------------------------------------------------------------------------
+# Evidence. Written first as a failure and replaced on success, so an operation
+# that dies anywhere -- a missing tool, a lock, the network -- leaves a failure.
+#------------------------------------------------------------------------------
+
+evidence_name=""
+case "$operation" in
+  run) evidence_name=last-backup ;;
+  check) evidence_name=last-check ;;
+  rehearse) evidence_name=last-rehearsal ;;
+esac
+readonly evidence_name
+started_at="$(date +%s)"
+readonly started_at
+
+record() {
+  [[ -n "$evidence_name" ]] || return 0
+  {
+    printf 'result=%s\n' "$1"
+    printf 'at=%s\n' "$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'epoch=%s\n' "$(date +%s)"
+    shift
+    printf '%s\n' "$@"
+  } >"$EVIDENCE/$evidence_name.new"
+  mv -- "$EVIDENCE/$evidence_name.new" "$EVIDENCE/$evidence_name"
+}
+
+evidence_value() {
+  sed -n "s/^$2=//p" "$EVIDENCE/$1" 2>/dev/null | head -n 1
+}
+
+# The successful backup is what `check` and `rehearse` read, so a failed `run`
+# must not erase it: its failure goes beside it instead.
+if [[ "$operation" == "run" ]]; then
+  record_failure() { printf 'result=failed\nat=%s\n' "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" >"$EVIDENCE/last-backup-failure"; }
+else
+  record_failure() { record failed; }
+fi
+
+succeeded=false
+rehearsal_started=false
+finish() {
+  local status=$?
+  set +e
+  rm -rf -- "$STAGING" "$REHEARSAL_STAGING"
+  if $rehearsal_started; then
+    docker rm --force --volumes "$REHEARSAL_CONTAINER" >/dev/null 2>&1
+  fi
+  if ! $succeeded; then
+    record_failure
+    printf '[backup] %s failed\n' "$operation" >&2
+  fi
+  exit "$status"
+}
+trap finish EXIT
+trap 'exit 1' INT TERM HUP
+
+#------------------------------------------------------------------------------
+# Private configuration: the bucket and its own credentials, the repository
+# password. Read as data, never sourced, and never printed.
+#------------------------------------------------------------------------------
+
+readonly BACKUP_ENV="$CONFIG/backup.env"
+readonly PASSWORD_FILE="$CONFIG/restic-password"
+
+require_private_file() {
+  [[ -f "$1" && ! -L "$1" ]] || die "$1 is missing"
+  [[ "$(stat -c '%a %U' "$1")" == "600 $ACCOUNT" ]] || die "$1 must be owned by $ACCOUNT with mode 0600"
+  [[ -s "$1" ]] || die "$1 is empty"
+}
+require_private_file "$BACKUP_ENV"
+require_private_file "$PASSWORD_FILE"
+
+while IFS='=' read -r name value; do
+  case "$name" in
+    RESTIC_REPOSITORY | AWS_ACCESS_KEY_ID | AWS_SECRET_ACCESS_KEY | AWS_DEFAULT_REGION)
+      export "$name=$value"
+      ;;
+    '' | '#'*) ;;
+    *) die "$BACKUP_ENV has an unexpected line; see deploy/backup.env.example" ;;
+  esac
+done <"$BACKUP_ENV"
+[[ "${RESTIC_REPOSITORY:-}" == s3:https://* ]] || die "RESTIC_REPOSITORY must be an s3:https:// repository"
+[[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]] || die "$BACKUP_ENV has no access key"
+export RESTIC_PASSWORD_FILE="$PASSWORD_FILE"
+export RESTIC_CACHE_DIR="$ROOT/state/restic-cache"
+
+command -v restic >/dev/null || die "the host has no restic"
+
+# One lock for deployments and backups: a dump never races a migration, and a
+# rehearsal never competes with an image build.
+exec 9>"$ROOT/state/operation.lock"
+flock --wait 3600 9 || die "a deployment or another backup is still running"
+
+#------------------------------------------------------------------------------
+# init
+#------------------------------------------------------------------------------
+
+if [[ "$operation" == "init" ]]; then
+  if restic cat config >/dev/null 2>&1; then
+    log "the repository exists already and this password opens it"
+  else
+    restic init
+  fi
+  succeeded=true
+  exit 0
+fi
+
+#------------------------------------------------------------------------------
+# PostgreSQL, addressed as exactly this project's container
+#------------------------------------------------------------------------------
+
+require_postgres() {
+  local labels
+  labels="$(docker inspect --format \
+    '{{.State.Running}}/{{index .Config.Labels "com.docker.compose.project"}}/{{index .Config.Labels "com.docker.compose.service"}}' \
+    "$POSTGRES_CONTAINER" 2>/dev/null)" || die "there is no container $POSTGRES_CONTAINER"
+  [[ "$labels" == "true/$PROJECT/postgres" ]] || die "$POSTGRES_CONTAINER is not the running postgres service of $PROJECT"
+}
+
+# query <container> <database-or-empty> <sql>: one unaligned value. An empty
+# database means the container's own POSTGRES_DB.
+query() {
+  docker exec --user postgres "$1" sh -ceu \
+    'exec psql --username "$POSTGRES_USER" --dbname "${1:-$POSTGRES_DB}" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --command "$2"' \
+    -- "$2" "$3"
+}
+
+readonly REVISION_QUERY="SELECT version_num FROM public.alembic_version"
+readonly TABLE_COUNT_QUERY="SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')"
+# Exact, unlike the planner's estimates: the rehearsal compares it.
+readonly ROW_COUNT_QUERY="SELECT coalesce(sum((xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text::bigint), 0) FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')"
+
+#------------------------------------------------------------------------------
+# run
+#------------------------------------------------------------------------------
+
+if [[ "$operation" == "run" ]]; then
+  require_postgres
+  rm -rf -- "$STAGING"
+  install -d -m 0700 "$STAGING"
+  dump="$STAGING/league-analysis.dump"
+
+  log "dumping the database"
+  # One snapshot for the dump and the figures recorded beside it would need a
+  # shared transaction; the counts are taken first and the rehearsal compares
+  # them with a tolerance for the rows written in between.
+  revision="$(query "$POSTGRES_CONTAINER" '' "$REVISION_QUERY")"
+  tables="$(query "$POSTGRES_CONTAINER" '' "$TABLE_COUNT_QUERY")"
+  rows="$(query "$POSTGRES_CONTAINER" '' "$ROW_COUNT_QUERY")"
+  [[ "$revision" =~ ^[0-9]{8}_[0-9]{4}$ ]] || die "the database reports no valid Alembic revision"
+  docker exec --user postgres "$POSTGRES_CONTAINER" sh -ceu \
+    'exec pg_dump --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --format=custom --no-password' \
+    >"$dump"
+  docker exec --interactive --user postgres "$POSTGRES_CONTAINER" pg_restore --list <"$dump" >/dev/null ||
+    die "the dump is not a readable archive"
+  size="$(stat -c '%s' "$dump")"
+  digest="$(sha256sum "$dump" | cut -d ' ' -f 1)"
+  commit="$(cat "$ROOT/state/deployed-commit" 2>/dev/null || true)"
+  printf 'commit=%s\nalembic=%s\ntables=%s\nrows=%s\nsize=%s\nsha256=%s\n' \
+    "$commit" "$revision" "$tables" "$rows" "$size" "$digest" >"$STAGING/metadata"
+
+  log "uploading $size bytes"
+  output="$(restic backup --host "$BACKUP_HOST" --tag scheduled "$STAGING")"
+  snapshot="$(sed -n 's/^snapshot \([0-9a-f]\{8,\}\) saved$/\1/p' <<<"$output")"
+  [[ -n "$snapshot" ]] || die "restic reported no snapshot"
+
+  log "applying retention"
+  restic forget --host "$BACKUP_HOST" --tag scheduled "${RETENTION[@]}" --prune >/dev/null
+
+  record ok "snapshot=$snapshot" "alembic=$revision" "tables=$tables" "rows=$rows" "size=$size" "sha256=$digest"
+  rm -f -- "$EVIDENCE/last-backup-failure"
+  succeeded=true
+  log "backup $snapshot saved (Alembic $revision, $size bytes)"
+  exit 0
+fi
+
+#------------------------------------------------------------------------------
+# check
+#------------------------------------------------------------------------------
+
+if [[ "$operation" == "check" ]]; then
+  [[ ! -e "$EVIDENCE/last-backup-failure" ]] || die "the most recent backup run failed"
+  [[ "$(evidence_value last-backup result)" == "ok" ]] || die "no successful backup is recorded"
+  snapshot="$(evidence_value last-backup snapshot)"
+  epoch="$(evidence_value last-backup epoch)"
+  [[ "$snapshot" =~ ^[0-9a-f]{8,}$ && "$epoch" =~ ^[0-9]+$ ]] || die "the backup evidence is unreadable"
+  age=$((started_at - epoch))
+  ((age <= MAXIMUM_BACKUP_AGE_SECONDS)) || die "the last backup is $((age / 3600)) hours old"
+
+  restic snapshots --host "$BACKUP_HOST" "$snapshot" >/dev/null || die "snapshot $snapshot is not in the repository"
+  restic check --read-data-subset=5% >/dev/null || die "the repository failed its integrity check"
+
+  record ok "snapshot=$snapshot" "age_hours=$((age / 3600))"
+  succeeded=true
+  log "backup $snapshot is $((age / 3600)) hours old, present and intact"
+  exit 0
+fi
+
+#------------------------------------------------------------------------------
+# rehearse: restore into a PostgreSQL that has no network and no part in
+# production, started from the image production runs
+#------------------------------------------------------------------------------
+
+require_postgres
+rm -rf -- "$REHEARSAL_STAGING"
+install -d -m 0700 "$REHEARSAL_STAGING"
+
+snapshot="$(restic snapshots --host "$BACKUP_HOST" --tag scheduled --latest 1 --json |
+  python3 -c 'import json, sys; snapshots = json.load(sys.stdin); print(snapshots[-1]["short_id"] if snapshots else "")')"
+[[ "$snapshot" =~ ^[0-9a-f]{8,}$ ]] || die "the repository holds no scheduled snapshot"
+
+log "restoring snapshot $snapshot"
+# The subfolder selector restores the backup directory alone; a whole snapshot
+# would also replay the ownership of its ancestor directories.
+restic restore "$snapshot:$STAGING" --target "$REHEARSAL_STAGING" >/dev/null
+dump="$REHEARSAL_STAGING/league-analysis.dump"
+metadata="$REHEARSAL_STAGING/metadata"
+[[ -f "$dump" && -f "$metadata" ]] || die "the snapshot does not contain the dump and its metadata"
+recorded() { sed -n "s/^$1=//p" "$metadata" | head -n 1; }
+[[ "$(sha256sum "$dump" | cut -d ' ' -f 1)" == "$(recorded sha256)" ]] || die "the restored dump does not match its recorded digest"
+
+image="$(docker inspect --format '{{.Config.Image}}' "$POSTGRES_CONTAINER")"
+docker rm --force --volumes "$REHEARSAL_CONTAINER" >/dev/null 2>&1 || true
+rehearsal_started=true
+# The password never leaves this container, which has no network at all.
+docker run --detach --name "$REHEARSAL_CONTAINER" \
+  --network none --memory 1g --cpus 1 --pids-limit 256 \
+  --env POSTGRES_USER=rehearsal --env POSTGRES_DB="$REHEARSAL_DATABASE" \
+  --env POSTGRES_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
+  "$image" >/dev/null
+for _ in $(seq 1 60); do
+  # The entrypoint runs a temporary server first; only the final one listens
+  # on TCP, so this waits for the real start.
+  docker exec "$REHEARSAL_CONTAINER" pg_isready --host 127.0.0.1 --username rehearsal --dbname "$REHEARSAL_DATABASE" >/dev/null 2>&1 && break
+  sleep 1
+done
+docker exec "$REHEARSAL_CONTAINER" pg_isready --host 127.0.0.1 --username rehearsal --dbname "$REHEARSAL_DATABASE" >/dev/null ||
+  die "the rehearsal PostgreSQL did not start"
+
+log "importing the dump into a throwaway PostgreSQL"
+docker exec --interactive --user postgres "$REHEARSAL_CONTAINER" \
+  pg_restore --username rehearsal --dbname "$REHEARSAL_DATABASE" --no-owner --no-privileges --exit-on-error \
+  <"$dump"
+
+revision="$(query "$REHEARSAL_CONTAINER" "$REHEARSAL_DATABASE" "$REVISION_QUERY")"
+tables="$(query "$REHEARSAL_CONTAINER" "$REHEARSAL_DATABASE" "$TABLE_COUNT_QUERY")"
+rows="$(query "$REHEARSAL_CONTAINER" "$REHEARSAL_DATABASE" "$ROW_COUNT_QUERY")"
+[[ "$revision" == "$(recorded alembic)" ]] || die "restored Alembic revision $revision differs from the recorded $(recorded alembic)"
+[[ "$tables" == "$(recorded tables)" ]] || die "restored $tables tables, the backup recorded $(recorded tables)"
+# The dump is taken moments after the count, while jobs keep writing, so the
+# restored database may hold slightly more rows; it must never hold fewer.
+recorded_rows="$(recorded rows)"
+[[ "$rows" =~ ^[0-9]+$ && "$recorded_rows" =~ ^[0-9]+$ ]] || die "the row counts are unreadable"
+((rows >= recorded_rows && rows > 0)) || die "restored $rows rows, the backup recorded $recorded_rows"
+
+duration=$(($(date +%s) - started_at))
+record ok "snapshot=$snapshot" "alembic=$revision" "tables=$tables" "rows=$rows" "duration_seconds=$duration"
+succeeded=true
+log "snapshot $snapshot restored in ${duration}s: Alembic $revision, $tables tables, $rows rows"

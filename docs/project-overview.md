@@ -129,7 +129,9 @@ copy `.env` secret values into documentation or Jira.
 
 Select the pinned Node and npm before the first npm command. `.nvmrc` and the
 `packageManager` field hold those versions, and the gate rejects any other
-runtime. Backend tooling needs a `uv` matching the version CI installs;
+runtime. No Node 26 release bundles the pinned npm, so
+`tools/use-project-node.sh`, which `run.sh` and `test.sh` source, installs it
+into the selected Node when it differs and prints what it did. Backend tooling needs a `uv` matching the version CI installs;
 `uv lock --check` must accept the committed lock before development continues.
 
 ```bash
@@ -268,6 +270,9 @@ commits behave the same from a linked worktree as from the main checkout. See
 [`quality-checks.md`](quality-checks.md) for the GitHub side.
 
 ## Debugging and Operational Boundaries
+
+This section is about a local session. The production installation is
+operated as described in [Production Deployment](deployment.md).
 
 Inspect logs before changing code in response to a runtime error:
 

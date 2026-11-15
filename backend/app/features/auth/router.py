@@ -39,7 +39,6 @@ from .schemas import (
     PasswordChangeRequest,
     RefreshTokenRequest,
     Token,
-    UserCreate,
     UserProfileUpdate,
     UserResponse,
 )
@@ -307,27 +306,9 @@ def get_current_user_info(
     return current_user
 
 
-@router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-)
-@rate_limit("3/minute")
-async def register_user(
-    request: Request,
-    user_create: UserCreate,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> User:
-    """Register a new user account.
-
-    Passwords need 8+ characters with lower, upper, digit and special.
-    """
-    try:
-        return await auth_service.create_user(user_create)
-    except EmailAlreadyRegisteredError as e:
-        raise http_error(
-            status.HTTP_400_BAD_REQUEST,
-            "EMAIL_ALREADY_REGISTERED",
-            "This email is already registered.",
-        ) from e
+# No registration route. Accounts are created by the operator alone, through
+# `scripts/account.py`; `POST /auth/register` used to create an active account
+# for any anonymous caller, and `tests/test_registration_closed.py` keeps it gone.
 
 
 @router.post("/join-us/contact")

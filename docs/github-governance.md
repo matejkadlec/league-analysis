@@ -50,6 +50,14 @@ Disposable PR [#10](https://github.com/matejkadlec/league-analysis/pull/10)
 then confirmed that GitHub rejected an early merge, direct push, force push, and
 default-branch deletion; the PR was closed and its temporary branch deleted.
 
+## Production environment
+
+The GitHub environment `production` admits the `master` branch only and holds
+the restricted deploy key for <https://league.matejkadlec.cz>. The Deploy
+workflow runs after Quality Checks succeeds for a push to `master`; its secrets
+are never available to a pull request. [Production Deployment](deployment.md)
+lists the environment's secrets and variables and what the key can do.
+
 ## Safe delivery policy
 
 Dependabot and authorized automation may create branches and pull requests, but

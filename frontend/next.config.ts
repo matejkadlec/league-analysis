@@ -17,6 +17,25 @@ export const DOCUMENT_CACHE_CONTROL =
 export const HASHED_STATIC_CACHE_CONTROL =
   "public, max-age=31536000, immutable";
 
+/**
+ * Sent with every response the interface itself produces; forwarded `/api/v1`
+ * responses pass through without them. No Content-Security-Policy yet:
+ * Next.js inlines scripts, so that needs per-request nonces first.
+ */
+export const SECURITY_HEADERS = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=()",
+  },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=31536000; includeSubDomains",
+  },
+];
+
 const deploymentId = process.env.NEXT_DEPLOYMENT_ID;
 
 const nextConfig: NextConfig = {
@@ -40,12 +59,14 @@ const nextConfig: NextConfig = {
         source: "/",
         headers: [
           { key: "Cache-Control", value: DOCUMENT_CACHE_CONTROL },
+          ...SECURITY_HEADERS,
         ],
       },
       {
         source: "/:path*",
         headers: [
           { key: "Cache-Control", value: DOCUMENT_CACHE_CONTROL },
+          ...SECURITY_HEADERS,
         ],
       },
       {
@@ -56,11 +77,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Only the versioned API: the backend serves its interactive documentation
+  // at `/api` itself, which `/api/:path*` also matched and so published.
   async rewrites() {
     return [
       {
-        source: "/api/:path*",
-        destination: `${internalApiUrl}/api/:path*`,
+        source: "/api/v1/:path*",
+        destination: `${internalApiUrl}/api/v1/:path*`,
       },
     ];
   },

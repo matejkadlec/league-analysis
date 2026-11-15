@@ -1,0 +1,23 @@
+# Overrides for deploy/container-qa.sh only: a disposable copy of the production
+# stack under its own project, container and volume names, so a rehearsal can
+# never address production's containers or its data volume.
+name: league-analysis-qa
+
+services:
+  postgres:
+    container_name: league-analysis-qa-postgres
+  backend:
+    container_name: league-analysis-qa-backend
+
+networks:
+  edge:
+    name: league-analysis-qa-edge
+  application:
+    name: league-analysis-qa-application
+  database:
+    name: league-analysis-qa-database
+
+volumes:
+  postgres_data:
+    name: league-analysis-qa-postgres-data
+    external: false

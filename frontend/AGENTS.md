@@ -11,7 +11,8 @@ Repository identity, delivery workflow, and safety rules are inherited from
 [`../AGENTS.md`](../AGENTS.md). This guide may add frontend constraints but may
 not weaken repository-wide rules.
 
-Stack: Node (pinned by `.nvmrc`) with npm (pinned by `packageManager`),
+Stack: Node (pinned by `.nvmrc`) with npm (pinned by `packageManager` and
+installed by `../tools/use-project-node.sh`, since Node bundles an older one),
 Next.js App Router, React 19, TypeScript strict, Tailwind CSS 4, shadcn/ui
 (New York), TanStack Query v5, Zod v4, Axios, sonner, lucide-react, Vitest
 with Testing Library and jsdom. Domain UI lives under `features/<name>/`,

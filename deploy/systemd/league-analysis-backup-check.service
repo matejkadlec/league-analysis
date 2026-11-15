@@ -1,0 +1,14 @@
+# Installed for the lga-deploy account by deploy/provision-server.sh.
+[Unit]
+Description=League Analysis: backup freshness and integrity check
+Documentation=https://github.com/matejkadlec/league-analysis/blob/master/docs/deployment.md
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/league-analysis-backup check
+# A backup must never compete with the sites for CPU or disk.
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
