@@ -67,7 +67,7 @@ function ObjectiveStat({
       aria-label={`${label}: ${displayCount}`}
       title={label}
       data-objective={objective}
-      className="flex h-full items-center justify-center"
+      className="flex h-full w-full items-center justify-center lg:w-auto"
     >
       <span aria-hidden="true">
         <ObjectiveGlyph
@@ -91,10 +91,10 @@ export function TeamObjectiveStats({
   team: "blue" | "red";
 }) {
   return (
-    // Content-sized tracks: six equal ones made every cell as wide as the
-    // turret's, which cost 46px a row. Both teams still align column for
-    // column, because each objective's icon and count box are fixed sizes.
-    <div className="grid h-full grid-cols-[repeat(6,auto)] gap-1.5 text-xs">
+    // Content-sized tracks from `lg`: six equal ones made every cell as wide
+    // as the turret's, 46px a row. Below `lg` the tracks stay equal and
+    // shrinkable, or the block overflows a phone narrower than 378px.
+    <div className="grid h-full w-full grid-cols-6 gap-1.5 text-xs lg:w-auto lg:grid-cols-[repeat(6,auto)]">
       {OBJECTIVE_DEFINITIONS.map((objective) => (
         <ObjectiveStat
           key={objective.id}

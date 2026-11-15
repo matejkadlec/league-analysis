@@ -198,9 +198,9 @@ test("choosing a player never starts an update, whichever way they are chosen", 
     // The stranger's stored history is on screen before the count is read, so
     // a start fired by the switch has had its chance to arrive.
     await expect(page.locator("#match-history")).toBeVisible();
-    await expect(page.getByText("Player profile update started")).toHaveCount(
-      0,
-    );
+    // Any wording: a start the harness answered 404 would be reported as
+    // "could not start", which is still a start that was attempted.
+    await expect(page.getByText(/Player profile update/)).toHaveCount(0);
     expect(state.syncStarts).toBe(0);
   });
 

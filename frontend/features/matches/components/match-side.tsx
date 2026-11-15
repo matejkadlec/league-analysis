@@ -48,7 +48,7 @@ export function MatchSideStats({
   return (
     <div
       data-testid={`match-side-stats-${side}`}
-      className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs min-[84rem]:w-25 min-[84rem]:shrink-0"
+      className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:w-25 lg:shrink-0"
     >
       <span className={lead(highlight.kda).trim()}>
         <span className="font-medium">{kda.toFixed(2)}</span> KDA
@@ -89,7 +89,7 @@ export function MatchSideColumn({
   return (
     <div
       data-testid={`match-side-column-${side}`}
-      className="flex min-w-0 flex-1 items-center gap-2 min-[84rem]:w-48 min-[84rem]:flex-none"
+      className="flex min-w-0 flex-1 items-center gap-2 lg:w-48 lg:flex-none"
     >
       {/* Below `lg` the two sides split one phone width, and the rune icons
           are the detail worth trading for a readable champion name. */}

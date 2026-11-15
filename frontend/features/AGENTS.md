@@ -51,10 +51,10 @@ public API via `index.ts`.
   the sidebar search, the Tracked Players dialog and a participant icon in
   Match History all behave the same (LGA-133). Only an explicit Update action
   may start a sync; `e2e/player-context.spec.ts` counts the starts.
-- A Match History row never scrolls sideways. Below 84rem its blocks wrap as
-  siblings; from 84rem the match/matchup group and the teams/objectives group
-  keep desktop widths and share one line only when both fit, which a 1920px
-  viewport does. `e2e/match-history-layout.spec.ts` measures the three layouts.
+- A Match History row never scrolls sideways. Below `lg` its blocks wrap as
+  siblings. From `lg` three fixed-width groups (match info; matchup with both
+  stat blocks; teams and objectives) wrap as units: one line at 1920px, two at
+  1366px, three at 1024px. `e2e/match-history-layout.spec.ts` measures each.
 - Match History objective order, accessible labels, counts, and dedicated
   silhouettes and tuned visual sizes live in
   `matches/components/objective-icons.tsx`. Preserve the shared semantic

@@ -177,7 +177,7 @@ export function PlayerContextProvider({
 
   // `urlPuuid`, not `urlPlayerQuery.data?.puuid`: the row behind the URL is
   // still loading right after a switch, so reading the loaded player would
-  // leave this on the previous one and a second click would start twice.
+  // leave this on the previous one and a second click would push again.
   const currentPuuid =
     urlPuuid ?? contextQuery.data?.current_player?.puuid ?? null;
 

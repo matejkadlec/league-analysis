@@ -6,9 +6,9 @@ import { blockUpstreamRequests } from "./offline";
 import { populatedMatch } from "./populated-player-harness";
 
 /**
- * Six tracked players, one of them untracked, and one player who exists only
- * as an analysis suggestion. Enough rows that the dialog's list scrolls, which
- * is what the scroll-region assertions need.
+ * Six listed players (one untracked), enough rows that the dialog's list
+ * scrolls. Beside them: an analysis-only suggestion, and two strangers reached
+ * through the sidebar search and through a participant icon.
  */
 
 const NOW = "2026-08-09T10:00:00.000Z";
@@ -313,7 +313,7 @@ async function installPlayerContextMocks(
 }
 
 /**
- * Where all four specs start: mocks installed, a viewport short enough that the
+ * Where every spec here starts: mocks installed, a viewport short enough that the
  * page scrolls, and the consent banner out of the way.
  */
 export async function startAtPlayerOverview(

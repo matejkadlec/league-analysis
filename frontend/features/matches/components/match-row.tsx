@@ -96,102 +96,109 @@ export function MatchRow({
         outcome.bgClass,
       )}
     >
-      {/* Three layouts, none of which scrolls sideways (LGA-108). Below 84rem
-          the eight blocks wrap as siblings, matchup first. From 84rem the two
-          groups hold desktop widths and share one line once both fit. */}
+      {/* Never scrolls sideways (LGA-108). Below `lg` the eight blocks wrap as
+          siblings, matchup first. From `lg` three fixed-width groups wrap as
+          units instead: one line at 1920px, two at 1366px, three at 1024px. */}
       <div
         data-testid="match-row-layout"
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-2 lg:justify-center"
       >
-        <div className="contents min-[84rem]:flex min-[84rem]:shrink-0 min-[84rem]:items-center min-[84rem]:gap-2">
-          <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center min-[84rem]:w-33 min-[84rem]:shrink-0">
-            <span className="text-sm font-medium text-center">
-              {getMatchQueueName(match.queue_id)}
-            </span>
-            <span className="text-xs text-foreground/75 text-center mt-1">
-              Patch {match.game_version.split(".").slice(0, 2).join(".")}
-            </span>
-          </div>
-
-          <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center min-[84rem]:w-33 min-[84rem]:shrink-0">
-            <span className="text-sm text-center">
-              {formatDateTime(match.game_start_timestamp)}
-            </span>
-            <span className="text-xs text-center text-foreground/75 mt-1">
-              {getDaysAgo(match.game_start_timestamp)}
-            </span>
-          </div>
-
-          {/* Full width while stacked: a half here would pair the duration with
-              the player's stat block and push the opponent's onto the next row,
-              breaking the side-by-side reading the wrap order exists for. */}
-          <div className="w-full shrink-0 text-center flex flex-col justify-center min-[84rem]:w-16">
-            {/* The row's tint is the only other outcome signal; colourblind
-                players need the word (WCAG 1.4.1: no colour-only meaning). */}
-            <span className="text-[10px] font-semibold uppercase text-foreground/75">
-              {outcome.label}
-            </span>
-            <span>{formatDuration(match.game_duration)}</span>
-          </div>
-
-          {participant && (
-            <MatchSideStats
-              side="player"
-              kda={participant.kda}
-              totalCs={participant.total_cs}
-              csPerMinute={csPerMinute}
-              visionScore={participant.vision_score}
-              killParticipation={killParticipation}
-              highlight={playerStatHighlight}
-            />
-          )}
-
-          {/* Content-sized from 84rem: a fixed width here once left 60px of
-              nothing between the opponent's champion and their stat block. */}
-          <div className="order-first flex w-full items-center gap-0 min-[84rem]:order-none min-[84rem]:w-auto min-[84rem]:shrink-0">
-            <MatchSideColumn
-              side="player"
-              participant={participant}
-              ddragonVersion={ddragonVersion}
-              emptyChampionFallback={false}
-              emptyKdaFallback={false}
-              onSelectPlayer={onSelectPlayer}
-            />
-
-            <div className="w-8 flex items-center justify-center shrink-0">
-              <Swords className="h-5 w-5 text-muted-foreground" />
+        {/* `min-w-0` lets this group take the row's width when its two halves
+            cannot share a line, so they wrap inside it instead of overflowing. */}
+        <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-center lg:gap-2">
+          <div className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2">
+            <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-33 lg:shrink-0">
+              <span className="text-sm font-medium text-center">
+                {getMatchQueueName(match.queue_id)}
+              </span>
+              <span className="text-xs text-foreground/75 text-center mt-1">
+                Patch {match.game_version.split(".").slice(0, 2).join(".")}
+              </span>
             </div>
 
-            <MatchSideColumn
-              side="opponent"
-              participant={opponent}
-              ddragonVersion={ddragonVersion}
-              emptyChampionFallback
-              emptyKdaFallback
-              onSelectPlayer={onSelectPlayer}
-            />
+            <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-33 lg:shrink-0">
+              <span className="text-sm text-center">
+                {formatDateTime(match.game_start_timestamp)}
+              </span>
+              <span className="text-xs text-center text-foreground/75 mt-1">
+                {getDaysAgo(match.game_start_timestamp)}
+              </span>
+            </div>
+
+            {/* Full width while stacked: a half here would pair the duration
+                with the player's stat block and push the opponent's onto the
+                next row, breaking the side-by-side reading of the wrap order. */}
+            <div className="w-full shrink-0 text-center flex flex-col justify-center lg:w-16">
+              {/* The row's tint is the only other outcome signal; colourblind
+                  players need the word (WCAG 1.4.1: no colour-only meaning). */}
+              <span className="text-[10px] font-semibold uppercase text-foreground/75">
+                {outcome.label}
+              </span>
+              <span>{formatDuration(match.game_duration)}</span>
+            </div>
           </div>
 
-          {opponent && (
-            <MatchSideStats
-              side="opponent"
-              kda={opponent.kda}
-              totalCs={opponent.total_cs}
-              csPerMinute={opponentCsPerMinute}
-              visionScore={opponent.vision_score}
-              killParticipation={enemyKillParticipation}
-              highlight={opponentStatHighlight}
-            />
-          )}
+          <div
+            data-testid="match-row-matchup"
+            className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2"
+          >
+            {participant && (
+              <MatchSideStats
+                side="player"
+                kda={participant.kda}
+                totalCs={participant.total_cs}
+                csPerMinute={csPerMinute}
+                visionScore={participant.vision_score}
+                killParticipation={killParticipation}
+                highlight={playerStatHighlight}
+              />
+            )}
+
+            {/* Content-sized from `lg`: a fixed width here once left 60px of
+                nothing between the opponent's champion and their stat block. */}
+            <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-auto lg:shrink-0">
+              <MatchSideColumn
+                side="player"
+                participant={participant}
+                ddragonVersion={ddragonVersion}
+                emptyChampionFallback={false}
+                emptyKdaFallback={false}
+                onSelectPlayer={onSelectPlayer}
+              />
+
+              <div className="w-8 flex items-center justify-center shrink-0">
+                <Swords className="h-5 w-5 text-muted-foreground" />
+              </div>
+
+              <MatchSideColumn
+                side="opponent"
+                participant={opponent}
+                ddragonVersion={ddragonVersion}
+                emptyChampionFallback
+                emptyKdaFallback
+                onSelectPlayer={onSelectPlayer}
+              />
+            </div>
+
+            {opponent && (
+              <MatchSideStats
+                side="opponent"
+                kda={opponent.kda}
+                totalCs={opponent.total_cs}
+                csPerMinute={opponentCsPerMinute}
+                visionScore={opponent.vision_score}
+                killParticipation={enemyKillParticipation}
+                highlight={opponentStatHighlight}
+              />
+            )}
+          </div>
         </div>
 
         {/* No per-match LP column: reliable historical per-match LP is not
             obtainable under the current Riot developer-key constraints.
             `match.lp_change` is still stored and still served. */}
 
-        {/* `ml-auto` puts any spare width between the two groups, and keeps
-            this one against the card's right edge when it wraps below. */}
-        <div className="contents min-[84rem]:ml-auto min-[84rem]:flex min-[84rem]:shrink-0 min-[84rem]:items-center min-[84rem]:gap-2">
+        <div className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2">
           <MatchTeamCompositions
             teamComps={teamComps}
             playerPuuid={playerPuuid}

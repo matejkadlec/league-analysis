@@ -165,17 +165,6 @@ beforeEach(() => {
     data: { current_player: FROM_URL },
   });
   validatedPost.mockReset();
-  validatedPost.mockResolvedValue({
-    success: true,
-    data: {
-      id: 21,
-      puuid: STRANGER.puuid,
-      status: "pending",
-      match_execution_id: null,
-      created_at: "2026-08-16T10:00:00Z",
-      updated_at: "2026-08-16T10:00:00Z",
-    },
-  });
   useAuth.mockReturnValue(session(ACCOUNT));
 });
 

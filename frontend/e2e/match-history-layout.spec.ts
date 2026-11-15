@@ -6,7 +6,7 @@ import {
 } from "./support/populated-player-harness";
 
 /**
- * The Match History row at the three widths it has a layout for (LGA-108).
+ * The Match History row at every width it has a layout for (LGA-108).
  * Measured on rendered boxes: the regression was arithmetic between class
  * names in three files, which no assertion on a single class can see.
  */
@@ -20,7 +20,12 @@ async function measureRows(page: Page) {
     const box = (element: Element | null | undefined) => {
       const rect = element?.getBoundingClientRect();
       return rect
-        ? { left: rect.left, right: rect.right, top: rect.top }
+        ? {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+          }
         : null;
     };
     const list = document.querySelector("[data-testid='match-list']")!;
@@ -56,11 +61,15 @@ async function measureRows(page: Page) {
   });
 }
 
-type RowMeasurements = Awaited<ReturnType<typeof measureRows>>;
+type Measurements = Awaited<ReturnType<typeof measureRows>>;
+type Row = Measurements["rows"][number];
 
-function expectObjectivesInsideCard({ card, rows }: RowMeasurements) {
+/** The list does not scroll sideways and every objective is inside the card. */
+function expectNothingCutOff({ card, rows, listOverflow }: Measurements) {
+  expect(rows.length).toBeGreaterThan(0);
+  // One pixel of tolerance for sub-pixel rounding, as the phone specs allow.
+  expect(listOverflow).toBeLessThanOrEqual(1);
   for (const row of rows) {
-    // Six objectives for each of the two teams, every one inside the card.
     expect(row.objectives).toHaveLength(12);
     for (const cell of row.objectives) {
       expect(cell.left).toBeGreaterThanOrEqual(card.left);
@@ -68,6 +77,22 @@ function expectObjectivesInsideCard({ card, rows }: RowMeasurements) {
     }
   }
 }
+
+/** Stats, champion, champion, stats on one line, mirrored around the swords. */
+function expectMatchupOnOneLine(row: Row) {
+  expect(Math.abs(row.playerStats.top - row.opponentStats.top)).toBeLessThan(1);
+  // No dead zone: the opponent's stats sit as close to their champion column
+  // as the player's stats sit to theirs.
+  const playerGap = row.playerColumn.left - row.playerStats.right;
+  const opponentGap = row.opponentStats.left - row.opponentColumn.right;
+  expect(playerGap).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(opponentGap - playerGap)).toBeLessThanOrEqual(2);
+}
+
+const objectivesStartBelow = (row: Row, edge: number) =>
+  row.objectives.every((cell) => cell.top >= edge);
+const objectivesStartAbove = (row: Row, edge: number) =>
+  row.objectives.every((cell) => cell.top < edge);
 
 test("a 1920x1080 desktop holds every row on one line with nothing cut off", async ({
   page,
@@ -77,72 +102,67 @@ test("a 1920x1080 desktop holds every row on one line with nothing cut off", asy
 
   const measured = await measureRows(page);
 
-  expect(measured.rows.length).toBeGreaterThan(0);
+  expectNothingCutOff(measured);
   expect(measured.listOverflow).toBe(0);
   expect(measured.documentOverflow).toBe(0);
   // Nothing scrolls sideways, so there is no region to reach by keyboard.
   expect(measured.listIsFocusStop).toBe(false);
-  expectObjectivesInsideCard(measured);
   for (const row of measured.rows) {
-    // One line: the last objective starts no lower than the stat block ends.
-    const objectiveTops = row.objectives.map((cell) => cell.top);
-    expect(Math.min(...objectiveTops)).toBeLessThan(row.playerStats.top + 40);
-    // No dead zone: the opponent's stats sit as close to their champion
-    // column as the player's stats sit to theirs.
-    const playerGap = row.playerColumn.left - row.playerStats.right;
-    const opponentGap = row.opponentStats.left - row.opponentColumn.right;
-    expect(playerGap).toBeGreaterThanOrEqual(0);
-    expect(Math.abs(opponentGap - playerGap)).toBeLessThanOrEqual(2);
+    expectMatchupOnOneLine(row);
+    // One line: every objective starts before the stat block has ended.
+    expect(objectivesStartAbove(row, row.playerStats.bottom)).toBe(true);
   }
 });
 
-test("a 1366x768 laptop wraps teams and objectives onto a second line", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1366, height: 768 });
-  await gotoPopulatedRoute(page, MATCH_HISTORY);
+for (const viewport of [
+  { width: 1366, height: 768 },
+  { width: 1280, height: 720 },
+  { width: 1024, height: 768 },
+]) {
+  test(`a ${viewport.width}px laptop wraps teams and objectives under an intact matchup`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await gotoPopulatedRoute(page, MATCH_HISTORY);
 
-  const measured = await measureRows(page);
+    const measured = await measureRows(page);
 
-  expect(measured.rows.length).toBeGreaterThan(0);
-  expect(measured.listOverflow).toBe(0);
-  expect(measured.documentOverflow).toBe(0);
-  expectObjectivesInsideCard(measured);
-  for (const row of measured.rows) {
-    // The matchup keeps its desktop line: stats, champions, stats, in order.
-    expect(row.playerStats.right).toBeLessThanOrEqual(row.playerColumn.left);
-    expect(row.opponentColumn.right).toBeLessThanOrEqual(
-      row.opponentStats.left,
-    );
-    expect(Math.abs(row.playerStats.top - row.opponentStats.top)).toBeLessThan(
-      1,
-    );
-    // And the objectives sit on a line of their own beneath it.
-    for (const cell of row.objectives) {
-      expect(cell.top).toBeGreaterThan(row.playerStats.top + 40);
+    expectNothingCutOff(measured);
+    expect(measured.documentOverflow).toBe(0);
+    for (const row of measured.rows) {
+      expectMatchupOnOneLine(row);
+      expect(objectivesStartBelow(row, row.playerStats.bottom)).toBe(true);
     }
-  }
-});
+  });
+}
 
-test("a 390px phone still stacks the row instead of scrolling it", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await gotoPopulatedRoute(page, MATCH_HISTORY);
+for (const { width, pageFits } of [
+  { width: 390, pageFits: true },
+  { width: 360, pageFits: true },
+  // LGA-137: the card header's totals line is 12px too wide at 320px. The
+  // rows are measured here regardless; the page itself joins once that lands.
+  { width: 320, pageFits: false },
+]) {
+  test(`a ${width}px phone stacks the row instead of scrolling it`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await gotoPopulatedRoute(page, MATCH_HISTORY);
 
-  const measured = await measureRows(page);
+    const measured = await measureRows(page);
 
-  expect(measured.rows.length).toBeGreaterThan(0);
-  expect(measured.listOverflow).toBeLessThanOrEqual(1);
-  expect(measured.documentOverflow).toBe(0);
-  expectObjectivesInsideCard(measured);
-  for (const row of measured.rows) {
-    // Stacked: the matchup leads, and the two stat blocks share the line
-    // beneath it, the player's on the left.
-    expect(row.playerColumn.top).toBeLessThan(row.playerStats.top);
-    expect(row.playerStats.right).toBeLessThanOrEqual(row.opponentStats.left);
-    expect(Math.abs(row.playerStats.top - row.opponentStats.top)).toBeLessThan(
-      1,
-    );
-  }
-});
+    expectNothingCutOff(measured);
+    if (pageFits) {
+      expect(measured.documentOverflow).toBe(0);
+    }
+    for (const row of measured.rows) {
+      // Stacked: the matchup leads, and the two stat blocks share the line
+      // beneath it, the player's on the left.
+      expect(row.playerColumn.top).toBeLessThan(row.playerStats.top);
+      expect(row.playerStats.right).toBeLessThanOrEqual(row.opponentStats.left);
+      expect(
+        Math.abs(row.playerStats.top - row.opponentStats.top),
+      ).toBeLessThan(1);
+    }
+  });
+}
