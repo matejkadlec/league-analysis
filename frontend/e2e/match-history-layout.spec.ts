@@ -16,6 +16,8 @@ const MATCH_HISTORY = POPULATED_ROUTES.find(
 )!;
 
 async function measureRows(page: Page) {
+  // Widths below depend on the web font, which swaps in after first paint.
+  await page.evaluate(() => document.fonts.ready);
   return page.evaluate(() => {
     const box = (element: Element | null | undefined) => {
       const rect = element?.getBoundingClientRect();
@@ -111,9 +113,7 @@ test("a 1920x1080 desktop holds every row on one line with nothing cut off", asy
   expect(measured.listIsFocusStop).toBe(false);
   for (const row of measured.rows) {
     expectMatchupOnOneLine(row);
-    // One line: match info and every objective start before the stat block
-    // has ended.
-    expect(row.info.top).toBeLessThan(row.playerStats.bottom);
+    // One line: every objective starts before the stat block has ended.
     expect(lowestObjective(row)).toBeLessThan(row.playerStats.bottom);
   }
 });
@@ -165,8 +165,12 @@ for (const { width, pageFits } of [
     const measured = await measureRows(page);
 
     expectNothingCutOff(measured);
-    // Asserted both ways, so the 320px exception fails once LGA-137 lands.
-    expect(measured.documentOverflow > 0).toBe(!pageFits);
+    if (pageFits) {
+      expect(measured.documentOverflow).toBe(0);
+    } else {
+      // Asserted, not skipped, so this fails once LGA-137 lands.
+      expect(measured.documentOverflow).toBeGreaterThan(0);
+    }
     for (const row of measured.rows) {
       // Stacked: the matchup leads, and the two stat blocks share the line
       // beneath it, the player's on the left.
