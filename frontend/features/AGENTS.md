@@ -49,8 +49,9 @@ public API via `index.ts`.
   size persist only through consent-gated optional browser storage.
 - Choosing a player is navigation to stored data and never starts an update:
   the sidebar search, the Tracked Players dialog and a participant icon in
-  Match History all behave the same (LGA-133). Only an explicit Update action
-  may start a sync; `e2e/player-context.spec.ts` counts the starts.
+  Match History all behave the same (LGA-133). Only an explicit user action
+  (Update, or a Rank Manipulation comparison) may start a sync;
+  `e2e/player-context.spec.ts` counts the starts.
 - A Match History row never scrolls sideways. Below `lg` its blocks wrap as
   siblings. From `lg` three fixed-width groups (match info; matchup with both
   stat blocks; teams and objectives) wrap as units: one line at 1920px, two at

@@ -44,6 +44,8 @@ async function measureRows(page: Page) {
         objectives: [...row.querySelectorAll("[data-objective]")].map(
           (cell) => box(cell)!,
         ),
+        // A zero box below `lg`, where the group is `display: contents`.
+        info: box(row.querySelector("[data-testid='match-row-info']"))!,
         playerStats: box(
           row.querySelector("[data-testid='match-side-stats-player']"),
         )!,
@@ -89,10 +91,10 @@ function expectMatchupOnOneLine(row: Row) {
   expect(Math.abs(opponentGap - playerGap)).toBeLessThanOrEqual(2);
 }
 
-const objectivesStartBelow = (row: Row, edge: number) =>
-  row.objectives.every((cell) => cell.top >= edge);
-const objectivesStartAbove = (row: Row, edge: number) =>
-  row.objectives.every((cell) => cell.top < edge);
+const highestObjective = (row: Row) =>
+  Math.min(...row.objectives.map((cell) => cell.top));
+const lowestObjective = (row: Row) =>
+  Math.max(...row.objectives.map((cell) => cell.top));
 
 test("a 1920x1080 desktop holds every row on one line with nothing cut off", async ({
   page,
@@ -109,17 +111,19 @@ test("a 1920x1080 desktop holds every row on one line with nothing cut off", asy
   expect(measured.listIsFocusStop).toBe(false);
   for (const row of measured.rows) {
     expectMatchupOnOneLine(row);
-    // One line: every objective starts before the stat block has ended.
-    expect(objectivesStartAbove(row, row.playerStats.bottom)).toBe(true);
+    // One line: match info and every objective start before the stat block
+    // has ended.
+    expect(row.info.top).toBeLessThan(row.playerStats.bottom);
+    expect(lowestObjective(row)).toBeLessThan(row.playerStats.bottom);
   }
 });
 
-for (const viewport of [
-  { width: 1366, height: 768 },
-  { width: 1280, height: 720 },
-  { width: 1024, height: 768 },
+for (const { viewport, lines } of [
+  { viewport: { width: 1366, height: 768 }, lines: 2 },
+  { viewport: { width: 1280, height: 720 }, lines: 3 },
+  { viewport: { width: 1024, height: 768 }, lines: 3 },
 ]) {
-  test(`a ${viewport.width}px laptop wraps teams and objectives under an intact matchup`, async ({
+  test(`a ${viewport.width}px laptop wraps the row onto ${lines} lines around an intact matchup`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -131,7 +135,16 @@ for (const viewport of [
     expect(measured.documentOverflow).toBe(0);
     for (const row of measured.rows) {
       expectMatchupOnOneLine(row);
-      expect(objectivesStartBelow(row, row.playerStats.bottom)).toBe(true);
+      expect(highestObjective(row)).toBeGreaterThanOrEqual(
+        row.playerStats.bottom,
+      );
+      // Two lines keep match info beside the matchup; three put it above.
+      if (lines === 2) {
+        expect(row.info.top).toBeLessThan(row.playerStats.bottom);
+        expect(row.info.bottom).toBeGreaterThan(row.playerStats.top);
+      } else {
+        expect(row.info.bottom).toBeLessThanOrEqual(row.playerStats.top);
+      }
     }
   });
 }
@@ -152,9 +165,8 @@ for (const { width, pageFits } of [
     const measured = await measureRows(page);
 
     expectNothingCutOff(measured);
-    if (pageFits) {
-      expect(measured.documentOverflow).toBe(0);
-    }
+    // Asserted both ways, so the 320px exception fails once LGA-137 lands.
+    expect(measured.documentOverflow > 0).toBe(!pageFits);
     for (const row of measured.rows) {
       // Stacked: the matchup leads, and the two stat blocks share the line
       // beneath it, the player's on the left.

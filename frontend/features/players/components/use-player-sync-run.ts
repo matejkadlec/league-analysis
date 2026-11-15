@@ -84,7 +84,7 @@ interface ProfileUpdateStart {
 
 /**
  * Start one player's profile update, or attach to the run already going.
- * Only an explicit Update action calls this (LGA-133). Seeding
+ * Only an explicit user action calls this (LGA-133). Seeding
  * `player-sync-active` lets every surface showing that player adopt the run.
  */
 export function usePlayerProfileUpdate({

@@ -101,12 +101,15 @@ export function MatchRow({
           units instead: one line at 1920px, two at 1366px, three at 1024px. */}
       <div
         data-testid="match-row-layout"
-        className="flex flex-wrap items-center gap-2 lg:justify-center"
+        className="flex flex-wrap items-center gap-2 lg:justify-center-safe"
       >
         {/* `min-w-0` lets this group take the row's width when its two halves
             cannot share a line, so they wrap inside it instead of overflowing. */}
-        <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-center lg:gap-2">
-          <div className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-center-safe lg:gap-2">
+          <div
+            data-testid="match-row-info"
+            className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2"
+          >
             <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-33 lg:shrink-0">
               <span className="text-sm font-medium text-center">
                 {getMatchQueueName(match.queue_id)}
@@ -138,10 +141,7 @@ export function MatchRow({
             </div>
           </div>
 
-          <div
-            data-testid="match-row-matchup"
-            className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2"
-          >
+          <div className="contents lg:flex lg:shrink-0 lg:items-center lg:gap-2">
             {participant && (
               <MatchSideStats
                 side="player"
