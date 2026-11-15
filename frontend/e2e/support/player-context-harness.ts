@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { seedAuthenticatedSession } from "./auth";
 import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
+import { populatedMatch } from "./populated-player-harness";
 
 /**
  * Six tracked players, one of them untracked, and one player who exists only
@@ -15,6 +16,8 @@ const NOW = "2026-08-09T10:00:00.000Z";
 export const CURRENT_PUUID = "current-player-puuid";
 export const RECENT_PUUID = "recent-player-puuid";
 export const ANALYZED_PUUID = "analyzed-player-puuid";
+export const SEARCHED_PUUID = "searched-player-puuid";
+export const PARTICIPANT_PUUID = "participant-player-puuid";
 const THIRD_PUUID = "third-player-puuid";
 const FOURTH_PUUID = "fourth-player-puuid";
 const FIFTH_PUUID = "fifth-player-puuid";
@@ -42,6 +45,40 @@ const players = {
   [SIXTH_PUUID]: player(SIXTH_PUUID, "Sixth", "SIX"),
 };
 
+// Two strangers no account tracks: one found through the sidebar search, one
+// met only as the lane opponent in the other's single stored match.
+const visitors = {
+  [SEARCHED_PUUID]: {
+    ...player(SEARCHED_PUUID, "Searched", "SIDE"),
+    is_tracked: false,
+  },
+  [PARTICIPANT_PUUID]: {
+    ...player(PARTICIPANT_PUUID, "Participant", "MATCH"),
+    is_tracked: false,
+  },
+};
+
+const readablePlayers = { ...players, ...visitors };
+
+const searchedPlayerMatches = {
+  matches: [
+    {
+      ...populatedMatch(0),
+      lane_opponent: {
+        ...populatedMatch(0).lane_opponent,
+        puuid: PARTICIPANT_PUUID,
+        game_name: "Participant",
+        tag_line: "MATCH",
+      },
+    },
+  ],
+  total: 1,
+  total_analyzed: 1,
+  page: 1,
+  size: 25,
+  pages: 1,
+};
+
 const analyzedPlayer = {
   ...players[CURRENT_PUUID],
   puuid: ANALYZED_PUUID,
@@ -56,7 +93,7 @@ export interface PlayerContextState {
   currentPuuid: string;
   /** How many times that write has been made. */
   currentPlayerUpdates: number;
-  /** How many match syncs have been started. */
+  /** How many player updates have been started (`POST .../sync`). */
   syncStarts: number;
 }
 
@@ -103,7 +140,8 @@ async function installPlayerContextMocks(
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          current_player: players[state.currentPuuid as keyof typeof players],
+          current_player:
+            readablePlayers[state.currentPuuid as keyof typeof readablePlayers],
           tracked_players: Object.values(players),
         }),
       });
@@ -119,9 +157,14 @@ async function installPlayerContextMocks(
     }
 
     if (path.endsWith("/players/suggestions")) {
+      const query = new URL(request.url()).searchParams.get("q") ?? "";
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify([analyzedPlayer]),
+        body: JSON.stringify(
+          query.startsWith("Searched")
+            ? [visitors[SEARCHED_PUUID]]
+            : [analyzedPlayer],
+        ),
       });
       return;
     }
@@ -146,7 +189,7 @@ async function installPlayerContextMocks(
       return;
     }
 
-    const statsPlayer = Object.values(players).find((candidate) =>
+    const statsPlayer = Object.values(readablePlayers).find((candidate) =>
       path.includes(`/matches/player/${candidate.puuid}/`),
     );
     if (statsPlayer && path.endsWith("/champion-stats")) {
@@ -219,6 +262,13 @@ async function installPlayerContextMocks(
     }
 
     if (statsPlayer && path.endsWith("/detailed")) {
+      if (statsPlayer.puuid === SEARCHED_PUUID) {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify(searchedPlayerMatches),
+        });
+        return;
+      }
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -233,7 +283,7 @@ async function installPlayerContextMocks(
       return;
     }
 
-    const readPlayer = Object.values(players).find((candidate) =>
+    const readPlayer = Object.values(readablePlayers).find((candidate) =>
       path.endsWith(`/players/${candidate.puuid}`),
     );
     if (readPlayer) {

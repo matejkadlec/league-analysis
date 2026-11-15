@@ -437,10 +437,10 @@ describe("choosing a player from the picker", () => {
 });
 
 describe("switching to a participant by PUUID", () => {
-  it("starts the target's update and navigates, but never persists a stranger", async () => {
-    // Clicking an enemy laner starts their update and switches the page, but
-    // the persist effect skips an untracked player -- so tomorrow's visit
-    // still defaults to the last *tracked* player, not to a stranger.
+  it("navigates to the stranger without starting an update or persisting them", async () => {
+    // Owner decision on LGA-133: a participant click is navigation to stored
+    // data, like the sidebar. One click used to start a full-history sync that
+    // blocked every other update, and a stranger must not become the default.
     const { result, rerender } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
@@ -448,12 +448,6 @@ describe("switching to a participant by PUUID", () => {
 
     result.current.selectPlayerByPuuid(STRANGER.puuid);
 
-    await waitFor(() =>
-      expect(validatedPost).toHaveBeenCalledWith(
-        expect.anything(),
-        `/players/${STRANGER.puuid}/sync`,
-      ),
-    );
     expect(push).toHaveBeenCalledWith(
       `/player-overview?puuid=${STRANGER.puuid}`,
       { scroll: false },
@@ -465,6 +459,7 @@ describe("switching to a participant by PUUID", () => {
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe(STRANGER.puuid),
     );
+    expect(validatedPost).not.toHaveBeenCalled();
     expect(validatedPut).not.toHaveBeenCalled();
   });
 
