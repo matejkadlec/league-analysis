@@ -18,9 +18,9 @@ export const HASHED_STATIC_CACHE_CONTROL =
   "public, max-age=31536000, immutable";
 
 /**
- * Sent with every response. Browsers ignore HSTS over plain HTTP, so local
- * development is unaffected. No Content-Security-Policy yet: Next.js inlines
- * scripts, so that needs per-request nonces first.
+ * Sent with every response the interface itself produces; forwarded `/api/v1`
+ * responses pass through without them. No Content-Security-Policy yet:
+ * Next.js inlines scripts, so that needs per-request nonces first.
  */
 export const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
