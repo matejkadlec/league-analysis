@@ -1326,6 +1326,11 @@ the Deploy workflow for the merge commit to their end. Its "Jira tickets"
 section keeps the tickets in step: a `🤖 Claude QA` update after each of its
 pushes, PENDING USER QA and back for a reconfirmation, DONE after the merge.
 
+Claude Code loads skills and agents when a session starts, so a session that
+adds or changes `.claude/agents/pr-reviewer.md` cannot start the reviewer it
+wrote: the independent review of such a pull request runs in a new session
+(`finalize-pr`, "Roles").
+
 Outside such a run (another session's pull request, or one whose run stopped),
 do not poll, fix, merge or update its tickets unless Matěj resumes or delegates
 that pull request (`finalize-pr <n>`). The one standing exception is the

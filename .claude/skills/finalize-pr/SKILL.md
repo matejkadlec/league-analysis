@@ -177,10 +177,14 @@ weakens a test or check.
   Agent tool and `subagent_type: pr-reviewer`, never any other type: other types
   inherit tools that can write. Never continue an earlier round's reviewer (no
   SendMessage to it), because a continued context is not an independent pass.
-  When no fresh-context, read-only subagent is available (for example the agent
-  is not listed because the session started before
-  `.claude/agents/pr-reviewer.md` existed), do not simulate one. Stop under
-  "User needed".
+  When no fresh-context, read-only subagent is available, do not simulate one
+  with another agent type. Stop under "User needed". Claude Code reads
+  `.claude/agents/` when a session starts, so a session that started before
+  `.claude/agents/pr-reviewer.md` existed on its branch (the session that added
+  or changed it included: the Agent tool answers "Agent type 'pr-reviewer' not
+  found") cannot start one. Everything else in the run may go on (CI, threads,
+  Jira); the question asks Matěj to continue with `finalize-pr <n>` in a new
+  session on the pull request's branch, local or cloud, which then owns the run.
 - Claude Code's built-in `/code-review` is not the independent pass: it runs in
   the invoking context. It can still run as an extra, non-independent pass.
 
