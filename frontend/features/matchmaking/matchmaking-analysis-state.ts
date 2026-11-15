@@ -98,7 +98,12 @@ export function analysisFailureMessage(
     case "RIOT_API_KEY_INVALID":
       return "The Riot API key is invalid or expired. Please contact an administrator.";
     case "riot_service_error":
-      return "Riot data could not be loaded for this analysis. Please try again.";
+      // The backend's sentence says which outage it was (one failed call, or
+      // too many players unread); it is written to be shown.
+      return (
+        analysis.error_message ??
+        "Riot data could not be loaded for this analysis. Please try again."
+      );
     case "not_enough_matches":
       return (
         analysis.error_message ??

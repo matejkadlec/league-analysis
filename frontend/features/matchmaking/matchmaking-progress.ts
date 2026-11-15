@@ -1,8 +1,29 @@
 const RIOT_LONG_WINDOW_SECONDS = 120;
+const RIOT_LONG_WINDOW_REQUESTS = 100;
+
+/**
+ * Minutes a run of `matchCount` spine matches takes with nothing cached: the
+ * backend's `theoretical_max_requests` (100N + 2) through the long window.
+ * `docs/matchmaking-analysis.md` carries the same table.
+ */
+export function estimateColdRunMinutes(matchCount: number): number {
+  const requests = 100 * matchCount + 2;
+  return Math.round(
+    (requests / RIOT_LONG_WINDOW_REQUESTS) * (RIOT_LONG_WINDOW_SECONDS / 60),
+  );
+}
+
+/** "20 min", "1 h", "3 h 20 min". */
+export function formatRunDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
 // A warm-cache analysis completes about seven Riot requests per logical player
 // (six match reads plus the league-v4 rank read). Display-only interpolation;
 // every real backend milestone still moves the projection immediately.
-const ESTIMATED_PLAYERS_PER_WINDOW = 100 / 7;
+const ESTIMATED_PLAYERS_PER_WINDOW = RIOT_LONG_WINDOW_REQUESTS / 7;
 
 export interface ProgressProjection {
   analysisCreatedAt: string | null;
