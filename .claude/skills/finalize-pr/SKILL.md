@@ -536,10 +536,14 @@ reading.
 - **Visual-review state.** The status of the pull request's tickets in Jira (see
   "Jira tickets"): a ticket in PENDING USER QA means a reconfirmation waits for
   Matěj's `qa1` or `qa2`.
-- **Deploy state.** The latest completed run of the Deploy workflow on `master`:
-  `gh api "repos/matejkadlec/league-analysis/actions/workflows/deploy.yml/runs?branch=master&status=completed&per_page=1" --jq '.workflow_runs[0] | {id, head_sha, conclusion}'`.
-  A `failure` there is a **deploy hold**: production runs the previous release
-  (or a failed one), and nothing merges until a later Deploy run succeeds.
+- **Deploy state.** The latest Deploy run on `master` that actually ran its job.
+  A run whose job condition was false (CI failed or was cancelled for that
+  commit) ends `skipped`, and a pending run that a newer one replaced ends
+  `cancelled`; neither says anything about production, so skip both:
+  `gh api "repos/matejkadlec/league-analysis/actions/workflows/deploy.yml/runs?branch=master&status=completed&per_page=30" --jq '[.workflow_runs[] | select(.conclusion != "skipped" and .conclusion != "cancelled")][0] | {id, head_sha, conclusion}'`.
+  Anything but `success` there (`failure`, `timed_out`) is a **deploy hold**:
+  production runs the previous release (or a failed one), and nothing merges
+  until a later Deploy run succeeds.
 
 ## Loop
 
@@ -796,8 +800,8 @@ Check all of these on one fresh reading, in order:
    adds one. Either sends the run to step 2 of "Loop": the new head needs its
    checks, and a review pass unless "Which head is reviewed" keeps the earlier
    one.
-8. No deploy hold: the latest completed Deploy run on `master` succeeded
-   ("Deploy state" in "Signals"). A failed or rolled-back deploy stops every
+8. No deploy hold: the latest Deploy run on `master` that ran its job
+   succeeded ("Deploy state" in "Signals"). A failed or rolled-back deploy stops every
    merge until Matěj has dealt with it and a later Deploy run succeeds: go to
    "User needed".
 9. No production hold, or Matěj approved the merge of this exact head in this
@@ -877,6 +881,8 @@ gh api -X PUT repos/matejkadlec/league-analysis/pulls/<n>/merge -f merge_method=
      dispatch the deploy, and never touch the host.
    - **Skipped** (the job's condition was false): CI did not succeed for that
      commit; that is step 2.
+   - **Cancelled** (a newer Deploy run replaced it while it waited): follow the
+     newer run, which deploys a later `master` that contains this merge.
 
 ## Stops
 
