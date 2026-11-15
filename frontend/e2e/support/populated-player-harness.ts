@@ -119,7 +119,8 @@ function teamChampion(index: number, teamId: number) {
   };
 }
 
-function match(index: number) {
+/** One fully populated ranked row; `index` varies champions, runes and outcome. */
+export function populatedMatch(index: number) {
   const start = Date.parse(NOW) - index * 3_600_000;
   const [champion_name, champion_id] = CHAMPIONS[index % CHAMPIONS.length]!;
   const [opponent_name, opponent_id] =
@@ -215,7 +216,7 @@ function match(index: number) {
 }
 
 const matchList = {
-  matches: [0, 1, 2, 3, 4].map(match),
+  matches: [0, 1, 2, 3, 4].map(populatedMatch),
   total: 126,
   total_analyzed: 126,
   page: 0,

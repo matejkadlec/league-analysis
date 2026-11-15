@@ -457,6 +457,32 @@ describe("a match history row", () => {
     expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);
   });
 
+  it("names the keystones Riot added and renamed after the table was written", () => {
+    // 8992 used to fall back to the Sorcery tree icon and label, and 8230 kept
+    // its pre-16.9 name (LGA-122). The opponent's own tree is Domination, so
+    // "Sorcery" can only come from a fallback on the player's side.
+    renderRow({
+      player_participant: {
+        ...PARTICIPANT,
+        runes: { primary_style: 8200, sub_style: 8300, keystone: 8992 },
+      },
+    });
+    const deathfire = screen.getByAltText<HTMLImageElement>("Deathfire Touch");
+    expect(deathfire.src).toContain("DeathfireTouch/DEATHFIRE_TOUCH_KEYSTONE");
+    expect(screen.queryByAltText("Sorcery")).toBeNull();
+    cleanup();
+
+    renderRow({
+      player_participant: {
+        ...PARTICIPANT,
+        runes: { primary_style: 8200, sub_style: 8300, keystone: 8230 },
+      },
+    });
+    const surge = screen.getByAltText<HTMLImageElement>("Stormraider's Surge");
+    expect(surge.src).toContain("StormraidersSurgeRuneIcon2");
+    expect(screen.queryByAltText("Phase Rush")).toBeNull();
+  });
+
   it("falls back to the tree when the keystone is one we have no name for", () => {
     // The tooltip and the icon read the same keystone table, so an unknown
     // keystone has to drop both back to the tree together -- a label naming a

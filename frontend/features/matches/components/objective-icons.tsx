@@ -67,7 +67,7 @@ function ObjectiveStat({
       aria-label={`${label}: ${displayCount}`}
       title={label}
       data-objective={objective}
-      className="flex h-full w-full items-center justify-center"
+      className="flex h-full w-full items-center justify-center lg:w-auto"
     >
       <span aria-hidden="true">
         <ObjectiveGlyph
@@ -76,7 +76,7 @@ function ObjectiveStat({
           team={team}
         />
       </span>
-      <span aria-hidden="true" className="w-5 text-center text-xs">
+      <span aria-hidden="true" className="w-4 text-center text-xs">
         {displayCount}
       </span>
     </div>
@@ -91,7 +91,10 @@ export function TeamObjectiveStats({
   team: "blue" | "red";
 }) {
   return (
-    <div className="grid h-full w-full grid-cols-6 gap-1.5 text-xs">
+    // Content-sized tracks from `lg`: six equal ones made every cell as wide
+    // as the turret's, 46px a row. Below `lg` the tracks stay equal and
+    // shrinkable, or the block overflows a phone narrower than 378px.
+    <div className="grid h-full w-full grid-cols-6 gap-1.5 text-xs lg:w-auto lg:grid-cols-[repeat(6,auto)]">
       {OBJECTIVE_DEFINITIONS.map((objective) => (
         <ObjectiveStat
           key={objective.id}
