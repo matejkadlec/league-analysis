@@ -3,7 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   ANALYZED_PUUID,
   CURRENT_PUUID,
+  PARTICIPANT_PUUID,
   RECENT_PUUID,
+  SEARCHED_PUUID,
   startAtPlayerOverview,
 } from "./support/player-context-harness";
 
@@ -144,6 +146,70 @@ test("routes player overview to the account's player and switches it", async ({
     await expect(page.getByTestId("current-player-button")).toHaveText(
       /Recent#TWO/,
     );
+  });
+});
+
+test("choosing a player never starts an update, whichever way they are chosen", async ({
+  page,
+}) => {
+  // Owner decision on LGA-133: the tracked-players dialog, the sidebar search
+  // and a participant click are all navigation to stored data. Only the
+  // explicit Update action may start a sync.
+  const state = await startAtPlayerOverview(page);
+
+  await test.step("from the tracked-players dialog", async () => {
+    await page.getByTestId("current-player-button").click();
+    await page
+      .getByRole("dialog")
+      .getByTestId(`tracked-player-row-${RECENT_PUUID}`)
+      .getByRole("button", { name: "View" })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`puuid=${RECENT_PUUID}`));
+    await expect(page.getByTestId("current-player-button")).toHaveText(
+      "Recent#TWO",
+    );
+    expect(state.syncStarts).toBe(0);
+  });
+
+  await test.step("from the sidebar search", async () => {
+    const sidebarSearch = page.getByRole("combobox", {
+      name: "Search for player",
+    });
+    await sidebarSearch.fill("Searched");
+    await page.getByRole("option", { name: /Searched#SIDE/ }).click();
+    await expect(page).toHaveURL(new RegExp(`puuid=${SEARCHED_PUUID}`));
+    await expect(page.getByTestId("current-player-button")).toHaveText(
+      "Searched#SIDE",
+    );
+    expect(state.syncStarts).toBe(0);
+  });
+
+  await test.step("from a participant icon in Match History", async () => {
+    await page.getByRole("link", { name: "Match History" }).click();
+    await page
+      .getByRole("button", { name: /— view Participant#MATCH$/ })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/match-history\\?puuid=${PARTICIPANT_PUUID}`),
+    );
+    await expect(page.getByTestId("current-player-button")).toHaveText(
+      "Participant#MATCH",
+    );
+    // The stranger's stored history is on screen before the count is read, so
+    // a start fired by the switch has had its chance to arrive.
+    await expect(page.locator("#match-history")).toBeVisible();
+    // Any wording: a start the harness answered 404 would be reported as
+    // "could not start", which is still a start that was attempted.
+    await expect(page.getByText(/Player profile update/)).toHaveCount(0);
+    expect(state.syncStarts).toBe(0);
+  });
+
+  await test.step("the explicit Update action is what starts one", async () => {
+    await page
+      .locator("#match-history")
+      .getByRole("button", { name: "Update" })
+      .click();
+    await expect.poll(() => state.syncStarts).toBe(1);
   });
 });
 

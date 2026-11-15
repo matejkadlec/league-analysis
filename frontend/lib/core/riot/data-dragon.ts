@@ -125,9 +125,9 @@ export function getSummonerSpellName(spellId: number): string | null {
 /**
  * Keystone icons and names from `runesReforged` (en_US), one entry each: the
  * asset filename is not the in-game name and cannot be derived from it (8439
- * is still `VeteranAftershock`, 8008 is `LethalTempoTemp`).
+ * is still `VeteranAftershock`). `tests/data-dragon.test.ts` fails on drift.
  */
-const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
+export const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
   // Domination
   8112: {
     name: "Electrocute",
@@ -197,9 +197,16 @@ const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
     name: "Arcane Comet",
     iconPath: "perk-images/Styles/Sorcery/ArcaneComet/ArcaneComet.png",
   },
+  // Renamed from Phase Rush in 16.9; the directory kept the old name.
   8230: {
-    name: "Phase Rush",
-    iconPath: "perk-images/Styles/Sorcery/PhaseRush/PhaseRush.png",
+    name: "Stormraider's Surge",
+    iconPath:
+      "perk-images/Styles/Sorcery/PhaseRush/StormraidersSurgeRuneIcon2.png",
+  },
+  8992: {
+    name: "Deathfire Touch",
+    iconPath:
+      "perk-images/Styles/Sorcery/DeathfireTouch/DEATHFIRE_TOUCH_KEYSTONE.png",
   },
 };
 
