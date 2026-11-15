@@ -560,8 +560,8 @@ def seed_rows_revision_0035_must_correct(database: str) -> None:
     """Seed the two disagreements between a remake flag and its match.
 
     Raw SQL at revision 0034, because no writer can store either any more:
-    `remake` now comes from the match. The completed game carries the flag and
-    the zero LP the old derivation gave it; the real remake has one row without.
+    `remake` now comes from the match. A completed ranked game carries the flag
+    and its zero LP, a real remake has one row without, an ARAM game has no LP.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -621,6 +621,27 @@ def seed_rows_revision_0035_must_correct(database: str) -> None:
                 )
             )
             connection.execute(copy_participant)
+            # A completed ARAM game: flagged, but never given LP provenance.
+            connection.execute(
+                text(
+                    "UPDATE remake_match SET match_id = 'EUN1_ARAM', "
+                    "early_surrender = false, queue_id = 450, game_duration = 1200"
+                )
+            )
+            connection.execute(
+                text(
+                    f"INSERT INTO core.matches ({match_columns}) "
+                    f"SELECT {match_columns} FROM remake_match"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE remake_participants SET match_id = 'EUN1_ARAM', "
+                    "participant_id = 1, remake = true, lp_change = NULL, "
+                    "lp_change_source = NULL, lp_change_reason = NULL"
+                )
+            )
+            connection.execute(copy_participant)
     finally:
         engine.dispose()
 
@@ -649,7 +670,8 @@ def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
                         "SELECT match_id, participant_id, remake, lp_change, "
                         "lp_change_source, lp_change_reason "
                         "FROM core.match_participants "
-                        "WHERE match_id IN ('EUN1_VALIDATION', 'EUN1_REMAKE') "
+                        "WHERE match_id IN "
+                        "('EUN1_VALIDATION', 'EUN1_REMAKE', 'EUN1_ARAM') "
                         "ORDER BY match_id, participant_id"
                     )
                 ).all()
@@ -662,9 +684,12 @@ def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
             f"revision 0035 left {disagreeing} participant row(s) whose remake "
             "flag disagrees with the match's early_surrender"
         )
+    remake_lp = (0, "riot_match_remake", "riot_early_surrender")
     expected = [
-        ("EUN1_REMAKE", 1, True, 0, "riot_match_remake", "riot_early_surrender"),
-        ("EUN1_REMAKE", 2, True, None, "unavailable", "league_observation_pending"),
+        # Not ranked, so it never had LP provenance and still has none.
+        ("EUN1_ARAM", 1, False, None, None, None),
+        ("EUN1_REMAKE", 1, True, *remake_lp),
+        ("EUN1_REMAKE", 2, True, *remake_lp),
         ("EUN1_VALIDATION", 1, False, None, "unavailable", "remake_flag_corrected"),
     ]
     if seeded != expected:

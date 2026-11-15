@@ -21,6 +21,9 @@ logger = structlog.get_logger(__name__)
 OLD_COMMENT = "Inverted eligibleForProgression"
 NEW_COMMENT = "Mirrors matches.early_surrender; a remake is a match-level fact"
 
+# The two LP statements select on the flag the two mirror statements are
+# about to correct, so they have to run before them.
+
 # A completed ranked game stored as a remake was also handed a certain zero LP
 # (`initialize_participant_lp`). That zero was never observed, so it goes back
 # to unavailable under a reason of its own instead of posing as a pending one.
@@ -36,12 +39,37 @@ RESET_FALSE_REMAKE_LP = """
       AND participant.lp_change_source = 'riot_match_remake'
 """
 
-MIRROR_EARLY_SURRENDER = """
+# The other direction: a ranked row of a real remake that was not flagged gets
+# the zero the writer now stores for it, unless a value was observed.
+ZERO_UNFLAGGED_REMAKE_LP = """
     UPDATE core.match_participants AS participant
-    SET remake = match.early_surrender
+    SET lp_change = 0,
+        lp_change_source = 'riot_match_remake',
+        lp_change_reason = 'riot_early_surrender'
     FROM core.matches AS match
     WHERE match.match_id = participant.match_id
-      AND participant.remake IS DISTINCT FROM match.early_surrender
+      AND match.early_surrender IS TRUE
+      AND match.queue_id = 420
+      AND participant.remake IS FALSE
+      AND participant.lp_change_source = 'unavailable'
+"""
+
+CLEAR_FALSE_REMAKES = """
+    UPDATE core.match_participants AS participant
+    SET remake = FALSE
+    FROM core.matches AS match
+    WHERE match.match_id = participant.match_id
+      AND match.early_surrender IS FALSE
+      AND participant.remake IS TRUE
+"""
+
+FLAG_UNFLAGGED_REMAKES = """
+    UPDATE core.match_participants AS participant
+    SET remake = TRUE
+    FROM core.matches AS match
+    WHERE match.match_id = participant.match_id
+      AND match.early_surrender IS TRUE
+      AND participant.remake IS FALSE
 """
 
 RENAME_REMAKE_LP_REASON = """
@@ -56,18 +84,21 @@ def upgrade() -> None:
 
     `remake` was `NOT eligibleForProgression`, a per-player marker Riot also
     clears for individual players in completed games, so full-length games were
-    labelled Remake and left out of analyses. The LP reset runs first: it
-    selects on the flag the second statement is about to correct.
+    labelled Remake and left out of analyses. Idempotent: a second run matches
+    no row.
     """
     connection = op.get_bind()
-    lp_reset = connection.execute(sa.text(RESET_FALSE_REMAKE_LP)).rowcount
-    flags_corrected = connection.execute(sa.text(MIRROR_EARLY_SURRENDER)).rowcount
-    reasons_renamed = connection.execute(sa.text(RENAME_REMAKE_LP_REASON)).rowcount
+
+    def rows(statement: str) -> int:
+        return connection.execute(sa.text(statement)).rowcount
+
     logger.info(
         "remake_flags_mirrored_from_early_surrender",
-        participant_rows_corrected=flags_corrected,
-        false_remake_lp_rows_reset=lp_reset,
-        remake_lp_reasons_renamed=reasons_renamed,
+        false_remake_lp_rows_reset=rows(RESET_FALSE_REMAKE_LP),
+        unflagged_remake_lp_rows_zeroed=rows(ZERO_UNFLAGGED_REMAKE_LP),
+        completed_games_no_longer_remakes=rows(CLEAR_FALSE_REMAKES),
+        remake_rows_newly_flagged=rows(FLAG_UNFLAGGED_REMAKES),
+        remake_lp_reasons_renamed=rows(RENAME_REMAKE_LP_REASON),
     )
     op.alter_column(
         "match_participants",

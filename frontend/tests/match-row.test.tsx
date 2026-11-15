@@ -227,9 +227,9 @@ describe("a match history row", () => {
   });
 
   it("treats an early surrender as a remake even when the participant flag is not set", () => {
-    // The two flags come from different places — `remake` off the
-    // participant, `early_surrender` off the match — and either one alone
-    // means the game was voided.
+    // The backend now mirrors the match's flag onto every participant, so the
+    // two agree; a response from before that still has to read as voided
+    // when only the match says so.
     const { container } = renderRow({
       early_surrender: true,
       player_participant: { ...PARTICIPANT, win: false, remake: false },

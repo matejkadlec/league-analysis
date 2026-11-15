@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.match_lp import (
-    LP_REASON_REMAKE,
     LP_SOURCE_OBSERVED,
     LP_SOURCE_REMAKE,
     LP_SOURCE_UNAVAILABLE,
@@ -447,7 +446,8 @@ def test_a_remake_is_initialized_as_a_certain_zero() -> None:
 
     assert participant.lp_change == 0
     assert participant.lp_change_source == LP_SOURCE_REMAKE
-    assert participant.lp_change_reason == LP_REASON_REMAKE
+    # The literal: revision 0035 wrote this same string into stored rows.
+    assert participant.lp_change_reason == "riot_early_surrender"
 
 
 @pytest.fixture
