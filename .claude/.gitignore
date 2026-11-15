@@ -1,0 +1,4 @@
+# Claude Code session worktrees (desktop app sessions, `claude --worktree`).
+/worktrees/
+# Personal settings that override .claude/settings.json on one machine.
+/settings.local.json
