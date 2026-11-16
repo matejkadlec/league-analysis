@@ -10,8 +10,12 @@ everyone else runs it locally.
 
 Read the nearest `AGENTS.md` before changing a subtree. Public project copy
 belongs in [README.md](README.md); technical documentation is indexed in
-[docs/README.md](docs/README.md). [SKILLS.md](SKILLS.md) describes reusable local
-workflows. Machine-specific agent configuration stays outside version control.
+[docs/README.md](docs/README.md). [SKILLS.md](SKILLS.md) describes reusable
+workflows. The shared Claude Code configuration is versioned: [CLAUDE.md](CLAUDE.md)
+(which imports this guide), the delivery skills, the reviewer agent and the
+hooks in `.claude/`, and the Jira server in `.mcp.json`. Personal and
+machine-specific agent configuration (`.agents/`, `.codex/`,
+`.claude/settings.local.json`) stays outside version control.
 
 ## Working safely
 
@@ -62,7 +66,17 @@ remove the PostgreSQL volume, and never create accounts there except through
 the documented account command.
 
 Do not commit or push without authorization, push task changes directly to
-`master`, bypass hooks, or use an unsafe force push. Published pull requests
-are ready for owner review; do not merge or continue modifying them without
-an explicit request. If Jira is used, target only project `LGA`, keep the issue
-current, and mark it done only after its pull request is merged.
+`master`, bypass hooks, or use an unsafe force push. Jira work targets only
+project `LGA`; keep the issue current, and mark it done only after its pull
+request is merged.
+
+Agent delivery follows [docs/ai-development-flow.md](docs/ai-development-flow.md)
+through the `flow1`, `flow2`, `qa1`, `qa2` and `finalize-pr` skills. Starting
+one of them authorizes its commits, pushes, pull requests and Jira updates. A
+change the owner should see is pushed for his visual review before any pull
+request opens. An AI-only pull request is merged by `finalize-pr` once an
+independent review of its exact head is clean and every check is green; a pull
+request that adds an Alembic revision or changes the deploy path or production
+configuration waits for the owner's approval of that head before it merges.
+Outside such a run, do not merge or continue modifying a published pull request
+without an explicit request, and never bypass the `master` ruleset.

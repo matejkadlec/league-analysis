@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "mcp-remote",
+      "args": ["https://mcp.atlassian.com/v2/mcp"]
+    }
+  }
+}

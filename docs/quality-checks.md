@@ -18,7 +18,10 @@
 
 The focused modes shorten implementation feedback. They never substitute for
 the complete gate before publication. `test.sh` resolves its own worktree root,
-so it is safe to call from the main checkout or any worktree.
+so it is safe to call from the main checkout or any worktree. Two runs that
+include the frontend cannot overlap on one machine, because the Playwright
+step starts its server on the fixed port 3100; agents queue them with `flock`
+([AI development flow](ai-development-flow.md#gate-queue)).
 
 ## Decisions
 
