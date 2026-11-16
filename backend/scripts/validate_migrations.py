@@ -561,7 +561,8 @@ def seed_rows_revision_0035_must_correct(database: str) -> None:
 
     Raw SQL at revision 0034, because no writer can store either any more:
     `remake` now comes from the match. A completed ranked game carries the flag
-    and its zero LP, a real remake has one row without, an ARAM game has no LP.
+    and its zero LP, a real remake has three rows without (one never evaluated,
+    two whose LP holds evidence), an ARAM game has no LP.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
@@ -621,6 +622,48 @@ def seed_rows_revision_0035_must_correct(database: str) -> None:
                 )
             )
             connection.execute(copy_participant)
+            # Two more unflagged rows of the remake whose LP holds evidence the
+            # correction must keep: an observed loss, and a counter mismatch.
+            # Their players are copies too, for the participant's foreign key.
+            player_columns = _writable_columns(connection, "players")
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_players ON COMMIT DROP AS "
+                    "SELECT * FROM core.players WHERE puuid = 'JSON_NULL_VALIDATION'"
+                )
+            )
+            for puuid, participant_lp in (
+                (
+                    "REMAKE_OBSERVED",
+                    "participant_id = 3, lp_change = -15, "
+                    "lp_change_source = 'riot_league_observation', "
+                    "lp_change_reason = 'single_match_counter_transition'",
+                ),
+                (
+                    "REMAKE_BOUNDARY",
+                    "participant_id = 4, lp_change = NULL, "
+                    "lp_change_source = 'unavailable', "
+                    "lp_change_reason = 'rank_boundary'",
+                ),
+            ):
+                connection.execute(
+                    text("UPDATE remake_players SET puuid = :puuid"),
+                    {"puuid": puuid},
+                )
+                connection.execute(
+                    text(
+                        f"INSERT INTO core.players ({player_columns}) "
+                        f"SELECT {player_columns} FROM remake_players"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "UPDATE remake_participants SET puuid = :puuid, "
+                        f"{participant_lp}"
+                    ),
+                    {"puuid": puuid},
+                )
+                connection.execute(copy_participant)
             # A completed ARAM game: flagged, but never given LP provenance.
             connection.execute(
                 text(
@@ -690,6 +733,16 @@ def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
         ("EUN1_ARAM", 1, False, None, None, None),
         ("EUN1_REMAKE", 1, True, *remake_lp),
         ("EUN1_REMAKE", 2, True, *remake_lp),
+        # Flagged, with the LP evidence each carried left exactly as it was.
+        (
+            "EUN1_REMAKE",
+            3,
+            True,
+            -15,
+            "riot_league_observation",
+            "single_match_counter_transition",
+        ),
+        ("EUN1_REMAKE", 4, True, None, "unavailable", "rank_boundary"),
         ("EUN1_VALIDATION", 1, False, None, "unavailable", "remake_flag_corrected"),
     ]
     if seeded != expected:

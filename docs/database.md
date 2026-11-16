@@ -96,11 +96,13 @@ because these values drive staleness decisions.
   full-length games were labelled Remake and left out of analyses. Revision
   `20261115_0035` corrected the stored rows in both directions, returned the
   zero LP of falsely flagged rows to `unavailable` (`remake_flag_corrected`),
-  gave unflagged rows of real remakes their zero, and renamed the stored remake
-  reason `riot_eligible_for_progression_false` to `riot_early_surrender`. The
-  original flag was never stored, so its downgrade restores only the column
-  comment. Rank Manipulation comparisons stored before it are not marked stale
-  by it; they pick the corrected games up when they are run again.
+  gave unflagged rows of real remakes their zero where LP had never been
+  evaluated (observed values and evidence reasons stay), and renamed the stored
+  remake reason `riot_eligible_for_progression_false` to
+  `riot_early_surrender`. The original flag was never stored, so its downgrade
+  restores only the column comment. Rank Manipulation comparisons stored before
+  it are not marked stale by it; they pick the corrected games up when they are
+  run again.
 - `core.matches` keeps both `game_creation_timestamp` and
   `game_start_timestamp` with a `game_start_timestamp_source` marker
   (`riot_game_start` vs `legacy_game_creation`), so the provenance of every

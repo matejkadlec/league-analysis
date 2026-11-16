@@ -40,7 +40,8 @@ RESET_FALSE_REMAKE_LP = """
 """
 
 # The other direction: a ranked row of a real remake that was not flagged gets
-# the zero the writer now stores for it, unless a value was observed.
+# the zero the writer now stores for it, but only where LP was never evaluated.
+# Any other reason records evidence (a leaver can lose LP in a remake) and stays.
 ZERO_UNFLAGGED_REMAKE_LP = """
     UPDATE core.match_participants AS participant
     SET lp_change = 0,
@@ -52,6 +53,8 @@ ZERO_UNFLAGGED_REMAKE_LP = """
       AND match.queue_id = 420
       AND participant.remake IS FALSE
       AND participant.lp_change_source = 'unavailable'
+      AND participant.lp_change_reason IN
+        ('league_observation_pending', 'historical_without_observation')
 """
 
 CLEAR_FALSE_REMAKES = """
@@ -92,13 +95,18 @@ def upgrade() -> None:
     def rows(statement: str) -> int:
         return connection.execute(sa.text(statement)).rowcount
 
+    lp_reset = rows(RESET_FALSE_REMAKE_LP)
+    lp_zeroed = rows(ZERO_UNFLAGGED_REMAKE_LP)
+    cleared = rows(CLEAR_FALSE_REMAKES)
+    flagged = rows(FLAG_UNFLAGGED_REMAKES)
+    renamed = rows(RENAME_REMAKE_LP_REASON)
     logger.info(
         "remake_flags_mirrored_from_early_surrender",
-        false_remake_lp_rows_reset=rows(RESET_FALSE_REMAKE_LP),
-        unflagged_remake_lp_rows_zeroed=rows(ZERO_UNFLAGGED_REMAKE_LP),
-        completed_games_no_longer_remakes=rows(CLEAR_FALSE_REMAKES),
-        remake_rows_newly_flagged=rows(FLAG_UNFLAGGED_REMAKES),
-        remake_lp_reasons_renamed=rows(RENAME_REMAKE_LP_REASON),
+        false_remake_lp_rows_reset=lp_reset,
+        unflagged_remake_lp_rows_zeroed=lp_zeroed,
+        completed_games_no_longer_remakes=cleared,
+        remake_rows_newly_flagged=flagged,
+        remake_lp_reasons_renamed=renamed,
     )
     op.alter_column(
         "match_participants",
