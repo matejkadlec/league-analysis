@@ -559,10 +559,9 @@ def _writable_columns(connection: Connection, table: str) -> str:
 def seed_rows_revision_0035_must_correct(database: str) -> None:
     """Seed the two disagreements between a remake flag and its match.
 
-    Raw SQL at revision 0034, because no writer can store either any more:
-    `remake` now comes from the match. A completed ranked game carries the flag
-    and its zero LP, a real remake has three rows without (one never evaluated,
-    two whose LP holds evidence), an ARAM game has no LP.
+    Raw SQL at 0034: no writer can store either now. A completed ranked game
+    carries the flag and its zero LP, a real remake has three rows without (one
+    never evaluated, two holding LP evidence), an ARAM game has no LP.
     """
     url = administration_url().set(database=database)
     engine = create_engine(url)
