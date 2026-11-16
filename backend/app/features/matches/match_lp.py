@@ -18,6 +18,7 @@ from .participants import MatchParticipant
 LP_SOURCE_OBSERVED = "riot_league_observation"
 LP_SOURCE_REMAKE = "riot_match_remake"
 LP_SOURCE_UNAVAILABLE = "unavailable"
+LP_REASON_REMAKE = "riot_early_surrender"
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,7 @@ def initialize_participant_lp(
     if remake:
         participant.lp_change = 0
         participant.lp_change_source = LP_SOURCE_REMAKE
-        participant.lp_change_reason = "riot_eligible_for_progression_false"
+        participant.lp_change_reason = LP_REASON_REMAKE
         return
     participant.lp_change = None
     participant.lp_change_source = LP_SOURCE_UNAVAILABLE
@@ -78,11 +79,7 @@ def _precondition_attribution(
     if match.queue_id != RANKED_SOLO_QUEUE_ID:
         return LPAttribution(None, LP_SOURCE_UNAVAILABLE, "not_ranked_solo")
     if participant.remake:
-        return LPAttribution(
-            0,
-            LP_SOURCE_REMAKE,
-            "riot_eligible_for_progression_false",
-        )
+        return LPAttribution(0, LP_SOURCE_REMAKE, LP_REASON_REMAKE)
     if before is None:
         return LPAttribution(None, LP_SOURCE_UNAVAILABLE, "missing_before_snapshot")
     if after is None:

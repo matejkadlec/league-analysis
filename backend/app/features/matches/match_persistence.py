@@ -95,13 +95,17 @@ async def merge_reprocess_participants(
     match_dto: MatchDTO,
     match_id: str,
     platform_id: str,
+    *,
+    remake: bool,
 ) -> None:
     """Upsert every participant player and match-participant row for a rematch."""
     from .transformers import MatchDTOTransformer
 
     for participant in match_dto.info.participants:
         await merge_reprocess_player(session, participant, platform_id)
-        participant_data = MatchDTOTransformer.extract_participant_data(participant)
+        participant_data = MatchDTOTransformer.extract_participant_data(
+            participant, remake=remake
+        )
         participant_model = await session.merge(
             MatchParticipant(
                 match_id=match_id,
@@ -111,7 +115,7 @@ async def merge_reprocess_participants(
         initialize_participant_lp(
             participant_model,
             queue_id=match_dto.info.queue_id,
-            remake=participant_data["remake"],
+            remake=remake,
         )
 
 
@@ -141,7 +145,9 @@ async def upsert_match(
                 fully_analyzed=True,
             )
         )
-        await merge_reprocess_participants(db, match_dto, match_id, platform_id)
+        await merge_reprocess_participants(
+            db, match_dto, match_id, platform_id, remake=early_surrender
+        )
         timeline_rows = await replace_match_timeline_rows(
             db, match_dto, timeline_payload
         )
