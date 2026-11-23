@@ -8,7 +8,12 @@ from app.features.matchmaking_analysis.ranks import (
     rank_value,
     summarize_ranks,
 )
-from app.features.matchmaking_analysis.service import theoretical_max_requests
+from app.features.matchmaking_analysis.service import (
+    MATCHES_FOR_WINRATE,
+    league_v4_max_requests,
+    match_v5_max_requests,
+    theoretical_max_requests,
+)
 
 # Shared with the frontend formatter test (rank-display.test.ts): the same
 # triples must produce the same values and display strings on both sides, or
@@ -121,8 +126,17 @@ def test_unknown_tier_is_refused_rather_than_counted_as_iron() -> None:
         rank_value("WOOD", "I", 50)
 
 
-def test_theoretical_max_keeps_the_original_terms_plus_league_calls() -> None:
-    # The pre-extension constant for 10 spine matches was 911; the league-v4
-    # term adds one call per unique player (9*10 + 1).
-    assert theoretical_max_requests(10) == 911 + 91
-    assert theoretical_max_requests(5) == (1 + 45) + 5 + 45 * 9 + 46
+def test_one_spine_match_costs_a_full_sample_for_each_of_nine_players() -> None:
+    # The spine list, nine match lists, the spine detail, and ten sample
+    # details for each of the nine: the spine match is in no sample (LGA-140),
+    # so none of the ten is already known.
+    assert match_v5_max_requests(1) == 1 + 9 + 1 + 9 * MATCHES_FOR_WINRATE
+    # One rank read per unique player, the analyzed player included.
+    assert league_v4_max_requests(1) == 10
+
+
+@pytest.mark.parametrize("spine_size", [1, 5, 10, 30])
+def test_the_request_maximum_is_both_hosts_together(spine_size: int) -> None:
+    assert theoretical_max_requests(spine_size) == match_v5_max_requests(
+        spine_size
+    ) + league_v4_max_requests(spine_size)

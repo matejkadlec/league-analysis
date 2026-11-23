@@ -118,9 +118,18 @@ def player_rank_map(
     }
 
 
-# A teammate met this many times across the spine is treated as a duo partner,
-# whatever the spine size; chance repeats therefore grow with the window.
+# A teammate met in at least max(2, ceil(N x 15 %)) of N spine matches is
+# treated as a duo partner (owner decision, LGA-140). Chance repeats grow with
+# the window, so the threshold grows with it; a fixed 2 over-classified.
 DUO_PARTNER_MIN_SHARED_MATCHES = 2
+DUO_PARTNER_SHARE_PERCENT = 15
+
+
+def duo_partner_threshold(spine_size: int) -> int:
+    """Shared spine matches that make a recurring teammate a duo partner."""
+    # ceil(N x 15 / 100) in integers, so no float rounding can move a boundary.
+    scaled = -(-spine_size * DUO_PARTNER_SHARE_PERCENT // 100)
+    return max(DUO_PARTNER_MIN_SHARED_MATCHES, scaled)
 
 
 def duo_partner_puuids(
@@ -128,21 +137,20 @@ def duo_partner_puuids(
     *,
     analyzed_puuid: str,
 ) -> set[str]:
-    """Non-analyzed allies recurring in >= 2 spine matches: the likely duo.
+    """Non-analyzed allies recurring in enough spine matches: the likely duo.
 
-    Ignores ``analyzed_puuid`` (they appear in every match). ponytail: no party data.
+    The threshold scales with the spine the matches came from
+    (`duo_partner_threshold`). Ignores ``analyzed_puuid`` (they appear in every
+    match). Riot exposes no party data, so this is a co-occurrence heuristic.
     """
+    threshold = duo_partner_threshold(len(spine_allies))
     appearances = Counter(
         puuid
         for _match_id, allies in spine_allies
         for puuid in set(allies)
         if puuid != analyzed_puuid
     )
-    return {
-        puuid
-        for puuid, count in appearances.items()
-        if count >= DUO_PARTNER_MIN_SHARED_MATCHES
-    }
+    return {puuid for puuid, count in appearances.items() if count >= threshold}
 
 
 def classify_duo_matches(

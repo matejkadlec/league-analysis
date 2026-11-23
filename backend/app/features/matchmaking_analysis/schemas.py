@@ -35,9 +35,9 @@ ACTIVE_ANALYSIS_STATUSES: tuple[MatchmakingAnalysisStatus, ...] = (
     "waiting_rate_limit",
 )
 
-DEFAULT_MATCH_COUNT = 10
-MIN_MATCH_COUNT = 10
-MAX_MATCH_COUNT = 100
+# Every new run analyzes exactly this many spine matches (owner decision,
+# LGA-140). Runs stored with another count keep it in their `params`.
+MATCH_COUNT = 10
 
 
 class MatchmakingAnalysisRequest(BaseModel):
@@ -45,10 +45,11 @@ class MatchmakingAnalysisRequest(BaseModel):
 
     puuid: str = Field(..., description="Player PUUID to analyze")
     match_count: int = Field(
-        default=DEFAULT_MATCH_COUNT,
-        ge=MIN_MATCH_COUNT,
-        le=MAX_MATCH_COUNT,
-        description="Number of the player's ranked matches to analyze",
+        default=MATCH_COUNT,
+        ge=MATCH_COUNT,
+        le=MATCH_COUNT,
+        description="Number of the player's ranked matches to analyze; fixed, "
+        "any other value is refused",
     )
     end_date: date | None = Field(
         default=None,
@@ -74,10 +75,11 @@ class MatchmakingAnalysisParams(BaseModel):
     """The parameters one run was started with, echoed on every read.
 
     Runs persisted before the `params` column existed were all 10-match
-    latest-window runs, so that default is truthful, not a guess.
+    latest-window runs, so that default is truthful, not a guess. Runs stored
+    while the count was selectable (10 to 100) keep the count they ran with.
     """
 
-    match_count: int = DEFAULT_MATCH_COUNT
+    match_count: int = MATCH_COUNT
     end_date: date | None = None
 
 

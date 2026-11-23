@@ -118,20 +118,39 @@ RANK_SNAPSHOT_MAX_AGE = timedelta(hours=24)
 HISTORICAL_RANK_WINDOW = timedelta(days=14)
 
 
-def theoretical_max_requests(spine_size: int) -> int:
-    """Request maximum with an empty database, as a function of spine size.
+def match_v5_max_requests(spine_size: int) -> int:
+    """MATCH-V5 calls with an empty database, all on the regional host.
 
     The spine ID list, one match-ID list per other player, one detail per spine
-    match, each other player's remaining details (one of theirs is the known
-    spine match), and one league-v4 call per unique player.
+    match, and each other player's sample details: their last matches before
+    the spine match, which is never part of its own sample (LGA-140).
     """
     others = spine_size * 9
-    return (
-        (1 + others)
-        + spine_size
-        + others * max(1, MATCHES_FOR_WINRATE - 1)
-        + (others + 1)
-    )
+    return (1 + others) + spine_size + others * MATCHES_FOR_WINRATE
+
+
+def league_v4_max_requests(spine_size: int) -> int:
+    """LEAGUE-V4 calls with an empty database: one per unique player, on the
+    platform host, whose application limit is separate from MATCH-V5's."""
+    return spine_size * 9 + 1
+
+
+def theoretical_max_requests(spine_size: int) -> int:
+    """Request maximum with an empty database, as a function of spine size."""
+    return match_v5_max_requests(spine_size) + league_v4_max_requests(spine_size)
+
+
+@dataclass(frozen=True)
+class SpineAnchor:
+    """The spine match a participant is sampled at.
+
+    Their sample is their last ranked matches up to `end_time_seconds`, the
+    spine match itself left out: it is the game being judged, and counting it
+    put the analyzed player's own result into every participant's win rate.
+    """
+
+    match_id: str
+    end_time_seconds: int
 
 
 @dataclass(frozen=True)
@@ -886,8 +905,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             result = await self._sample_spine_match(
                 puuid,
                 created_at,
-                match_id,
-                match_anchor_seconds,
+                SpineAnchor(match_id, match_anchor_seconds),
                 await self._get_match_platform(match_id),
             )
             if result:
@@ -982,8 +1000,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self,
         analysis_puuid: str,
         analysis_created_at: datetime,
-        match_id: str,
-        end_time_seconds: int,
+        anchor: SpineAnchor,
         platform: Platform,
     ) -> SpineMatchStats | None:
         """Process a single spine match: winrates and ranks for all participants.
@@ -991,6 +1008,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         `platform` is the match's own: its ten players are ranked there, even
         when the analysed player has since moved to another server.
         """
+        match_id = anchor.match_id
         participants = await self._get_match_participants(match_id)
         if not participants:
             return None
@@ -1012,7 +1030,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             await self._sample_participant(
                 side,
                 p_puuid,
-                end_time_seconds,
+                anchor,
                 platform,
                 analysis_puuid,
                 analysis_created_at,
@@ -1040,7 +1058,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self,
         side: SideSamples,
         p_puuid: str,
-        end_time_seconds: int,
+        anchor: SpineAnchor,
         platform: Platform,
         analysis_puuid: str,
         analysis_created_at: datetime,
@@ -1048,7 +1066,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         """One participant's winrate, trailing form and rank, onto their side."""
         already_sampled = p_puuid in self._winrate_cache
         failures_before = self.optional_fetch_failures
-        wr = await self._cached_player_winrate(p_puuid, end_time_seconds)
+        wr = await self._cached_player_winrate(p_puuid, anchor)
         if wr is not None:
             side.winrates[p_puuid] = wr
         # After the winrate above, so the sampled match IDs it recorded exist.
@@ -1066,12 +1084,12 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             )
 
     async def _cached_player_winrate(
-        self, p_puuid: str, end_time_seconds: int
+        self, p_puuid: str, anchor: SpineAnchor
     ) -> float | None:
         if p_puuid in self._winrate_cache:
             return self._winrate_cache[p_puuid]
         failures_before = self.optional_fetch_failures
-        wr = await self._calculate_player_winrate(p_puuid, end_time_seconds)
+        wr = await self._calculate_player_winrate(p_puuid, anchor)
         if self.optional_fetch_failures > failures_before:
             wr = self._winrate_unless_sample_is_thin(p_puuid, wr)
         self._winrate_cache[p_puuid] = wr
@@ -1305,15 +1323,14 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     async def _calculate_player_winrate(
         self,
         puuid: str,
-        end_time_seconds: int,
+        anchor: SpineAnchor,
     ) -> float | None:
-        """Calculate a player's winrate from their last 10 ranked matches
-        ending before the anchor time.
+        """A player's winrate over their last 10 ranked matches at the anchor.
 
-        DB-first: uses the DB when it holds ≥10 fully_analyzed ranked matches
-        before the anchor, otherwise falls back to the API.
+        DB-first, else the API. Both reads ask for one match more than the
+        sample and drop the anchoring spine match, wherever it sorts.
         """
-        anchor_ms = end_time_seconds * 1000
+        anchor_ms = anchor.end_time_seconds * 1000
 
         result = await self.db.execute(
             select(MatchParticipant.match_id, MatchParticipant.win)
@@ -1325,14 +1342,16 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 Match.fully_analyzed.is_(True),
             )
             .order_by(Match.game_start_timestamp.desc())
-            .limit(MATCHES_FOR_WINRATE)
+            .limit(MATCHES_FOR_WINRATE + 1)
         )
-        db_rows = result.tuples().all()
+        db_rows = [row for row in result.tuples().all() if row[0] != anchor.match_id][
+            :MATCHES_FOR_WINRATE
+        ]
 
         if len(db_rows) >= MATCHES_FOR_WINRATE:
             return self._winrate_from_rows(puuid, db_rows)
 
-        match_ids = await self._get_match_ids_for_player(puuid, end_time_seconds)
+        match_ids = await self._get_match_ids_for_player(puuid, anchor)
         if not match_ids:
             return self._winrate_from_rows(puuid, db_rows)
         return await self._winrate_from_match_ids(match_ids, puuid)
@@ -1434,14 +1453,18 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     async def _get_match_ids_for_player(
         self,
         puuid: str,
-        end_time_seconds: int,
+        anchor: SpineAnchor,
     ) -> list[str]:
-        """Get a player's ranked match IDs with endTime from API."""
-        return await self._api_fetch_match_ids(
+        """A player's last ranked match IDs at the anchor, from the API,
+        without the spine match (one more is asked for to make up for it)."""
+        match_ids = await self._api_fetch_match_ids(
             puuid,
-            count=MATCHES_FOR_WINRATE,
-            end_time=end_time_seconds,
+            count=MATCHES_FOR_WINRATE + 1,
+            end_time=anchor.end_time_seconds,
         )
+        return [mid for mid in match_ids if mid != anchor.match_id][
+            :MATCHES_FOR_WINRATE
+        ]
 
     # ================================================================
     # Rate-Limited API Calls

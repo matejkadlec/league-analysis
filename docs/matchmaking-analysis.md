@@ -34,17 +34,25 @@ is a **3-percentage-point gap** (`winrateDiff >= 0.03` favorable,
 A run is parameterized (persisted in `matchmaking_analyses.params`, echoed on
 every read; `NULL` = legacy = `{match_count: 10, end_date: null}`):
 
-- **`match_count`** — spine size, 10 to 100 (UI presets 10/20/30 plus a Custom
-  input with the same bounds, default 10). The request is rejected outside
-  that range; the lower *completion* floor of 5 found matches is a different
-  rule (see Spine and anchors). The start card states the cold-cache duration
-  for the chosen count, from the cost table under Call and count accounting.
+- **`match_count`** — spine size, **fixed at 10** for every new run (owner
+  decision, LGA-140, 2026-11-16: 5 is too few, and a selectable count up to
+  100 contradicted the calculation flowchart). The start card has no count
+  control, and the API refuses any other value. The lower *completion* floor
+  of 5 found matches is a different rule (see Spine and anchors). The start
+  card states the cold-cache duration of a run, from the cost table under Call
+  and count accounting. Runs stored while the count was selectable keep theirs
+  (see Runs stored before LGA-140).
 - **`end_date`** — optional UTC day; the spine becomes the last N matches
   played **on or before that day** (match-v5 `endTime` = exclusive next
   midnight UTC). This is what makes "run it for games a month back and compare
-  against today" possible. A day that has not begun anywhere on Earth yet
-  (later than UTC+14's today) is rejected by the API, and the start card
-  applies the same bound before anything is sent.
+  against today" possible. It has two bounds (LGA-142):
+  - the **start card** accepts days up to the viewer's own calendar date,
+    read from their clock whenever the field changes, so "cannot be after
+    today" is literally true and a card left open past midnight moves on;
+  - the **API** rejects only a day that has not begun anywhere on Earth yet
+    (later than UTC+14's today), so a client ahead of UTC can still send its
+    own current day. The card's bound is never later than the API's, so a day
+    the card allows is always accepted.
 
 The resumed worker re-reads params from the run row — a restarted process has
 no request payload.
@@ -74,6 +82,14 @@ Changing any element below is a product change.
    reflects their strength when they played with the current player, not
    today. Fewer than 10 available matches at the anchor is tolerated: all
    available matches are used.
+4. **The spine match itself is never in that sample** (owner decision,
+   LGA-140). It is the game being judged: counting it put the analyzed
+   player's own result into every participant's rate, which moved the gap by
+   about `10 pp × (2p − 1)`, p being the analyzed player's spine win rate (a
+   7–3 record alone read about +4 pp, past the fairness threshold). Both the
+   database read and the Riot match list ask for 11 matches and drop the spine
+   match wherever it sorts. Only the anchoring match is left out: a player met
+   again in an older spine match can still have that one in their sample.
 
 ### Win-rate caching rule
 
@@ -87,7 +103,8 @@ appearances. Win rates are **not** recomputed per spine match.
 
 Average of averages of averages:
 
-1. Per player: wins / matches over their ≤10 anchored matches.
+1. Per player: wins / matches over their ≤10 anchored matches (the spine match
+   left out).
 2. Per spine match: mean of the 4 teammate win rates and mean of the 5 enemy
    win rates. The analyzed player is **excluded from their own side** (they
    are the constant in every lobby; including them diluted teammate quality)
@@ -176,14 +193,15 @@ fallback.
 ### Duo classification (heuristic)
 
 A spine match is classified **DuoQ** when any non-analyzed player appears on
-the analyzed player's team in ≥ 2 spine matches (`classify_duo_matches`,
-pure, zero API calls — computed from stored participants). The threshold is
-2 whatever the spine size (`DUO_PARTNER_MIN_SHARED_MATCHES`). Riot's match-v5
-carries no party data, so this is a deliberate co-occurrence heuristic. False
-positives grow with the window, not shrink: the more spine matches, the more
-likely a stranger is met twice by chance, so a 100-match run over-classifies
-and removes those chance repeats from the ally averages. `per_match` retains
-the flags so the rule can be tightened later without refetching.
+the analyzed player's team in at least `max(2, ceil(N × 0.15))` of the N spine
+matches found (`classify_duo_matches`, `duo_partner_threshold`; pure, zero API
+calls — computed from stored participants). Riot's match-v5 carries no party
+data, so this is a deliberate co-occurrence heuristic. Chance repeats grow
+with the window, so the threshold grows with it (owner decision, LGA-140): a
+fixed 2 over-classified a 100-match run and removed those chance repeats from
+the ally averages. At the fixed N = 10 it is 2; the scaling keeps the rule
+right if N ever changes. `per_match` retains the flags so the rule can be
+tightened later without refetching.
 
 ### Call and count accounting
 
@@ -194,21 +212,46 @@ With N spine matches (formulas in `theoretical_max_requests`):
 - `matches_analyzed` = N + 9N × 10: the basis size shown in the UI; every
   player's win-rate model uses ≤10 matches.
 - The internal additional-match-detail workload is N spine details +
-  9N participants × 9 non-spine details — one of each participant's 10
-  matches is the already-known spine match.
-- One league-v4 call per unique player: **9N + 1**.
-- Theoretical maximum without any DB cache: `(1 + 9N) + N + 81N + (9N + 1)`
-  = **100N + 2**. `requests_saved` is this maximum minus actual API calls made.
+  9N participants × 10 sample details — the spine match is in no sample.
+- MATCH-V5, on the regional host: `(1 + 9N) + N + 90N` = **100N + 1**
+  (`match_v5_max_requests`).
+- LEAGUE-V4, on the platform host: one call per unique player, **9N + 1**
+  (`league_v4_max_requests`).
+- Theoretical maximum without any DB cache: **109N + 2**
+  (`theoretical_max_requests`). `requests_saved` is this maximum minus actual
+  API calls made.
 
-| N | Requests (100N + 2) | Cold duration at 100 requests / 120 s | LEAGUE-V4 calls (9N + 1) |
-| --- | --- | --- | --- |
-| 10 | 1,002 | about 20 min | 91 |
-| 30 | 3,002 | about 1 h | 271 |
-| 100 | 10,002 | about 3 h 20 min | 901 |
+Riot's application limits apply per routing host ([riot-api.md](riot-api.md)),
+so the two hosts spend separate budgets, and a cold run takes as long as the
+busier host needs at the development key's 100 requests / 120 s: MATCH-V5's
+calls alone (LGA-147).
 
-The duration column is the development-key long window with nothing else
-spending the budget; a warm cache is much faster, and a concurrent update is
-slower. The start card shows the same figure for the chosen N.
+| N | MATCH-V5 requests | LEAGUE-V4 requests | Total requests | Cold duration |
+| --- | --- | --- | --- | --- |
+| 10 | 1,001 | 91 | 1,092 | about 20 min |
+
+The duration is the development-key long window with nothing else spending
+the budget; a warm cache is much faster, and a concurrent update is slower.
+The start card shows the same figure (`estimateColdRunMinutes`), and tests on
+both sides read this table, so a formula that drifts from it fails the gate.
+
+### Runs stored before LGA-140
+
+Stored runs are never recomputed, so Analysis History mixes runs made under
+the older rules with runs made under the current ones. A comparison across
+that boundary is approximate, in three ways:
+
+- **Spine size.** Older runs may cover 10 to 100 matches; their history row
+  and result caption still show their count. A larger spine trims more
+  matches (see Averaging) and reaches further back in time.
+- **Duo rule.** Older runs flagged a teammate met twice as a duo partner
+  whatever the spine size. On a 10-match run that is the current rule; on a
+  larger one it flagged more DuoQ matches and removed more allies from the
+  ally averages than the scaled threshold does.
+- **Spine match in the sample.** Older runs counted the spine match in every
+  participant's win rate, which pulled the gap toward the analyzed player's
+  own record by about `10 pp × (2p − 1)`. A run with a winning record reads
+  more favourable than the same games analyzed today, a losing one less.
 
 ---
 
@@ -219,10 +262,11 @@ The analysis checks the database before every Riot call:
 - **Match lookup**: use any `core.matches` row if present; otherwise fetch from
   the API and **persist the match** for future runs.
 - **Win-rate shortcut**: if `core.match_participants` joined with
-  `core.matches` yields ≥10 rows for the player with `queue_id = 420`,
-  `game_start_timestamp <= anchor`, `fully_analyzed = true`, the win rate is
-  computed entirely from the DB — saving up to **10 API calls** for that player
-  (1 match-list call + 9 additional match details, per the accounting above).
+  `core.matches` yields ≥10 rows other than the spine match for the player
+  with `queue_id = 420`, `game_start_timestamp <= anchor`,
+  `fully_analyzed = true`, the win rate is computed entirely from the DB —
+  saving up to **11 API calls** for that player (1 match-list call + 10 match
+  details, per the accounting above).
 - With <10 DB rows, the match-ID list comes from the API and each match is
   still checked in the DB before a detail fetch.
 
@@ -464,7 +508,8 @@ completion reaches 100% and triggers result/history refresh.
 | League read empty for a participant           | Player counted UNRANKED; excluded from rank averages            |
 | Optional Riot read fails (not a 404)          | Participant counted degraded; a win rate whose own read failed is kept only over ≥ 5 matches; count shown on the card |
 | More than 10% of participants degraded        | Run becomes retryable `failed` (`riot_service_error`)           |
-| End date past UTC+14's today                  | Start card refuses it before sending; the API rejects it        |
+| End date after the viewer's local today       | Start card refuses it before sending                            |
+| End date past UTC+14's today                  | The API rejects it                                              |
 | Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
 | Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |
 | Riot 401/403 during **any** provider call     | Run terminates with `RIOT_API_KEY_INVALID`; global warning header appears |

@@ -36,15 +36,18 @@ from app.features.matchmaking_analysis.models import (
 )
 from app.features.matchmaking_analysis.ranks import rank_value, summarize_ranks
 from app.features.matchmaking_analysis.schemas import (
+    MATCH_COUNT,
     MatchmakingAnalysisParams,
     MatchmakingAnalysisRequest,
 )
 from app.features.matchmaking_analysis.service import (
     HISTORICAL_RANK_WINDOW,
+    MATCHES_FOR_WINRATE,
     MAX_DEGRADED_PLAYER_SHARE,
     MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH,
     RANK_SNAPSHOT_MAX_AGE,
     MatchmakingAnalysisService,
+    SpineAnchor,
 )
 from app.features.matchmaking_analysis.statistics import (
     PlayerPerformance,
@@ -58,6 +61,8 @@ from app.features.matchmaking_analysis.statistics import (
 # The account these tests act as. Every stored run belongs to one, so a service
 # cannot be built without saying which.
 _USER_ID = 7
+# The spine match a participant's win rate is sampled at, in the win-rate tests.
+_ANCHOR = SpineAnchor("EUN1_SPINE", 1_786_100_000)
 
 _PUUID = "test-puuid"
 
@@ -842,7 +847,10 @@ async def test_a_resumed_run_does_not_refetch_players_already_marked_done(
 
     await service._initialize_progress_keys(_PUUID, run.created_at, ["EUW1_0"])
     stats = await service._sample_spine_match(
-        _PUUID, run.created_at, "EUW1_0", 1_786_100_000, Platform.EUW1
+        _PUUID,
+        run.created_at,
+        SpineAnchor("EUW1_0", 1_786_100_000),
+        Platform.EUW1,
     )
 
     assert riot.match_lists == ["fresh-enemy"]
@@ -1001,21 +1009,20 @@ def _gold_entry(lp: int = 40) -> LeagueEntryDTO:
 
 
 async def test_route_threads_non_default_params_into_the_service() -> None:
-    """A chosen preset and end date must reach start_analysis, not defaults."""
+    """A chosen end date must reach start_analysis, not the default."""
     expected = _analysis()
     service = MagicMock(spec=MatchmakingAnalysisService)
     service.start_analysis.return_value = expected
 
     result = await analysis_router.start_analysis(
         request=_request(),
-        payload=MatchmakingAnalysisRequest(
-            puuid=_PUUID, match_count=30, end_date=date(2026, 7, 26)
-        ),
+        payload=MatchmakingAnalysisRequest(puuid=_PUUID, end_date=date(2026, 7, 26)),
         service=cast(MatchmakingAnalysisService, service),
     )
 
     service.start_analysis.assert_awaited_once_with(
-        _PUUID, MatchmakingAnalysisParams(match_count=30, end_date=date(2026, 7, 26))
+        _PUUID,
+        MatchmakingAnalysisParams(match_count=MATCH_COUNT, end_date=date(2026, 7, 26)),
     )
     assert result is expected
 
@@ -1195,14 +1202,15 @@ def _winrate_service(
 async def test_a_transient_failure_never_yields_a_one_match_winrate(
     failure: Exception,
 ) -> None:
-    """A failed match-ID list leaves only the stored spine match to count.
+    """A failed match-ID list leaves one stored earlier game to count.
 
-    That one game is a win for every ally of a won match and a loss for every
-    enemy, so the run used to report 100% against 0% and call itself complete.
+    One game is 100% or 0% (when the spine match still counted, it was a win
+    for every ally of a won match and a loss for every enemy), so the run
+    used to report 100% against 0% and call itself complete.
     """
-    service = _winrate_service([("EUN1_SPINE", True)], failure)
+    service = _winrate_service([("EUN1_SPINE", True), ("EUN1_EARLIER", True)], failure)
 
-    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
 
     assert winrate is None
     assert "ally" not in service._winrate_sample_ids
@@ -1219,20 +1227,85 @@ async def test_a_failed_list_call_keeps_a_winrate_that_rests_on_enough_matches()
     ]
     service = _winrate_service(rows, ServiceUnavailableError("upstream"))
 
-    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
 
     assert winrate == pytest.approx(3 / 5)
     assert service.matches_analyzed == MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH
 
 
 async def test_a_player_riot_has_no_history_for_is_not_a_failure() -> None:
-    """A 404 is an answer: the stored game is all there is, and it counts."""
-    service = _winrate_service([("EUN1_SPINE", True)], NotFoundError("no matches"))
+    """A 404 is an answer: the stored earlier game is all there is, and it
+    counts. The stored spine match does not: it is the game being judged."""
+    service = _winrate_service(
+        [("EUN1_SPINE", True), ("EUN1_EARLIER", False)], NotFoundError("no matches")
+    )
 
-    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
 
-    assert winrate == pytest.approx(1.0)
+    assert winrate == pytest.approx(0.0)
+    assert service._winrate_sample_ids["ally"] == ["EUN1_EARLIER"]
     assert service.optional_fetch_failures == 0
+
+
+@pytest.mark.parametrize("spine_position", [0, 4, 10], ids=["first", "middle", "last"])
+async def test_the_spine_match_never_counts_in_a_stored_sample(
+    spine_position: int,
+) -> None:
+    """LGA-140: a participant's ten matches are the ones before the game being
+    judged. Counting it moved every gap by about 10 pp x (2p - 1), where p is
+    the analyzed player's own spine win rate. Eleven are read, so a full
+    sample remains wherever the spine match sorts."""
+    earlier = [(f"EUN1_{index}", False) for index in range(MATCHES_FOR_WINRATE)]
+    stored = [
+        *earlier[:spine_position],
+        ("EUN1_SPINE", True),
+        *earlier[spine_position:],
+    ]
+    service = _winrate_service(stored, AssertionError("the database was enough"))
+
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
+
+    assert winrate == pytest.approx(0.0)
+    assert service._winrate_sample_ids["ally"] == [mid for mid, _ in earlier]
+    assert service.matches_analyzed == MATCHES_FOR_WINRATE
+
+
+async def test_the_spine_match_never_counts_in_a_sample_read_from_riot() -> None:
+    """The API path drops it the same way, after asking for one match more."""
+    earlier = [f"EUN1_{index}" for index in range(MATCHES_FOR_WINRATE)]
+    match_list = AsyncMock(
+        return_value=SimpleNamespace(match_ids=["EUN1_SPINE", *earlier])
+    )
+    service = MatchmakingAnalysisService(
+        cast(
+            AsyncSession,
+            SimpleNamespace(
+                execute=AsyncMock(
+                    return_value=SimpleNamespace(
+                        tuples=lambda: SimpleNamespace(all=list)
+                    )
+                )
+            ),
+        ),
+        cast(RiotAPIClient, SimpleNamespace(get_match_list_by_puuid=match_list)),
+        _USER_ID,
+    )
+    service._region = Region.EUROPE
+    asked: list[str] = []
+
+    async def win_status(match_id: str, _puuid: str) -> bool:
+        asked.append(match_id)
+        return match_id == "EUN1_SPINE"
+
+    service._get_win_status = AsyncMock(side_effect=win_status)
+
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
+
+    assert match_list.await_args is not None
+    assert match_list.await_args.kwargs["count"] == MATCHES_FOR_WINRATE + 1
+    assert match_list.await_args.kwargs["end_time"] == _ANCHOR.end_time_seconds
+    assert asked == earlier
+    assert winrate == pytest.approx(0.0)
 
 
 async def test_a_participant_whose_read_failed_is_counted_as_degraded() -> None:
@@ -1248,11 +1321,11 @@ async def test_a_participant_whose_read_failed_is_counted_as_degraded() -> None:
     side = analysis_service_module.SideSamples({}, {})
 
     await service._sample_participant(
-        side, "unread", 1, Platform.EUN1, _PUUID, datetime.now(UTC)
+        side, "unread", _ANCHOR, Platform.EUN1, _PUUID, datetime.now(UTC)
     )
     service._cached_player_winrate = AsyncMock(return_value=0.5)
     await service._sample_participant(
-        side, "read", 1, Platform.EUN1, _PUUID, datetime.now(UTC)
+        side, "read", _ANCHOR, Platform.EUN1, _PUUID, datetime.now(UTC)
     )
 
     assert service._degraded_players == {"unread"}
@@ -1302,18 +1375,20 @@ def test_a_lightly_degraded_run_completes_and_says_how_many_it_missed() -> None:
 
 
 def _detail_failure_service(failure: Exception) -> MatchmakingAnalysisService:
-    """The match-ID list answers with ten games; every detail fetch fails.
+    """The match-ID list answers with the spine match and ten earlier games;
+    every detail fetch fails.
 
-    Only the spine match is stored, so the real `_get_win_status` finds one row
-    and has to ask Riot for the other nine.
+    The spine match and one earlier game are stored, so the real
+    `_get_win_status` finds that game and has to ask Riot for the other nine.
     """
-    match_ids = ["EUN1_SPINE", *(f"EUN1_{index}" for index in range(9))]
+    match_ids = ["EUN1_SPINE", *(f"EUN1_{index}" for index in range(10))]
+    stored = {"EUN1_SPINE": True, "EUN1_0": True}
 
     async def execute(statement: ClauseElement) -> SimpleNamespace:
         asked = set(_compiled_values(statement))
-        stored_win = True if "EUN1_SPINE" in asked else None
+        stored_win = next((stored[mid] for mid in stored if mid in asked), None)
         return SimpleNamespace(
-            tuples=lambda: SimpleNamespace(all=lambda: [("EUN1_SPINE", True)]),
+            tuples=lambda: SimpleNamespace(all=lambda: list(stored.items())),
             scalar_one_or_none=lambda: stored_win,
         )
 
@@ -1343,7 +1418,7 @@ async def test_failed_match_details_never_leave_a_one_match_winrate(
     """The other path to the same figure: the list arrives, the games do not."""
     service = _detail_failure_service(failure)
 
-    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
+    winrate = await service._cached_player_winrate("ally", _ANCHOR)
 
     assert winrate is None
     assert "ally" not in service._winrate_sample_ids

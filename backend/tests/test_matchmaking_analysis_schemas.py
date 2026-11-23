@@ -10,12 +10,11 @@ from pydantic import ValidationError
 
 from app.features.matchmaking_analysis import schemas as schemas_module
 from app.features.matchmaking_analysis.ranks import (
-    DUO_PARTNER_MIN_SHARED_MATCHES,
     classify_duo_matches,
+    duo_partner_threshold,
 )
 from app.features.matchmaking_analysis.schemas import (
-    MAX_MATCH_COUNT,
-    MIN_MATCH_COUNT,
+    MATCH_COUNT,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisParams,
     MatchmakingAnalysisRequest,
@@ -26,6 +25,8 @@ from app.features.matchmaking_analysis.service import (
     MAX_DEGRADED_PLAYER_SHARE,
     MIN_MATCHES_FLOOR,
     MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH,
+    league_v4_max_requests,
+    match_v5_max_requests,
     theoretical_max_requests,
 )
 
@@ -110,15 +111,25 @@ def test_winrates_are_fractions_not_percentages() -> None:
         )
 
 
-def test_request_bounds_reject_out_of_range_match_counts() -> None:
-    # 10-100 is the backend contract; the UI presets plus the custom input.
+@pytest.mark.parametrize("asked", [MATCH_COUNT - 1, MATCH_COUNT + 1, 30, 100])
+def test_a_request_for_any_other_match_count_is_refused(asked: int) -> None:
+    # LGA-140: the count is fixed. A client asking for 30 is told so rather
+    # than silently handed a 10-match run it did not ask for.
     with pytest.raises(ValidationError):
-        MatchmakingAnalysisRequest(puuid="p-1", match_count=9)
-    with pytest.raises(ValidationError):
-        MatchmakingAnalysisRequest(puuid="p-1", match_count=101)
-    assert MatchmakingAnalysisRequest(puuid="p-1", match_count=100).match_count == 100
-    assert MatchmakingAnalysisRequest(puuid="p-1").match_count == 10
+        MatchmakingAnalysisRequest(puuid="p-1", match_count=asked)
+
+
+def test_a_request_runs_the_fixed_count_whether_or_not_it_names_it() -> None:
+    assert MatchmakingAnalysisRequest(puuid="p-1").match_count == MATCH_COUNT
+    named = MatchmakingAnalysisRequest(puuid="p-1", match_count=MATCH_COUNT)
+    assert named.match_count == MATCH_COUNT
     assert MatchmakingAnalysisRequest(puuid="p-1").end_date is None
+
+
+def test_a_stored_run_keeps_the_count_it_ran_with() -> None:
+    # Runs from before LGA-140 carry 10 to 100; reading them must not refuse
+    # or rewrite the count their history row shows.
+    assert MatchmakingAnalysisParams(match_count=30).match_count == 30
 
 
 def test_a_legacy_results_blob_parses_with_new_fields_absent_not_zero() -> None:
@@ -195,25 +206,35 @@ _DOCUMENTATION = (
 _PROSE = " ".join(_DOCUMENTATION.split())
 
 
-def test_the_documented_bounds_match_the_request_schema() -> None:
+def test_the_documented_count_matches_the_request_schema() -> None:
     # The document said "5-30" for three months after the ceiling moved to 100,
     # and the floor it quoted is the completion floor, a different rule.
-    assert f"spine size, {MIN_MATCH_COUNT} to {MAX_MATCH_COUNT} " in _PROSE, (
-        "docs/matchmaking-analysis.md states other match-count bounds"
+    assert f"spine size, **fixed at {MATCH_COUNT}**" in _PROSE, (
+        "docs/matchmaking-analysis.md states another match count"
     )
     assert f"**Floor: {MIN_MATCHES_FLOOR} found matches**" in _PROSE
 
 
-def test_the_documented_cost_table_matches_the_request_formula() -> None:
+def _number(cell: str) -> int:
+    return int(cell.replace(",", ""))
+
+
+def test_the_documented_cost_table_matches_the_request_formulas() -> None:
+    # The start card's duration test reads the same table (LGA-147), so the
+    # backend formulas, the frontend estimate and the document cannot drift
+    # apart without one side failing.
     rows = re.findall(
-        r"^\| (\d+) \| ([\d,]+) \| [^|]+ \| (\d+) \|$", _DOCUMENTATION, re.MULTILINE
+        r"^\| (\d+) \| ([\d,]+) \| ([\d,]+) \| ([\d,]+) \| about [^|]+ \|$",
+        _DOCUMENTATION,
+        re.MULTILINE,
     )
 
-    assert [int(size) for size, _, _ in rows] == [10, 30, MAX_MATCH_COUNT]
-    for size, requests, league_calls in rows:
+    assert [int(size) for size, *_ in rows] == [MATCH_COUNT]
+    for size, match_v5, league_v4, total in rows:
         spine = int(size)
-        assert int(requests.replace(",", "")) == theoretical_max_requests(spine)
-        assert int(league_calls) == 9 * spine + 1
+        assert _number(match_v5) == match_v5_max_requests(spine)
+        assert _number(league_v4) == league_v4_max_requests(spine)
+        assert _number(total) == theoretical_max_requests(spine)
 
 
 def test_the_documented_degradation_rules_match_the_constants() -> None:
@@ -227,17 +248,49 @@ def test_the_documented_degradation_rules_match_the_constants() -> None:
     )
 
 
-def test_two_shared_matches_make_a_duo_even_across_a_hundred_match_spine() -> None:
-    # The documented rule, pinned at the largest run: the threshold does not
-    # scale with the spine, so one chance repeat in 100 games reads as a duo.
-    assert f"≥ {DUO_PARTNER_MIN_SHARED_MATCHES} spine matches" in _PROSE
-    spine = [(f"m{index}", [f"stranger-{index}"]) for index in range(MAX_MATCH_COUNT)]
-    spine[3] = ("m3", ["met-twice"])
-    spine[97] = ("m97", ["met-twice"])
+def _spine_meeting(partner: str, times: int, size: int) -> list[tuple[str, list[str]]]:
+    spine = [(f"m{index}", [f"stranger-{index}"]) for index in range(size)]
+    for index in range(times):
+        spine[index] = (f"m{index}", [partner])
+    return spine
 
-    flags = classify_duo_matches(spine, analyzed_puuid="self")
 
-    assert [match_id for match_id, duo in flags.items() if duo] == ["m3", "m97"]
+def test_the_documented_duo_rule_is_the_coded_one() -> None:
+    assert (
+        "at least `max(2, ceil(N \N{MULTIPLICATION SIGN} 0.15))` of the N spine matches"
+        in _PROSE
+    )
+    # The floor holds for short spines, and the share takes over from 14 on.
+    assert [duo_partner_threshold(n) for n in (5, 10, 13, 14, 20, 100)] == [
+        2,
+        2,
+        2,
+        3,
+        3,
+        15,
+    ]
+
+
+def test_two_shared_matches_make_a_duo_in_a_ten_match_spine() -> None:
+    flags = classify_duo_matches(
+        _spine_meeting("met-twice", 2, MATCH_COUNT), analyzed_puuid="self"
+    )
+
+    assert [match_id for match_id, duo in flags.items() if duo] == ["m0", "m1"]
+
+
+def test_a_chance_repeat_across_a_hundred_match_spine_is_not_a_duo() -> None:
+    # LGA-140: a stranger met twice in 100 games is chance, and flagging them
+    # removed them from the ally averages; fifteen meetings are a partner.
+    twice = classify_duo_matches(
+        _spine_meeting("met-twice", 2, 100), analyzed_puuid="self"
+    )
+    often = classify_duo_matches(
+        _spine_meeting("partner", 15, 100), analyzed_puuid="self"
+    )
+
+    assert not any(twice.values())
+    assert sum(often.values()) == 15
 
 
 def _clock_at(monkeypatch: pytest.MonkeyPatch, hour: int) -> None:
