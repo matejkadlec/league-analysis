@@ -33,14 +33,17 @@ passed_ there holds the rules.
    says so in his `qa1`; otherwise it goes back to him for another review, as
    `qa2` does, instead of being published.
 3. **Finish:** commit the coherent batch. When `origin/master` moved (for a
-   stacked batch: its dependency branch), rebase onto it, regenerate a shared
+   stacked batch: its dependency branch), merge it in
+   (`git merge origin/master`), never rebase: Matěj reviewed this branch, so its
+   reviewed head and his pushed commits stay in its history and his clone can
+   still fast-forward (`CLAUDE.md`, "Commits and pushes"). Regenerate a shared
    lockfile with its tool (`uv lock`, `npm install --package-lock-only`), and
    move a new Alembic revision's `down_revision` and
    `backend/alembic/expected-head.txt` onto the new head when `master` gained a
    revision (_Conflict domains_). Whenever the head differs from the handed-off
-   head the gate last passed on (his commits or edits, a rebase), run the
+   head the gate last passed on (his commits or edits, a merge), run the
    complete gate again through the _Gate queue_ (_Implementation and
-   verification_). A rebase whose conflict resolutions touch anything he sees
+   verification_). A merge whose conflict resolutions touch anything he sees
    (_QA classification_) changes what he reviewed: push it and hand it back for
    another review, as `qa2` does, instead of publishing.
 4. **Publish** under _Publication_: push (leased as in step 2), open one ready
