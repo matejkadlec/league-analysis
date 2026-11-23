@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MAX_MATCH_COUNT, MIN_MATCH_COUNT } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
@@ -39,17 +40,37 @@ interface MatchmakingAnalysisStartCardProps {
   onStart: () => void;
 }
 
+/**
+ * The start card's placeholder, in its geometry -- the description, the three
+ * fields and the button -- so the result cards below do not move when the
+ * latest run answers and the real card replaces it.
+ */
 export function MatchmakingAnalysisLoadingCard() {
   return (
-    <Card>
+    <Card aria-busy="true">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Scale className="h-5 w-5 text-primary" />
           Matchmaking Analysis
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">Loading analysis...</p>
+      <CardContent className="space-y-4">
+        <p className="sr-only">Loading analysis...</p>
+        <Skeleton className="h-16 w-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <Skeleton className="h-10 w-full" />
       </CardContent>
     </Card>
   );

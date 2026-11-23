@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { renderWithQueryClient } from "./support/render-support";
@@ -97,10 +97,11 @@ describe("the last matchmaking analysis result", () => {
     });
     const { queryClient } = renderResults();
 
+    // Both result cards say it, so neither reads as a card that failed alone.
     await waitFor(() =>
       expect(
-        screen.getByText(/No completed analysis is available/),
-      ).toBeTruthy(),
+        screen.getAllByText(/No completed analysis is available/),
+      ).toHaveLength(2),
     );
     queryClient.clear();
   });
@@ -118,8 +119,8 @@ describe("the last matchmaking analysis result", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/The latest result could not be loaded/),
-      ).toBeTruthy(),
+        screen.getAllByText(/The latest result could not be loaded/),
+      ).toHaveLength(2),
     );
     queryClient.clear();
   });
@@ -142,10 +143,11 @@ describe("the last matchmaking analysis result", () => {
     });
     const { queryClient } = renderResults();
 
+    // Both result cards say it, so neither reads as a card that failed alone.
     await waitFor(() =>
       expect(
-        screen.getByText(/No completed analysis is available/),
-      ).toBeTruthy(),
+        screen.getAllByText(/No completed analysis is available/),
+      ).toHaveLength(2),
     );
     expect(screen.queryByText(/90%/)).toBeNull();
     queryClient.clear();
@@ -176,10 +178,36 @@ describe("the last matchmaking analysis result", () => {
     queryClient.clear();
   });
 
-  it("colours the two rows against each other, not the same way", async () => {
-    // The two cells carry mirror-image ternaries over the same pair of
-    // booleans. Copy one into the other and both teams turn green on a
-    // favourable result, quietly losing the only signal in the table.
+  it("leaves the win rates plain and puts the verdict on the gap", async () => {
+    // LGA-135: the higher side used to be green whichever team it was, so a
+    // stronger enemy read as good news. Colour now belongs to the gap alone,
+    // next to a symbol and a sign that say the same without it.
+    getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
+      completed({
+        team_avg_winrate: 0.45,
+        enemy_avg_winrate: 0.55,
+        matches_analyzed: 910,
+      }),
+    );
+    const { queryClient } = renderResults();
+
+    await waitFor(() => expect(screen.getByText("55%")).toBeTruthy());
+    for (const figure of ["45%", "55%"]) {
+      expect(screen.getByText(figure).className).not.toMatch(
+        /text-(green|red)/,
+      );
+    }
+    const gap = within(screen.getByRole("row", { name: /Gap/ })).getByText(
+      (_, node) =>
+        node?.tagName === "SPAN" &&
+        node.textContent === "✗ −10% (Unfavorable)",
+    );
+    expect(gap.className).toContain("red");
+
+    queryClient.clear();
+  });
+
+  it("colours a favourable gap the other way", async () => {
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.6,
@@ -187,15 +215,14 @@ describe("the last matchmaking analysis result", () => {
         matches_analyzed: 910,
       }),
     );
-    const { container, queryClient } = renderResults();
+    const { queryClient } = renderResults();
 
     await waitFor(() => expect(screen.getByText("60%")).toBeTruthy());
-
-    const [team, enemy] = [
-      ...container.querySelectorAll("td.text-right span"),
-    ].map((cell) => cell.className);
-    expect(team).toContain("green");
-    expect(enemy).toContain("red");
+    const gap = within(screen.getByRole("row", { name: /Gap/ })).getByText(
+      (_, node) =>
+        node?.tagName === "SPAN" && node.textContent === "✓ +10% (Favorable)",
+    );
+    expect(gap.className).toContain("green");
 
     queryClient.clear();
   });
@@ -302,9 +329,11 @@ describe("the last matchmaking analysis result", () => {
     const { queryClient } = renderResults();
 
     await waitFor(() =>
-      expect(screen.getByText(/Last 10 Matches/)).toBeTruthy(),
+      expect(screen.getAllByText(/Last 10 Matches/)).toHaveLength(2),
     );
     expect(screen.queryByLabelText("Match scope filter")).toBeNull();
+    // The Ranks card still says why it is empty rather than standing blank.
+    expect(screen.getByText(/predates rank analysis/)).toBeTruthy();
     expect(screen.queryByText("Average Rank")).toBeNull();
     expect(screen.queryByText("Tier Distribution")).toBeNull();
     expect(screen.queryByText("Recent Form")).toBeNull();
@@ -393,6 +422,10 @@ describe("the last matchmaking analysis result", () => {
     ).toBeTruthy();
     expect(screen.getByText(/78 ranks measured near/)).toBeTruthy();
     expect(screen.getByText("Tier Distribution")).toBeTruthy();
+    // The scope is picked on the win-rate card and re-slices this one too,
+    // so the Ranks card says which slice it is showing.
+    expect(screen.getByText("Scope: All matches of this run")).toBeTruthy();
+    expect(screen.queryByText(/predates rank analysis/)).toBeNull();
     queryClient.clear();
   });
 
@@ -448,8 +481,8 @@ describe("the last matchmaking analysis result", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/8 of 30 Matches through Jul 26, 2026/),
-      ).toBeTruthy(),
+        screen.getAllByText(/8 of 30 Matches through Jul 26, 2026/),
+      ).toHaveLength(2),
     );
     expect(screen.queryByText(/Last 30 Matches/)).toBeNull();
     queryClient.clear();
@@ -474,13 +507,18 @@ describe("the last matchmaking analysis result", () => {
     );
     const { queryClient } = renderResults();
 
-    await waitFor(() => expect(screen.getByText(expected)).toBeTruthy());
+    // Both cards name the run they show, so either one read alone says it.
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(`Latest run · ${expected} · Last 10 Matches`),
+      ).toHaveLength(2),
+    );
     queryClient.clear();
   });
 
   it("shows the run picked in the history card, not the newest one", async () => {
     // The two panels read different endpoints. Ignore the picked timestamp and
-    // the card silently answers with the latest run instead of the chosen one.
+    // the cards silently answer with the latest run instead of the chosen one.
     const PICKED = new Date(2026, 1, 9, 10, 0).toISOString();
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({ ...EVEN, matches_analyzed: 910 }),
@@ -500,8 +538,9 @@ describe("the last matchmaking analysis result", () => {
     await waitFor(() =>
       expect(screen.getByText(/Based on 455 ranked matches/)).toBeTruthy(),
     );
-    expect(screen.getByText("Selected Analysis Result")).toBeTruthy();
-    expect(screen.getByText("9.2.2026 10:00 AM")).toBeTruthy();
+    expect(
+      screen.getAllByText("Selected run · 9.2.2026 10:00 AM · Last 10 Matches"),
+    ).toHaveLength(2);
     expect(getMatchmakingAnalysisStatus.mock.calls[0]?.slice(0, 2)).toEqual([
       "puuid",
       PICKED,
@@ -524,7 +563,7 @@ describe("the last matchmaking analysis result", () => {
 
     // The state the control belongs to: an old run on screen is the only
     // thing there is to come back from.
-    expect(screen.getByText("Selected Analysis Result")).toBeTruthy();
+    expect(screen.getAllByText(/^Selected run · /)).toHaveLength(2);
     await user.click(screen.getByText("Show latest"));
 
     expect(showLatest).toHaveBeenCalledTimes(1);
@@ -546,7 +585,7 @@ describe("the last matchmaking analysis result", () => {
     const { queryClient } = renderResults(PICKED);
 
     await waitFor(() =>
-      expect(screen.getByText(/no longer available/)).toBeTruthy(),
+      expect(screen.getAllByText(/no longer available/)).toHaveLength(2),
     );
     expect(screen.queryByText(/No completed analysis is available/)).toBeNull();
     queryClient.clear();

@@ -1,20 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/core/utils";
 import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import {
   Medal,
+  Scale,
   Shield,
   Swords,
   TrendingUp,
   TriangleAlert,
+  type LucideIcon,
 } from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 
+import { SectionRow } from "@/components/page-sections";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -31,7 +35,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getRankColors, rankValueToDisplay } from "@/features/players";
-import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
+import { gapVerdict } from "../gap-verdict";
+import { GapFigure } from "./gap-figure";
 import { formatRunEndDate } from "../run-type";
 import {
   effectiveScope as resolveScope,
@@ -50,7 +55,7 @@ import { useShownMatchmakingAnalysis } from "./use-shown-matchmaking-analysis";
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
   analyzedPlayerLabel: string;
-  /** A run picked out of the history card; null shows the latest completed. */
+  /** A run picked out of the history; null shows the latest completed. */
   selectedCreatedAt: string | null;
   onShowLatest: () => void;
 }
@@ -108,7 +113,7 @@ function PerformanceRow({
   );
 }
 
-/** What the card says while it has no run to show, for either source. */
+/** What the cards say while they have no run to show, for either source. */
 function emptyMessage(
   isSelection: boolean,
   isLoading: boolean,
@@ -129,22 +134,118 @@ function emptyMessage(
     : "No completed analysis is available for this player yet.";
 }
 
+const SCOPE_CAPTIONS: Record<MatchScope, string> = {
+  all: "All matches of this run",
+  solo: "SoloQ matches of this run only",
+  duo: "DuoQ matches of this run only",
+};
+
+/**
+ * One of the two result cards. Both name the player and the run they show, so
+ * either card read on its own says which analysis it belongs to.
+ */
+function ResultCard({
+  id,
+  icon: Icon,
+  title,
+  action,
+  playerLabel,
+  runCaption,
+  children,
+}: {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  action?: ReactNode;
+  playerLabel: string;
+  runCaption: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <Card id={id} data-testid={id} className="flex flex-col">
+      <CardHeader>
+        <div className="flex min-h-9 items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Icon className="h-5 w-5 text-primary" />
+            {title}
+          </CardTitle>
+          {action}
+        </div>
+        <AnalyzedPlayerResultLabel playerLabel={playerLabel} />
+        {runCaption && (
+          <p className="text-sm text-muted-foreground">{runCaption}</p>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+// Roughly the loaded cards' content, so the history and flowchart below do
+// not jump when a result lands. An empty or failed load shows one line.
+function WinRatesSkeleton() {
+  return (
+    <>
+      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-36 w-full" />
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-44 w-full" />
+    </>
+  );
+}
+
+function RanksSkeleton() {
+  return (
+    <>
+      <Skeleton className="h-5 w-48" />
+      <Skeleton className="h-28 w-full" />
+      <Skeleton className="h-56 w-full" />
+    </>
+  );
+}
+
+/** The result row before there is a player to load it for. */
+export function MatchmakingAnalysisResultsSkeleton() {
+  return (
+    <SectionRow>
+      <Card aria-busy="true">
+        <CardHeader>
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-56" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <WinRatesSkeleton />
+        </CardContent>
+      </Card>
+      <Card aria-busy="true">
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-56" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <RanksSkeleton />
+        </CardContent>
+      </Card>
+    </SectionRow>
+  );
+}
+
 export function MatchmakingAnalysisResults({
   puuid,
   analyzedPlayerLabel,
   selectedCreatedAt,
   onShowLatest,
 }: MatchmakingAnalysisResultsProps) {
+  // Owned here, above both cards: the scope picked on the win-rate card
+  // re-slices the ranks card too, and each must say which slice it shows.
   const [scope, setScope] = useState<MatchScope>("all");
   const {
     data: shownAnalysis,
     isLoading,
     error,
   } = useShownMatchmakingAnalysis(puuid, selectedCreatedAt);
-  const cardTitle = selectedCreatedAt
-    ? "Selected Analysis Result"
-    : "Last Analysis Result";
-  const showLatestButton = selectedCreatedAt ? (
+  const isSelection = Boolean(selectedCreatedAt);
+  const showLatestButton = isSelection ? (
     <button
       type="button"
       onClick={onShowLatest}
@@ -160,22 +261,32 @@ export function MatchmakingAnalysisResults({
     !shownAnalysis ||
     shownAnalysis.status !== "completed"
   ) {
+    // The same two cards as a loaded result, so nothing moves when it lands.
+    const message = emptyMessage(isSelection, isLoading, Boolean(error));
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              {cardTitle}
-            </CardTitle>
-            {showLatestButton}
-          </div>
-          <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {emptyMessage(Boolean(selectedCreatedAt), isLoading, Boolean(error))}
-        </CardContent>
-      </Card>
+      <SectionRow>
+        <ResultCard
+          id="matchmaking-win-rates"
+          icon={TrendingUp}
+          title="Win Rates & Verdict"
+          action={showLatestButton}
+          playerLabel={analyzedPlayerLabel}
+          runCaption={null}
+        >
+          <p className="text-sm text-muted-foreground">{message}</p>
+          {isLoading && <WinRatesSkeleton />}
+        </ResultCard>
+        <ResultCard
+          id="matchmaking-ranks"
+          icon={Medal}
+          title="Ranks"
+          playerLabel={analyzedPlayerLabel}
+          runCaption={null}
+        >
+          <p className="text-sm text-muted-foreground">{message}</p>
+          {isLoading && <RanksSkeleton />}
+        </ResultCard>
+      </SectionRow>
     );
   }
 
@@ -185,7 +296,7 @@ export function MatchmakingAnalysisResults({
   const duoAggregates = perMatch ? scopeAggregates(perMatch, "duo") : null;
   const effectiveScope = resolveScope(scope, soloAggregates, duoAggregates);
   // The "All" scope always shows the stored aggregate -- never a client
-  // recomputation, so it cannot drift from the history card's figures.
+  // recomputation, so it cannot drift from the history's figures.
   const scoped =
     effectiveScope === "solo" && soloAggregates
       ? soloAggregates
@@ -206,13 +317,12 @@ export function MatchmakingAnalysisResults({
   const windowLabel = params.end_date
     ? `${windowCount} Matches through ${formatRunEndDate(params.end_date)}`
     : `Last ${windowCount} Matches`;
+  const runCaption = `${isSelection ? "Selected run" : "Latest run"} · ${formatDateTime(
+    shownAnalysis.created_at,
+  )} · ${windowLabel}`;
   const winrateDiff = scoped.teamAvg - scoped.enemyAvg;
   const winrateDiffPercent = formatFractionAsPercent(Math.abs(winrateDiff));
-  const {
-    verdict,
-    ally: allyColor,
-    enemy: enemyColor,
-  } = gapVerdict(winrateDiff, GAP_FAIRNESS_THRESHOLD);
+  const gap = gapVerdict(winrateDiff);
 
   const performance = perMatch
     ? performanceAggregates(perMatch, effectiveScope)
@@ -241,10 +351,12 @@ export function MatchmakingAnalysisResults({
     ? scopedRanks.enemyTierCounts
     : (results.enemy_tier_counts ?? null);
   const ranksAreRunWide = effectiveScope !== "all" && !scopedRanks;
+  const hasRanks = allyRank !== null || enemyRank !== null;
+  const hasTiers = Boolean(allyTiers && enemyTiers);
   const freshness = results.rank_freshness ?? null;
   const degradedPlayers = results.degraded_players ?? 0;
   const record = perMatch ? winLossRecord(perMatch, effectiveScope) : null;
-  const gap = perMatch
+  const lobby = perMatch
     ? lobbyGap(
         perMatch,
         results.player_ranks,
@@ -252,26 +364,18 @@ export function MatchmakingAnalysisResults({
         shownAnalysis.puuid,
       )
     : null;
-  const gapLp = gap ? Math.round(gap.lobbyAvg - gap.playerValue) : 0;
+  const gapLp = lobby ? Math.round(lobby.lobbyAvg - lobby.playerValue) : 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            {cardTitle}
-          </CardTitle>
-          <div className="flex items-center gap-3">
-            {showLatestButton}
-            <span className="text-sm text-muted-foreground">
-              {formatDateTime(shownAnalysis.created_at)}
-            </span>
-          </div>
-        </div>
-        <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SectionRow>
+      <ResultCard
+        id="matchmaking-win-rates"
+        icon={TrendingUp}
+        title="Win Rates & Verdict"
+        action={showLatestButton}
+        playerLabel={analyzedPlayerLabel}
+        runCaption={runCaption}
+      >
         {degradedPlayers > 0 && (
           // The run completed, but not on everything it asked Riot for, and
           // the figures below cannot show that on their own. A status, not an
@@ -324,9 +428,7 @@ export function MatchmakingAnalysisResults({
           <TableHeader>
             <TableRow>
               <TableHead>Team</TableHead>
-              <TableHead className="text-right">
-                Average Winrate ({windowLabel})
-              </TableHead>
+              <TableHead className="text-right">Average Win Rate</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -338,9 +440,7 @@ export function MatchmakingAnalysisResults({
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
-                <span className={allyColor}>
-                  {formatFractionAsPercent(scoped.teamAvg)}
-                </span>
+                {formatFractionAsPercent(scoped.teamAvg)}
               </TableCell>
             </TableRow>
             <TableRow>
@@ -351,9 +451,21 @@ export function MatchmakingAnalysisResults({
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
-                <span className={enemyColor}>
-                  {formatFractionAsPercent(scoped.enemyAvg)}
-                </span>
+                {formatFractionAsPercent(scoped.enemyAvg)}
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-2">
+                  <Scale className="h-4 w-4" />
+                  Gap
+                </div>
+              </TableCell>
+              <TableCell
+                className="text-right font-mono"
+                data-testid="matchmaking-result-gap"
+              >
+                <GapFigure gap={winrateDiff} />
               </TableCell>
             </TableRow>
           </TableBody>
@@ -376,23 +488,23 @@ export function MatchmakingAnalysisResults({
             </p>
           )}
 
-          {verdict === "favorable" && (
-            <p className="text-sm text-green-400">
-              ✓ The analyzed player&apos;s teammates had higher average win
-              rates than opponents by{" "}
+          {gap.verdict === "favorable" && (
+            <p className={cn("text-sm", gap.tone)}>
+              {gap.symbol} The analyzed player&apos;s teammates had higher
+              average win rates than opponents by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
-          {verdict === "unfavorable" && (
-            <p className="text-sm text-red-400">
-              ✗ The analyzed player&apos;s opponents had higher average win
-              rates than teammates by{" "}
+          {gap.verdict === "unfavorable" && (
+            <p className={cn("text-sm", gap.tone)}>
+              {gap.symbol} The analyzed player&apos;s opponents had higher
+              average win rates than teammates by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
-          {verdict === "fair" && (
+          {gap.verdict === "fair" && (
             <p className="text-sm text-muted-foreground">
-              ≈ Matchmaking relatively fair (win rates within 3%)
+              {gap.symbol} Matchmaking relatively fair (win rates within 3%)
             </p>
           )}
         </div>
@@ -429,13 +541,24 @@ export function MatchmakingAnalysisResults({
             </p>
           </div>
         )}
+      </ResultCard>
 
-        {(allyRank !== null || enemyRank !== null) && (
-          <div className="space-y-2 border-t border-border/40 pt-4">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Medal className="h-4 w-4 text-primary" />
-              Average Rank
-            </p>
+      <ResultCard
+        id="matchmaking-ranks"
+        icon={Medal}
+        title="Ranks"
+        playerLabel={analyzedPlayerLabel}
+        runCaption={runCaption}
+      >
+        {perMatch && (
+          <p className="text-sm text-muted-foreground">
+            Scope: {SCOPE_CAPTIONS[effectiveScope]}
+          </p>
+        )}
+
+        {hasRanks && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Average Rank</p>
             <dl className="grid grid-cols-2 gap-2">
               {allyRank !== null && (
                 <RankFigure label="Allies" value={allyRank} />
@@ -452,16 +575,17 @@ export function MatchmakingAnalysisResults({
                   {formatLpGap(enemyRank - allyRank)} higher.
                 </p>
               )}
-            {gap && gapLp !== 0 && (
+            {lobby && gapLp !== 0 && (
               <p className="text-sm text-muted-foreground">
                 The other players in these lobbies average{" "}
                 <span
                   className={cn(
                     "font-medium",
-                    getRankColors(rankValueToDisplay(gap.lobbyAvg).tier).text,
+                    getRankColors(rankValueToDisplay(lobby.lobbyAvg).tier)
+                      .text,
                   )}
                 >
-                  {rankValueToDisplay(gap.lobbyAvg).label}
+                  {rankValueToDisplay(lobby.lobbyAvg).label}
                 </span>{" "}
                 — {formatLpGap(gapLp)} {gapLp > 0 ? "above" : "below"} the
                 analyzed player&apos;s own rank.
@@ -483,16 +607,29 @@ export function MatchmakingAnalysisResults({
           </div>
         )}
 
-        {allyTiers && enemyTiers && (
-          <div className="space-y-2 border-t border-border/40 pt-4">
+        {hasTiers && allyTiers && enemyTiers && (
+          <div
+            className={cn(
+              "flex flex-1 flex-col gap-2",
+              hasRanks && "border-t border-border/40 pt-4",
+            )}
+          >
             <p className="text-sm font-medium">Tier Distribution</p>
             <TierDistribution
               allyCounts={allyTiers}
               enemyCounts={enemyTiers}
+              fillHeight
             />
           </div>
         )}
-      </CardContent>
-    </Card>
+
+        {!hasRanks && !hasTiers && (
+          <p className="text-sm text-muted-foreground">
+            This run predates rank analysis, so it has no rank figures. A new
+            analysis of this player measures them.
+          </p>
+        )}
+      </ResultCard>
+    </SectionRow>
   );
 }

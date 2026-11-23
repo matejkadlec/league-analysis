@@ -2,43 +2,58 @@ import { describe, expect, it } from "vitest";
 
 import {
   GAP_FAIRNESS_THRESHOLD,
+  formatSignedGap,
   gapVerdict,
 } from "@/features/matchmaking/gap-verdict";
 
 /**
- * Two surfaces read the same gap with different thresholds on purpose: the
- * results card leaves a gap under three points grey, the history table colours
- * every gap. These cases pin both readings, including the boundary.
+ * One reading of a win-rate gap for both surfaces that show it, the result
+ * cards and the history list (LGA-135): the same fairness band, the same
+ * colour, and a symbol that carries the meaning without the colour.
  */
 describe("gapVerdict", () => {
-  it("calls a gap inside the fairness band fair", () => {
-    expect(gapVerdict(0.029, GAP_FAIRNESS_THRESHOLD).verdict).toBe("fair");
-    expect(gapVerdict(-0.029, GAP_FAIRNESS_THRESHOLD).verdict).toBe("fair");
-    expect(gapVerdict(0.029, GAP_FAIRNESS_THRESHOLD).ally).toBe("");
+  it("calls a gap inside the fairness band fair, uncoloured", () => {
+    for (const gap of [0, 0.029, -0.029]) {
+      expect(gapVerdict(gap)).toMatchObject({
+        verdict: "fair",
+        tone: "",
+        symbol: "≈",
+      });
+    }
   });
 
   it("includes the threshold itself in the verdict", () => {
-    expect(gapVerdict(0.03, GAP_FAIRNESS_THRESHOLD).verdict).toBe("favorable");
-    expect(gapVerdict(-0.03, GAP_FAIRNESS_THRESHOLD).verdict).toBe(
-      "unfavorable",
+    expect(gapVerdict(GAP_FAIRNESS_THRESHOLD).verdict).toBe("favorable");
+    expect(gapVerdict(-GAP_FAIRNESS_THRESHOLD).verdict).toBe("unfavorable");
+  });
+
+  it("colours a gap by what it means for the analyzed player", () => {
+    // A higher enemy win rate is bad news, so it is never drawn in the
+    // colour that reads as good -- the defect LGA-135 reported.
+    const favorable = gapVerdict(0.1);
+    const unfavorable = gapVerdict(-0.1);
+    expect(favorable.tone).toContain("green");
+    expect(unfavorable.tone).toContain("red");
+    expect(favorable.tone).not.toBe(unfavorable.tone);
+  });
+
+  it("gives every reading its own symbol, so colour is never the only cue", () => {
+    const symbols = [0.1, 0, -0.1].map((gap) => gapVerdict(gap).symbol);
+    expect(new Set(symbols).size).toBe(3);
+  });
+});
+
+describe("formatSignedGap", () => {
+  it("signs a gap by its direction", () => {
+    expect(formatSignedGap(0.062)).toMatch(/^\+/);
+    expect(formatSignedGap(-0.062)).toMatch(/^−/);
+    expect(formatSignedGap(0.062).slice(1)).toBe(
+      formatSignedGap(-0.062).slice(1),
     );
   });
 
-  it("gives the two teams opposite colours", () => {
-    const favorable = gapVerdict(0.1, GAP_FAIRNESS_THRESHOLD);
-    expect(favorable.ally).toContain("green");
-    expect(favorable.enemy).toContain("red");
-
-    const unfavorable = gapVerdict(-0.1, GAP_FAIRNESS_THRESHOLD);
-    expect(unfavorable.ally).toContain("red");
-    expect(unfavorable.enemy).toContain("green");
-  });
-
-  it("colours every gap at a zero threshold, the history table's reading", () => {
-    expect(gapVerdict(0.0001, 0).verdict).toBe("favorable");
-    expect(gapVerdict(-0.0001, 0).verdict).toBe("unfavorable");
-    // Exactly zero reads as unfavorable rather than grey, which is what the
-    // history table did before this function existed.
-    expect(gapVerdict(0, 0).ally).toContain("red");
+  it("leaves a gap that rounds to nothing unsigned", () => {
+    expect(formatSignedGap(0)).not.toMatch(/^[+−]/);
+    expect(formatSignedGap(0.00001)).not.toMatch(/^[+−]/);
   });
 });

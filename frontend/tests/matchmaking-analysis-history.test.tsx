@@ -52,6 +52,11 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 }));
 
 import { MatchmakingAnalysisHistory } from "@/features/matchmaking/components/matchmaking-analysis-history";
+import {
+  COOKIE_CONSENT_COOKIE_NAME,
+  MATCHMAKING_HISTORY_OPEN_STORAGE_KEY,
+  writeCookieConsent,
+} from "@/features/cookie-consent/consent-storage";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
 import { renderWithQueryClient } from "./support/render-support";
@@ -120,12 +125,25 @@ function renderHistory(selectedCreatedAt: string | null = null) {
   ).queryClient;
 }
 
+function disclosure() {
+  return screen.findByRole("button", { name: /Analysis History/ });
+}
+
+/** The history is closed by default (LGA-135); open it as a viewer would. */
+async function openHistory() {
+  const toggle = await disclosure();
+  if (toggle.getAttribute("aria-expanded") === "false") {
+    await userEvent.click(toggle);
+  }
+}
+
 /**
  * The table half of the card. Both layouts render in jsdom -- the stacked
  * blocks are hidden by a Tailwind breakpoint no stylesheet applies here -- so
  * every figure is on screen twice and the queries have to say which copy.
  */
 async function table() {
+  await openHistory();
   return within(await screen.findByRole("table"));
 }
 
@@ -142,6 +160,53 @@ describe("the matchmaking analysis history card", () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
+    document.cookie = `${COOKIE_CONSENT_COOKIE_NAME}=; max-age=0; path=/`;
+  });
+
+  it("stays closed until opened, and says how many runs it holds", async () => {
+    const queryClient = renderHistory();
+
+    const toggle = await disclosure();
+    await waitFor(() => expect(toggle.textContent).toContain("(2)"));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table")).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(await screen.findByRole("table")).toBeTruthy();
+
+    queryClient.clear();
+  });
+
+  it("remembers that a viewer opened it, with their consent", async () => {
+    writeCookieConsent("all");
+    const first = renderHistory();
+    await openHistory();
+    expect(
+      window.localStorage.getItem(MATCHMAKING_HISTORY_OPEN_STORAGE_KEY),
+    ).toBe("open");
+    first.clear();
+    cleanup();
+
+    const second = renderHistory();
+    expect((await disclosure()).getAttribute("aria-expanded")).toBe("true");
+    second.clear();
+  });
+
+  it("forgets it without consent to optional storage", async () => {
+    writeCookieConsent("necessary");
+    const first = renderHistory();
+    await openHistory();
+    expect(
+      window.localStorage.getItem(MATCHMAKING_HISTORY_OPEN_STORAGE_KEY),
+    ).toBeNull();
+    first.clear();
+    cleanup();
+
+    const second = renderHistory();
+    expect((await disclosure()).getAttribute("aria-expanded")).toBe("false");
+    second.clear();
   });
 
   it("labels each run's Type from its own params", async () => {
@@ -179,6 +244,7 @@ describe("the matchmaking analysis history card", () => {
         />
       </QueryClientProvider>,
     );
+    await openHistory();
 
     expect(
       await screen.findByText(
@@ -202,6 +268,7 @@ describe("the matchmaking analysis history card", () => {
       },
     });
     const queryClient = renderHistory();
+    await openHistory();
 
     expect(
       await screen.findByText("Analysis history could not be loaded."),
@@ -210,21 +277,38 @@ describe("the matchmaking analysis history card", () => {
     queryClient.clear();
   });
 
-  it("colours each win rate by which side the gap favoured", async () => {
-    // The gap is printed as an absolute value, so the colour is the only thing
-    // on screen saying which team it favoured -- swap the comparison and the card
-    // tells someone their team was outmatched in the game it was stronger in.
+  it("reads each gap the way the result cards do, never by colour alone", async () => {
+    // LGA-135: a higher enemy win rate used to be drawn in the colour that
+    // reads as good. Now the win rates are plain figures, and only the gap
+    // carries the verdict, with a sign and symbol beside its colour.
     const queryClient = renderHistory();
 
     const rows = await table();
-    expect(rows.getByText("52.3%").className).toContain("text-green-400");
-    expect(rows.getByText("49.1%").className).toContain("text-red-400");
+    for (const figure of ["52.3%", "49.1%", "47.4%", "51.2%"]) {
+      expect(rows.getByText(figure).className).not.toMatch(/text-(green|red)/);
+    }
 
-    // The losing side of the same card, and the sign that is not printed.
-    expect(rows.getByText("47.4%").className).toContain("text-red-400");
-    expect(rows.getByText("51.2%").className).toContain("text-green-400");
-    expect(rows.getByText("3.8%")).toBeTruthy();
-    expect(rows.queryByText("-3.8%")).toBeNull();
+    const favourable = rows.getByText((_, node) =>
+      node?.textContent === "✓ +3.2% (Favorable)" && node.tagName === "SPAN",
+    );
+    const unfavourable = rows.getByText((_, node) =>
+      node?.textContent === "✗ −3.8% (Unfavorable)" && node.tagName === "SPAN",
+    );
+    expect(favourable.className).toContain("text-green-400");
+    expect(unfavourable.className).toContain("text-red-400");
+
+    queryClient.clear();
+  });
+
+  it("leaves a gap inside the fairness band uncoloured", async () => {
+    answerWith([{ ...AHEAD, gap: 0.02 }]);
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    const fair = rows.getByText((_, node) =>
+      node?.textContent === "≈ +2% (Fair)" && node.tagName === "SPAN",
+    );
+    expect(fair.className).not.toMatch(/text-(green|red)/);
 
     queryClient.clear();
   });
@@ -355,7 +439,7 @@ describe("the matchmaking analysis history card", () => {
     await user.click(older);
 
     expect(older.getAttribute("title")).toBe(
-      "Show this analysis in the result card",
+      "Show this analysis in the result cards",
     );
     expect([...new Set(select.mock.calls.flat())]).toEqual([
       BEHIND.created_at,
@@ -363,7 +447,7 @@ describe("the matchmaking analysis history card", () => {
     queryClient.clear();
   });
 
-  it("marks the picked row apart from the rest", async () => {
+  it("marks the picked row apart from the rest, in words too", async () => {
     const queryClient = renderHistory(BEHIND.created_at);
 
     const rows = await table();
@@ -372,6 +456,9 @@ describe("the matchmaking analysis history card", () => {
     expect(
       rows.getByText("4.3.2026 2:07 PM").getAttribute("aria-current"),
     ).toBeNull();
+    const shown = rows.getAllByText("Shown");
+    expect(shown).toHaveLength(1);
+    expect(picked.parentElement?.contains(shown[0]!)).toBe(true);
     queryClient.clear();
   });
 
