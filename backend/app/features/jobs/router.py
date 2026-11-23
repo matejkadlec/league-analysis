@@ -6,7 +6,7 @@
 from typing import Annotated, NoReturn
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.features.auth.dependencies import AdminUserDep, get_current_admin_user
 
@@ -21,6 +21,7 @@ from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJ
 from .intervals import JobIntervalError
 from .maintenance import RiotWriterMaintenanceConfigurationError
 from .models import ExecutionType, JobStatus
+from .runtime_tasks import start_runtime_task
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -198,7 +199,6 @@ async def list_all_executions(
 @router.post("/{job_id}/trigger")
 async def trigger_job(
     job_id: int,
-    background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
     current_user: AdminUserDep,
 ) -> JobTriggerResponse:
@@ -252,7 +252,7 @@ async def trigger_job(
     # The literal "user" is a frontend contract: the jobs UI compares
     # triggered_by === "user" to tell manual runs from scheduled ones.
     job_instance = _create_job_instance(job, triggered_by="user")
-    background_tasks.add_task(job_instance.run)
+    start_runtime_task(job_instance.run)
 
     logger.info(
         "Job triggered manually",
@@ -368,7 +368,6 @@ def _set_scheduled_job_suspended(job_id: int, *, suspended: bool) -> None:
 @router.post("/{job_id}/test")
 async def trigger_test_run(
     job_id: int,
-    background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
     current_user: AdminUserDep,
     suspend_regular: Annotated[
@@ -407,7 +406,7 @@ async def trigger_test_run(
     test_instance = _create_test_job_instance(job)
     # Store suspend_regular flag so test completion can resume the scheduler
     test_instance.suspend_regular = suspend_regular
-    background_tasks.add_task(
+    start_runtime_task(
         _run_test_job_with_cleanup,
         test_instance,
         job.id,

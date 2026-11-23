@@ -1,5 +1,6 @@
 """Persist and run explicit per-player synchronization lifecycles."""
 
+import asyncio
 from datetime import UTC, datetime
 
 import structlog
@@ -15,6 +16,8 @@ from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.models import (
     ACTIVE_SYNC_STATUSES,
+    PLAYER_SYNC_TRIGGER,
+    SYNC_CANCELLED_MESSAGE,
     JobConfiguration,
     JobStatus,
     JobType,
@@ -161,11 +164,7 @@ def _failure_from_job(job: BaseJob) -> tuple[str, str, str]:
             "The update reached Riot's rate limit. Please try again later.",
         )
     if job.job_execution_status == JobStatus.CANCELLED:
-        return (
-            "cancelled",
-            "SYNC_CANCELLED",
-            "The player update was cancelled before it finished.",
-        )
+        return ("cancelled", "SYNC_CANCELLED", SYNC_CANCELLED_MESSAGE)
     return (
         "failed",
         "SYNC_FAILED",
@@ -181,17 +180,20 @@ async def _finish_sync(
     error_message: str | None = None,
     match_execution_id: int | None = None,
     profile_execution_id: int | None = None,
-) -> None:
+) -> bool:
     """Persist one safe lifecycle update from the background orchestrator.
 
     A terminal row is never reopened: startup recovery or an operator may
     cancel a run while this orchestrator is mid-flight. The row lock makes the
     check hold against a cancellation committing between read and write.
+
+    Returns:
+        False when the run was already terminal, so the caller must stop.
     """
     async with db_manager.get_session() as db:
         sync_run = await db.get(PlayerSyncRun, sync_id, with_for_update=True)
         if sync_run is None or sync_run.status not in ACTIVE_SYNC_STATUSES:
-            return
+            return False
         sync_run.status = status
         sync_run.error_code = error_code
         sync_run.error_message = error_message
@@ -204,6 +206,7 @@ async def _finish_sync(
         if status not in ACTIVE_SYNC_STATUSES:
             sync_run.completed_at = datetime.now(UTC)
         await db.commit()
+        return True
 
 
 async def _load_player_sync(
@@ -241,7 +244,7 @@ async def _run_sync_writer(
     """Run one writer against a single PUUID allowlist."""
     job = job_cls(
         config_id,
-        triggered_by="player_sync",
+        triggered_by=PLAYER_SYNC_TRIGGER,
         target_puuids={puuid},
     )
     await job.run()
@@ -287,7 +290,10 @@ async def run_player_sync(sync_id: int) -> None:
             )
             return
 
-        await _finish_sync(sync_id, status="running")
+        # A run cancelled since it was created must not start a writer: its
+        # player may already have a replacement run.
+        if not await _finish_sync(sync_id, status="running"):
+            return
         match_job = await _run_sync_writer(MatchFetcherJob, match_config.id, puuid)
         match_execution_id = match_job.job_execution_id
         if _writer_is_unsuccessful(match_job):
@@ -298,11 +304,12 @@ async def run_player_sync(sync_id: int) -> None:
             )
             return
 
-        await _finish_sync(
+        if not await _finish_sync(
             sync_id,
             status="running",
             match_execution_id=match_execution_id,
-        )
+        ):
+            return
 
         profile_job = await _run_sync_writer(PlayerUpdaterJob, profile_config.id, puuid)
         profile_execution_id = profile_job.job_execution_id
@@ -321,6 +328,16 @@ async def run_player_sync(sync_id: int) -> None:
             match_execution_id=match_execution_id,
             profile_execution_id=profile_execution_id,
         )
+    except asyncio.CancelledError:
+        # Shutdown reached the orchestrator between its writers. Close the run
+        # now, so the player is not blocked until the next startup recovery.
+        await _finish_sync(
+            sync_id,
+            status="cancelled",
+            error_code="SYNC_CANCELLED",
+            error_message=SYNC_CANCELLED_MESSAGE,
+        )
+        raise
     except Exception as error:
         logger.error(
             "player_sync_orchestration_failed",

@@ -5,7 +5,7 @@ from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import Select, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
@@ -20,6 +20,20 @@ from app.features.players import router as players_router
 from app.features.players import service as players_service_module
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
+
+type StartedTask = tuple[object, tuple[object, ...]]
+
+
+@pytest.fixture
+def started_tasks(monkeypatch: pytest.MonkeyPatch) -> list[StartedTask]:
+    """What the routes hand to the job runtime, recorded instead of run."""
+    started: list[StartedTask] = []
+
+    def record(work: object, *args: object) -> None:
+        started.append((work, args))
+
+    monkeypatch.setattr(players_router, "start_runtime_task", record)
+    return started
 
 
 def _request() -> Request:
@@ -63,6 +77,7 @@ async def test_the_global_tracking_recount_locks_the_row_it_rewrites() -> None:
 
 async def test_tracking_a_player_starts_one_initial_sync(
     monkeypatch: pytest.MonkeyPatch,
+    started_tasks: list[StartedTask],
 ) -> None:
     """Tracking claims the same PlayerSyncRun lifecycle as the Update button.
 
@@ -76,25 +91,22 @@ async def test_tracking_a_player_starts_one_initial_sync(
     )
     claim = AsyncMock(return_value=(SimpleNamespace(id=11), True))
     monkeypatch.setattr(players_router, "create_or_get_player_sync", claim)
-    background_tasks = BackgroundTasks()
 
     result = await players_router.track_player(
         request=_request(),
         puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
-        background_tasks=background_tasks,
         current_user=cast(User, SimpleNamespace(id=7)),
     )
 
     assert result is response
     claim.assert_awaited_once_with(player_service.db, user_id=7, puuid="test-puuid")
-    assert len(background_tasks.tasks) == 1
-    assert background_tasks.tasks[0].func is players_router.run_player_sync
-    assert background_tasks.tasks[0].args == (11,)
+    assert started_tasks == [(players_router.run_player_sync, (11,))]
 
 
 async def test_tracking_an_already_syncing_player_queues_no_second_task(
     monkeypatch: pytest.MonkeyPatch,
+    started_tasks: list[StartedTask],
 ) -> None:
     """Attaching to a running update must not start a second orchestrator."""
     player_service = SimpleNamespace(
@@ -106,21 +118,20 @@ async def test_tracking_an_already_syncing_player_queues_no_second_task(
         "create_or_get_player_sync",
         AsyncMock(return_value=(SimpleNamespace(id=11), False)),
     )
-    background_tasks = BackgroundTasks()
 
     await players_router.track_player(
         request=_request(),
         puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
-        background_tasks=background_tasks,
         current_user=cast(User, SimpleNamespace(id=7)),
     )
 
-    assert not background_tasks.tasks
+    assert started_tasks == []
 
 
 async def test_tracking_blocks_and_starts_nothing_during_maintenance(
     monkeypatch: pytest.MonkeyPatch,
+    started_tasks: list[StartedTask],
 ) -> None:
     """The interlock has to stop the sync as well as the tracking write."""
     player_service = SimpleNamespace(
@@ -129,24 +140,23 @@ async def test_tracking_blocks_and_starts_nothing_during_maintenance(
     )
     claim = AsyncMock()
     monkeypatch.setattr(players_router, "create_or_get_player_sync", claim)
-    background_tasks = BackgroundTasks()
 
     with pytest.raises(HTTPException) as error:
         await players_router.track_player(
             request=_request(),
             puuid="test-puuid",
             player_service=cast(PlayerService, player_service),
-            background_tasks=background_tasks,
             current_user=cast(User, SimpleNamespace(id=7)),
         )
 
     assert error.value.status_code == 503
     claim.assert_not_awaited()
-    assert not background_tasks.tasks
+    assert started_tasks == []
 
 
 async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
     monkeypatch: pytest.MonkeyPatch,
+    started_tasks: list[StartedTask],
 ) -> None:
     """The tracking write is already committed when the claim runs.
 
@@ -164,18 +174,16 @@ async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
         "create_or_get_player_sync",
         AsyncMock(side_effect=RuntimeError("claim exploded")),
     )
-    background_tasks = BackgroundTasks()
 
     result = await players_router.track_player(
         request=_request(),
         puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
-        background_tasks=background_tasks,
         current_user=cast(User, SimpleNamespace(id=7)),
     )
 
     assert result is response
-    assert not background_tasks.tasks
+    assert started_tasks == []
 
 
 async def test_player_refresh_uses_the_shared_writer_guard(

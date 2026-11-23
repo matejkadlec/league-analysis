@@ -346,8 +346,9 @@ class _FlakyCompletionSession:
         self.executes = 0
         self.commits = 0
 
-    async def execute(self, statement: Update) -> None:
+    async def execute(self, statement: Update) -> SimpleNamespace:
         self.executes += 1
+        return SimpleNamespace(rowcount=1)
 
     async def commit(self) -> None:
         self.commits += 1
@@ -369,10 +370,10 @@ async def test_a_completion_write_is_retried_once_after_a_failed_commit() -> Non
     session = _FlakyCompletionSession()
     statement = update(JobExecution).where(JobExecution.id == 31)
 
-    committed = await job._execute_completion_update(
+    closed_rows = await job._execute_completion_update(
         cast(AsyncSession, session), statement
     )
 
-    assert committed is True
+    assert closed_rows == 1
     assert session.executes == 2
     assert session.commits == 2

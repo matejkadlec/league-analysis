@@ -60,6 +60,15 @@ class ExecutionType(str, PyEnum):
     TEST = "TEST"
 
 
+# The statuses a run still owns. Any other row was closed by its own run or by
+# another owner (startup recovery, the orphan sweep) and is never rewritten.
+ACTIVE_EXECUTION_STATUSES: Final = (JobStatus.RUNNING, JobStatus.PAUSED)
+
+# `triggered_by` of the two writers one Player Card update starts: a targeted
+# one-player run, which never counts as the scheduled job having run.
+PLAYER_SYNC_TRIGGER: Final = "player_sync"
+
+
 class JobConfiguration(Base):
     """Job configuration model storing job scheduling and settings."""
 
@@ -260,6 +269,9 @@ PlayerSyncStatus = Literal[
 ]
 PLAYER_SYNC_STATUSES: tuple[PlayerSyncStatus, ...] = get_args(PlayerSyncStatus)
 ACTIVE_SYNC_STATUSES: tuple[PlayerSyncStatus, ...] = ("pending", "running")
+
+# The client-safe sentence of a cancelled run, whoever cancelled it.
+SYNC_CANCELLED_MESSAGE: Final = "The player update was cancelled before it finished."
 
 
 class PlayerSyncRun(Base):

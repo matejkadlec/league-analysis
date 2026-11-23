@@ -3,7 +3,7 @@
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_riot_client
 from app.core.http_errors import http_error
@@ -26,6 +26,7 @@ from app.features.jobs.player_sync import (
     get_active_player_sync,
     run_player_sync,
 )
+from app.features.jobs.runtime_tasks import start_runtime_task
 
 from .dependencies import PlayerServiceDep
 from .leagues import PlayerLeague
@@ -194,7 +195,6 @@ async def get_player_by_puuid(
 async def start_player_sync(
     request: Request,
     puuid: str,
-    background_tasks: BackgroundTasks,
     player_service: PlayerServiceDep,
     current_user: CurrentUserDep,
 ) -> PlayerSyncRun:
@@ -216,7 +216,7 @@ async def start_player_sync(
             detail={"code": "SYNC_BUSY", "message": error.message},
         ) from error
     if created:
-        background_tasks.add_task(run_player_sync, sync_run.id)
+        start_runtime_task(run_player_sync, sync_run.id)
     return sync_run
 
 
@@ -256,7 +256,6 @@ async def track_player(
     request: Request,
     puuid: str,
     player_service: PlayerServiceDep,
-    background_tasks: BackgroundTasks,
     current_user: CurrentUserDep,
 ) -> PlayerResponse:
     """
@@ -318,7 +317,7 @@ async def track_player(
         )
     else:
         if created:
-            background_tasks.add_task(run_player_sync, sync_run.id)
+            start_runtime_task(run_player_sync, sync_run.id)
 
     return player
 

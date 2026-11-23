@@ -47,7 +47,13 @@ from .control import (
 )
 from .log_capture import job_log_capture
 from .maintenance import riot_writer_maintenance_is_active
-from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
+from .models import (
+    ACTIVE_EXECUTION_STATUSES,
+    ExecutionType,
+    JobConfiguration,
+    JobExecution,
+    JobStatus,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -212,6 +218,12 @@ def _build_error_diagnostic(
     return diagnostic
 
 
+def _rowcount(result: object) -> int:
+    """Rows an UPDATE matched; a driver that cannot say reads as one row."""
+    count = getattr(result, "rowcount", None)
+    return count if isinstance(count, int) and count >= 0 else 1
+
+
 class BaseJob(ABC):
     """Abstract base class for all automated jobs.
 
@@ -283,6 +295,9 @@ class BaseJob(ABC):
         # execution row. It must stay distinguishable from a run whose start
         # failed, which also leaves no execution id but is a genuine failure.
         self.skipped_as_already_running: bool = False
+        # Set once another owner (startup recovery, the orphan sweep) closed
+        # this run's row: from then on the run may write nothing further.
+        self.ownership_lost: bool = False
         # Track API call records for detailed logging
         self._api_call_records: list[APICallRecord] = []
 
@@ -416,18 +431,7 @@ class BaseJob(ABC):
 
             self._log_completion_summary(success, duration)
 
-            detailed_logs: dict[str, Any] | None = {}
-            if logs:
-                detailed_logs["logs"] = self._strip_redundant_fields(logs)
-
-            if self._api_call_records:
-                detailed_logs["api_calls"] = _format_api_calls_for_storage(
-                    self._api_call_records
-                )
-
-            if not detailed_logs:
-                detailed_logs = None
-
+            detailed_logs = self._detailed_logs_for_storage(logs)
             final_status = (
                 status
                 if status is not None
@@ -440,13 +444,15 @@ class BaseJob(ABC):
                 detailed_logs,
             )
 
-            self._completion_logged = await self._execute_completion_update(
-                db, update_stmt
-            )
+            closed_rows = await self._execute_completion_update(db, update_stmt)
+            if closed_rows == 0:
+                await self._adopt_closed_execution(db)
+                return
 
             # Publish the terminal status only once it is actually persisted:
             # a cached status from a write that never landed would contradict
             # the stored row for every reader that classifies from the scalar.
+            self._completion_logged = closed_rows is not None
             if self._completion_logged:
                 self.job_execution_status = final_status
             self.job_execution.completed_at = completed_at
@@ -454,6 +460,63 @@ class BaseJob(ABC):
 
         except Exception as e:
             await self._handle_completion_error(db, e)
+
+    def _detailed_logs_for_storage(
+        self, logs: Sequence[Mapping[str, Any]] | None
+    ) -> dict[str, Any] | None:
+        """This run's captured logs and API calls, or None when it has neither."""
+        detailed_logs: dict[str, Any] = {}
+        if logs:
+            detailed_logs["logs"] = self._strip_redundant_fields(logs)
+        if self._api_call_records:
+            detailed_logs["api_calls"] = _format_api_calls_for_storage(
+                self._api_call_records
+            )
+        return detailed_logs or None
+
+    async def _adopt_closed_execution(self, db: AsyncSession) -> None:
+        """Publish the status of a row another owner closed before this run.
+
+        The guarded completion matched nothing, so the stored row stands and
+        this run reports what it says instead of what it meant to write.
+        """
+        stored_status = await db.scalar(
+            select(JobExecution.status).where(JobExecution.id == self.job_execution_id)
+        )
+        logger.warning(
+            "job_completion_skipped_row_already_closed",
+            job_config_id=self.job_config_id,
+            execution_id=self.job_execution_id,
+            stored_status=stored_status.value if stored_status else None,
+        )
+        self.ownership_lost = True
+        self._completion_logged = True
+        self.job_execution_status = stored_status
+
+    async def ensure_execution_is_owned(self, db: AsyncSession) -> None:
+        """Stop this run once another owner has closed its execution row.
+
+        One primary-key read, so writers call it per player and before a
+        freshness write, never per request like `check_control_state`.
+
+        Raises:
+            JobStopSignal: If the row is no longer `RUNNING` or `PAUSED`.
+        """
+        if self.job_execution_id is None:
+            return
+        stored_status = await db.scalar(
+            select(JobExecution.status).where(JobExecution.id == self.job_execution_id)
+        )
+        if stored_status in ACTIVE_EXECUTION_STATUSES:
+            return
+        logger.warning(
+            "job_execution_ownership_lost",
+            job_config_id=self.job_config_id,
+            execution_id=self.job_execution_id,
+            stored_status=stored_status.value if stored_status else None,
+        )
+        self.ownership_lost = True
+        raise JobStopSignal(force=True, reason="ownership_lost")
 
     async def fail_orphaned_execution(self, db: AsyncSession) -> None:
         """Fail a RUNNING/PAUSED row left behind by a process that died.
@@ -693,9 +756,12 @@ class BaseJob(ABC):
         )
         try:
             await rollback_quietly(db)
-            await db.execute(
+            result = await db.execute(
                 update(JobExecution)
-                .where(JobExecution.id == self.job_execution_id)
+                .where(
+                    JobExecution.id == self.job_execution_id,
+                    JobExecution.status.in_(ACTIVE_EXECUTION_STATUSES),
+                )
                 .values(
                     status=JobStatus.FAILED,
                     completed_at=datetime.now(UTC),
@@ -703,6 +769,9 @@ class BaseJob(ABC):
                 )
             )
             await db.commit()
+            if _rowcount(result) == 0:
+                await self._adopt_closed_execution(db)
+                return
             self.job_execution_status = JobStatus.FAILED
         except Exception as error:
             logger.error(
@@ -787,11 +856,36 @@ class BaseJob(ABC):
             return False
 
     async def _set_execution_status(self, db: AsyncSession, status: JobStatus) -> None:
-        """Update the current execution's status in the database."""
-        if self.job_execution is None:
+        """Move the owned execution between `RUNNING` and `PAUSED`.
+
+        Raises:
+            JobStopSignal: If another owner already closed the row.
+        """
+        if self.job_execution_id is None:
             return
-        self.job_execution.status = status
-        await self.safe_commit(db, f"set execution status to {status.value}")
+        try:
+            result = await db.execute(
+                update(JobExecution)
+                .where(
+                    JobExecution.id == self.job_execution_id,
+                    JobExecution.status.in_(ACTIVE_EXECUTION_STATUSES),
+                )
+                .values(status=status)
+            )
+        except Exception as error:
+            await rollback_quietly(db)
+            logger.error(
+                "job_status_update_failed",
+                job_config_id=self.job_config_id,
+                execution_id=self.job_execution_id,
+                error_type=type(error).__name__,
+            )
+            return
+        if not await self.safe_commit(db, f"set execution status to {status.value}"):
+            return
+        if _rowcount(result) == 0:
+            self.ownership_lost = True
+            raise JobStopSignal(force=True, reason="ownership_lost")
 
     def _get_job_logs(self) -> list[MutableMapping[str, Any]]:
         """Extract logs for this job execution."""
@@ -1003,9 +1097,14 @@ class BaseJob(ABC):
         if self.job_execution is None:
             raise RuntimeError("Job execution is missing during completion update")
 
+        # Only a row this run still owns: a completion that lands after
+        # startup recovery or the orphan sweep closed it must not reopen it.
         return (
             update(JobExecution)
-            .where(JobExecution.id == self.job_execution_id)
+            .where(
+                JobExecution.id == self.job_execution_id,
+                JobExecution.status.in_(ACTIVE_EXECUTION_STATUSES),
+            )
             .values(
                 completed_at=completed_at,
                 status=final_status,
@@ -1019,14 +1118,21 @@ class BaseJob(ABC):
             )
         )
 
-    async def _execute_completion_update(self, db: AsyncSession, stmt: Update) -> bool:
-        """Execute the completion update with retry logic."""
+    async def _execute_completion_update(
+        self, db: AsyncSession, stmt: Update
+    ) -> int | None:
+        """Execute the completion update, retrying once.
+
+        Returns:
+            The number of rows closed (0 when the row was already terminal),
+            or None when neither attempt was committed.
+        """
         execution_id = self.job_execution_id
 
         try:
-            await db.execute(stmt)
+            result = await db.execute(stmt)
             if await self.safe_commit(db, "job completion"):
-                return True
+                return _rowcount(result)
         except Exception as execute_error:
             logger.error(
                 "Failed to execute job completion update",
@@ -1039,13 +1145,13 @@ class BaseJob(ABC):
         # Retry once after rollback
         try:
             await rollback_quietly(db)
-            await db.execute(stmt)
+            result = await db.execute(stmt)
             if await self.safe_commit(db, "job completion retry"):
                 logger.info(
                     "Successfully committed job completion on retry",
                     execution_id=execution_id,
                 )
-                return True
+                return _rowcount(result)
             else:
                 logger.warning(
                     "Job completion retry commit failed - job may remain stuck",
@@ -1061,7 +1167,7 @@ class BaseJob(ABC):
             )
             # Don't raise - we want the job to complete even if logging fails
 
-        return False
+        return None
 
     async def _handle_completion_error(
         self, db: AsyncSession, error: Exception

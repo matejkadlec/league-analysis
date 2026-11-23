@@ -69,6 +69,11 @@ def is_runtime_job_running(job_config_id: int) -> bool:
     return job_config_id in _runtime_controls
 
 
+def running_job_tasks() -> set[asyncio.Task[None]]:
+    """The task of every run that currently holds a runtime key."""
+    return {control.task for control in _runtime_controls.values() if control.task}
+
+
 def request_job_stop(job_config_id: int, force: bool = False) -> bool:
     """Request graceful or forced stop for a running job.
 

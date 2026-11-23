@@ -41,6 +41,7 @@ class PlayerUpdaterJob(PlayerTargetsMixin, BaseJob):
 
             for puuid in tracked_puuids:
                 await self.check_control_state(db)
+                await self.ensure_execution_is_owned(db)
                 try:
                     # Re-read per iteration: a recoverable error rolls the
                     # session back, which expires every row it holds.
