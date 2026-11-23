@@ -11,7 +11,6 @@ import {
   matchHistoryStatsQueryOptions,
 } from "../matches-query";
 import { useDebouncedValue } from "@/lib/core/hooks/use-debounced-value";
-import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/hooks/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,7 +61,6 @@ export function MatchHistory({
   onSelectPlayer,
 }: MatchHistoryProps) {
   const router = useRouter();
-  const isDesktopLayout = useMediaQuery(LG_BREAKPOINT_QUERY);
   const queryClient = useQueryClient();
   const { isUpdating, isFetchingMatches, startSync } = usePlayerSyncRun(puuid, {
     // Queries keyed by the PUUID are refreshed by the hook; the server
@@ -281,37 +279,22 @@ export function MatchHistory({
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          // Below `lg` a row reflows into stacked blocks; from `lg` up it is
-          // the fixed-width desktop layout, which still has to scroll inside
-          // this container. `min-w-0` because the flex chain refuses to shrink.
-          <div
-            data-testid="match-list"
-            className="min-w-0 rounded-md border lg:overflow-x-auto"
-            // A region that scrolls sideways must be reachable without a
-            // mouse, and a focusable region needs a name -- but only from
-            // `lg` up, the only width this container scrolls at.
-            {...(isDesktopLayout
-              ? {
-                  role: "region",
-                  "aria-label": "Match list",
-                  tabIndex: 0,
-                }
-              : {})}
-          >
-            <div className="lg:w-max lg:min-w-full">
-              {matches.map((match) => (
-                <MatchRow
-                  key={match.match_id}
-                  match={match}
-                  playerPuuid={puuid}
-                  onSelectPlayer={onSelectPlayer}
-                />
-              ))}
-              {showLoadingRow && <MatchHistoryLoadingRow />}
-              {showLoadFailedRow && (
-                <MatchHistoryLoadFailedRow onRetry={() => void refetch()} />
-              )}
-            </div>
+          // No scroll region: a row wraps at every width it cannot hold one
+          // line at (LGA-108). `min-w-0` because the flex chain around this
+          // refuses to shrink below its content otherwise.
+          <div data-testid="match-list" className="min-w-0 rounded-md border">
+            {matches.map((match) => (
+              <MatchRow
+                key={match.match_id}
+                match={match}
+                playerPuuid={puuid}
+                onSelectPlayer={onSelectPlayer}
+              />
+            ))}
+            {showLoadingRow && <MatchHistoryLoadingRow />}
+            {showLoadFailedRow && (
+              <MatchHistoryLoadFailedRow onRetry={() => void refetch()} />
+            )}
           </div>
         )}
 

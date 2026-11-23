@@ -118,6 +118,11 @@ def player_rank_map(
     }
 
 
+# A teammate met this many times across the spine is treated as a duo partner,
+# whatever the spine size; chance repeats therefore grow with the window.
+DUO_PARTNER_MIN_SHARED_MATCHES = 2
+
+
 def duo_partner_puuids(
     spine_allies: list[tuple[str, list[str]]],
     *,
@@ -133,7 +138,11 @@ def duo_partner_puuids(
         for puuid in set(allies)
         if puuid != analyzed_puuid
     )
-    return {puuid for puuid, count in appearances.items() if count >= 2}
+    return {
+        puuid
+        for puuid, count in appearances.items()
+        if count >= DUO_PARTNER_MIN_SHARED_MATCHES
+    }
 
 
 def classify_duo_matches(

@@ -28,7 +28,6 @@ ROUTE_GUARDS: dict[tuple[str, str], Guard] = {
     ("GET", "/api/v1/auth/me"): "USER",
     ("PATCH", "/api/v1/auth/me"): "USER",
     ("POST", "/api/v1/auth/refresh"): "PUBLIC",
-    ("POST", "/api/v1/auth/register"): "PUBLIC",
     ("GET", "/api/v1/auth/users"): "ADMIN",
     ("GET", "/api/v1/jobs/"): "ADMIN",
     ("GET", "/api/v1/jobs/executions/all"): "ADMIN",

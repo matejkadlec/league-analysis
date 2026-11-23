@@ -227,9 +227,9 @@ describe("a match history row", () => {
   });
 
   it("treats an early surrender as a remake even when the participant flag is not set", () => {
-    // The two flags come from different places — `remake` off the
-    // participant, `early_surrender` off the match — and either one alone
-    // means the game was voided.
+    // The backend now mirrors the match's flag onto every participant, so the
+    // two agree; a response from before that still has to read as voided
+    // when only the match says so.
     const { container } = renderRow({
       early_surrender: true,
       player_participant: { ...PARTICIPANT, win: false, remake: false },
@@ -455,6 +455,32 @@ describe("a match history row", () => {
     const { container } = renderRow();
 
     expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);
+  });
+
+  it("names the keystones Riot added and renamed after the table was written", () => {
+    // 8992 used to fall back to the Sorcery tree icon and label, and 8230 kept
+    // its pre-16.9 name (LGA-122). The opponent's own tree is Domination, so
+    // "Sorcery" can only come from a fallback on the player's side.
+    renderRow({
+      player_participant: {
+        ...PARTICIPANT,
+        runes: { primary_style: 8200, sub_style: 8300, keystone: 8992 },
+      },
+    });
+    const deathfire = screen.getByAltText<HTMLImageElement>("Deathfire Touch");
+    expect(deathfire.src).toContain("DeathfireTouch/DEATHFIRE_TOUCH_KEYSTONE");
+    expect(screen.queryByAltText("Sorcery")).toBeNull();
+    cleanup();
+
+    renderRow({
+      player_participant: {
+        ...PARTICIPANT,
+        runes: { primary_style: 8200, sub_style: 8300, keystone: 8230 },
+      },
+    });
+    const surge = screen.getByAltText<HTMLImageElement>("Stormraider's Surge");
+    expect(surge.src).toContain("StormraidersSurgeRuneIcon2");
+    expect(screen.queryByAltText("Phase Rush")).toBeNull();
   });
 
   it("falls back to the tree when the keystone is one we have no name for", () => {

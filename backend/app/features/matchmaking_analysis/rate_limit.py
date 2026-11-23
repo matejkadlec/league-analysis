@@ -18,6 +18,7 @@ from app.core.db_session import rollback_quietly
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
+    NotFoundError,
     RateLimitError,
     RiotAPIError,
 )
@@ -56,6 +57,7 @@ class _RetryPolicyHost(Protocol):
     db: AsyncSession
     requests_saved: int
     api_calls_made: int
+    optional_fetch_failures: int
     _is_waiting_for_rate_limit: bool
     _current_analysis_puuid: str | None
     _current_analysis_created_at: datetime | None
@@ -90,9 +92,9 @@ class RateLimitRetryMixin(_RetryPolicyHost):
     ) -> T | None:
         """Run one Riot call under the shared rate-limit retry policy.
 
-        Returns None when capacity is unavailable, the error is recoverable,
-        or retries are exhausted; `required=True` raises instead. These attempts
-        stack on the Riot client's own tenacity retry of 429/5xx.
+        None means an optional call found nothing (404), failed, or ran out of
+        retries; `required=True` raises instead. Every None but the 404 is
+        counted in `optional_fetch_failures`. Stacks on the client's own retry.
         """
         for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
             try:
@@ -122,11 +124,14 @@ class RateLimitRetryMixin(_RetryPolicyHost):
                 )
                 if _should_reraise_riot_error(e, required=required):
                     raise
+                if not isinstance(e, NotFoundError):
+                    self.optional_fetch_failures += 1
                 return None
 
         logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
         await self._clear_rate_limit_wait_if_active()
         _raise_if_retries_exhausted(required=required)
+        self.optional_fetch_failures += 1
         return None
 
     async def _record_successful_api_call(self) -> None:

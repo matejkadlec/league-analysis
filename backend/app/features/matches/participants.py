@@ -110,7 +110,7 @@ class MatchParticipant(Base):
         Boolean,
         nullable=False,
         default=False,
-        comment="Inverted eligibleForProgression",
+        comment="Mirrors matches.early_surrender; a remake is a match-level fact",
     )
     lp_change: Mapped[int | None] = mapped_column(
         Integer,

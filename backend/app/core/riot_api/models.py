@@ -144,15 +144,12 @@ class ParticipantDTO(RiotDTO):
     time_spent_dead: int = Field(default=0, alias="totalTimeSpentDead")
     time_played: int = Field(default=0)
 
-    # Flags
+    # Flags. A remake is a property of the match (every participant carries
+    # `gameEndedInEarlySurrender`); `eligibleForProgression` is a per-player
+    # marker Riot also clears in completed games, and decides nothing here.
     eligible_for_progression: bool = Field(default=True)
     game_ended_in_early_surrender: bool | None = Field(default=None)
     game_ended_in_surrender: bool | None = Field(default=None)
-
-    @property
-    def remake(self) -> bool:
-        """Remake is the negation of eligibleForProgression."""
-        return not self.eligible_for_progression
 
     # Advanced
 

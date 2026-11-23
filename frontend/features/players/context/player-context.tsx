@@ -24,7 +24,6 @@ import {
   playerQueryOptions,
 } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
-import { usePlayerProfileUpdate } from "../components/use-player-sync-run";
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
@@ -32,8 +31,8 @@ interface PlayerContextValue {
   selectPlayer: (player: Player) => Promise<void>;
   /**
    * Switch to a player known only by PUUID -- a participant in somebody
-   * else's match. Persisting is left to the `?puuid=` effect below; two
-   * writers would race on a switch to a PUUID whose row has since been deleted.
+   * else's match. Navigation only, like `selectPlayer`: it starts no update,
+   * and persisting is left to the `?puuid=` effect below.
    */
   selectPlayerByPuuid: (puuid: string) => void;
 }
@@ -152,11 +151,9 @@ export function PlayerContextProvider({
     updateCurrentMutation.mutate(urlPuuid);
   }, [contextQuery.data, updateCurrentMutation, urlPlayerQuery.data, urlPuuid]);
 
-  const { mutate: startProfileUpdate } = usePlayerProfileUpdate();
-
-  // No profile update here, on purpose: picking a player from the sidebar is
-  // navigation, so browsing six tracked players cannot spend six Riot fetches.
-  // `selectPlayerByPuuid` below is the deliberate exception.
+  // No profile update here or in `selectPlayerByPuuid`, on purpose (LGA-133):
+  // choosing a player is navigation to stored data, and only the explicit
+  // Update action may spend a Riot fetch.
   const selectPlayer = useCallback(
     async (player: Player) => {
       pendingExplicitSelectionRef.current = player.puuid;
@@ -180,25 +177,21 @@ export function PlayerContextProvider({
 
   // `urlPuuid`, not `urlPlayerQuery.data?.puuid`: the row behind the URL is
   // still loading right after a switch, so reading the loaded player would
-  // leave this on the previous one and a second click would start twice.
+  // leave this on the previous one and a second click would push again.
   const currentPuuid =
     urlPuuid ?? contextQuery.data?.current_player?.puuid ?? null;
 
   const selectPlayerByPuuid = useCallback(
     (puuid: string) => {
-      // Switching to the player already current would restart their update and
-      // push the URL they are already on.
+      // Switching to the player already current would only push the URL they
+      // are already on.
       if (puuid === currentPuuid) return;
-      // The exception to the rule above `selectPlayer`: this path is reached
-      // only by clicking a participant inside somebody else's match -- a
-      // player with no stored games, so navigating alone lands on empty history.
-      startProfileUpdate({ puuid });
       router.push(
         playerRoute(pathname, new URLSearchParams(searchParams), puuid),
         { scroll: false },
       );
     },
-    [currentPuuid, pathname, router, searchParams, startProfileUpdate],
+    [currentPuuid, pathname, router, searchParams],
   );
 
   const value = useMemo<PlayerContextValue>(

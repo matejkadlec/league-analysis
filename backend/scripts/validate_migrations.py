@@ -539,6 +539,218 @@ def validate_revision_0034_left_one_absent_value(database: str) -> None:
         )
 
 
+def _writable_columns(connection: Connection, table: str) -> str:
+    """One `core` table's column list without the generated columns.
+
+    PostgreSQL refuses a value for a generated column, so a row cannot be
+    copied with `SELECT *`.
+    """
+    return connection.execute(
+        text(
+            "SELECT string_agg(quote_ident(column_name), ', ' "
+            "ORDER BY ordinal_position) FROM information_schema.columns "
+            "WHERE table_schema = 'core' AND table_name = :table "
+            "AND is_generated = 'NEVER'"
+        ),
+        {"table": table},
+    ).scalar_one()
+
+
+def seed_rows_revision_0035_must_correct(database: str) -> None:
+    """Seed the two disagreements between a remake flag and its match.
+
+    Raw SQL at 0034: no writer can store either now. A completed ranked game
+    carries the flag and its zero LP, a real remake has three rows without (one
+    never evaluated, two holding LP evidence), an ARAM game has no LP.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE core.match_participants SET remake = true, "
+                    "lp_change = 0, lp_change_source = 'riot_match_remake', "
+                    "lp_change_reason = 'riot_eligible_for_progression_false' "
+                    "WHERE match_id = 'EUN1_VALIDATION' AND participant_id = 1"
+                )
+            )
+            # Copies of the rows already seeded, so this names no column an
+            # earlier revision could have left out of step with head.
+            match_columns = _writable_columns(connection, "matches")
+            participant_columns = _writable_columns(connection, "match_participants")
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_match ON COMMIT DROP AS "
+                    "SELECT * FROM core.matches WHERE match_id = 'EUN1_VALIDATION'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE remake_match SET match_id = 'EUN1_REMAKE', "
+                    "early_surrender = true, game_duration = 190"
+                )
+            )
+            connection.execute(
+                text(
+                    f"INSERT INTO core.matches ({match_columns}) "
+                    f"SELECT {match_columns} FROM remake_match"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_participants ON COMMIT DROP AS "
+                    "SELECT * FROM core.match_participants "
+                    "WHERE match_id = 'EUN1_VALIDATION' AND participant_id = 1"
+                )
+            )
+            copy_participant = text(
+                f"INSERT INTO core.match_participants ({participant_columns}) "
+                f"SELECT {participant_columns} FROM remake_participants"
+            )
+            connection.execute(
+                text("UPDATE remake_participants SET match_id = 'EUN1_REMAKE'")
+            )
+            connection.execute(copy_participant)
+            connection.execute(
+                text(
+                    "UPDATE remake_participants SET participant_id = 2, "
+                    "puuid = 'JSON_NULL_VALIDATION', remake = false, "
+                    "lp_change = NULL, lp_change_source = 'unavailable', "
+                    "lp_change_reason = 'league_observation_pending'"
+                )
+            )
+            connection.execute(copy_participant)
+            # Two more unflagged rows of the remake whose LP holds evidence the
+            # correction must keep: an observed loss, and a counter mismatch.
+            # Their players are copies too, for the participant's foreign key.
+            player_columns = _writable_columns(connection, "players")
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE remake_players ON COMMIT DROP AS "
+                    "SELECT * FROM core.players WHERE puuid = 'JSON_NULL_VALIDATION'"
+                )
+            )
+            for puuid, participant_lp in (
+                (
+                    "REMAKE_OBSERVED",
+                    "participant_id = 3, lp_change = -15, "
+                    "lp_change_source = 'riot_league_observation', "
+                    "lp_change_reason = 'single_match_counter_transition'",
+                ),
+                (
+                    "REMAKE_BOUNDARY",
+                    "participant_id = 4, lp_change = NULL, "
+                    "lp_change_source = 'unavailable', "
+                    "lp_change_reason = 'rank_boundary'",
+                ),
+            ):
+                connection.execute(
+                    text("UPDATE remake_players SET puuid = :puuid"),
+                    {"puuid": puuid},
+                )
+                connection.execute(
+                    text(
+                        f"INSERT INTO core.players ({player_columns}) "
+                        f"SELECT {player_columns} FROM remake_players"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "UPDATE remake_participants SET puuid = :puuid, "
+                        f"{participant_lp}"
+                    ),
+                    {"puuid": puuid},
+                )
+                connection.execute(copy_participant)
+            # A completed ARAM game: flagged, but never given LP provenance.
+            connection.execute(
+                text(
+                    "UPDATE remake_match SET match_id = 'EUN1_ARAM', "
+                    "early_surrender = false, queue_id = 450, game_duration = 1200"
+                )
+            )
+            connection.execute(
+                text(
+                    f"INSERT INTO core.matches ({match_columns}) "
+                    f"SELECT {match_columns} FROM remake_match"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE remake_participants SET match_id = 'EUN1_ARAM', "
+                    "participant_id = 1, remake = true, lp_change = NULL, "
+                    "lp_change_source = NULL, lp_change_reason = NULL"
+                )
+            )
+            connection.execute(copy_participant)
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
+    """Assert every remake flag agrees with its match after revision 0035.
+
+    The count is the invariant; the seeded rows make it non-vacuous and pin
+    which way each disagreement was settled, and what became of the zero LP.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            disagreeing = connection.execute(
+                text(
+                    "SELECT count(*) FROM core.match_participants AS participant "
+                    "JOIN core.matches AS match USING (match_id) "
+                    "WHERE participant.remake IS DISTINCT FROM match.early_surrender"
+                )
+            ).scalar_one()
+            seeded = [
+                tuple(row)
+                for row in connection.execute(
+                    text(
+                        "SELECT match_id, participant_id, remake, lp_change, "
+                        "lp_change_source, lp_change_reason "
+                        "FROM core.match_participants "
+                        "WHERE match_id IN "
+                        "('EUN1_VALIDATION', 'EUN1_REMAKE', 'EUN1_ARAM') "
+                        "ORDER BY match_id, participant_id"
+                    )
+                ).all()
+            ]
+    finally:
+        engine.dispose()
+
+    if disagreeing:
+        raise RuntimeError(
+            f"revision 0035 left {disagreeing} participant row(s) whose remake "
+            "flag disagrees with the match's early_surrender"
+        )
+    remake_lp = (0, "riot_match_remake", "riot_early_surrender")
+    expected = [
+        # Not ranked, so it never had LP provenance and still has none.
+        ("EUN1_ARAM", 1, False, None, None, None),
+        ("EUN1_REMAKE", 1, True, *remake_lp),
+        ("EUN1_REMAKE", 2, True, *remake_lp),
+        # Flagged, with the LP evidence each carried left exactly as it was.
+        (
+            "EUN1_REMAKE",
+            3,
+            True,
+            -15,
+            "riot_league_observation",
+            "single_match_counter_transition",
+        ),
+        ("EUN1_REMAKE", 4, True, None, "unavailable", "rank_boundary"),
+        ("EUN1_VALIDATION", 1, False, None, "unavailable", "remake_flag_corrected"),
+    ]
+    if seeded != expected:
+        raise RuntimeError(
+            "the rows seeded for revision 0035 were not corrected as reviewed: "
+            f"{seeded!r}"
+        )
+
+
 def validate_revision_0019_kept_one_bound_key(database: str) -> None:
     """Assert only the active key survived and health still points at it."""
     url = administration_url().set(database=database)
@@ -1160,9 +1372,12 @@ def main() -> int:
         validate_revision_0017_rewrote_the_seeded_basis(database)
         seed_riot_keys_revision_0019_must_collapse(database)
         seed_rows_revision_0034_must_normalise(database)
+        run_upgrade(database, "20260829_0034")
+        seed_rows_revision_0035_must_correct(database)
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0034_left_one_absent_value(database)
+        validate_revision_0035_mirrored_early_surrender(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)

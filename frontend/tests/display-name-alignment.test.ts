@@ -67,10 +67,10 @@ function displayNameConstraints(schemaName: string) {
 }
 
 describe.runIf(spec)("display name rules match the API", () => {
-  // The two write models: the settings form goes through `UserProfileUpdate`,
-  // registration through `UserCreate`. `UserResponse` is deliberately excluded
-  // -- see the comment on it in the backend schema.
-  it.each(["UserCreate", "UserProfileUpdate"])(
+  // The one write model the API publishes; there is no registration route.
+  // `UserResponse` is deliberately excluded -- see the comment on it in the
+  // backend schema.
+  it.each(["UserProfileUpdate"])(
     "%s declares the rule the form enforces",
     (schemaName) => {
       const constraints = displayNameConstraints(schemaName);

@@ -37,7 +37,7 @@ def test_extracted_participant_fits_the_row_it_becomes() -> None:
     # This is the whole production path: `MatchParticipant(match_id=...,
     # **extract_participant_data(dto))` in match_persistence. SQLAlchemy raises
     # on an unknown kwarg, so one construction checks the entire ~75-key mapping.
-    data = MatchDTOTransformer.extract_participant_data(participant())
+    data = MatchDTOTransformer.extract_participant_data(participant(), remake=False)
     row = MatchParticipant(match_id="EUN1_1", **data)
 
     assert row.puuid == "p-1"
@@ -45,15 +45,30 @@ def test_extracted_participant_fits_the_row_it_becomes() -> None:
     assert row.kills == 5
 
 
-def test_remake_is_the_negation_of_progression_eligibility() -> None:
-    # Riot has no "remake" flag; the signal is eligibleForProgression, and
-    # the transformer inverts it. Inverted the wrong way, every real game is
-    # stored as a remake and excluded from every analysis.
-    assert MatchDTOTransformer.extract_participant_data(participant())["remake"] is (
-        False
+def test_remake_comes_from_the_match_never_from_progression_eligibility() -> None:
+    # `eligibleForProgression` is false for individual players in completed
+    # games (LGA-132: a 30-minute `GameComplete` ranked game, one of ten). Read
+    # as the remake flag it greyed that row out and dropped it from analyses.
+    finished = participant(
+        eligibleForProgression=False,
+        gameEndedInEarlySurrender=False,
+        gameEndedInSurrender=False,
+        timePlayed=1859,
     )
-    remade = participant(eligibleForProgression=False)
-    assert MatchDTOTransformer.extract_participant_data(remade)["remake"] is True
+
+    stored = MatchDTOTransformer.extract_participant_data(finished, remake=False)
+
+    assert stored["remake"] is False
+
+
+def test_every_participant_of_a_remade_match_is_stored_as_a_remake() -> None:
+    # The match decides, so a participant whose own flags say nothing still
+    # carries the remake the other nine do.
+    silent = participant(eligibleForProgression=True)
+
+    stored = MatchDTOTransformer.extract_participant_data(silent, remake=True)
+
+    assert stored["remake"] is True
 
 
 def test_display_name_falls_back_through_riot_id_then_summoner_name() -> None:
@@ -61,18 +76,20 @@ def test_display_name_falls_back_through_riot_id_then_summoner_name() -> None:
     # wins; the legacy summonerName fills in when the riot id is empty string
     # (which the API sends, not null); the column is NOT NULL, so a last resort.
     riot_id = participant(riotIdGameName="Faker", summonerName="OldName")
-    assert MatchDTOTransformer.extract_participant_data(riot_id)["game_name"] == (
-        "Faker"
-    )
+    assert MatchDTOTransformer.extract_participant_data(riot_id, remake=False)[
+        "game_name"
+    ] == ("Faker")
 
     summoner_name_only = participant(riotIdGameName="", summonerName="OldName")
-    fallen_back = MatchDTOTransformer.extract_participant_data(summoner_name_only)
+    fallen_back = MatchDTOTransformer.extract_participant_data(
+        summoner_name_only, remake=False
+    )
     assert fallen_back["game_name"] == "OldName"
 
     nameless = participant()
-    assert MatchDTOTransformer.extract_participant_data(nameless)["game_name"] == (
-        "Unknown Player"
-    )
+    assert MatchDTOTransformer.extract_participant_data(nameless, remake=False)[
+        "game_name"
+    ] == ("Unknown Player")
 
 
 def test_lane_falls_back_to_individual_position() -> None:
@@ -80,7 +97,9 @@ def test_lane_falls_back_to_individual_position() -> None:
     # individualPosition; without the fallback those games have no lane at all.
     payload = participant(teamPosition="", individualPosition="JUNGLE")
     assert (
-        MatchDTOTransformer.extract_participant_data(payload)["team_position"]
+        MatchDTOTransformer.extract_participant_data(payload, remake=False)[
+            "team_position"
+        ]
         == "JUNGLE"
     )
 
@@ -88,7 +107,10 @@ def test_lane_falls_back_to_individual_position() -> None:
 def test_unrecognised_positions_are_stored_as_null() -> None:
     payload = participant(teamPosition="Invalid", individualPosition="")
     assert (
-        MatchDTOTransformer.extract_participant_data(payload)["team_position"] is None
+        MatchDTOTransformer.extract_participant_data(payload, remake=False)[
+            "team_position"
+        ]
+        is None
     )
 
 
@@ -106,7 +128,7 @@ def test_challenge_stats_are_read_under_riots_own_names() -> None:
             "epicMonsterSteals": 2,
         }
     )
-    data = MatchDTOTransformer.extract_participant_data(payload)
+    data = MatchDTOTransformer.extract_participant_data(payload, remake=False)
     assert data["solo_kills"] == 3
     assert data["gold_per_minute"] == 401.5
     assert data["vision_score_per_minute"] == 1.25
@@ -115,7 +137,7 @@ def test_challenge_stats_are_read_under_riots_own_names() -> None:
     assert data["epic_monster_steals"] == 2
 
     # And a payload with no challenges block defaults to zeros, not KeyError.
-    bare = MatchDTOTransformer.extract_participant_data(participant())
+    bare = MatchDTOTransformer.extract_participant_data(participant(), remake=False)
     assert bare["solo_kills"] == 0
 
 
@@ -128,20 +150,27 @@ def test_the_challenges_blob_is_stored_whole() -> None:
     """
     challenges = {"skillshotsHit": 41, "buffsStolen": 1, "soloKills": 3}
     data = MatchDTOTransformer.extract_participant_data(
-        participant(challenges=challenges)
+        participant(challenges=challenges), remake=False
     )
 
     assert data["advanced_stats"] == challenges
 
 
 def test_missing_vision_score_becomes_zero_not_null() -> None:
-    data = MatchDTOTransformer.extract_participant_data(participant())
+    data = MatchDTOTransformer.extract_participant_data(participant(), remake=False)
     assert data["vision_score"] == 0
 
     scored = participant(visionScore=31.9)
-    assert MatchDTOTransformer.extract_participant_data(scored)["vision_score"] == 31
+    assert (
+        MatchDTOTransformer.extract_participant_data(scored, remake=False)[
+            "vision_score"
+        ]
+        == 31
+    )
 
 
 def test_empty_tag_line_is_stored_as_null() -> None:
-    data = MatchDTOTransformer.extract_participant_data(participant(riotIdTagline=""))
+    data = MatchDTOTransformer.extract_participant_data(
+        participant(riotIdTagline=""), remake=False
+    )
     assert data["tag_line"] is None

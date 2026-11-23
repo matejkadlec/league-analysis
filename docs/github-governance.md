@@ -50,14 +50,38 @@ Disposable PR [#10](https://github.com/matejkadlec/league-analysis/pull/10)
 then confirmed that GitHub rejected an early merge, direct push, force push, and
 default-branch deletion; the PR was closed and its temporary branch deleted.
 
+Re-read on 2026-11-15 (`gh api repos/matejkadlec/league-analysis/rulesets`):
+the active ruleset is
+[`20484385`](https://github.com/matejkadlec/league-analysis/rules/20484385),
+created 2026-08-06, with the requirements listed above, one required context
+(`Deterministic full-project gate`, GitHub Actions, strict), and GitHub's
+`require_extra_approval_for_unattributed_changes` switched on. The repository
+allows all three merge methods, has auto-merge disabled and deletes head
+branches on merge.
+
+## Production environment
+
+The GitHub environment `production` admits the `master` branch only and holds
+the restricted deploy key for <https://league.matejkadlec.cz>. The Deploy
+workflow runs after Quality Checks succeeds for a push to `master`; its secrets
+are never available to a pull request. [Production Deployment](deployment.md)
+lists the environment's secrets and variables and what the key can do.
+
 ## Safe delivery policy
 
 Dependabot and authorized automation may create branches and pull requests, but
 they have no ruleset bypass. The ruleset blocks direct updates, force pushes,
 and deletion of `master`, but its zero-review configuration cannot distinguish
 the owner from any credential permitted to perform a normal pull-request merge.
-Owner-managed review and merging are therefore a repository workflow policy:
-automation must not merge without explicit owner authorization.
+Who may merge is therefore a repository workflow policy. The owner authorizes
+one automated path: the `finalize-pr` skill of the
+[AI development flow](ai-development-flow.md) merges a pull request that a flow
+published once an independent review of its exact head is clean, every check is
+green and every review thread is resolved, through the normal protected merge
+and never with a bypass or auto-merge. A pull request that adds an Alembic
+revision or changes the deploy path or production configuration still waits for
+the owner's approval of that head. Any other automated merge needs explicit
+owner authorization; Dependabot pull requests are never auto-merged.
 
 Do not add a bypass actor for convenience. A documented emergency exception
 requires explicit owner approval, the narrowest possible actor and

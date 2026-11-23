@@ -51,11 +51,16 @@ class MatchDTOTransformer:
         return participant_data
 
     @staticmethod
-    def extract_participant_data(participant_dto: ParticipantDTO) -> dict[str, Any]:
+    def extract_participant_data(
+        participant_dto: ParticipantDTO, *, remake: bool
+    ) -> dict[str, Any]:
         """Extract participant data from DTO for database storage.
 
         Args:
             participant_dto: Participant DTO from match data
+            remake: Whether the match ended in early surrender. Passed in
+                because it is one fact about the match, shared by all ten
+                rows; no per-participant field decides it.
 
         Returns:
             Dictionary with participant data ready for database storage
@@ -81,7 +86,7 @@ class MatchDTOTransformer:
             "champion_transform": participant_dto.champion_transform,
             # Results
             "win": participant_dto.win,
-            "remake": participant_dto.remake,
+            "remake": remake,
             # KDA
             "kills": participant_dto.kills,
             "deaths": participant_dto.deaths,

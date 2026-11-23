@@ -18,7 +18,10 @@
 
 The focused modes shorten implementation feedback. They never substitute for
 the complete gate before publication. `test.sh` resolves its own worktree root,
-so it is safe to call from the main checkout or any worktree.
+so it is safe to call from the main checkout or any worktree. Two runs that
+include the frontend cannot overlap on one machine, because the Playwright
+step starts its server on the fixed port 3100; agents queue them with `flock`
+([AI development flow](ai-development-flow.md#gate-queue)).
 
 ## Decisions
 
@@ -81,7 +84,25 @@ so it is safe to call from the main checkout or any worktree.
   Remove repository access to self-hosted runners before changing visibility;
   a contributor can modify workflow files in their own pull request.
 - **CI always runs the complete gate.** Documentation-only local feedback may
-  use `./test.sh -r`; publication does not trigger deployment.
+  use `./test.sh -r`. A pull request deploys nothing; a merge to `master`
+  deploys once the whole workflow has passed
+  ([Production Deployment](deployment.md)).
+- **The production images are built and started in CI, in a job of their
+  own.** The gate builds the interface inside the full repository, where every
+  import resolves, on ARM64. Only `deploy/container-qa.sh` builds both images
+  from their own contexts and starts the real stack, and it runs on x86-64, the
+  architecture production uses. It is a separate job so the gate's result does
+  not wait for it; the Deploy workflow waits for both. It is not a required
+  check yet.
+- **Toolchain versions are compared, not trusted.** Node, npm, Python, uv and
+  PostgreSQL are each pinned in several files, for local development, the gate
+  container and the production images. `tools/check-toolchain-pins.sh` fails
+  the gate when they disagree, so a Dependabot bump of one file cannot leave
+  the gate testing a runtime production does not run.
+- **npm is installed, not bundled.** No Node 26 release bundles npm 12 (checked
+  against nodejs.org on 2026-11-14), so `.nvmrc` cannot deliver the npm that
+  `packageManager` pins. `tools/use-project-node.sh` installs it into the
+  selected Node and says so; both Dockerfiles install the same version.
 - **Dependabot pull requests are never auto-merged and never receive real
   secrets.** They follow the normal workflow: rebase on current `master`, run
   the complete gate, wait for required checks and review, merge through the

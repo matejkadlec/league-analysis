@@ -12,6 +12,10 @@ import { MAX_MATCH_COUNT, MIN_MATCH_COUNT } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { ANALYSIS_CARD_TRANSITION } from "../matchmaking-analysis-state";
+import {
+  estimateColdRunMinutes,
+  formatRunDuration,
+} from "../matchmaking-progress";
 
 const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
 
@@ -62,14 +66,21 @@ export function MatchmakingAnalysisStartCard({
   onEndDateChange,
   onStart,
 }: MatchmakingAnalysisStartCardProps) {
-  // Render must stay pure, so the clock is read once per mount.
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  // The last day the API accepts: today at the latest clock on Earth
+  // (UTC+14), so a viewer ahead of UTC can pick their own current day. Render
+  // must stay pure, so the clock is read once per mount.
+  const [today] = useState(() =>
+    new Date(Date.now() + 14 * 3_600_000).toISOString().slice(0, 10),
+  );
   const isPresetCount = (MATCH_COUNT_PRESETS as readonly number[]).includes(
     matchCount,
   );
   const [customActive, setCustomActive] = useState(!isPresetCount);
   const [customText, setCustomText] = useState(String(matchCount));
   const customShown = customActive || !isPresetCount;
+  // ISO dates order as strings. `max` on the input stops the picker but not
+  // the keyboard, so a later day is refused here and never sent.
+  const endDateInFuture = endDate !== null && endDate > today;
 
   return (
     <Card className={ANALYSIS_CARD_TRANSITION}>
@@ -170,12 +181,15 @@ export function MatchmakingAnalysisStartCard({
               />
             )}
           </div>
-          {matchCount >= 30 && (
-            <p className="text-sm text-muted-foreground">
-              Larger runs analyze many more players and can take much longer
-              on a cold cache — a 100-match run may need over an hour.
-            </p>
-          )}
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="matchmaking-expected-duration"
+          >
+            Expected duration: up to about{" "}
+            {formatRunDuration(estimateColdRunMinutes(matchCount))} when
+            nothing is stored yet, less for players and matches already
+            fetched.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="matchmaking-end-date">
@@ -186,6 +200,10 @@ export function MatchmakingAnalysisStartCard({
               id="matchmaking-end-date"
               type="date"
               max={today}
+              aria-invalid={endDateInFuture}
+              aria-describedby={
+                endDateInFuture ? "matchmaking-end-date-error" : undefined
+              }
               value={endDate ?? ""}
               onChange={(event) =>
                 onEndDateChange(event.target.value || null)
@@ -203,10 +221,19 @@ export function MatchmakingAnalysisStartCard({
               </Button>
             )}
           </div>
+          {endDateInFuture && (
+            <p
+              id="matchmaking-end-date-error"
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              The last day to include cannot be after today.
+            </p>
+          )}
         </div>
         <Button
           onClick={onStart}
-          disabled={startPending}
+          disabled={startPending || endDateInFuture}
           className="w-full gold-gradient button-medium no-rotation"
         >
           {startPending ? (

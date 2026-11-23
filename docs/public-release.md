@@ -4,6 +4,13 @@ League Analysis is a paused portfolio project for local exploration. Source
 visibility is not Riot approval, an open-source license, or a security
 certification.
 
+The owner also runs one private installation, described in
+[Production Deployment](deployment.md). It is not a public service: it has no
+registration, every account is created by the owner, search engines are told
+not to index it, and it uses the owner's own Riot key for private
+experimentation. Opening it to the public would need the Riot registration and
+key described below first.
+
 ## Riot policy review — 2026-09-10
 
 Read Riot's [general policies](https://developer.riotgames.com/policies/general),
@@ -44,7 +51,9 @@ for such use. No Riot approval is claimed by this project.
   historical authorship or ownership of contributions.
 
 The documented QA fixture passwords are deliberately local-only. Do not reuse
-them for another account or a network-accessible installation. Each reader
+them for another account or a network-accessible installation, and never copy
+the `auth` schema of a local database to one: the production installation
+receives game data only and its accounts are created there. Each reader
 should create their own account and fresh local database using the README.
 
 ## History

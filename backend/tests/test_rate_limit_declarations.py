@@ -13,7 +13,6 @@ from app.core.http_rate_limit import limiter
 
 DECLARED_LIMITS: dict[str, str] = {
     "app.features.auth.router.login": "5 per 1 minute",
-    "app.features.auth.router.register_user": "3 per 1 minute",
     "app.features.auth.router.refresh_access_token": "20 per 1 minute",
     "app.features.auth.router.submit_join_us_contact": "5 per 1 minute",
     "app.features.auth.router.request_email_change_code": "10 per 1 minute",
