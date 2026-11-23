@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.riot_api.constants import (
     RANKED_SOLO_QUEUE_TYPE,
     Platform,
-    get_region_by_platform,
+    get_account_region_by_platform,
 )
 from app.features.auth.users.models import User
 from app.features.auth.users.user_settings import UserSettings, ensure_user_settings
@@ -258,7 +258,7 @@ class PlayerService:
     ) -> PlayerResponse:
         """Resolve one Riot ID into shared canonical data without tracking it."""
         await ensure_riot_writer_maintenance_is_inactive(self.db)
-        region = get_region_by_platform(platform)
+        region = get_account_region_by_platform(platform)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
             raise PlayerNotFoundError(f"Player {game_name}#{tag_line} was not found.")
@@ -515,7 +515,7 @@ class PlayerService:
         logger.debug("Updating player profile", puuid=player.puuid)
 
         platform_enum = Platform(player.platform.lower())
-        region = get_region_by_platform(platform_enum)
+        region = get_account_region_by_platform(platform_enum)
 
         # Fetch both sources before mutating the ORM object so a partial Riot
         # response cannot leave an uncommitted half-update in the session.
