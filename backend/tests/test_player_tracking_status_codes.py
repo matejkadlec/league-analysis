@@ -28,7 +28,6 @@ async def _track(error: Exception) -> HTTPException:
             request=loopback_request(),
             puuid="puuid-1",
             player_service=service,
-            background_tasks=MagicMock(),
             current_user=MagicMock(),
         )
     return raised.value

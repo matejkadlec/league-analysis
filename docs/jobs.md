@@ -37,12 +37,50 @@ health checks, not best-effort batch writers.
 advance only on a clean owning check — including one that found nothing new.
 Failed, cancelled, warning-bearing, or rate-limited work never advances them.
 
+## One Process Owns Every Run
+
+A run belongs to the process that started it, and recovery at the next start
+assumes that process is gone. Three layers keep that true across a restart
+(LGA-111: a restarted backend closed its port and went on fetching while the
+new one cancelled the same run, two writers on one Riot key).
+
+- **Riot work never rides on a request.** Player syncs, manual triggers and
+  test runs start through `start_runtime_task`
+  (`backend/app/features/jobs/runtime_tasks.py`), not Starlette
+  `BackgroundTasks`: Uvicorn drains every request before it runs the lifespan
+  shutdown, so a background task kept a stopped server alive for as long as
+  its Riot run lasted.
+- **Shutdown cancels every running job and is bounded.** The lifespan stops
+  APScheduler with `wait=False`, cancels the runtime-owned tasks and the
+  scheduler-dispatched runs, and waits at most five seconds for each to record
+  `CANCELLED`. Uvicorn runs with a graceful-shutdown timeout (10 s from
+  `run.sh`, 20 s in the production image), so an open request cannot postpone
+  that either. Whatever a run could not record in time, startup recovery closes.
+- **A run writes only while it owns its row.** The completion, the
+  unfinished-run fallback and the pause/resume status write all match the
+  execution only while it is `RUNNING` or `PAUSED`; a write that matches
+  nothing leaves the stored row standing and the run reports that status. The
+  two writers also re-read their row once per player and before a freshness
+  write (`ensure_execution_is_owned`), and stop with nothing further written
+  once another owner closed it. The check is per player, not per request, so a
+  superseded run may still finish storing the matches of the player it is on.
+
+`run.sh` adds the process-level guarantee for local use: every backend process
+it starts (the `uv` wrapper, Uvicorn's reloader and its worker) inherits a
+marker in its environment, and a start stops all of them — `TERM`, a bounded
+wait, then `KILL` — before it stops the port listeners. A worker that has
+closed its listener is invisible to a port lookup, which is how it used to
+survive. Exiting the launcher stops only the backend that launcher started.
+In production one fixed container holds the API
+([Production Deployment](deployment.md#the-stack)).
+
 ## Startup Recovery — Deliberately Asymmetric
 
 On startup, recovery marks executions orphaned in `RUNNING`/`PAUSED`
 `CANCELLED` and cancels **every** active (`pending`/`running`)
-`jobs.player_sync_runs` row: the sync worker is in-process, so no such row can
-still be owned, and because the start route attaches to an existing active
+`jobs.player_sync_runs` row: the previous process is gone
+([One Process Owns Every Run](#one-process-owns-every-run)), so no such row is
+still owned, and because the start route attaches to an existing active
 row, an orphan would permanently block that player's updates. This step is
 mandatory — failure raises `StartupRecoveryError` and stops the application
 rather than serving with rows no worker owns. Resolve the recovery error
@@ -70,6 +108,19 @@ dispatch. Each never-run or overdue configuration is then queued exactly once
 as scheduler-owned catch-up work. The scheduler resumes only after that queue
 is complete, while FastAPI readiness never waits for the catch-up execution or
 a Riot rate-limit window.
+
+"Ran" means the last **covering** run: a `REGULAR` execution that finished
+`SUCCESS` over every tracked player. A failed start (no key), a run the
+restart itself cancelled, a rate-limited run that stopped part-way, a `TEST`
+run and a one-player Player Card update (`triggered_by = 'player_sync'`) all
+leave players unvisited, so none of them satisfies the check (LGA-125: each
+used to suppress the catch-up).
+
+A rebuilt schedule fires one interval after the last covering run, not one
+interval after the restart; counted from the restart, a backend restarted more
+often than a job's interval never reached that job's scheduled run. An overdue
+job gets its catch-up immediately and its schedule restarts one interval from
+then, so the two never dispatch together.
 
 During a live process (not startup), an execution that claims to be running
 but has no in-memory control is marked `FAILED` instead. A run that ends
@@ -120,6 +171,10 @@ finish `SUCCESS` without recoverable warnings.
   terminal run: startup recovery or an operator may cancel it while the
   orchestrator is mid-flight, and an unguarded write would revive the
   cancelled run and collide with its replacement; a row lock holds the check.
+  It answers whether it wrote, and the orchestrator starts no writer for a run
+  that is already terminal. An orchestrator cancelled between its writers
+  (shutdown) closes its run as `cancelled`, so the player is not blocked until
+  the next start.
 
 ## Match Fetcher Invariants
 
@@ -131,15 +186,17 @@ finish `SUCCESS` without recoverable warnings.
   last stored values instead, so a config holding one again means
   something wrote it back rather than that a historical row survived. A newly
   approved queue is enabled by adding it to that single allowlist.
-- Sleeps 1.2 s between match-detail requests to respect the development-key
-  100-requests/2-minutes budget, on top of the client's own
-  response-reported window adaptation. Do not change throttling outside an
-  explicitly scoped task (see [`riot-api.md`](riot-api.md)).
-- Only current release-year matches (game version `16.*` for 2026) are
-  ingested; the boundary is deliberately explicit so a new season requires a
-  reviewed update instead of silently mixing historical data.
-- Rank snapshots come from `update_player_league()`
-  (`backend/app/features/players/service.py:1280`), Solo/Duo only, writing a
+- Adds no pacing of its own between match-detail requests: throttling is the
+  Riot client's response-reported window adaptation alone. Do not change
+  throttling outside an explicitly scoped task (see
+  [`riot-api.md`](riot-api.md)).
+- Only matches from the oldest synced release onward are ingested: game major
+  `>= OLDEST_SYNCED_GAME_MAJOR` together with a start-time bound on every id
+  page (`backend/app/features/matches/match_sync.py`). The boundary is
+  deliberately explicit so a new season requires a reviewed update instead of
+  silently mixing historical data.
+- Rank snapshots come from `PlayerService.update_player_league()`
+  (`backend/app/features/players/service.py`), Solo/Duo only, writing a
   new immutable `core.player_leagues` row only when the rank changed.
 
 ## Test Runs

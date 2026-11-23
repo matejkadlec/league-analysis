@@ -152,8 +152,14 @@ only when `node_modules` is absent, and starts Next.js. Defaults:
 - Backend log: `logs/backend.log`
 - Frontend log: `logs/frontend.log`
 
-`run.sh` requires `lsof` and `ss`. Before the database check, it gracefully
-terminates TCP listeners on the selected frontend and backend ports, then
+`run.sh` requires `lsof` and `ss`. Before the database check, it stops the
+backend a previous `./run.sh` of this checkout started on the selected backend
+port, as a whole process tree: the wrapper, Uvicorn's reloader and its worker
+are found by a marker in their environment, terminated, and force-stopped if
+any is still alive after 20 seconds
+([Background Jobs](jobs.md#one-process-owns-every-run) explains why a port
+lookup is not enough). It then gracefully
+terminates TCP listeners on the selected frontend and backend ports, and
 force-terminates only listeners that remain after five seconds. `ss` covers
 WSL cases where `lsof` does not report a listener. Consequently, `./run.sh`
 clears 3000 and 8000, `./run.sh 3001` clears 3001 and 8000, and

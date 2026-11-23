@@ -5,7 +5,7 @@ from typing import cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
@@ -232,13 +232,17 @@ async def test_the_start_endpoint_maps_a_busy_refusal_to_a_structured_409(
         "create_or_get_player_sync",
         AsyncMock(side_effect=SyncBusyError("An update for Faker#KR1 is running.")),
     )
-    background_tasks = BackgroundTasks()
+    started: list[object] = []
+
+    def record(*work: object) -> None:
+        started.append(work)
+
+    monkeypatch.setattr(players_router, "start_runtime_task", record)
 
     with pytest.raises(HTTPException) as error:
         await players_router.start_player_sync(
             request=_request(),
             puuid="player-puuid",
-            background_tasks=background_tasks,
             player_service=cast(PlayerService, SimpleNamespace(db=object())),
             current_user=cast(User, SimpleNamespace(id=7)),
         )
@@ -248,7 +252,7 @@ async def test_the_start_endpoint_maps_a_busy_refusal_to_a_structured_409(
         "code": "SYNC_BUSY",
         "message": "An update for Faker#KR1 is running.",
     }
-    assert not background_tasks.tasks
+    assert started == []
 
 
 async def test_a_failure_before_the_writers_still_terminates_the_run(

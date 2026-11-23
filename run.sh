@@ -139,6 +139,80 @@ BACKEND_PORT="${2:-8000}"
 validate_port "Frontend" "$FRONTEND_PORT"
 validate_port "Backend" "$BACKEND_PORT"
 
+# Uvicorn stops waiting for open requests after this many seconds. Riot runs
+# no longer ride on a request, so this bounds a stuck client, not a job.
+BACKEND_GRACEFUL_TIMEOUT=10
+# What a stopping backend gets before it is force-stopped: the graceful
+# timeout, the job runtime's own bounded wait, and a margin.
+BACKEND_STOP_TIMEOUT="${LGA_RUN_BACKEND_STOP_TIMEOUT:-20}"
+if ! [[ "$BACKEND_STOP_TIMEOUT" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}ERROR: LGA_RUN_BACKEND_STOP_TIMEOUT must be a whole number of seconds. Got: $BACKEND_STOP_TIMEOUT${NC}" >&2
+    exit 1
+fi
+# Every process of a backend inherits two markers from its launcher: the uv
+# wrapper, uvicorn's reloader and its worker. One names the checkout and port,
+# for a start that replaces any earlier backend; one names this launcher.
+BACKEND_MARKER="LGA_RUN_BACKEND=$SCRIPT_DIR:$BACKEND_PORT"
+OWN_BACKEND_MARKER="LGA_RUN_BACKEND_LAUNCHER=$SCRIPT_DIR:$BACKEND_PORT:$$"
+
+backend_process_pids() {
+    local marker="$1"
+
+    # A worker that closed its listener is invisible to a port lookup, so a
+    # backend is found by the marker in its environment instead.
+    grep -lzxF -- "$marker" /proc/[0-9]*/environ 2>/dev/null \
+        | sed -E 's#^/proc/([0-9]+)/environ$#\1#' || true
+}
+
+signal_backend_processes() {
+    local signal="$1"
+    local pids="$2"
+    local pid
+
+    while IFS= read -r pid; do
+        if [[ "$pid" =~ ^[0-9]+$ ]]; then
+            kill "-$signal" "$pid" 2>/dev/null || true
+        fi
+    done <<< "$pids"
+}
+
+stop_backend_processes() {
+    local marker="$1"
+    local pids
+    local remaining_pids
+    local attempts=$((BACKEND_STOP_TIMEOUT * 5))
+
+    pids="$(backend_process_pids "$marker")"
+    if [ -z "$pids" ]; then
+        return 0
+    fi
+
+    echo -e "${YELLOW}Stopping backend process(es): ${pids//$'\n'/ }${NC}"
+    signal_backend_processes TERM "$pids"
+    for ((attempt = 0; attempt < attempts; attempt++)); do
+        sleep 0.2
+        remaining_pids="$(backend_process_pids "$marker")"
+        if [ -z "$remaining_pids" ]; then
+            echo -e "${GREEN}✓ Backend stopped${NC}"
+            return 0
+        fi
+    done
+
+    echo -e "${YELLOW}Force-stopping backend process(es) still alive after ${BACKEND_STOP_TIMEOUT}s: ${remaining_pids//$'\n'/ }${NC}"
+    signal_backend_processes KILL "$remaining_pids"
+    for ((attempt = 0; attempt < 25; attempt++)); do
+        sleep 0.2
+        remaining_pids="$(backend_process_pids "$marker")"
+        if [ -z "$remaining_pids" ]; then
+            echo -e "${GREEN}✓ Backend stopped${NC}"
+            return 0
+        fi
+    done
+
+    echo -e "${RED}ERROR: Backend process(es) could not be stopped: ${remaining_pids//$'\n'/ }${NC}" >&2
+    return 1
+}
+
 listener_pids_for_port() {
     local port="$1"
 
@@ -223,6 +297,9 @@ if ! command -v ss >/dev/null 2>&1; then
     exit 1
 fi
 
+# The previous backend first, as a whole process tree: two backends on one
+# database are two job runners sharing one Riot key.
+stop_backend_processes "$BACKEND_MARKER"
 stop_listeners_on_port "$FRONTEND_PORT"
 if [ "$BACKEND_PORT" != "$FRONTEND_PORT" ]; then
     stop_listeners_on_port "$BACKEND_PORT"
@@ -246,7 +323,9 @@ cleanup() {
 
     if [ -n "$BACKEND_PID" ]; then
         echo -e "${BLUE}Stopping backend (PID: $BACKEND_PID)...${NC}"
-        kill "$BACKEND_PID" 2>/dev/null || true
+        # Only this launcher's own: a later `./run.sh` may already have
+        # replaced it, and that backend is not this one's to stop.
+        stop_backend_processes "$OWN_BACKEND_MARKER" || true
     fi
 
     if [ -n "$FRONTEND_PID" ]; then
@@ -294,7 +373,7 @@ echo ""
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Backend (FastAPI)${NC}"
 echo -e "${BLUE}=============================================${NC}"
-CORS_ORIGINS="$RUN_CORS_ORIGINS" uv run uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
+LGA_RUN_BACKEND="$SCRIPT_DIR:$BACKEND_PORT" LGA_RUN_BACKEND_LAUNCHER="$SCRIPT_DIR:$BACKEND_PORT:$$" CORS_ORIGINS="$RUN_CORS_ORIGINS" uv run uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload --timeout-graceful-shutdown "$BACKEND_GRACEFUL_TIMEOUT" > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}✓ Backend started (PID: $BACKEND_PID)${NC}"
 echo -e "${GREEN}  App: http://localhost:$BACKEND_PORT${NC}"

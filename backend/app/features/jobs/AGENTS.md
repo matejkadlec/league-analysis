@@ -46,6 +46,20 @@ changes. Module responsibilities live in the code under this directory.
   stop remain responsive.
 - Register/unregister runtime controls in all success, error, cancellation, and
   shutdown paths.
+- Start Riot work that outlives its request with `start_runtime_task`
+  (`runtime_tasks.py`), never Starlette `BackgroundTasks`: Uvicorn drains every
+  request before the lifespan shutdown, so a background task keeps a stopped
+  server alive and fetching. The lifespan cancels those tasks and every run
+  holding a runtime key, then waits a bounded moment for their terminal rows.
+- A run writes its execution row only while the row is `RUNNING` or `PAUSED`
+  (`ACTIVE_EXECUTION_STATUSES`). Keep that predicate on the completion, the
+  unfinished-run fallback and the pause/resume write; a write that matches
+  nothing means another owner closed the row, and the run adopts the stored
+  status instead of publishing its own.
+- Call `ensure_execution_is_owned()` once per player and before a freshness
+  write, outside any `except Exception` that records a player error: its
+  `JobStopSignal` must end the run. It is a database read, so never call it
+  per request the way `check_control_state()` is called.
 - Prevent concurrent regular runs of the same job type. Test runs use the
   negative configuration ID as their runtime key.
 - A regular manual trigger may force-stop its active test run before starting.
@@ -92,7 +106,8 @@ changes. Module responsibilities live in the code under this directory.
 - `_finish_sync` never reopens a terminal `PlayerSyncRun`. It locks the row and
   writes only while the run is still active, because an operator stop or startup
   recovery may cancel it while this orchestrator is mid-flight; reviving it
-  would also risk a collision with a replacement run on the same PUUID.
+  would also risk a collision with a replacement run on the same PUUID. It
+  returns whether it wrote: `run_player_sync` starts no writer after a `False`.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
   diagnostics after isolated player, match, timeline, or provider-shape errors.
   Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is
@@ -118,7 +133,8 @@ changes. Module responsibilities live in the code under this directory.
 - Mark `RUNNING`/`PAUSED` executions left by an ungraceful shutdown as
   `CANCELLED`.
 - Cancel every active `jobs.player_sync_runs` row too. Its worker is
-  in-process, so no row left active by a previous process can still be owned;
+  in-process and shutdown cancels it, so no row left active by a previous
+  process can still be owned (`docs/jobs.md`, "One Process Owns Every Run");
   the table allows one active row per PUUID and the route schedules work only
   for a newly created row, so an orphan blocks that player's updates. Startup is
   the only safe place: a live process cannot tell an abandoned row from one a
@@ -143,14 +159,19 @@ changes. Module responsibilities live in the code under this directory.
   status. Production runs `restart: unless-stopped`, so a transient fault gets a
   clean retry. Mark mandatory steps with the explicit flag in the step tuple,
   never by matching a function name.
-- Stop APScheduler with `wait=False` during process shutdown. Deployment must
-  never drain or wait for long-running Riot executions; startup recovery owns
-  the interrupted persisted state.
+- Stop APScheduler with `wait=False` during process shutdown, then cancel the
+  running jobs with a bounded wait. Deployment must never drain or wait for
+  long-running Riot executions; startup recovery owns whatever persisted state
+  an interrupted run could not close itself.
 - Start APScheduler paused, discard its stale persisted triggers, and rebuild
   regular schedules from authoritative active job configurations before
   dispatch. Queue each never-run or overdue configuration exactly once as
   scheduler-owned catch-up work, then resume; application readiness must not
   wait for that provider work or a rate-limit window.
+- Judge "overdue" and the first scheduled run from the last *covering*
+  execution only: `REGULAR`, `SUCCESS`, and not `PLAYER_SYNC_TRIGGER`. A new
+  kind of partial or targeted run must stay out of that query, or it silently
+  suppresses the catch-up for every other tracked player.
 - Service/base orphan cleanup may mark a database execution `FAILED` when no
   matching in-memory runtime control exists during a live process.
 

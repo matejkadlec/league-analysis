@@ -4,7 +4,7 @@
 """Scheduler module for managing automated background jobs."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import structlog
@@ -21,7 +21,15 @@ from app.core.db_session import rollback_quietly
 from .base import BaseJob
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
 from .intervals import JobIntervalError, resolve_interval_seconds
-from .models import JobConfiguration, JobExecution, JobStatus, JobType
+from .models import (
+    ACTIVE_EXECUTION_STATUSES,
+    PLAYER_SYNC_TRIGGER,
+    ExecutionType,
+    JobConfiguration,
+    JobExecution,
+    JobStatus,
+    JobType,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -51,8 +59,8 @@ class SchedulerLike(Protocol):
     def resume(self) -> None: ...
 
     # APScheduler funnels trigger arguments through `**trigger_args`, where they
-    # collide with its own `jobstore`/`executor` keywords. Naming the two this
-    # module passes -- `seconds` and `run_date` -- keeps the boundary typed.
+    # collide with its own keywords, so the ones this module passes are named.
+    # `next_run_time` takes no None: APScheduler reads that as "add paused".
     def add_job(
         self,
         func: Callable[..., object],
@@ -63,6 +71,7 @@ class SchedulerLike(Protocol):
         replace_existing: bool = False,
         seconds: int | None = None,
         run_date: datetime | None = None,
+        next_run_time: datetime = ...,
     ) -> object: ...
 
     def get_jobs(self) -> list[ScheduledJobLike]: ...
@@ -211,7 +220,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
 
     from sqlalchemy import update
 
-    from .models import ACTIVE_SYNC_STATUSES, PlayerSyncRun
+    from .models import ACTIVE_SYNC_STATUSES, SYNC_CANCELLED_MESSAGE, PlayerSyncRun
 
     try:
         now = datetime.now(UTC)
@@ -224,7 +233,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
                 # A Core update bypasses the model's application-side onupdate.
                 updated_at=now,
                 error_code="SYNC_CANCELLED",
-                error_message="The player update was cancelled before it finished.",
+                error_message=SYNC_CANCELLED_MESSAGE,
             )
         )
         await db.commit()
@@ -260,7 +269,7 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
 
         # Find ALL running or paused jobs (none should exist during startup)
         stmt = select(JobExecution).where(
-            JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED])
+            JobExecution.status.in_(ACTIVE_EXECUTION_STATUSES)
         )
         result = await db.execute(stmt)
         stale_jobs = result.scalars().all()
@@ -275,7 +284,7 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
             # Update them to cancelled status — they were interrupted by shutdown
             update_stmt = (
                 update(JobExecution)
-                .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
+                .where(JobExecution.status.in_(ACTIVE_EXECUTION_STATUSES))
                 .values(
                     status=JobStatus.CANCELLED,
                     completed_at=datetime.now(UTC),
@@ -416,13 +425,18 @@ def _get_job_class(
 
 
 def _schedule_job(
-    job_config: JobConfiguration, job_class: type[BaseJob], interval_seconds: int
+    job_config: JobConfiguration,
+    job_class: type[BaseJob],
+    interval_seconds: int,
+    first_run: datetime,
 ) -> None:
     """Schedule a single job with the scheduler.
 
-    :param job_config: Job configuration.
-    :param job_class: Job class to instantiate.
-    :param interval_seconds: Interval in seconds.
+    Args:
+        job_config: Job configuration.
+        job_class: Job class to instantiate.
+        interval_seconds: Interval in seconds.
+        first_run: When the schedule fires first; later runs follow it.
     """
     job_instance = job_class(job_config.id)
 
@@ -436,6 +450,7 @@ def _schedule_job(
         id=f"job_{job_config.id}",
         name=job_config.name,
         replace_existing=True,
+        next_run_time=first_run,
     )
 
     logger.info(
@@ -444,6 +459,7 @@ def _schedule_job(
         job_name=job_config.name,
         job_type=job_config.job_type.value,
         interval_seconds=interval_seconds,
+        first_run=first_run.isoformat(),
     )
 
 
@@ -491,7 +507,13 @@ async def sync_job_configuration(job_config_id: int) -> None:
 
     # No blanket handler. The update route validates the interval before it
     # commits, so only genuine scheduler faults reach here -- worth a 500.
-    _schedule_job(job_config, job_class, _resolve_interval_seconds(job_config))
+    interval_seconds = _resolve_interval_seconds(job_config)
+    _schedule_job(
+        job_config,
+        job_class,
+        interval_seconds,
+        first_run=datetime.now(UTC) + timedelta(seconds=interval_seconds),
+    )
 
 
 def _overdue_reason(
@@ -511,14 +533,43 @@ def _overdue_reason(
     return None
 
 
-async def _last_job_execution(job_config_id: int) -> JobExecution | None:
-    """Return the most recent execution for one configuration, if any."""
+def _first_scheduled_run(
+    last_execution: JobExecution | None,
+    now: datetime,
+    interval_seconds: int,
+) -> datetime:
+    """When a rebuilt schedule fires first: one interval after the last run.
+
+    Counting from the restart would postpone the job on every start. An
+    overdue job gets its catch-up run now, so its schedule restarts one
+    interval from now rather than firing twice at once.
+    """
+    interval = timedelta(seconds=interval_seconds)
+    if last_execution is not None:
+        due = last_execution.started_at + interval
+        if due >= now:
+            return due
+    return now + interval
+
+
+async def _last_covering_execution(job_config_id: int) -> JobExecution | None:
+    """Return the most recent run that covered the whole job, if any.
+
+    Only a successful regular run over every tracked player counts. A failed,
+    cancelled or rate-limited run, a test run and a one-player Player Card
+    update each leave players unvisited, so the job is still owed.
+    """
     from sqlalchemy import select
 
     async with db_manager.get_session() as db:
         stmt = (
             select(JobExecution)
-            .where(JobExecution.job_config_id == job_config_id)
+            .where(
+                JobExecution.job_config_id == job_config_id,
+                JobExecution.execution_type == ExecutionType.REGULAR,
+                JobExecution.status == JobStatus.SUCCESS,
+                JobExecution.triggered_by != PLAYER_SYNC_TRIGGER,
+            )
             .order_by(JobExecution.started_at.desc())
             .limit(1)
         )
@@ -540,7 +591,7 @@ async def _collect_overdue_jobs(
                 continue
 
             interval_seconds = _resolve_interval_seconds(job_config)
-            last_execution = await _last_job_execution(job_config.id)
+            last_execution = await _last_covering_execution(job_config.id)
             reason = _overdue_reason(last_execution, now, interval_seconds)
             if reason is None:
                 continue
@@ -588,9 +639,9 @@ def _queue_overdue_jobs(
 async def _check_and_run_overdue_jobs() -> None:
     """Check for overdue jobs and queue them once for immediate execution.
 
-    Overdue means never run, or last run longer ago than the interval. The
-    scheduler is still paused here, so one-shot entries dispatch only once
-    startup resumes it and readiness never waits on provider traffic.
+    Overdue means no covering run yet, or the last one longer ago than the
+    interval. The scheduler is still paused here, so one-shot entries dispatch
+    only once startup resumes it and readiness never waits on provider traffic.
     """
     try:
         logger.info("Checking for overdue jobs at startup")
@@ -660,7 +711,15 @@ async def _load_and_schedule_jobs() -> None:
                     continue
 
                 interval_seconds = _resolve_interval_seconds(job_config)
-                _schedule_job(job_config, job_class, interval_seconds)
+                last_execution = await _last_covering_execution(job_config.id)
+                _schedule_job(
+                    job_config,
+                    job_class,
+                    interval_seconds,
+                    first_run=_first_scheduled_run(
+                        last_execution, datetime.now(UTC), interval_seconds
+                    ),
+                )
                 scheduled += 1
             except JobIntervalError as e:
                 logger.error(

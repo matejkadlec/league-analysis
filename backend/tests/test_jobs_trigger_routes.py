@@ -2,7 +2,7 @@
 
 Both routes answer a refusal with HTTP 200 and `success=False`, so nothing
 raises when they decline; the only evidence is the body and whether a task was
-queued. Both assertions are made here.
+started. Both assertions are made here.
 """
 
 from datetime import UTC, datetime
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 
 from app.features.auth.users.models import User
 from app.features.jobs import control as control_module
@@ -81,6 +81,12 @@ def _service(
 
 
 BUILT_JOBS: list[dict[str, object]] = []
+STARTED_TASKS: list[tuple[object, tuple[object, ...]]] = []
+
+
+def _record_started_task(work: object, *args: object) -> None:
+    """Stands in for the job runtime: remembers the work, runs none of it."""
+    STARTED_TASKS.append((work, args))
 
 
 class _RecordedJob:
@@ -100,9 +106,11 @@ class _RecordedJob:
 
 @pytest.fixture(autouse=True)
 def isolated_runtime_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No run holds a key, and no test reaches the real scheduler."""
+    """No run holds a key, and no test reaches the scheduler or starts work."""
     monkeypatch.setattr(control_module, "_runtime_controls", {})
+    monkeypatch.setattr(router_module, "start_runtime_task", _record_started_task)
     BUILT_JOBS.clear()
+    STARTED_TASKS.clear()
 
 
 async def test_an_inactive_job_cannot_be_triggered() -> None:
@@ -111,13 +119,11 @@ async def test_an_inactive_job_cannot_be_triggered() -> None:
     Without the guard the one control an operator has for taking a job out of
     service still leaves the Run button working.
     """
-    tasks = BackgroundTasks()
-
     with pytest.raises(HTTPException) as caught:
-        await trigger_job(JOB_ID, tasks, _service(_job(is_active=False)), _admin_user())
+        await trigger_job(JOB_ID, _service(_job(is_active=False)), _admin_user())
 
     assert caught.value.status_code == 400
-    assert tasks.tasks == []
+    assert STARTED_TASKS == []
 
 
 async def test_a_job_already_running_is_refused_without_queueing_a_second_run() -> None:
@@ -125,15 +131,13 @@ async def test_a_job_already_running_is_refused_without_queueing_a_second_run() 
 
     A queued second run would have both writing the same Riot data at once.
     """
-    tasks = BackgroundTasks()
-
     response = await trigger_job(
-        JOB_ID, tasks, _service(_job(), job_running=True), _admin_user()
+        JOB_ID, _service(_job(), job_running=True), _admin_user()
     )
 
     assert response.success is False
     assert "already running" in response.message
-    assert tasks.tasks == []
+    assert STARTED_TASKS == []
 
 
 async def test_a_manual_run_is_recorded_as_triggered_by_the_user(
@@ -147,13 +151,12 @@ async def test_a_manual_run_is_recorded_as_triggered_by_the_user(
         return _RecordedJob(job.id, triggered_by)
 
     monkeypatch.setattr(router_module, "_create_job_instance", record)
-    tasks = BackgroundTasks()
 
-    response = await trigger_job(JOB_ID, tasks, _service(_job()), _admin_user())
+    response = await trigger_job(JOB_ID, _service(_job()), _admin_user())
 
     assert response.success is True
     assert BUILT_JOBS == [{"job_config_id": JOB_ID, "triggered_by": "user"}]
-    assert len(tasks.tasks) == 1
+    assert len(STARTED_TASKS) == 1
 
 
 async def test_an_unimplemented_job_type_is_501_rather_than_a_crash(
@@ -163,10 +166,9 @@ async def test_an_unimplemented_job_type_is_501_rather_than_a_crash(
     from app.features.jobs import scheduler as scheduler_module
 
     monkeypatch.setattr(scheduler_module, "job_registry", dict)
-    tasks = BackgroundTasks()
 
     with pytest.raises(HTTPException) as caught:
-        await trigger_job(JOB_ID, tasks, _service(_job()), _admin_user())
+        await trigger_job(JOB_ID, _service(_job()), _admin_user())
 
     assert caught.value.status_code == 501
 
@@ -176,15 +178,13 @@ async def test_a_second_test_run_is_refused_while_one_is_active() -> None:
     control_module.claim_runtime_control(
         control_module.runtime_control_key(JOB_ID, test_run=True), None
     )
-    tasks = BackgroundTasks()
-
     response = await trigger_test_run(
-        JOB_ID, tasks, _service(_job()), _admin_user(), suspend_regular=False
+        JOB_ID, _service(_job()), _admin_user(), suspend_regular=False
     )
 
     assert response.success is False
     assert "already active" in response.message
-    assert tasks.tasks == []
+    assert STARTED_TASKS == []
 
 
 @pytest.mark.parametrize("suspend_regular", [True, False])
@@ -204,11 +204,9 @@ async def test_suspending_the_schedule_is_the_callers_choice(
         router_module, "_set_scheduled_job_suspended", record_suspension
     )
     monkeypatch.setattr(router_module, "_create_test_job_instance", build_test_job)
-    tasks = BackgroundTasks()
 
     response = await trigger_test_run(
         JOB_ID,
-        tasks,
         _service(_job()),
         _admin_user(),
         suspend_regular=suspend_regular,

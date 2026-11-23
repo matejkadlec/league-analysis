@@ -21,6 +21,7 @@ from app.core.request_logging import RequestLoggingMiddleware
 from app.features.auth.router import router as auth_router
 from app.features.jobs.log_capture import job_log_capture
 from app.features.jobs.router import router as jobs_router
+from app.features.jobs.runtime_tasks import cancel_runtime_tasks
 from app.features.jobs.scheduler import (
     StartupRecoveryError,
     shutdown_scheduler,
@@ -96,7 +97,10 @@ async def lifespan(app: FastAPI):
     await _start_scheduler_safely()
     yield
     logger.info("Shutting down League Analysis Backend")
+    # Scheduler first, so nothing new is dispatched while the running jobs
+    # are cancelled and given a bounded moment to record their terminal state.
     shutdown_scheduler()
+    await cancel_runtime_tasks()
 
 
 tags_metadata = [
@@ -204,4 +208,7 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.debug,
         log_level=settings.log_level.lower(),
+        # Bounded like `run.sh` and the production image: a client that never
+        # closes its request must not keep a stopped server alive.
+        timeout_graceful_shutdown=10,
     )

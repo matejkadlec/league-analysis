@@ -77,6 +77,7 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
         """Process each tracked player, converting stop conditions to signals."""
         for puuid in tracked_puuids:
             await self.check_control_state(db)
+            await self.ensure_execution_is_owned(db)
             try:
                 # Re-read per iteration: `_handle_player_processing_error`
                 # rolls the session back, which expires every row it holds.
@@ -91,7 +92,7 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
                     match_service,
                     riot_client,
                 )
-            except RateLimitSignal:
+            except RateLimitSignal, JobStopSignal:
                 raise
             except RateLimitError as error:
                 raise RateLimitSignal(
@@ -157,6 +158,10 @@ class MatchFetcherJob(PlayerTargetsMixin, BaseJob):
                 message="Rate limit reached while synchronizing matches",
             ) from error
         self.metrics["records_created"] += count
+
+        # The match sync can run for minutes. A run superseded meanwhile must
+        # not advance a freshness timestamp or record a league observation.
+        await self.ensure_execution_is_owned(db)
 
         if len(self._errors_encountered) != error_count_before:
             # Same rollback, other half: everything below reads `player`
