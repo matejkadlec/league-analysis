@@ -31,8 +31,9 @@ holds the rules.
    decision was set aside in step 1).
 4. **Check and commit:** the affected checks and the complete gate through the
    _Gate queue_ (_Implementation and verification_), then commit.
-5. **Push** the revision (`--force-with-lease` after a rebase) and read the
-   remote head back. Open no pull request. A batch whose pull request waits for a
+5. **Push** the revision and read the remote head back. When `origin/master`
+   has to come in, merge it (`git merge origin/master`), never rebase: Matěj
+   reviewed this branch (`CLAUDE.md`, "Commits and pushes"). Open no pull request. A batch whose pull request waits for a
    reconfirmation (_Reconfirmation_) gets the new head on that pull request, and
    its `finalize-pr` run carries on (the new head gets its review pass). Such a
    `qa2` belongs in the session whose `finalize-pr` run owns the pull request; in
@@ -48,7 +49,7 @@ holds the rules.
    viewport), the whole block that switches Matěj's clone to the branch, updates
    it and starts the application (_Launch commands_: `cd`, `git fetch origin`,
    `git switch <branch>`, `git pull --ff-only`, then `./run.sh`; never the
-   update command alone; when this revision rebased the branch, so
+   update command alone; when the branch was rewritten anyway, so
    `git merge-base --is-ancestor <the head he last ran> origin/<branch>` fails,
    `git reset --keep origin/<branch>` and `git rev-parse --short HEAD` replace
    `git pull --ff-only`: _Launch commands_, "A rewritten branch"; plus the

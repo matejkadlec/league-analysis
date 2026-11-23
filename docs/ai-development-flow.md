@@ -568,10 +568,13 @@ Matěj's `qa1` passes the review and authorizes publishing the batch. The
    pushed commits) counts as reviewed only when his `qa1` says so; otherwise it
    goes back to him for another review instead of being published.
 3. **Finish:** commit. When `origin/master` (for a stacked batch: its dependency
-   branch) moved, rebase onto it, regenerate the lockfiles and move a new
+   branch) moved, merge it in, never rebase: the branch is one Matěj has
+   reviewed, so its reviewed head and his pushed commits stay in its history and
+   his clone can still fast-forward (`CLAUDE.md`, "Commits and pushes";
+   [Reconfirmation](#reconfirmation)). Regenerate the lockfiles and move a new
    Alembic revision onto the new head when needed
    ([Conflict domains](#conflict-domains)). Whenever the head differs from the
-   handed-off head the gate last passed on, run the full gate again. A rebase
+   handed-off head the gate last passed on, run the full gate again. A merge
    whose conflict resolutions touch anything Matěj sees
    ([QA classification](#qa-classification)) changes what he reviewed: push it
    and hand it back for another review, as a `qa2` revision does, instead of
@@ -610,8 +613,9 @@ branch. The [`qa2` skill](../.claude/skills/qa2/SKILL.md) carries it out:
    tickets' comments for context the handoff did not repeat.
 3. **Fix** what he reported, run the affected checks and the full gate, and
    commit.
-4. **Push** the revision (`--force-with-lease` after a rebase) and read the
-   remote head back. Open no pull request; a reconfirmation's pull request
+4. **Push** the revision and read the remote head back. A revision brings
+   `master` in by merging, never by rebasing, as `qa1` does: the branch is one
+   Matěj has reviewed. Open no pull request; a reconfirmation's pull request
    simply gets the new head, and its `finalize-pr` run carries on (the new head
    gets its review pass).
 5. **Record** the revision on each affected ticket as a new
@@ -665,9 +669,10 @@ applies the Alembic revisions to his local database, and starts both servers.
   For a first handoff, `git pull --ff-only` only confirms the branch is current;
   keep it in the block anyway.
 
-- **A rewritten branch:** when the branch was rewritten since the head Matěj
-  last ran (a `qa1` that rebased it before publishing, a revision pushed with
-  `--force-with-lease`), his clone still holds the old commits, `git switch`
+- **A rewritten branch:** reviewed branches take `master` by merging, so this
+  is the exception (a force-push that replaced commits he already ran). When
+  the branch was rewritten since the head Matěj last ran, his clone still holds
+  the old commits, `git switch`
   reports that the branches have diverged and `git pull --ff-only` refuses. The
   agent tests it before the handoff, with `<reviewed head>` the head of the
   latest `🖥️ Visual review handoff`:
@@ -1264,7 +1269,9 @@ the lock costs nothing.
   `.env`, logs, dumps or build output).
 - Before publishing, rebase onto the latest `origin/master` (a stacked batch: its
   dependency branch) when it moved, resolve conflicts (regenerate lockfiles, move
-  a new Alembic revision onto the new head), and rerun the affected checks.
+  a new Alembic revision onto the new head), and rerun the affected checks. A
+  branch Matěj has reviewed (a Visual batch after its handoff) takes it by merge
+  instead ([qa1](#qa1-visual-review-passed)).
 - After the merge, `finalize-pr` removes the batch's worktree and local branch.
   A Visual batch keeps its worktree from the handoff until then; the session that
   runs `qa1` takes the batch over, so it removes them.

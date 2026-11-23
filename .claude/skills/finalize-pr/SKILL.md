@@ -136,9 +136,11 @@ weakens a test or check.
   deploys by hand: never re-run, dispatch or otherwise trigger the Deploy
   workflow, never run the server's deploy command, and never touch the
   production host.
-- **Secrets.** Never read, print or copy `.env` files, tokens, keys, a Riot key,
-  database dumps, or production configuration. Never put them in a review
-  bundle, a comment, a reply or a report. Deploy logs are public: quote only the
+- **Secrets.** Never read, print or quote `.env` files, tokens, keys, a Riot
+  key, database dumps, or production configuration, and never copy them
+  anywhere but the one case "Start" names (a root `.env` into a new worktree of
+  this repository). Never put them in a review bundle, a comment, a reply or a
+  report. Deploy logs are public: quote only the
   failing step and its non-secret message.
 - **Paginate.** GitHub returns comment, review and reaction listings 30 entries
   per page, oldest first. Read every page (`gh api --paginate`) before you
@@ -213,8 +215,18 @@ session:
 2. **Locate the worktree.** Run `git fetch origin`. Reuse the worktree that
    `git worktree list` holds for the head branch (it may be the main checkout,
    or a cloud session's own clone). Create one only when none exists
-   (`git worktree add ../league-analysis-worktrees/<dir> <branch>`), then copy
-   `.env` into it only if a check needs the application.
+   (`git worktree add ../league-analysis-worktrees/<dir> <branch>`). Copy the
+   main checkout's `.env` into it only if a check needs the application, and
+   follow "Running the application" in `docs/ai-development-flow.md`
+   (_Implementation and verification_): in a local session, never start the
+   application against Matěj's local database (`league_analysis_local_dev`,
+   which the copied `.env` points at), because every backend start's recovery
+   cancels his running jobs. Point the worktree's `.env` at a database of the
+   agent's own (`POSTGRES_DB`, edited in place without reading the file), apply
+   the migrations to it, start `./run.sh 3201 8201`, and drop that database
+   afterwards; when it cannot create one, ask Matěj instead of starting
+   anything. A cloud session's database is its own, so `./run.sh` on its
+   defaults is fine there.
    - A clean local branch that is strictly behind its remote: fast-forward it
      (`git merge --ff-only`).
    - Uncommitted changes, or a local branch that is ahead of or diverged from
@@ -740,9 +752,9 @@ step expects. Skip it and say so in the report.
   shape, asking for the answer (`qa1` or `qa2`) in this session, which keeps
   owning the pull request. Pick the launch block by the head Matěj last ran (the
   latest `🖥️ Visual review handoff`'s): when
-  `git merge-base --is-ancestor <that head> origin/<branch>` fails, `qa1`
-  rebased the branch since (or a revision was force-pushed), his clone has
-  diverged, and `git pull --ff-only` refuses, so the block uses
+  `git merge-base --is-ancestor <that head> origin/<branch>` fails, the branch
+  was rewritten since (a force-push; reviewed branches otherwise take `master`
+  by merging), his clone has diverged, and `git pull --ff-only` refuses, so the block uses
   `git reset --keep origin/<branch>` and `git rev-parse --short HEAD` instead and
   the handoff names the head it prints (`docs/ai-development-flow.md`, "Launch
   commands", "A rewritten branch").
