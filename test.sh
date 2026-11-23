@@ -8,6 +8,10 @@ readonly repository_root
 run_frontend=true
 run_backend=true
 
+# shellcheck source=tools/preflight.sh
+source "$repository_root/tools/preflight.sh"
+trap 'printf "ERROR: test.sh failed with exit %s at line %s: %s\n" "$?" "$LINENO" "$BASH_COMMAND" >&2' ERR
+
 usage() {
   printf '%s\n' \
     'Usage: ./test.sh [-f|--frontend|-b|--backend|-r|--repo]' \
@@ -57,6 +61,18 @@ run_step() {
   exit 1
 }
 
+# What a selected scope needs, checked before the first step; each check names
+# what is wrong and how to fix it. The backend sync and the PostgreSQL check
+# right after this cover Python and the database.
+run_prerequisites() {
+  if [[ "$run_frontend" == true ]]; then
+    preflight_node || return 1
+  fi
+  if [[ "$run_backend" == true ]]; then
+    preflight_commands uv psql pg_dump pg_restore || return 1
+  fi
+}
+
 run_repository_hygiene() {
   git -C "$repository_root" diff --check
 }
@@ -88,6 +104,16 @@ run_backend_tests() {
     JWT_SECRET_KEY=league-analysis-test-jwt-secret-32-characters \
     ENVIRONMENT=test \
     uv run pytest --cov --cov-report=term
+}
+
+# The server and clients the migration validation will use (the integration
+# tier skips without a database; this step does not), checked up front.
+run_backend_postgres_prerequisites() {
+  cd "$repository_root/backend"
+  DEBUG=false \
+    ENVIRONMENT=test \
+    JWT_SECRET_KEY=league-analysis-test-jwt-secret-32-characters \
+    uv run python scripts/validate_migrations.py --prerequisites
 }
 
 run_backend_migration_validation() {
@@ -243,6 +269,14 @@ else
   printf 'Scope: repository\n'
 fi
 
+if [[ "$run_frontend" == true || "$run_backend" == true ]]; then
+  run_step 'Prerequisites' run_prerequisites
+fi
+if [[ "$run_backend" == true ]]; then
+  # uv installs the pinned Python here, or says why it cannot.
+  run_step 'Backend deterministic sync' run_backend_sync
+  run_step 'PostgreSQL for migration validation' run_backend_postgres_prerequisites
+fi
 run_step 'Repository hygiene' run_repository_hygiene
 # Secret scanning and the architecture rules used to run only from
 # .githooks/pre-commit, which every developer has to opt into. These two steps
@@ -260,8 +294,6 @@ run_step 'GitHub workflow syntax' "$repository_root/tools/run-actionlint.sh"
 # build and the e2e suite that runs against it -- are now last in the whole
 # gate, and nothing cheap sits behind them.
 if [[ "$run_frontend" == true ]]; then
-  # shellcheck disable=SC1091
-  source "$repository_root/tools/use-project-node.sh"
   run_step 'Frontend deterministic install' run_frontend_install
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck
@@ -269,11 +301,6 @@ if [[ "$run_frontend" == true ]]; then
 fi
 
 if [[ "$run_backend" == true ]]; then
-  command -v uv >/dev/null 2>&1 || {
-    printf 'ERROR: uv is required for backend checks.\n' >&2
-    exit 1
-  }
-  run_step 'Backend deterministic sync' run_backend_sync
   run_step 'Pre-commit configuration' run_pre_commit_config_validation
   run_step 'Backend Ruff lint' run_backend_ruff_lint
   run_step 'Backend Ruff format' run_backend_ruff_format

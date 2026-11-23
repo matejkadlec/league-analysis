@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
 import asyncio
 import os
@@ -1349,6 +1350,50 @@ async def verify_expired_key_turns_health_missing(database: str) -> None:
             os.environ["POSTGRES_DB"] = original_database
 
 
+def check_prerequisites() -> int:
+    """Check the clients and server this validation needs, changing nothing.
+
+    `test.sh` runs this before its long steps, so a missing or wrong PostgreSQL
+    is reported with its fix at the start rather than as the last failure.
+    """
+    try:
+        validate_postgres_client_versions()
+        url = administration_url()
+        engine = create_engine(url, connect_args={"connect_timeout": 5})
+        try:
+            with engine.connect() as connection:
+                server_version = int(
+                    connection.execute(text("SHOW server_version_num")).scalar_one()
+                )
+        finally:
+            engine.dispose()
+    except Exception as error:
+        print(
+            "ERROR: PostgreSQL is not ready for the migration validation: "
+            f"{type(error).__name__}: {error}\n"
+            "  It connects to the 'postgres' database with POSTGRES_* from the "
+            "environment, else from .env.\n"
+            "  Start the server (WSL: sudo service postgresql start) and check "
+            "those settings.",
+            file=sys.stderr,
+        )
+        return 1
+
+    server_major = server_version // 10000
+    if server_major != EXPECTED_POSTGRES_MAJOR:
+        print(
+            f"ERROR: the migration validation needs PostgreSQL "
+            f"{EXPECTED_POSTGRES_MAJOR}, but the server at {url.host}:{url.port} "
+            f"runs PostgreSQL {server_major}.",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"PostgreSQL {server_major} at {url.host}:{url.port} and its clients are ready."
+    )
+    return 0
+
+
 def main() -> int:
     """Validate migration plus full backup/restore in isolated databases."""
     database = temporary_database_name()
@@ -1422,4 +1467,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--prerequisites",
+        action="store_true",
+        help="only check the PostgreSQL clients and server, then exit",
+    )
+    arguments = parser.parse_args()
+    raise SystemExit(check_prerequisites() if arguments.prerequisites else main())

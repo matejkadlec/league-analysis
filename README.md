@@ -37,8 +37,10 @@ or who was playing an account.
 Setup currently requires a few command-line steps. You will need Linux or
 Windows with WSL, Git, [Node.js](https://nodejs.org/) through NVM,
 [uv](https://docs.astral.sh/uv/getting-started/installation/), and a running
-[PostgreSQL 18](https://www.postgresql.org/download/) server. Install `lsof` and
-`iproute2` as well; the launcher uses them to check local ports.
+[PostgreSQL 18](https://www.postgresql.org/download/) server. Install `curl`,
+`lsof` and `iproute2` as well; the launcher uses them to check the backend and
+local ports. `./run.sh` and `./test.sh` check these prerequisites before they
+start anything and stop with what is wrong and how to fix it.
 
 ### 1. Download and install
 
@@ -93,8 +95,10 @@ It is restricted to the named local development database. Open
 **[localhost:3000](http://localhost:3000)** and sign in with that account.
 
 The launcher stops anything already listening on ports 3000 and 8000. Use
-`./run.sh 3001 8001` if those ports are occupied by another project. More setup
-and troubleshooting details are in the [project guide](docs/project-overview.md).
+`./run.sh 3001 8001` if those ports are occupied by another project. When a
+step fails, it names the step and the failing command and stops the services it
+started. More setup and troubleshooting details are in the
+[project guide](docs/project-overview.md).
 
 ### 4. Connect your own Riot API key
 

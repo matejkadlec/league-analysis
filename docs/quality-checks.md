@@ -103,6 +103,16 @@ step starts its server on the fixed port 3100; agents queue them with `flock`
   against nodejs.org on 2026-11-14), so `.nvmrc` cannot deliver the npm that
   `packageManager` pins. `tools/use-project-node.sh` installs it into the
   selected Node and says so; both Dockerfiles install the same version.
+- **A wrong prerequisite is the first failure, never a silent one.** Before
+  any other step, `test.sh` checks what the selected scope needs
+  ([`tools/preflight.sh`](../tools/preflight.sh): the pinned Node and npm, uv
+  and the PostgreSQL clients), syncs the backend (which installs the pinned
+  Python or says why it cannot), and asks the migration validator whether its
+  PostgreSQL is reachable and of the pinned major version
+  (`validate_migrations.py --prerequisites`). Each check names the problem and
+  its fix. `run.sh` uses the same helper before it stops or starts anything
+  (LGA-112); `backend/tests/test_local_script_prerequisites.py` runs both
+  scripts against stand-in commands.
 - **Dependabot pull requests are never auto-merged and never receive real
   secrets.** They follow the normal workflow: rebase on current `master`, run
   the complete gate, wait for required checks and review, merge through the
