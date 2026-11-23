@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { ProtectedRoute } from "@/features/auth";
 import { PageHeader } from "@/components/page-header";
+import { PageSections, Section } from "@/components/page-sections";
 import {
   SectionQuickNavigation,
   type SectionQuickNavigationItem,
@@ -35,9 +36,9 @@ const PLAYER_SEARCH_ID = "rank-manipulation-player-search";
 
 function RankManipulationSkeleton() {
   return (
-    <div className="space-y-6">
+    <Section width="half">
       <Skeleton className="h-72" />
-    </div>
+    </Section>
   );
 }
 
@@ -49,7 +50,7 @@ function RankManipulationContent() {
     <>
       <SectionQuickNavigation items={RANK_MANIPULATION_NAV_ITEMS} />
       <div className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
+        <PageSections>
           <PageHeader title="Rank Manipulation">
             <p className="text-sm leading-relaxed">
               Compare a player&apos;s recent ranked games against their own
@@ -91,8 +92,10 @@ function RankManipulationContent() {
           {/* The action first, the reference last: someone who lands here
               runs a comparison; the explanation waits below for whoever
               wants the model spelled out. */}
-          <SmurfBoostExplanationCard />
-        </div>
+          <Section>
+            <SmurfBoostExplanationCard />
+          </Section>
+        </PageSections>
       </div>
     </>
   );
@@ -105,8 +108,10 @@ export default function RankManipulationPage() {
       <Suspense
         fallback={
           <div className="container mx-auto px-4 py-8">
-            <Skeleton className="mb-6 h-32 w-full rounded-lg" />
-            <RankManipulationSkeleton />
+            <PageSections>
+              <Skeleton className="h-32 w-full rounded-lg" />
+              <RankManipulationSkeleton />
+            </PageSections>
           </div>
         }
       >

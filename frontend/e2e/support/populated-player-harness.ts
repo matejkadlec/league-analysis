@@ -72,20 +72,32 @@ const stats = {
   avg_vision_score: 22.4,
 };
 
+// More champions than one Top Champions page holds (ten), so the card renders
+// a full page and its pagination has somewhere to go.
+const STAT_CHAMPIONS = [
+  ...CHAMPIONS,
+  ["Ahri", 103],
+  ["LeeSin", 64],
+  ["Jinx", 222],
+  ["Thresh", 412],
+  ["Yasuo", 157],
+  ["Lux", 99],
+] as const;
+
 const championStats = {
   puuid: PUUID,
-  total_champions: CHAMPIONS.length,
-  champions: CHAMPIONS.map(([champion_name, champion_id], index) => ({
+  total_champions: STAT_CHAMPIONS.length,
+  champions: STAT_CHAMPIONS.map(([champion_name, champion_id], index) => ({
     champion_name,
     champion_id,
-    games_played: 30 - index * 4,
-    wins: 18 - index * 2,
-    losses: 12 - index * 2,
-    win_rate: 0.6 - index * 0.03,
-    avg_kills: 8.2 - index * 0.4,
+    games_played: 50 - index * 3,
+    wins: 28 - index * 2,
+    losses: 22 - index,
+    win_rate: (28 - index * 2) / (50 - index * 3),
+    avg_kills: 8.2 - index * 0.3,
     avg_deaths: 4.9,
     avg_assists: 10.1,
-    avg_kda: 3.7 - index * 0.2,
+    avg_kda: 3.7 - index * 0.15,
   })),
 };
 
@@ -241,11 +253,19 @@ const matchmakingAnalysis = {
     enemy_avg_rank_value: 1801.5,
     ally_tier_counts: { GOLD: 22, PLATINUM: 14, EMERALD: 6, UNRANKED: 3 },
     enemy_tier_counts: { GOLD: 18, PLATINUM: 17, EMERALD: 8, UNRANKED: 2 },
+    // Recent Form figures too, so the win-rate card is as tall as a current
+    // run makes it: the layout spec weighs it against the Ranks card.
     per_match: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => ({
       match_id: `EUN1_${7100000000 + index}`,
       duo: index < 3,
       team_avg: 0.45 + index * 0.01,
       enemy_avg: 0.55 - index * 0.01,
+      team_kda: 2.6 + index * 0.05,
+      enemy_kda: 3.1 - index * 0.04,
+      team_kill_participation: 0.48 + index * 0.005,
+      enemy_kill_participation: 0.52 - index * 0.004,
+      team_damage_share: 0.19 + index * 0.001,
+      enemy_damage_share: 0.21 - index * 0.001,
     })),
     rank_freshness: { period_accurate: 78, current_day: 13 },
     // Non-zero, so the axe and reflow specs grade the degraded notice too.
@@ -375,18 +395,29 @@ export const POPULATED_ROUTES = [
     // it mounts only once the league query has resolved, well past the page
     // skeleton. Champion names are display-transformed, so not safe anchors.
     ready: "text=Emerald II",
+    expand: null,
     reflowSurfaces: [],
   },
   {
     name: "match history",
     route: `/match-history?puuid=${PUUID}`,
     ready: "[data-testid='match-list']",
+    expand: null,
     reflowSurfaces: ["match-list", "match-history-queue-filters"],
   },
   {
     name: "matchmaking analysis",
     route: `/matchmaking-analysis?puuid=${PUUID}`,
-    ready: "[data-testid='matchmaking-analysis-history-stacked']",
+    // The run's notice, which only a loaded result renders. The history is
+    // closed by default (LGA-135), so it is opened before anything is scanned:
+    // a closed disclosure would hide its rows from every check.
+    ready: "[data-testid='matchmaking-degraded-notice']",
+    expand: {
+      button: /Analysis History/,
+      // Attached rather than visible: the stacked list is the phone layout,
+      // present in the DOM at every viewport.
+      ready: "[data-testid='matchmaking-analysis-history-stacked']",
+    },
     reflowSurfaces: ["matchmaking-analysis-history-stacked"],
   },
 ] as const;
@@ -401,9 +432,11 @@ export async function gotoPopulatedRoute(
   await installPopulatedPlayerMocks(page);
   await page.goto(route.route);
   await acceptCookieBanner(page);
-  // Attached rather than visible: the matchmaking gate element is the
-  // stacked mobile list, present in the DOM at every viewport.
   await expect(page.locator(route.ready).first()).toBeAttached();
+  if (route.expand) {
+    await page.getByRole("button", { name: route.expand.button }).click();
+    await expect(page.locator(route.expand.ready).first()).toBeAttached();
+  }
   // Every other gated card, so a scan or a measurement cannot land on one
   // still showing its placeholder. Not `networkidle`: the shell polls on
   // timers, making network quiet a property of the clock, not of the page.

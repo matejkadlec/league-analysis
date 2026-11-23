@@ -13,9 +13,11 @@ import {
 import { ProtectedRoute } from "@/features/auth";
 
 import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
+import { PageSections, Section, SectionRow } from "@/components/page-sections";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, AlertCircle, Clock } from "lucide-react";
+import { AlertCircle, Clock } from "lucide-react";
 
 import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs";
 
@@ -46,6 +48,46 @@ function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
   }, [lastUpdate]);
 
   return <span>Auto-refresh in {secondsUntilRefresh}s</span>;
+}
+
+// Placeholders in the loaded geometry: the four status tiles and the System
+// Health line beneath them, and the job cards as one row, so the tabs and
+// executions below do not jump when the queries answer.
+function SystemStatusSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-busy="true">
+      {[...Array(4)].map((_, index) => (
+        <Card key={index}>
+          <CardContent className="space-y-2 p-6">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-5 w-20" />
+          </CardContent>
+        </Card>
+      ))}
+      <Card className="md:col-span-2 lg:col-span-4">
+        <CardContent className="p-6">
+          <Skeleton className="h-[6.5rem] w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function JobCardSkeleton() {
+  return (
+    <Card aria-busy="true">
+      <CardHeader className="space-y-2">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-4 w-64" />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-8 w-full" />
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function JobsPage() {
@@ -85,90 +127,89 @@ function JobsPageContent() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <PageHeader
-        title="Background Jobs"
-        titleSub={
-          <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
-            <Clock className="h-4 w-4" />
-            <RefreshCountdown
-              lastUpdate={Math.max(jobsUpdatedAt, statusUpdatedAt)}
-            />
-          </div>
-        }
-        className="mb-6"
-      >
-        <p className="text-sm leading-relaxed">
-          Monitor and manage automated background jobs for player tracking and
-          data processing
-        </p>
-      </PageHeader>
-
-      {/* System Status Dashboard */}
-      <div className="mb-6">
-        {isLoadingStatus ? (
-          <Card className="p-8">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <PageSections>
+        <PageHeader
+          title="Background Jobs"
+          titleSub={
+            <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
+              <Clock className="h-4 w-4" />
+              <RefreshCountdown
+                lastUpdate={Math.max(jobsUpdatedAt, statusUpdatedAt)}
+              />
             </div>
-          </Card>
-        ) : (
-          <SystemStatus status={status} />
-        )}
-      </div>
+          }
+        >
+          <p className="text-sm leading-relaxed">
+            Monitor and manage automated background jobs for player tracking and
+            data processing
+          </p>
+        </PageHeader>
 
-      {/* Tabs for Jobs and Executions */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="jobs">Job Configurations</TabsTrigger>
-          <TabsTrigger value="executions">Job Executions</TabsTrigger>
-        </TabsList>
-
-        {/* Job Configurations Tab */}
-        <TabsContent value="jobs" className="mt-6">
-          {isLoadingJobs ? (
-            <Card className="p-8">
-              <div className="flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            </Card>
-          ) : jobsError ? (
-            <Card className="p-8">
-              <div className="flex flex-col items-center justify-center gap-2">
-                <AlertCircle className="h-8 w-8 text-destructive" />
-                <p className="text-sm text-muted-foreground">
-                  Failed to load job configurations
-                </p>
-              </div>
-            </Card>
-          ) : jobs.length === 0 ? (
-            <Card className="p-8">
-              <p className="text-center text-muted-foreground">
-                No job configurations found
-              </p>
-            </Card>
+        <Section>
+          {isLoadingStatus ? (
+            <SystemStatusSkeleton />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {jobs.map((job: JobConfiguration) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onExecutionClick={handleExecutionClick}
-                />
-              ))}
-            </div>
+            <SystemStatus status={status} />
           )}
-        </TabsContent>
+        </Section>
 
-        {/* Recent Executions Tab */}
-        <TabsContent value="executions" className="mt-6">
-          <JobExecutions
-            jobs={jobs}
-            selectedExecutionId={selectedExecutionId}
-            onExecutionSelect={setSelectedExecutionId}
-          />
-        </TabsContent>
-      </Tabs>
+        <Section>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="jobs">Job Configurations</TabsTrigger>
+              <TabsTrigger value="executions">Job Executions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="jobs" className="mt-6">
+              {isLoadingJobs ? (
+                <SectionRow>
+                  <JobCardSkeleton />
+                  <JobCardSkeleton />
+                </SectionRow>
+              ) : jobsError ? (
+                <Card className="p-8">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <AlertCircle className="h-8 w-8 text-destructive" />
+                    <p className="text-sm text-muted-foreground">
+                      Failed to load job configurations
+                    </p>
+                  </div>
+                </Card>
+              ) : jobs.length === 0 ? (
+                <Card className="p-8">
+                  <p className="text-center text-muted-foreground">
+                    No job configurations found
+                  </p>
+                </Card>
+              ) : (
+                // Every job card has the same parts, so they balance by
+                // construction and share lines two at a time.
+                <SectionRow>
+                  {jobs.map((job: JobConfiguration) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      onExecutionClick={handleExecutionClick}
+                    />
+                  ))}
+                </SectionRow>
+              )}
+            </TabsContent>
+
+            <TabsContent value="executions" className="mt-6">
+              <JobExecutions
+                jobs={jobs}
+                selectedExecutionId={selectedExecutionId}
+                onExecutionSelect={setSelectedExecutionId}
+              />
+            </TabsContent>
+          </Tabs>
+        </Section>
+      </PageSections>
     </div>
   );
 }

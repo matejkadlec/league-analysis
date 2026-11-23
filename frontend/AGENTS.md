@@ -48,6 +48,17 @@ These are product design decisions, not suggestions:
 - **Every interactive element** (`button`, `a`, `[role="button"]`, etc.) has
   `cursor: pointer` — enforced globally via `globals.css`, no per-element
   override needed.
+- **Page layout** (LGA-152): every card page composes its content through
+  `components/page-sections.tsx` and nothing else -- a page is one column of
+  sections, each as wide as its content needs. A sparse card (a form with one
+  action) takes `Section width="half"`; a tall or wide one (a list, a table, an
+  explanation) takes a full-width `Section` and shows what the reader needs
+  rather than what fits beside a neighbour; only cards whose content balances
+  share a `SectionRow`, which stretches them to one height from `xl` and stacks
+  them below it. A card in a row that would end short grows a part that adapts
+  to the slot (a chart, a footer note) instead of leaving an empty band. Pages
+  carry no hand-rolled `grid-cols-2` pairing and no per-page height hack;
+  `e2e/page-layout.spec.ts` measures the rule on every page in scope.
 - **Use the custom classes from `globals.css`** for branded styling instead of
   inline Tailwind: `.gold-gradient` (primary CTA), `.red-gradient`
   (destructive/cancel), `.blue-gradient` (neutral/secondary),

@@ -384,11 +384,26 @@ completion reaches 100% and triggers result/history refresh.
   discovering it never changes global current-player context and never tracks
   it. The action, latest result, active run, and history are all keyed by that
   analyzed PUUID so changing targets cannot relabel another player's run.
-- The result card shows the latest completed run until a history row is picked,
-  after which it reads that exact `created_at` through the status endpoint and
-  says so in its heading. The pick is held with the PUUID it was made for, and
-  is released when that record is deleted, so it can never outlive its run or
-  follow the viewer to another player.
+- The result is two cards in one row (LGA-135): **Win Rates & Verdict** (the
+  scope selector, both sides' win rates, the gap, the record, the verdict and
+  Recent Form) and **Ranks** (average ranks, the lobby gap and the tier
+  distribution). The scope picked on the first re-slices the second, and both
+  name the run they show: `Latest run` or `Selected run`, its time and its
+  window. They show the latest completed run until a history row is picked,
+  after which they read that exact `created_at` through the status endpoint.
+  The pick is held with the PUUID it was made for, and is released when that
+  record is deleted, so it can never outlive its run or follow the viewer to
+  another player.
+- **Analysis History** sits under the result as a full-width disclosure with
+  the run count in its heading, closed by default; its open state is
+  remembered only with optional-storage consent
+  (`league_analysis_matchmaking_history_open`). The row the result cards show
+  is marked `Shown`, and the list scrolls inside its own region.
+- A gap reads the same everywhere it is printed: green with `✓` when the
+  teammates are ahead by at least the fairness threshold, red with `✗` when
+  the opponents are, and uncoloured with `≈` inside it, always with its sign.
+  The win rates themselves are plain figures, so a stronger enemy side is
+  never drawn in the colour that reads as good news.
 - Matchmaking Analysis and the sidebar reuse the same one-field player selector:
   stored suggestions include their server, while a new `Name#Tag` asks for a
   server only before the non-tracking discovery request.

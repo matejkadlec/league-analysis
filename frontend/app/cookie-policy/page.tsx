@@ -9,6 +9,7 @@ import {
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+  MATCHMAKING_HISTORY_OPEN_STORAGE_KEY,
 } from "@/features/cookie-consent/consent-storage";
 
 function storageName(name: string): string {
@@ -172,6 +173,22 @@ export default async function CookiePolicyPage() {
               </td>
               <td className="px-3 py-2">
                 Remembers your selected Match History queue filters.
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                Persistent until deleted
+              </td>
+            </tr>
+            <tr className="border-t border-white/10 align-top">
+              <td className="max-w-[16rem] px-3 py-2 font-mono">
+                {storageName(MATCHMAKING_HISTORY_OPEN_STORAGE_KEY)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">Local storage</td>
+              <td className="whitespace-nowrap px-3 py-2">
+                Optional preference
+              </td>
+              <td className="px-3 py-2">
+                Remembers whether you keep the Matchmaking Analysis history
+                open.
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 Persistent until deleted

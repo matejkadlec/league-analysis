@@ -17,11 +17,14 @@ export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
   "league_analysis_match_history_page_size";
 export const MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY =
   "league_analysis_match_history_queue_filters";
+export const MATCHMAKING_HISTORY_OPEN_STORAGE_KEY =
+  "league_analysis_matchmaking_history_open";
 
 const OPTIONAL_STORAGE_KEYS = [
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+  MATCHMAKING_HISTORY_OPEN_STORAGE_KEY,
 ] as const;
 
 // One spelling of the backend enum, from the module the contract test reads.

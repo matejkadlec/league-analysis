@@ -29,9 +29,9 @@ function champion(
   };
 }
 
-/** Twelve champions, so there are three pages of five. */
-function twelve(prefix = "Champ"): ChampionStatsItem[] {
-  return Array.from({ length: 12 }, (_, index) =>
+/** Twenty-three champions, so there are three pages of ten, the last short. */
+function twentyThree(prefix = "Champ"): ChampionStatsItem[] {
+  return Array.from({ length: 23 }, (_, index) =>
     champion(`${prefix}${index + 1}`),
   );
 }
@@ -69,36 +69,40 @@ describe("the top champions card", () => {
     // when the player changes, which is the only reason `dataSourceKey` is a prop.
     // The second list must be longer than the page reached in the first.
     const user = userEvent.setup();
-    const { container, rerender } = renderCard(twelve(), "player-a");
+    const { container, rerender } = renderCard(twentyThree(), "player-a");
 
     await user.click(next());
     await user.click(next());
-    expect(visibleRanks(container)).toEqual(["11", "12"]);
+    expect(visibleRanks(container)).toEqual(["21", "22", "23"]);
 
-    const twenty = Array.from({ length: 20 }, (_, index) =>
+    const thirty = Array.from({ length: 30 }, (_, index) =>
       champion(`Other${index + 1}`),
     );
     rerender(
       <ChampionStatsCard
-        stats={{ puuid: "puuid", total_champions: 20, champions: twenty }}
+        stats={{ puuid: "puuid", total_champions: 30, champions: thirty }}
         dataSourceKey="player-b"
       />,
     );
 
-    expect(visibleRanks(container)).toEqual(["1", "2", "3", "4", "5"]);
-    expect(screen.getByRole("status").textContent).toContain("1–5 of 20");
+    expect(visibleRanks(container)).toEqual(
+      Array.from({ length: 10 }, (_, index) => String(index + 1)),
+    );
+    expect(screen.getByRole("status").textContent).toContain("1–10 of 30");
   });
 
   it("numbers champions by their place in the whole list, not on the page", async () => {
-    // The rank is what makes this a ranking rather than five rows. Restart it
+    // The rank is what makes this a ranking rather than ten rows. Restart it
     // per page and the second page opens with another "1", which reads as the
     // best champion twice.
     const user = userEvent.setup();
-    const { container } = renderCard(twelve());
+    const { container } = renderCard(twentyThree());
 
     await user.click(next());
 
-    expect(visibleRanks(container)).toEqual(["6", "7", "8", "9", "10"]);
+    expect(visibleRanks(container)).toEqual(
+      Array.from({ length: 10 }, (_, index) => String(index + 11)),
+    );
   });
 
   it("stops at both ends", async () => {
@@ -106,7 +110,7 @@ describe("the top champions card", () => {
     // comparison is invisible until someone clicks past the end and the card
     // empties.
     const user = userEvent.setup();
-    renderCard(twelve());
+    renderCard(twentyThree());
 
     expect(isDisabled(previous())).toBe(true);
     expect(isDisabled(next())).toBe(false);
@@ -123,12 +127,12 @@ describe("the top champions card", () => {
     // `startIndex` is zero-based and the label is not, and the last page is
     // short. Both are places to be off by one in front of the reader.
     const user = userEvent.setup();
-    renderCard(twelve());
-    expect(screen.getByRole("status").textContent).toContain("1–5 of 12");
+    renderCard(twentyThree());
+    expect(screen.getByRole("status").textContent).toContain("1–10 of 23");
 
     await user.click(next());
     await user.click(next());
-    expect(screen.getByRole("status").textContent).toContain("11–12 of 12");
+    expect(screen.getByRole("status").textContent).toContain("21–23 of 23");
   });
 
   it("colours a KDA by the thresholds it claims", () => {

@@ -11,6 +11,7 @@ import {
 } from "recharts";
 
 import { LobbyTierSchema, type LobbyTier } from "@/lib/core/schemas";
+import { cn } from "@/lib/core/utils";
 
 /** Ascending rank order, the unranked bucket last. */
 const TIER_ORDER: LobbyTier[] = [...LobbyTierSchema.options];
@@ -62,6 +63,12 @@ export function tierShareRows(
 interface TierDistributionProps {
   allyCounts: Partial<Record<LobbyTier, number>>;
   enemyCounts: Partial<Record<LobbyTier, number>>;
+  /**
+   * Grow into the height the parent flex column leaves, never below the rows'
+   * own height. The Ranks card uses it to meet the taller win-rate card it is
+   * stretched beside, instead of ending in an empty band (LGA-152).
+   */
+  fillHeight?: boolean;
 }
 
 /**
@@ -72,6 +79,7 @@ interface TierDistributionProps {
 export function TierDistribution({
   allyCounts,
   enemyCounts,
+  fillHeight = false,
 }: TierDistributionProps) {
   const rows = tierShareRows(allyCounts, enemyCounts);
 
@@ -79,9 +87,21 @@ export function TierDistribution({
     return null;
   }
 
+  const naturalHeight = rows.length * 44 + 56;
+
+  // Filling: the chart is laid out absolutely inside a box that flexes, so
+  // its measured height never feeds back into the row it is stretched to.
   return (
-    <figure aria-label="Tier distribution of allies and enemies">
-      <ResponsiveContainer width="100%" height={rows.length * 44 + 56}>
+    <figure
+      aria-label="Tier distribution of allies and enemies"
+      className={cn(fillHeight && "relative flex-1")}
+      style={fillHeight ? { minHeight: naturalHeight } : {}}
+    >
+      <ResponsiveContainer
+        width="100%"
+        height={fillHeight ? "100%" : naturalHeight}
+        style={fillHeight ? { position: "absolute", inset: 0 } : {}}
+      >
         <BarChart
           data={rows}
           layout="vertical"

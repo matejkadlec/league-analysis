@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Download, Loader2, PlayCircle, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { Section } from "@/components/page-sections";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -231,7 +232,11 @@ export function SmurfBoostDetection({
   );
 
   if (isLoading) {
-    return <RunCardSkeleton />;
+    return (
+      <Section width="half">
+        <RunCardSkeleton />
+      </Section>
+    );
   }
 
   const running = runMutation.isPending || isActive(latest ?? null);
@@ -269,15 +274,12 @@ export function SmurfBoostDetection({
         "The comparison did not finish. Please try again.")
       : null;
 
+  // Sections of the page's own `PageSections`. The comparison is one button
+  // and a search, so it takes half the width rather than a stretched line or
+  // a neighbour invented to fill one.
   return (
-    <div className="space-y-6">
-      {/* Half the content width on desktop, with the second column left empty
-          on purpose -- the comparison is one button and a search, and filling
-          the space would mean inventing a card nobody asked for. */}
-      <div
-        id="smurf-boost-comparison-row"
-        className="grid grid-cols-1 gap-6 lg:grid-cols-2"
-      >
+    <>
+      <Section width="half">
         <Card id="smurf-boost-run">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -428,15 +430,17 @@ export function SmurfBoostDetection({
             )}
           </CardContent>
         </Card>
-      </div>
+      </Section>
 
       {results && latest && (
-        <SmurfBoostResultCard
-          results={results}
-          playerName={playerName}
-          thresholds={latest.thresholds}
-        />
+        <Section>
+          <SmurfBoostResultCard
+            results={results}
+            playerName={playerName}
+            thresholds={latest.thresholds}
+          />
+        </Section>
       )}
-    </div>
+    </>
   );
 }

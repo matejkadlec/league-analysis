@@ -151,7 +151,7 @@ export function RiotApiSettingsCard() {
   };
 
   return (
-    <Card className="h-full p-6 lg:col-span-3">
+    <Card className="flex flex-col p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
         <ShieldCheck className="h-5 w-5 text-[#cfa93a]" />
         Riot API Configuration
@@ -162,7 +162,7 @@ export function RiotApiSettingsCard() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="space-y-4 text-left">
+        <div className="flex flex-1 flex-col gap-4 text-left">
           {setting && (
             <div className="space-y-1.5">
               <Label>Current API Key</Label>
@@ -274,7 +274,9 @@ export function RiotApiSettingsCard() {
             </Button>
           </div>
 
-          <Alert>
+          {/* A footer: beside the taller account form it closes the card at
+              the row's bottom edge rather than leaving an empty band there. */}
+          <Alert className="mt-auto">
             <p className="text-sm">
               <strong>Note:</strong> The API key will be validated before
               saving. Newly generated keys usually <b>need a minute or two</b>{" "}

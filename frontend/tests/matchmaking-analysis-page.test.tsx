@@ -31,7 +31,9 @@ vi.mock("@/features/matchmaking", () => ({
   MatchmakingAnalysis: ({ playerSelector }: { playerSelector: React.ReactNode }) => (
     <div>{playerSelector}</div>
   ),
+  MatchmakingAnalysisLoadingCard: () => null,
   MatchmakingAnalysisResults: () => null,
+  MatchmakingAnalysisResultsSkeleton: () => null,
   MatchmakingAnalysisHistory: () => null,
   MatchmakingExplanationCard: () => null,
 }));

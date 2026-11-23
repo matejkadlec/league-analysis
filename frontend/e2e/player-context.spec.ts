@@ -129,8 +129,9 @@ test("routes player overview to the account's player and switches it", async ({
     const analyzedPlayerResultLabels = page
       .locator("p")
       .filter({ hasText: /^Results for player Analyzed#LOCAL$/ });
-    await expect(analyzedPlayerResultLabels).toHaveCount(2);
-    for (let index = 0; index < 2; index += 1) {
+    // Both result cards and the history name the player (LGA-135).
+    await expect(analyzedPlayerResultLabels).toHaveCount(3);
+    for (let index = 0; index < 3; index += 1) {
       const labelParts = analyzedPlayerResultLabels.nth(index).locator("span");
       await expect
         .soft(labelParts.nth(0))
@@ -612,8 +613,9 @@ test("marks the active route and reaches every sidebar destination", async ({
       page.getByText("Analyzed player (this page)", { exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByText("Last Analysis Result", { exact: true }),
+      page.getByRole("heading", { name: "Win Rates & Verdict" }),
     ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ranks" })).toBeVisible();
     await expect(
       page.getByText("Calculation Flowchart", { exact: true }),
     ).toBeVisible();
@@ -628,9 +630,10 @@ test("marks the active route and reaches every sidebar destination", async ({
         name: "Matchmaking Analysis Calculation Explanation",
       }),
     ).toBeVisible();
+    // A disclosure now, closed until wanted (LGA-135).
     await expect(
-      page.getByText("Analysis History", { exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", { name: /^Analysis History/ }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 
   await test.step("settings renders only the account section", async () => {

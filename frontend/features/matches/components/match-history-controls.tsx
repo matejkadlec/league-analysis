@@ -317,7 +317,9 @@ export function MatchHistoryHeader({
           />
         </div>
         {totalMatches > 0 && (
-          <div className="shrink-0 text-sm text-right">
+          // Wraps below `sm`: kept on one line it is 291px, wider than the
+          // header at a 320px phone width (LGA-137).
+          <div className="text-sm text-right sm:shrink-0">
             {totalMatches} total matches ({wins}W / {losses}L) •{" "}
             {formatFractionAsPercent(winRate)} WR
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, type ReactNode } from "react";
-import { Scale } from "lucide-react";
+import { History, Medal, Scale, TrendingUp } from "lucide-react";
 import {
   PlayerSelector,
   formatRiotId,
@@ -9,20 +9,23 @@ import {
 } from "@/features/players";
 import {
   MatchmakingAnalysis,
+  MatchmakingAnalysisLoadingCard,
   MatchmakingAnalysisResults,
+  MatchmakingAnalysisResultsSkeleton,
   MatchmakingAnalysisHistory,
   MatchmakingExplanationCard,
 } from "@/features/matchmaking";
 import { ProtectedRoute } from "@/features/auth";
 
 import { PageHeader } from "@/components/page-header";
+import { PageSections, Section, SectionRow } from "@/components/page-sections";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// The run card leads, full width: starting an analysis is what people come
-// here for. The result and the history it is picked from sit together below,
-// and the flowchart waits at the very bottom as reference.
+// The run card leads at half width, a short form that read empty stretched
+// across the page. Then the two result cards as one row, the history they are
+// picked from (closed until wanted), and the flowchart as reference.
 function AnalysisLayout({
   start,
   results,
@@ -35,23 +38,53 @@ function AnalysisLayout({
   explanation: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
-      {start}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {results}
-        {history}
-      </div>
-      {explanation}
-    </div>
+    <PageSections>
+      <Section width="half">{start}</Section>
+      {results}
+      <Section>{history}</Section>
+      <Section>{explanation}</Section>
+    </PageSections>
   );
 }
 
-function LoadingCard() {
+function PlaceholderCard({
+  icon: Icon,
+  title,
+  message,
+}: {
+  icon: typeof Scale;
+  title: string;
+  message: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-primary" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        {message}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <Card className="p-6 space-y-3">
+      <Skeleton className="h-5 w-48" />
+      <Skeleton className="h-4 w-64" />
+    </Card>
+  );
+}
+
+function ExplanationSkeleton() {
   return (
     <Card className="p-6 space-y-4">
       <Skeleton className="h-6 w-48" />
       <Skeleton className="h-20 w-full" />
-      <Skeleton className="h-10 w-full" />
     </Card>
   );
 }
@@ -111,10 +144,10 @@ function MatchmakingAnalysisContent() {
         <div className="mb-6">
           {isLoadingScope ? (
             <AnalysisLayout
-              start={<LoadingCard />}
-              results={<LoadingCard />}
-              history={<LoadingCard />}
-              explanation={<LoadingCard />}
+              start={<MatchmakingAnalysisLoadingCard />}
+              results={<MatchmakingAnalysisResultsSkeleton />}
+              history={<HistorySkeleton />}
+              explanation={<ExplanationSkeleton />}
             />
           ) : analyzedPlayer ? (
             <AnalysisLayout
@@ -169,24 +202,25 @@ function MatchmakingAnalysisContent() {
                 </Card>
               }
               results={
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Last Analysis Result</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    Select a player to load their latest completed result.
-                  </CardContent>
-                </Card>
+                <SectionRow>
+                  <PlaceholderCard
+                    icon={TrendingUp}
+                    title="Win Rates & Verdict"
+                    message="Select a player to load their latest completed result."
+                  />
+                  <PlaceholderCard
+                    icon={Medal}
+                    title="Ranks"
+                    message="Select a player to load their latest completed result."
+                  />
+                </SectionRow>
               }
               history={
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Analysis History</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    Select a player to load their analysis history.
-                  </CardContent>
-                </Card>
+                <PlaceholderCard
+                  icon={History}
+                  title="Analysis History"
+                  message="Select a player to load their analysis history."
+                />
               }
               explanation={<MatchmakingExplanationCard />}
             />
@@ -204,14 +238,12 @@ export default function MatchmakingAnalysisPage() {
         fallback={
           <div className="container mx-auto px-4 pt-8">
             <Skeleton className="h-32 w-full rounded-lg mb-6" />
-            <div className="space-y-6">
-              <Skeleton className="h-48 w-full rounded-lg" />
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <Skeleton className="h-48 w-full rounded-lg" />
-                <Skeleton className="h-48 w-full rounded-lg" />
-              </div>
-              <Skeleton className="h-48 w-full rounded-lg" />
-            </div>
+            <AnalysisLayout
+              start={<MatchmakingAnalysisLoadingCard />}
+              results={<MatchmakingAnalysisResultsSkeleton />}
+              history={<HistorySkeleton />}
+              explanation={<ExplanationSkeleton />}
+            />
           </div>
         }
       >

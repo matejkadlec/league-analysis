@@ -4,6 +4,7 @@ export {
   HEADER_MESSAGES_CLOSED_STORAGE_KEY,
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+  MATCHMAKING_HISTORY_OPEN_STORAGE_KEY,
   clearOptionalBrowserStorage,
   readOptionalStorage,
   requestCookieConsentPreferences,

@@ -36,7 +36,7 @@ secret.
 
 | Surface | Current behavior and dependency | First-release decision | Rationale |
 | --- | --- | --- | --- |
-| **Top Champions** | The profile page requests `GET /api/v1/matches/player/{puuid}/champion-stats?queues=420` (no limit parameter). The service returns the complete matching champion aggregate ordered by games played with the champion name as the deterministic tie-breaker; the UI displays five rows per local page. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
+| **Top Champions** | The profile page requests `GET /api/v1/matches/player/{puuid}/champion-stats?queues=420` (no limit parameter). The service returns the complete matching champion aggregate ordered by games played with the champion name as the deterministic tie-breaker; the UI displays ten rows per local page (five until LGA-152 gave the card a line of its own). | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /api/v1/matches/player/{puuid}/lane-stats?queues=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
@@ -55,7 +55,7 @@ title. A card title may change without changing its stored identifier.
 
 | Card ID | Version | Mutable settings | Fixed v1 behavior |
 | --- | --- | --- | --- |
-| `profile.top-champions` | `1` | minimum games, win rate, KDA, included roles | Ranked solo/duo (`420`), up to five eligible displayed rows with no padding, games-played descending order |
+| `profile.top-champions` | `1` | minimum games, win rate, KDA, included roles | Ranked solo/duo (`420`), up to ten eligible displayed rows per page with no padding (five before LGA-152), games-played descending order |
 | `profile.recent-performance` | `1` | recent sample size, win-rate trend tolerance, relative-metric trend tolerance | Ranked solo/duo (`420`), current overall baseline including its 10,000-match fetch cap, current displayed metrics |
 
 The catalog is an allowlist. A client must never invent an ID, setting name,
@@ -81,7 +81,7 @@ interface TopChampionsSettingsV1 {
   minimumWinRate: number; // percent, 0 through 100; default 0
   minimumKda: number; // 0 through 50 in 0.1 increments; default 0
   includedRoles: Role[]; // unique canonical values; [] means all roles
-  displayLimit: 5; // maximum five eligible rows; not configurable in LGA-23
+  displayLimit: 5; // v1 stored value, predates the ten-row page (LGA-155); fixed
 }
 
 interface RecentPerformanceSettingsV1 {
@@ -117,8 +117,10 @@ single “5% trend tolerance” control in the first UI. An advanced UI must sho
 their different meanings before exposing them independently.
 
 The approved bounds prevent accidental unbounded queries and unusable inputs
-while retaining the current defaults. `displayLimit` is intentionally fixed at
-a maximum of five eligible rows and is not a user setting in LGA-23. The
+while retaining the current defaults. `displayLimit` is intentionally fixed
+and is not a user setting in LGA-23. The v1 stored value of 5 predates LGA-152,
+which made the card show ten rows per page; no client reads the stored value
+yet, and LGA-155 aligns it with ten. The
 complete eligible result remains available to a future pagination contract;
 LGA-46 owns pagination through that result and is not part of this ticket.
 
@@ -143,10 +145,10 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    use the canonical champion name in ascending lexicographic order as the
    secondary key. The backend already implements exactly this ordering for the
    unfiltered aggregate; the filtered calculation must keep it.
-5. Order the complete eligible result and return up to five eligible rows for
-   the LGA-23 card. The normalized `displayLimit: 5` is a fixed maximum and
-   not configurable; the card never pads or fabricates rows when fewer
-   champions qualify. LGA-46 may paginate the remaining eligible champions
+5. Order the complete eligible result and show up to ten eligible rows per page
+   (LGA-152; the v1 `displayLimit` above predates it). The page capacity is
+   fixed and not configurable; the card never pads or fabricates rows when
+   fewer champions qualify. LGA-46 may paginate the remaining eligible champions
    without changing this filtering or ordering contract. The client explains
    when data exists but no aggregate meets the selected filters.
 
@@ -203,7 +205,7 @@ recent population, an actual-sample-size label instead of `Recent 10 games`:
 
 | Card | Current behavior preserved by default |
 | --- | --- |
-| Top Champions | Queue 420, all roles, no aggregate thresholds, and up to five eligible champions ordered by games played with a deterministic tie-breaker. The visible capacity is unchanged even though filtering must evaluate the complete aggregate population. |
+| Top Champions | Queue 420, all roles, no aggregate thresholds, and up to ten eligible champions per page (five before LGA-152) ordered by games played with a deterministic tie-breaker. The visible capacity is unchanged even though filtering must evaluate the complete aggregate population. |
 | Recent Performance | Queue 420, recent 10 matches against the current overall matching population capped at 10,000, 0.05 absolute win-rate tolerance, and 0.05 relative tolerance for the remaining metrics. For sparse results, LGA-25 intentionally replaces the current `Recent 10 games` copy with actual-sample-size disclosure. |
 
 The initial persistence API should have an explicit read, validated upsert, and
@@ -263,9 +265,9 @@ shown to the current viewer, including tracked-player profiles. It offers
 - Roles — multi-select of the canonical `TOP`, `JUNGLE`, `MIDDLE`, `BOTTOM`,
   and `UTILITY` values; no selection means all roles.
 
-The card keeps its current five-row capacity and renders up to five eligible
-champions. It never pads or fabricates rows when fewer qualify. If filters
-remove every champion, the empty state names the active filters and offers
+The card keeps its fixed page capacity and renders up to ten eligible
+champions per page (five before LGA-152). It never pads or fabricates rows
+when fewer qualify. If filters remove every champion, the empty state names the active filters and offers
 Reset; it does not claim that the player has no match data.
 
 ### Recent Performance controls
@@ -305,7 +307,8 @@ to a threshold contract.
 The exact persistence table, endpoint shape, query-key details, and dialog
 layout remain implementation choices for LGA-24 and LGA-25. They must preserve
 the approved card IDs, viewer-global scope, strict server validation, default
-equivalence, fixed five-row capacity, and calculation boundaries recorded here.
+equivalence, fixed page capacity (ten rows since LGA-152), and calculation
+boundaries recorded here.
 
 ## LGA-24 persistence and API boundary
 
@@ -338,7 +341,7 @@ The owner approved this contract on 2026-08-06. The approval is for exactly
 these v1 cards: `profile.top-champions` and `profile.recent-performance`.
 It confirms ranked Solo/Duo only (`queueId: 420`), viewer-global settings,
 empty `includedRoles` meaning all roles, the approved bounds/defaults, fixed
-five-row capacity with no padding, deterministic ordering, complete-population
+page capacity (ten rows since LGA-152) with no padding, deterministic ordering, complete-population
 filtering, the current 10,000-match overall baseline cap, and the versioned
 lifecycle rules above. All other inventoried cards remain outside
 the first configurable-card release for their documented reasons.
@@ -363,14 +366,15 @@ The contract remains compatible with the planned follow-up tickets:
   card without duplicating player data.
 - **LGA-25:** frontend controls can consume the normalized contract, use an
   accessible dialog, and expose one trend-tolerance control while preserving
-  the distinct mathematical meanings of its two fields. The five-row capacity
-  remains fixed in this ticket.
+  the distinct mathematical meanings of its two fields. The page capacity
+  remains fixed in this ticket (ten rows since LGA-152).
 - **LGA-26:** dashboard/catalog work can add placement, visibility, or other
   card composition concepts without changing these stable namespaced card IDs
   or reinterpreting their settings.
 - **LGA-46:** pagination operates on the complete deterministically ordered
   eligible Top Champions result after LGA-23 filters. It exposes rows beyond
-  the first five without making the five-row capacity a setting here.
+  the first page without making the page capacity (ten rows since LGA-152) a
+  setting here.
 
 LGA-23 remains a contract/design ticket. It authorizes no preference table,
 endpoint, calculation change, UI control, or displayed-behavior change until

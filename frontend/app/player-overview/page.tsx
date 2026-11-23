@@ -4,6 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { PageHeader } from "@/components/page-header";
 import {
+  PageSections,
+  Section,
+  SectionRow,
+} from "@/components/page-sections";
+import {
   SectionQuickNavigation,
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
@@ -11,6 +16,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/features/auth";
 import { RANKED_SOLO_QUEUE_ID } from "@/lib/core/riot/queue-catalog";
+import { cn } from "@/lib/core/utils";
 import {
   PlayerCard,
   PlayerCardSkeleton,
@@ -33,18 +39,58 @@ const PLAYER_OVERVIEW_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "Role Performance", anchor: "#role-performance" },
 ];
 
+// Placeholders in the loaded layout's geometry, so nothing moves when the
+// queries answer: the summary row, then the two full-width lists.
+function ListCardSkeleton({ rows, columns }: { rows: number; columns: 1 | 2 }) {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-40" />
+      </CardHeader>
+      <CardContent
+        className={cn(
+          columns === 2
+            ? "grid grid-cols-1 gap-3 xl:grid-flow-col xl:grid-cols-2 xl:grid-rows-5 xl:gap-x-8"
+            : "space-y-4",
+        )}
+      >
+        {[...Array(rows)].map((_, index) => (
+          <Skeleton key={index} className="h-14 w-full" />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryCardSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-48" />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </CardContent>
+    </Card>
+  );
+}
+
 function PlayerOverviewSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <PageSections>
+      <SectionRow>
         <PlayerCardSkeleton />
-        <Skeleton className="h-72" />
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Skeleton className="h-80" />
-        <Skeleton className="h-80" />
-      </div>
-    </div>
+        <SummaryCardSkeleton />
+      </SectionRow>
+      <Section>
+        <ListCardSkeleton rows={10} columns={2} />
+      </Section>
+      <Section>
+        <ListCardSkeleton rows={5} columns={1} />
+      </Section>
+    </PageSections>
   );
 }
 
@@ -71,34 +117,30 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
     );
   }
 
+  // Summary and recent form are read together and balance each other, so
+  // they share a row. Each list gets the whole width, which is what lets Top
+  // Champions show ten instead of matching Role Performance's five rows.
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <PageSections>
+      <SectionRow>
         {isPlayerLoading ? (
           <PlayerCardSkeleton />
         ) : player ? (
           <PlayerCard player={player} />
         ) : null}
-        {player && (
+        {isPlayerLoading ? (
+          <SummaryCardSkeleton />
+        ) : player ? (
           <RecentPerformanceCard
             puuid={puuid}
             lastUpdated={player.match_synced_at}
           />
-        )}
-      </div>
+        ) : null}
+      </SectionRow>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <Section>
         {isChampionLoading ? (
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {[...Array(5)].map((_, index) => (
-                <Skeleton key={index} className="h-12 w-full" />
-              ))}
-            </CardContent>
-          </Card>
+          <ListCardSkeleton rows={10} columns={2} />
         ) : championStats ? (
           <ChampionStatsCard
             stats={championStats}
@@ -106,26 +148,19 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
             dataSourceKey={`${puuid}:queue:${RANKED_SOLO_QUEUE_ID}`}
           />
         ) : null}
+      </Section>
 
+      <Section>
         {isLaneLoading ? (
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {[...Array(5)].map((_, index) => (
-                <Skeleton key={index} className="h-12 w-full" />
-              ))}
-            </CardContent>
-          </Card>
+          <ListCardSkeleton rows={5} columns={1} />
         ) : laneStats ? (
           <RoleStatsCard
             stats={laneStats}
             lastUpdated={player?.match_synced_at}
           />
         ) : null}
-      </div>
-    </div>
+      </Section>
+    </PageSections>
   );
 }
 
@@ -138,7 +173,7 @@ export default function PlayerOverviewPage() {
         <SectionQuickNavigation items={PLAYER_OVERVIEW_NAV_ITEMS} />
       )}
       <div className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
+        <PageSections>
           <PageHeader title="Player Overview">
             <p className="text-sm leading-relaxed">
               Review player&apos;s rank, recent performance, champion statistics,
@@ -151,9 +186,11 @@ export default function PlayerOverviewPage() {
           ) : currentPlayer ? (
             <PlayerOverviewContent puuid={currentPlayer.puuid} />
           ) : (
-            <SelectPlayerCard />
+            <Section>
+              <SelectPlayerCard />
+            </Section>
           )}
-        </div>
+        </PageSections>
       </div>
     </ProtectedRoute>
   );
