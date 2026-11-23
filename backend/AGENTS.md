@@ -10,7 +10,7 @@ Repository identity, delivery workflow, and safety rules are inherited from
 [`../AGENTS.md`](../AGENTS.md). This guide may add backend constraints but may
 not weaken repository-wide rules.
 
-Stack: Python 3.14 (pinned by `.python-version`), FastAPI, SQLAlchemy 2 async,
+Stack: Python 3.15 (pinned by `.python-version`), FastAPI, SQLAlchemy 2 async,
 Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
 `app/features/<name>/` (`router.py`, `service.py`, `models.py`, `schemas.py`,
 `dependencies.py`); shared infrastructure lives under `app/core/`.
