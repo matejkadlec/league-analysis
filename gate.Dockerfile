@@ -8,7 +8,7 @@
 FROM koalaman/shellcheck:v0.11.0 AS shellcheck
 FROM rhysd/actionlint:1.7.12 AS actionlint
 FROM zricethezav/gitleaks:v8.30.1 AS gitleaks
-FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.9 AS uv
 
 # Node comes from the base image, so .nvmrc is not consulted here. Keep the two
 # in step when bumping Node; tools/check-toolchain-pins.sh fails the gate when
