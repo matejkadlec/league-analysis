@@ -151,3 +151,20 @@ def test_stopping_the_launcher_stops_a_worker_that_ignores_term(
 
     assert launcher.started[0].wait(timeout=DEADLINE_SECONDS) == 0
     assert _survivors(backend) == []
+
+
+def test_a_superseded_launcher_leaves_its_successors_backend_running(
+    launcher: _Launcher,
+) -> None:
+    """An old launcher exits when its backend is replaced; it stops only its own.
+
+    Both backends serve the same checkout and port, so an exit that stopped
+    "the backend" took the new one down seconds after it had started.
+    """
+    launcher.start()
+    current_backend = launcher.start()
+
+    os.killpg(launcher.started[0].pid, signal.SIGTERM)
+
+    assert launcher.started[0].wait(timeout=DEADLINE_SECONDS) == 0
+    assert [pid for pid in current_backend if not _is_alive(pid)] == []
