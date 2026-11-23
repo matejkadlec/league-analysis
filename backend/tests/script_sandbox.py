@@ -167,22 +167,24 @@ class ScriptSandbox:
         }
 
     def run(self, *command: str) -> subprocess.CompletedProcess[str]:
-        """Run a command to completion and return its combined output."""
+        """Run a command to completion and return its combined output.
+
+        Whatever it leaves running stays for the test to see, until
+        `stop_everything` ends its process group at teardown.
+        """
         process = subprocess.Popen(
             command,
             cwd=self.root,
             env=self.environment(self.backend_record),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
             start_new_session=True,
         )
-        try:
-            output, _ = process.communicate(timeout=RUN_TIMEOUT_SECONDS)
-        finally:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-        return subprocess.CompletedProcess(command, process.returncode, output)
+        self.started.append(process)
+        output, _ = process.communicate(timeout=RUN_TIMEOUT_SECONDS)
+        return subprocess.CompletedProcess(
+            command, process.returncode, output.decode(errors="replace")
+        )
 
     def start(self, record: Path, *command: str) -> subprocess.Popen[bytes]:
         """Start a long-running command whose process group `stop_everything` ends."""
