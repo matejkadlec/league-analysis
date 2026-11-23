@@ -78,7 +78,7 @@ RUN set -eux; \
 # at build time is hidden at run time.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN set -eux; \
-    npx --yes playwright@1.65.0 install --with-deps chromium; \
+    npx --yes playwright@1.65.1 install --with-deps chromium; \
     rm -rf /var/lib/apt/lists/*; \
     chmod -R a+rX /opt/playwright
 
