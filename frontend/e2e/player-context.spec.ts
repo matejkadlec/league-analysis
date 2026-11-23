@@ -129,8 +129,9 @@ test("routes player overview to the account's player and switches it", async ({
     const analyzedPlayerResultLabels = page
       .locator("p")
       .filter({ hasText: /^Results for player Analyzed#LOCAL$/ });
-    await expect(analyzedPlayerResultLabels).toHaveCount(2);
-    for (let index = 0; index < 2; index += 1) {
+    // Both result cards and the history name the player (LGA-135).
+    await expect(analyzedPlayerResultLabels).toHaveCount(3);
+    for (let index = 0; index < 3; index += 1) {
       const labelParts = analyzedPlayerResultLabels.nth(index).locator("span");
       await expect
         .soft(labelParts.nth(0))
