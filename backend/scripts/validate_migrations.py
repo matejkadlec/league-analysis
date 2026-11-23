@@ -18,6 +18,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, Connection, create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 from structlog.testing import capture_logs
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -243,6 +244,23 @@ def run_upgrade(database: str, revision: str = "head") -> None:
         cwd=BACKEND_ROOT,
         env=migration_environment(database),
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
+    )
+
+
+def run_downgrade(database: str, revision: str) -> subprocess.CompletedProcess[str]:
+    """Step back through Alembic itself: `migrate.py` offers no downgrade.
+
+    The caller reads the return code, since a refused downgrade is an outcome
+    worth asserting; its traceback stays in the captured output.
+    """
+    return subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", revision],
+        cwd=BACKEND_ROOT,
+        env=migration_environment(database),
+        check=False,
+        capture_output=True,
+        text=True,
         timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
 
@@ -750,6 +768,158 @@ def validate_revision_0035_mirrored_early_surrender(database: str) -> None:
             "the rows seeded for revision 0035 were not corrected as reviewed: "
             f"{seeded!r}"
         )
+
+
+RETIRED_PLATFORM_PLAYER = "retired-platform-validation"
+ME1_PLAYER = "me1-platform-validation"
+
+
+def _copy_player(
+    connection: Connection, source: str, puuid: str, platform: str
+) -> None:
+    """Insert a copy of one stored player under a new PUUID and platform."""
+    columns = _writable_columns(connection, "players")
+    connection.execute(
+        text(
+            "CREATE TEMP TABLE copied_player ON COMMIT DROP AS "
+            f"SELECT * FROM core.players WHERE {source}"
+        )
+    )
+    connection.execute(
+        text("UPDATE copied_player SET puuid = :puuid, platform = :platform"),
+        {"puuid": puuid, "platform": platform},
+    )
+    inserted = connection.execute(
+        text(
+            f"INSERT INTO core.players ({columns}) SELECT {columns} FROM copied_player"
+        )
+    ).rowcount
+    if inserted != 1:
+        raise RuntimeError(f"expected one player to copy as {puuid}, got {inserted}")
+
+
+def seed_rows_revision_0037_must_retire(database: str) -> None:
+    """Seed a PH2 match and a TH2 player for revision 0037 to move to SG2.
+
+    Raw SQL at 0036: `Platform` has neither id any more, so no writer can store
+    them now. Copies of rows already seeded, as for revision 0035.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            match_columns = _writable_columns(connection, "matches")
+            connection.execute(
+                text(
+                    "CREATE TEMP TABLE retired_match ON COMMIT DROP AS "
+                    "SELECT * FROM core.matches WHERE match_id = 'EUN1_VALIDATION'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE retired_match SET match_id = 'PH2_VALIDATION', "
+                    "platform = 'ph2'"
+                )
+            )
+            connection.execute(
+                text(
+                    f"INSERT INTO core.matches ({match_columns}) "
+                    f"SELECT {match_columns} FROM retired_match"
+                )
+            )
+            _copy_player(
+                connection,
+                "puuid = (SELECT min(puuid) FROM core.players)",
+                RETIRED_PLATFORM_PLAYER,
+                "th2",
+            )
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0037_moved_retired_platforms(database: str) -> None:
+    """The PH2 match and the TH2 player now live on SG2, as Riot moved them."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            platforms = (
+                connection.execute(
+                    text(
+                        "SELECT platform FROM core.matches "
+                        "WHERE match_id = 'PH2_VALIDATION' "
+                        "UNION ALL SELECT platform FROM core.players "
+                        "WHERE puuid = :puuid"
+                    ),
+                    {"puuid": RETIRED_PLATFORM_PLAYER},
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+    if platforms != ["sg2", "sg2"]:
+        raise RuntimeError(
+            f"revision 0037 left the retired-platform rows on {platforms}"
+        )
+
+
+def _platform_accepted(connection: Connection, platform: str) -> bool:
+    """Whether the players CHECK takes `platform`; the probe is rolled back."""
+    transaction = connection.begin()
+    try:
+        connection.execute(
+            text("UPDATE core.players SET platform = :platform WHERE puuid = :puuid"),
+            {"platform": platform, "puuid": RETIRED_PLATFORM_PLAYER},
+        )
+    except IntegrityError:
+        return False
+    finally:
+        transaction.rollback()
+    return True
+
+
+def validate_revision_0037_downgrade(database: str) -> None:
+    """The downgrade refuses over an ME1 row, then restores the old list.
+
+    Runs last, on the source database, and upgrades it back to head, so every
+    earlier check still sees the schema the application runs on.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            _copy_player(
+                connection,
+                f"puuid = '{RETIRED_PLATFORM_PLAYER}'",
+                ME1_PLAYER,
+                "me1",
+            )
+        if run_downgrade(database, "20261123_0036").returncode == 0:
+            raise RuntimeError("revision 0037 downgraded over an ME1 player")
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM core.players WHERE puuid = :puuid"),
+                {"puuid": ME1_PLAYER},
+            )
+        downgrade = run_downgrade(database, "20261123_0036")
+        if downgrade.returncode != 0:
+            raise RuntimeError(
+                "revision 0037 did not downgrade without ME1 rows: "
+                + downgrade.stderr.strip().splitlines()[-1]
+            )
+        with engine.connect() as connection:
+            accepted = {
+                platform: _platform_accepted(connection, platform)
+                for platform in ("ph2", "th2", "me1")
+            }
+        if accepted != {"ph2": True, "th2": True, "me1": False}:
+            raise RuntimeError(
+                f"revision 0037 downgrade restored the wrong list: {accepted}"
+            )
+    finally:
+        engine.dispose()
+    run_upgrade(database)
 
 
 def validate_revision_0019_kept_one_bound_key(database: str) -> None:
@@ -1419,10 +1589,13 @@ def main() -> int:
         seed_rows_revision_0034_must_normalise(database)
         run_upgrade(database, "20260829_0034")
         seed_rows_revision_0035_must_correct(database)
+        run_upgrade(database, "20261123_0036")
+        seed_rows_revision_0037_must_retire(database)
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0034_left_one_absent_value(database)
         validate_revision_0035_mirrored_early_surrender(database)
+        validate_revision_0037_moved_retired_platforms(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)
@@ -1448,6 +1621,7 @@ def main() -> int:
                 raise RuntimeError(
                     "restored PostgreSQL snapshot differs from its source"
                 )
+        validate_revision_0037_downgrade(database)
     except Exception as error:
         print(
             f"Migration validation failed: {type(error).__name__}: {error}",

@@ -33,6 +33,8 @@ def _bound_platform(statement: Select[Player]) -> str | None:
         ("  EuN1  ", "eun1"),
         (Platform.EUW1, "euw1"),
         ("KR", "kr"),
+        # MATCH-V5 sends `platformId: ME1` for a Middle East game (LGA-114).
+        ("ME1", "me1"),
     ],
 )
 def test_normalize_platform_is_canonical(raw: str | Platform, expected: str) -> None:
@@ -40,7 +42,9 @@ def test_normalize_platform_is_canonical(raw: str | Platform, expected: str) -> 
     assert normalize_platform(raw) == expected
 
 
-@pytest.mark.parametrize("unknown", ["me1", "ME1", "EUNE", "", "not-a-platform"])
+# PH2 and TH2 are ids Riot no longer has: it merged both into SG2 and removed
+# their hosts (LGA-114), so a request routed there never gets an answer.
+@pytest.mark.parametrize("unknown", ["ph2", "TH2", "EUNE", "", "not-a-platform"])
 def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> None:
     """An unknown region is refused here or it becomes a row nobody can read.
 

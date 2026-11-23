@@ -122,6 +122,13 @@ the mapping and rejects an unknown platform rather than defaulting to Europe.
 A wrong default would send a player's requests to another continent's host and
 return an empty history that looks like a legitimate answer.
 
+`Platform` lists Riot's live platform hosts only. ME1 (Middle East) routes to
+`europe`. Riot merged PH2 and TH2 into SG2 on 2025-01-08 and removed their
+hosts, so both are gone from the enum and the server picker; revision
+`20261123_0037` moved any stored player or match on them to `sg2`, where the
+PUUID and the match ID (which keeps its `PH2_`/`TH2_` prefix) still resolve
+(LGA-114).
+
 ACCOUNT-V1 has fewer regional clusters than MATCH-V5: `americas`, `asia` and
 `europe`, each returning the same account, while MATCH-V5 also has `sea` for
 OC1, SG2, TW2 and VN2. Riot answers an account request on `sea` with 403, which

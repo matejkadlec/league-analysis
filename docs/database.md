@@ -118,7 +118,9 @@ because these values drive staleness decisions.
   enum, `player_leagues.tier` / `rank` / `queue_type` against `Tier` /
   `Division` / `LeagueQueueType`, and `match_participants.team_id` /
   `team_position` against `TeamId` / `TeamPosition` (unknown stored lanes were
-  folded to NULL first).
+  folded to NULL first). Revision `20261123_0037` replaced both platform CHECKs
+  when Riot's list changed (ME1 added; PH2 and TH2 retired, their rows moved to
+  `sg2`); its downgrade refuses while an ME1 player or match exists.
 - Absence in a nullable JSONB column is SQL `NULL`, never the JSON document
   `null`. `JSON.none_as_null` defaults to off, so a `None` written through
   SQLAlchemy used to store `'null'::jsonb`: Python reads both back as `None`,

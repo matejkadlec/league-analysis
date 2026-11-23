@@ -271,4 +271,46 @@ describe("PlayerSelector", () => {
       expect(onPlayerSelected).toHaveBeenCalledWith(discoveredPlayer);
     });
   });
+
+  it("offers Riot's live servers, ME included and the retired PH and TH not", async () => {
+    // LGA-114: Riot merged PH2 and TH2 into SG2 and removed their hosts, and
+    // ME1 went live; the picker is the only way to name a server.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    discoverPlayer.mockResolvedValue({ success: true, data: player });
+    renderSelector();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Choose test player"), "Target#ME1");
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Search Riot for this Name#Tag",
+      }),
+    );
+    // Radix opens the picker from the keyboard as well; jsdom has no layout
+    // for its pointer path inside a dialog, and no `scrollIntoView` for the
+    // highlighted option.
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<Element["scrollIntoView"]>(),
+    });
+    (await screen.findByRole("combobox", { name: "Server" })).focus();
+    await user.keyboard("{Enter}");
+    const servers = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(servers).toContain("ME");
+    expect(servers).not.toContain("PH");
+    expect(servers).not.toContain("TH");
+
+    await user.click(screen.getByRole("option", { name: "ME" }));
+    await user.click(screen.getByRole("button", { name: "Select player" }));
+
+    await waitFor(() => {
+      expect(discoverPlayer).toHaveBeenCalledWith({
+        game_name: "Target",
+        tag_line: "ME1",
+        platform: "me1",
+      });
+    });
+  });
 });

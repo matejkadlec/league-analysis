@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { PLATFORMS, getPlatformDisplayName } from "../lib/core/riot/platform-utils";
 import { getRankColors } from "../features/players/rank-colors";
-import { TierSchema } from "../lib/core/schemas";
+import { MatchSchema, PlayerSchema, TierSchema } from "../lib/core/schemas";
 
 describe("platform presentation", () => {
   it("names every platform it is given", () => {
@@ -12,6 +12,18 @@ describe("platform presentation", () => {
       expect(getPlatformDisplayName(platform)).toBeTruthy();
     }
     expect(getPlatformDisplayName("eun1")).toBe("EUNE");
+  });
+
+  it("parses Riot's Middle East platform and refuses the retired PH2 and TH2", () => {
+    // LGA-114: the API sends `me1`; `ph2` and `th2` no longer exist.
+    const platformOf = (schema: typeof PlayerSchema | typeof MatchSchema) =>
+      schema.shape.platform;
+    for (const schema of [PlayerSchema, MatchSchema]) {
+      expect(platformOf(schema).safeParse("me1").success).toBe(true);
+      expect(platformOf(schema).safeParse("ph2").success).toBe(false);
+      expect(platformOf(schema).safeParse("th2").success).toBe(false);
+    }
+    expect(getPlatformDisplayName("me1")).toBe("ME");
   });
 });
 

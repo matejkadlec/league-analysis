@@ -13,6 +13,9 @@ class Region(str, Enum):
     SEA = "sea"
 
 
+# Live hosts only: PH2 and TH2 merged into SG2 on 2025-01-08 (LGA-114).
+# Extending this enum is a schema change: both `platform_supported` CHECKs
+# render from it.
 class Platform(str, Enum):
     """Riot API platforms for platform routing."""
 
@@ -23,12 +26,11 @@ class Platform(str, Enum):
     KR = "kr"
     LA1 = "la1"
     LA2 = "la2"
+    ME1 = "me1"
     NA1 = "na1"
     OC1 = "oc1"
-    PH2 = "ph2"
     RU = "ru"
     SG2 = "sg2"
-    TH2 = "th2"
     TR1 = "tr1"
     TW2 = "tw2"
     VN2 = "vn2"
@@ -179,12 +181,11 @@ PLATFORM_REGIONS: Final[dict[Platform, Region]] = {
     Platform.JP1: Region.ASIA,
     Platform.EUN1: Region.EUROPE,
     Platform.EUW1: Region.EUROPE,
+    Platform.ME1: Region.EUROPE,
     Platform.RU: Region.EUROPE,
     Platform.TR1: Region.EUROPE,
     Platform.OC1: Region.SEA,
-    Platform.PH2: Region.SEA,
     Platform.SG2: Region.SEA,
-    Platform.TH2: Region.SEA,
     Platform.TW2: Region.SEA,
     Platform.VN2: Region.SEA,
 }

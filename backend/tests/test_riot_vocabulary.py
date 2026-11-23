@@ -16,12 +16,16 @@ from app.features.matches.match_stats import LANE_DISPLAY_NAMES
 from app.features.matches.schemas import LaneDisplayName
 from app.features.settings.schemas import CardRole
 
-REVISION = (
-    Path(__file__).resolve().parents[1]
-    / "alembic"
-    / "versions"
-    / "20260826_0033_riot_vocabulary_checks.py"
-)
+VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+REVISION = VERSIONS / "20260826_0033_riot_vocabulary_checks.py"
+# The latest revision to replace the platform CHECKs (LGA-114).
+PLATFORM_REVISION = VERSIONS / "20261123_0037_riot_platforms_me1.py"
+
+
+def _revision_namespace(revision: Path) -> dict[str, object]:
+    namespace: dict[str, object] = {}
+    exec(revision.read_text(encoding="utf-8"), namespace)
+    return namespace
 
 
 def test_lobby_tier_is_tier_plus_unranked() -> None:
@@ -38,11 +42,9 @@ def test_lane_display_names_cover_every_team_position() -> None:
 
 
 def test_check_sql_matches_the_python_vocabularies() -> None:
-    """The Alembic revision inlines these strings; this is the drift tripwire."""
-    namespace: dict[str, object] = {}
-    exec(REVISION.read_text(encoding="utf-8"), namespace)
+    """The Alembic revisions inline these strings; this is the drift tripwire."""
+    namespace = _revision_namespace(REVISION)
     expected = {
-        "PLATFORM_SQL": values_in_sql("platform", [p.value for p in Platform]),
         "TIER_SQL": values_in_sql("tier", [t.value for t in Tier]),
         "RANK_SQL": nullable_values_in_sql("rank", [d.value for d in Division]),
         "QUEUE_TYPE_SQL": values_in_sql(
@@ -55,3 +57,19 @@ def test_check_sql_matches_the_python_vocabularies() -> None:
     }
     for name, sql in expected.items():
         assert namespace[name] == sql
+
+
+def test_platform_check_sql_matches_the_platform_enum() -> None:
+    """Both `platform_supported` CHECKs render from `Platform`."""
+    namespace = _revision_namespace(PLATFORM_REVISION)
+    assert namespace["PLATFORM_SQL"] == values_in_sql(
+        "platform", [p.value for p in Platform]
+    )
+
+
+def test_platform_downgrade_restores_the_list_it_replaced() -> None:
+    """A downgrade puts back exactly what revision 0033 created, no other list."""
+    assert (
+        _revision_namespace(PLATFORM_REVISION)["PREVIOUS_PLATFORM_SQL"]
+        == _revision_namespace(REVISION)["PLATFORM_SQL"]
+    )

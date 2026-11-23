@@ -15,9 +15,8 @@ export const PLATFORM_DISPLAY_NAMES = {
   oc1: "OCE",
   tr1: "TR",
   ru: "RU",
-  ph2: "PH",
+  me1: "ME",
   sg2: "SG",
-  th2: "TH",
   tw2: "TW",
   vn2: "VN",
 } as const satisfies Record<string, string>;
