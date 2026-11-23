@@ -325,6 +325,12 @@ with the result.
   Riot's maintained queue dataset. `PRODUCT_SUPPORTED_QUEUE_IDS` is the much
   narrower **product allowlist** that Match Fetcher actually uses. Cataloging a
   queue must never silently enable it.
+- **Allowlist decision (owner, 2026-11-16, LGA-120):** Ranked 5s (710) and
+  Arena (1700, 1710, 1740 Bravery Arena, 1750 Arena 3x6) are catalogued and
+  labelled but not synced; Arena has no 5v5 teams (`teamId` is strictly
+  100/200), so adding it is design work, not an id. ARAM: Mayhem (2400) stays
+  synced, and its variant 2450 joins the allowlist only once MATCH-V5 returns
+  Mayhem matches (LGA-121).
 - The client validates match-list inputs **before I/O**: it rejects negative
   `start`, `count` outside 0–100, unsupported queue or type values, invalid
   epoch values, and reversed time ranges. Unknown stored queue IDs stay visible

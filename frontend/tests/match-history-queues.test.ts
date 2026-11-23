@@ -51,6 +51,15 @@ describe("Match History queue catalog", () => {
     expect(getMatchQueueName(999999)).toBe("Queue 999999");
   });
 
+  it("names the catalogued queues Riot returns, though none is synced", () => {
+    // LGA-120: MATCH-V5 returned an Arena 3x6 match; Ranked 5s, the Arena
+    // variants and the Mayhem variant are catalogued, not synced.
+    for (const queueId of [710, 1700, 1710, 1740, 1750, 2450]) {
+      expect(getMatchQueueName(queueId)).not.toBe(`Queue ${queueId}`);
+    }
+    expect(getMatchQueueName(1750)).toBe("Arena 3x6");
+  });
+
   it("explains the Match-V5 availability boundary for the Mayhem filter", () => {
     expect(getMatchHistoryEmptyMessage([2400])).toBe(
       "No ARAM: Mayhem matches are currently available from Riot Match-V5 for this player.",

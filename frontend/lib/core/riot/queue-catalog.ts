@@ -1,14 +1,31 @@
 /** Ranked Solo/Duo. Every stats surface in the app reports on this queue. */
 export const RANKED_SOLO_QUEUE_ID = 420;
 
+/**
+ * Names for the queues a stored match can carry. The six synced queues come
+ * first; the rest are catalogued queues Riot returns or lists but the product
+ * does not sync (LGA-120), named so a match from one never reads "Queue N".
+ */
 const MATCH_QUEUE_NAMES: Readonly<Record<number, string>> = {
   400: "Normal Draft",
   420: "Ranked Solo/Duo",
-  430: "Normal Blind",
   440: "Ranked Flex",
   450: "ARAM",
   480: "Swiftplay",
   2400: "ARAM: Mayhem",
+  430: "Normal Blind",
+  490: "Quickplay",
+  700: "Clash",
+  710: "Ranked 5s",
+  720: "ARAM Clash",
+  900: "ARURF",
+  1700: "Arena",
+  1710: "Arena",
+  1740: "Bravery Arena",
+  1750: "Arena 3x6",
+  1900: "URF",
+  2300: "Brawl",
+  2450: "ARAM: Mayhem Classic-ish",
 };
 
 export const MATCH_HISTORY_QUEUE_FILTERS = [

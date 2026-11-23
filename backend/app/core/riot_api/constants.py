@@ -93,6 +93,7 @@ class QueueType(int, Enum):
     BLOOD_HUNT_ASSASSIN = 600
     DARK_STAR_SINGULARITY = 610
     SUMMONERS_RIFT_CLASH = 700
+    RANKED_5S = 710
     ARAM_CLASH = 720
     COOP_VS_AI_INTERMEDIATE_TWISTED_TREELINE = 800
     COOP_VS_AI_INTRO_TWISTED_TREELINE = 810
@@ -120,6 +121,8 @@ class QueueType(int, Enum):
     ULTIMATE_SPELLBOOK = 1400
     ARENA = 1700
     ARENA_16_PLAYER = 1710
+    BRAVERY_ARENA = 1740
+    ARENA_3X6 = 1750
     SWARM_SOLO = 1810
     SWARM_DUO = 1820
     SWARM_TRIO = 1830
@@ -130,8 +133,11 @@ class QueueType(int, Enum):
     TUTORIAL_3 = 2020
     BRAWL = 2300
     ARAM_MAYHEM = 2400
+    ARAM_MAYHEM_CLASSIC_ISH = 2450
 
 
+# Owner decision 2026-11-16 (LGA-120): Ranked 5s (710) and Arena (1700, 1710,
+# 1740, 1750) stay catalogued only; 2450 joins only if Riot exposes Mayhem.
 PRODUCT_SUPPORTED_QUEUE_TYPES: tuple[QueueType, ...] = (
     QueueType.RANKED_SOLO_5X5,
     QueueType.RANKED_FLEX_5X5,
