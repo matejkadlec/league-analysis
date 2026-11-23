@@ -198,6 +198,29 @@ def get_region_by_platform(platform: Platform | str) -> Region:
         raise ValueError(f"Unsupported Riot platform: {platform}") from None
 
 
+# ACCOUNT-V1 is served only by these clusters, and each returns the same
+# account. MATCH-V5 also has `sea`, but an account request there is answered
+# 403, which credential health reads as a rejected key (LGA-116).
+ACCOUNT_REGIONS: Final[frozenset[Region]] = frozenset(
+    {Region.AMERICAS, Region.ASIA, Region.EUROPE}
+)
+
+
+def get_account_region(region: Region | str) -> Region:
+    """Route an ACCOUNT-V1 request to the account cluster nearest `region`.
+
+    `sea` has no account cluster, so it goes to `asia`; every other regional
+    route serves ACCOUNT-V1 itself.
+    """
+    resolved = Region(region)
+    return Region.ASIA if resolved is Region.SEA else resolved
+
+
+def get_account_region_by_platform(platform: Platform | str) -> Region:
+    """Map a supported platform to its ACCOUNT-V1 cluster or fail closed."""
+    return get_account_region(get_region_by_platform(platform))
+
+
 def enum_str(value: Region | Platform | str) -> str:
     """Extract string value from enum or return as-is.
 
