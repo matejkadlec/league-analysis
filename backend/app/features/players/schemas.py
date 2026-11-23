@@ -7,6 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.riot_api.constants import Platform
 from app.features.jobs.models import PlayerSyncStatus
 
+# Riot IDs are written in any script, so letters and numbers are Unicode
+# classes; `\p{M}` keeps scripts that need combining marks (Thai). `#`, tabs
+# and other control characters stay out (LGA-118).
+RIOT_ID_GAME_NAME_PATTERN = r"^[\p{L}\p{M}\p{N} ._-]+$"
+RIOT_ID_TAG_LINE_PATTERN = r"^[\p{L}\p{M}\p{N}]+$"
+
 
 class PlayerBase(BaseModel):
     """Base player schema with common fields."""

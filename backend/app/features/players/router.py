@@ -32,6 +32,8 @@ from .dependencies import PlayerServiceDep
 from .leagues import PlayerLeague
 from .leagues_schemas import PlayerLeagueResponse
 from .schemas import (
+    RIOT_ID_GAME_NAME_PATTERN,
+    RIOT_ID_TAG_LINE_PATTERN,
     CurrentPlayerUpdate,
     PlayerContextResponse,
     PlayerResponse,
@@ -137,7 +139,7 @@ async def discover_player(
         Query(
             min_length=1,
             max_length=16,
-            pattern=r"^[a-zA-Z0-9\s._-]+$",
+            pattern=RIOT_ID_GAME_NAME_PATTERN,
             description="Riot game name",
         ),
     ],
@@ -146,7 +148,7 @@ async def discover_player(
         Query(
             min_length=1,
             max_length=5,
-            pattern=r"^[a-zA-Z0-9]+$",
+            pattern=RIOT_ID_TAG_LINE_PATTERN,
             description="Riot tag line without #",
         ),
     ],

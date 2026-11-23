@@ -65,24 +65,37 @@ describe.skipIf(!spec)("Riot ID rules against the API contract", () => {
     );
   });
 
-  it("accepts exactly the game-name characters the API accepts", () => {
-    const apiPattern = new RegExp(parameterSchema("game_name")?.pattern ?? "$^");
-    for (let code = 32; code < 127; code += 1) {
-      const character = String.fromCharCode(code);
-      expect(
-        RIOT_ID_GAME_NAME_PATTERN.test(character),
-        `game name character ${JSON.stringify(character)}`,
-      ).toBe(apiPattern.test(character));
-    }
+  it("declares the same game-name pattern as the API", () => {
+    // Read with the `u` flag: the API's Rust regex engine knows `\p{...}`
+    // classes, and JavaScript only does in Unicode mode.
+    expect(parameterSchema("game_name")?.pattern).toBe(
+      RIOT_ID_GAME_NAME_PATTERN.source,
+    );
+    expect(RIOT_ID_GAME_NAME_PATTERN.flags).toBe("u");
   });
 
-  it("accepts exactly the tag-line characters the API accepts", () => {
-    const apiPattern = new RegExp(parameterSchema("tag_line")?.pattern ?? "$^");
-    for (let code = 32; code < 127; code += 1) {
-      const character = String.fromCharCode(code);
+  it("declares the same tag-line pattern as the API", () => {
+    expect(parameterSchema("tag_line")?.pattern).toBe(
+      RIOT_ID_TAG_LINE_PATTERN.source,
+    );
+    expect(RIOT_ID_TAG_LINE_PATTERN.flags).toBe("u");
+  });
+
+  it.each([
+    ["game_name", RIOT_ID_GAME_NAME_PATTERN],
+    ["tag_line", RIOT_ID_TAG_LINE_PATTERN],
+  ] as const)("accepts exactly the %s characters the API accepts", (name, ours) => {
+    const apiPattern = new RegExp(parameterSchema(name)?.pattern ?? "$^", "u");
+    // Printable ASCII, the control range and a sample of other scripts.
+    const characters = [
+      ...Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)),
+      // oxlint-disable-next-line typescript/no-misused-spread -- One sample per code point, as each regex test reads it.
+      ..."čřŠéñßЖпΩλ한글ไทยाあ中٣\u00a0\u200b😀",
+    ];
+    for (const character of characters) {
       expect(
-        RIOT_ID_TAG_LINE_PATTERN.test(character),
-        `tag line character ${JSON.stringify(character)}`,
+        ours.test(character),
+        `${name} character ${JSON.stringify(character)}`,
       ).toBe(apiPattern.test(character));
     }
   });

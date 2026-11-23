@@ -10,8 +10,19 @@ export const RIOT_ID_TAG_LINE_MAX_LENGTH = 5;
  */
 export const RIOT_ID_SEARCH_MAX_LENGTH = 30;
 
-export const RIOT_ID_GAME_NAME_PATTERN = /^[a-zA-Z0-9\s._-]+$/;
-export const RIOT_ID_TAG_LINE_PATTERN = /^[a-zA-Z0-9]+$/;
+/**
+ * Riot IDs are written in any script (LGA-118): letters and numbers are
+ * Unicode classes, `\p{M}` keeps scripts that need combining marks, and `#`,
+ * tabs and other control characters stay out. The API declares the same two.
+ */
+export const RIOT_ID_GAME_NAME_PATTERN = /^[\p{L}\p{M}\p{N} ._-]+$/u;
+export const RIOT_ID_TAG_LINE_PATTERN = /^[\p{L}\p{M}\p{N}]+$/u;
+
+/** Characters as the API counts them: code points, not UTF-16 units. */
+function characterCount(value: string): number {
+  // oxlint-disable-next-line typescript/no-misused-spread -- Code points are the unit the API's max_length counts.
+  return [...value].length;
+}
 
 export interface RiotIdParts {
   gameName: string;
@@ -51,12 +62,12 @@ export function parseRiotId(input: string): RiotIdParts {
   if (!tagLine) {
     throw new Error("Tag Line cannot be empty.");
   }
-  if (gameName.length > RIOT_ID_GAME_NAME_MAX_LENGTH) {
+  if (characterCount(gameName) > RIOT_ID_GAME_NAME_MAX_LENGTH) {
     throw new Error(
       `Game Name cannot exceed ${RIOT_ID_GAME_NAME_MAX_LENGTH} characters.`,
     );
   }
-  if (tagLine.length > RIOT_ID_TAG_LINE_MAX_LENGTH) {
+  if (characterCount(tagLine) > RIOT_ID_TAG_LINE_MAX_LENGTH) {
     throw new Error(
       `Tag Line cannot exceed ${RIOT_ID_TAG_LINE_MAX_LENGTH} characters.`,
     );
