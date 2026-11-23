@@ -773,9 +773,9 @@ Classify every candidate before selecting it, next to its
   - his local database (`league_analysis_local_dev` with his accounts, tracked
     players and matches): reproducing a defect only his data shows, a cleanup or
     reconciliation command he runs there;
-  - his other machines (`ssh pcs`);
-  - the production server (`matejkadlec-cz1`): provisioning, the account
-    command, a restore, anything on the host
+  - the production server (`matejkadlec-cz1`, reached over SSH through
+    Matěj's own alias): provisioning, the account command, a restore, anything
+    on the host
     ([Production Deployment](deployment.md)), where only the steps this
     project's documents list are this project's to run, and anything host-wide
     needs Matěj first;
