@@ -208,4 +208,7 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.debug,
         log_level=settings.log_level.lower(),
+        # Bounded like `run.sh` and the production image: a client that never
+        # closes its request must not keep a stopped server alive.
+        timeout_graceful_shutdown=10,
     )
