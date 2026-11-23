@@ -44,9 +44,13 @@ flock "${TMPDIR:-/tmp}/league-analysis-gate.lock" ./test.sh -f
 Two frontend gates on one machine collide on the Playwright server's port, so
 agents queue them ([flow: Gate queue](docs/ai-development-flow.md#gate-queue)).
 The complete gate takes several minutes: run it in the background and follow its
-output. In a cloud session the SessionStart hook runs the environment's
-`lga-cloud-up` (PostgreSQL 18, `uv sync`, `npm ci`, `.env`) in the background;
-before running `npm` or `npx` by hand, `source tools/use-project-node.sh`
+output. In a cloud session the SessionStart hook runs
+`.claude/hooks/cloud-up.sh` in the background: the Git hooks, the pinned Node
+and Playwright Chromium, and the environment's `lga-cloud-up` (PostgreSQL 18,
+`uv sync`, `npm ci`, `.env`), all under one lock. A session that needs the setup
+first runs that script, never a bare `lga-cloud-up`, and reads
+`logs/lga-cloud-up.log`; before running `npm` or `npx` by hand,
+`source tools/use-project-node.sh`
 ([flow: Cloud sessions](docs/ai-development-flow.md#cloud-sessions)).
 
 ## Git and branches

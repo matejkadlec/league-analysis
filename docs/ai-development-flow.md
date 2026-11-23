@@ -1469,16 +1469,26 @@ statement is: **The active sprint is complete.**
 A Claude Code cloud session (`CLAUDE_CODE_REMOTE=true`) runs the same flow; only
 this differs:
 
-- **Setup:** the cloud environment provides `lga-cloud-up`, which starts
-  PostgreSQL 18, syncs the backend (`uv sync`) and the frontend (`npm ci`),
-  installs a newer pinned Node or Playwright Chromium when the repository pins
-  one, and creates the local `.env` for `./run.sh` when it is missing. The
-  SessionStart hook in [`.claude/settings.json`](../.claude/settings.json) runs
-  it in the background at startup and resume, and writes its output to
-  `logs/lga-cloud-up.log`; a session that needs the database or the gate before
-  it finished runs `lga-cloud-up` itself (it is safe to run twice) and reports
-  any setup problem it prints. The helper is part of the environment, not the
-  repository: a local machine does not have it, and the hook then does nothing.
+- **Setup:** the SessionStart hook in
+  [`.claude/settings.json`](../.claude/settings.json) runs
+  [`.claude/hooks/cloud-up.sh`](../.claude/hooks/cloud-up.sh) in the background
+  at startup and resume. It sets `core.hooksPath` to `.githooks` when the clone
+  has none, so commits run the pre-commit checks
+  ([Project Overview](project-overview.md#git-hooks-and-worktrees)); installs
+  the Node version `.nvmrc` pins when the image lacks it; runs the cloud
+  environment's `lga-cloud-up`, which starts PostgreSQL 18, syncs the backend
+  (`uv sync`) and the frontend (`npm ci`) and creates the local `.env` for
+  `./run.sh` when it is missing; and installs the Chromium build the pinned
+  `@playwright/test` needs. Its output goes to `logs/lga-cloud-up.log`, whose
+  last line is `exit <status>`. Every step runs under one lock
+  (`${TMPDIR:-/tmp}/lga-cloud-up.lock`): two `npm ci` runs at once can leave a
+  broken install behind a valid stamp. A session that needs the database or the
+  gate before the hook finished runs the same script, never a bare
+  `lga-cloud-up`: `.claude/hooks/cloud-up.sh` waits for the running warm-up,
+  repeats the steps (which then find everything in place), and the session
+  reads the log's last lines and reports any setup problem there. The helper is
+  part of the environment, not the repository: a local machine does not have
+  it, and the hook then does nothing.
 - **Node:** before running `npm` or `npx` by hand, `source tools/use-project-node.sh`
   (`./test.sh` and `./run.sh` do it themselves); Node comes from the image's nvm.
 - **Database:** the test role and database `league_analysis_test` on

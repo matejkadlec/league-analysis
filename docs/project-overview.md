@@ -179,7 +179,9 @@ git config core.hooksPath .githooks
 ```
 
 `.githooks/pre-commit` runs the configured pre-commit checks through the
-backend's `uv` project. There is no other repository-managed hook.
+backend's `uv` project. There is no other repository-managed Git hook. A Claude
+Code cloud session's clone gets this setting from the SessionStart hook
+([AI development flow](ai-development-flow.md#cloud-sessions)).
 
 A `flow1` or `flow2` batch starts, once its Jira claim holds, on its own
 branch in a sibling linked worktree
