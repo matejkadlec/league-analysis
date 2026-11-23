@@ -277,6 +277,8 @@ if [[ "$run_backend" == true ]]; then
   run_step 'Backend deterministic sync' run_backend_sync
   run_step 'PostgreSQL for migration validation' run_backend_postgres_prerequisites
 fi
+# Those two steps leave the shell in backend/; the repository steps start here.
+cd "$repository_root"
 run_step 'Repository hygiene' run_repository_hygiene
 # Secret scanning and the architecture rules used to run only from
 # .githooks/pre-commit, which every developer has to opt into. These two steps
