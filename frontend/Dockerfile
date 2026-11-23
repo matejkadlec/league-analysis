@@ -4,7 +4,7 @@
 # The base image is pinned by tag and digest; change the two together, and keep
 # the Node and npm versions in step with .nvmrc and `packageManager`
 # (tools/check-toolchain-pins.sh compares them).
-FROM node:26.8.2-bookworm-slim@sha256:cd9f682fa2885cd1056e830424764158570061c59736a1da836bc3d73df095ae AS base
+FROM node:26.13.1-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS base
 
 FROM base AS dependencies
 
