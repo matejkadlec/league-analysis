@@ -149,13 +149,7 @@ for (const { viewport, lines } of [
   });
 }
 
-for (const { width, pageFits } of [
-  { width: 390, pageFits: true },
-  { width: 360, pageFits: true },
-  // LGA-137: the card header's totals line is 12px too wide at 320px. The
-  // rows are measured here regardless; the page itself joins once that lands.
-  { width: 320, pageFits: false },
-]) {
+for (const width of [390, 360, 320]) {
   test(`a ${width}px phone stacks the row instead of scrolling it`, async ({
     page,
   }) => {
@@ -165,12 +159,7 @@ for (const { width, pageFits } of [
     const measured = await measureRows(page);
 
     expectNothingCutOff(measured);
-    if (pageFits) {
-      expect(measured.documentOverflow).toBe(0);
-    } else {
-      // Asserted, not skipped, so this fails once LGA-137 lands.
-      expect(measured.documentOverflow).toBeGreaterThan(0);
-    }
+    expect(measured.documentOverflow).toBe(0);
     for (const row of measured.rows) {
       // Stacked: the matchup leads, and the two stat blocks share the line
       // beneath it, the player's on the left.
