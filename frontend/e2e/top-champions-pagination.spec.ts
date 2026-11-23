@@ -99,7 +99,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("navigates complete Top Champions results in fixed five-row pages", async ({
+test("navigates complete Top Champions results in fixed ten-row pages", async ({
   page,
 }) => {
   await page.goto(`/player-overview?puuid=${PUUID}`);
@@ -109,23 +109,20 @@ test("navigates complete Top Champions results in fixed five-row pages", async (
   const next = page.getByRole("button", { name: "Next champions" });
   const range = page.getByRole("status");
 
-  await expect(range).toHaveText("1–5 of 12");
+  await expect(range).toHaveText("1–10 of 12");
   await expect(previous).toBeDisabled();
   await expect(next).toBeEnabled();
   await expect(page.getByText("Champion01")).toBeVisible();
-  await expect(page.getByText("Champion06")).toHaveCount(0);
-
-  await next.click();
-  await expect(range).toHaveText("6–10 of 12");
-  await expect(page.getByText("Champion06")).toBeVisible();
+  await expect(page.getByText("Champion10")).toBeVisible();
   await expect(page.getByText("Champion11")).toHaveCount(0);
 
   await next.click();
   await expect(range).toHaveText("11–12 of 12");
+  await expect(page.getByText("Champion11")).toBeVisible();
+  await expect(page.getByText("Champion01")).toHaveCount(0);
   await expect(next).toBeDisabled();
   await expect(previous).toBeEnabled();
-  await expect(page.getByText("Champion11")).toBeVisible();
 
   await previous.click();
-  await expect(range).toHaveText("6–10 of 12");
+  await expect(range).toHaveText("1–10 of 12");
 });

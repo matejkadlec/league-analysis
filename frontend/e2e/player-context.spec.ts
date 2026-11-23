@@ -612,8 +612,9 @@ test("marks the active route and reaches every sidebar destination", async ({
       page.getByText("Analyzed player (this page)", { exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByText("Last Analysis Result", { exact: true }),
+      page.getByRole("heading", { name: "Win Rates & Verdict" }),
     ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ranks" })).toBeVisible();
     await expect(
       page.getByText("Calculation Flowchart", { exact: true }),
     ).toBeVisible();
@@ -628,9 +629,10 @@ test("marks the active route and reaches every sidebar destination", async ({
         name: "Matchmaking Analysis Calculation Explanation",
       }),
     ).toBeVisible();
+    // A disclosure now, closed until wanted (LGA-135).
     await expect(
-      page.getByText("Analysis History", { exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", { name: /^Analysis History/ }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 
   await test.step("settings renders only the account section", async () => {

@@ -319,19 +319,19 @@ test("renders the page at the sizes the layout was specified in", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
-  // Games Comparison takes half the content width, and the other half is left
-  // empty on purpose.
+  // Games Comparison is a half-width section: half the content width, and
+  // nothing invented to fill the other half.
   const runCard = page.locator("#smurf-boost-run");
-  const row = page.locator("#smurf-boost-comparison-row");
+  const content = page.locator("[data-layout='page-sections']");
   // Counted before it is measured: `boundingBox()` on a locator that matches
   // nothing waits out the whole timeout instead of saying what is missing.
-  await expect(row).toHaveCount(1);
+  await expect(content).toHaveCount(1);
   const runBox = await runCard.boundingBox();
-  const rowBox = await row.boundingBox();
+  const contentBox = await content.boundingBox();
   expect(runBox).not.toBeNull();
-  expect(rowBox).not.toBeNull();
-  expect(runBox!.width / rowBox!.width).toBeGreaterThan(0.4);
-  expect(runBox!.width / rowBox!.width).toBeLessThan(0.55);
+  expect(contentBox).not.toBeNull();
+  expect(runBox!.width / contentBox!.width).toBeGreaterThan(0.4);
+  expect(runBox!.width / contentBox!.width).toBeLessThan(0.55);
 
   // The sidebar label is short enough to stay on one line at desktop width.
   const label = page
