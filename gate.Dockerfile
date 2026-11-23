@@ -22,17 +22,23 @@ RUN npm install --global npm@12.0.2 --ignore-scripts && npm --version
 # PostgreSQL 18 clients. validate_migrations.py runs pg_dump, pg_restore and
 # psql against the database over TCP and refuses any major version but 18.
 # Debian bookworm ships 15, so the clients come from PGDG.
+# www.postgresql.org sometimes stalls mid-transfer (curl exit 18 after ~90 s),
+# which failed the required gate on pull requests that never touched this
+# file. Each attempt is bounded and retried on any error, and apt retries its
+# own downloads, so one slow mirror response no longer fails the build.
 RUN set -eux; \
-    apt-get update; \
-    apt-get install --yes --no-install-recommends ca-certificates gnupg; \
+    apt-get -o Acquire::Retries=5 update; \
+    apt-get -o Acquire::Retries=5 install --yes --no-install-recommends ca-certificates gnupg; \
     install -d -m 755 /usr/share/postgresql-common/pgdg; \
     curl --fail --silent --show-error --location \
+      --connect-timeout 20 --max-time 60 \
+      --retry 5 --retry-all-errors --retry-delay 5 \
       --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
       https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
     echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
       > /etc/apt/sources.list.d/pgdg.list; \
-    apt-get update; \
-    apt-get install --yes --no-install-recommends postgresql-client-18; \
+    apt-get -o Acquire::Retries=5 update; \
+    apt-get -o Acquire::Retries=5 install --yes --no-install-recommends postgresql-client-18; \
     rm -rf /var/lib/apt/lists/*; \
     pg_dump --version; \
     pg_restore --version; \
