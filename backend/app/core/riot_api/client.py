@@ -23,6 +23,7 @@ from .constants import (
     QueueType,
     Region,
     enum_str,
+    get_account_region,
 )
 from .credential_vocabulary import RiotCredentialStatus
 from .endpoints import (
@@ -519,13 +520,13 @@ class RiotAPIClient:
         self, game_name: str, tag_line: str, region: Region | None = None
     ) -> AccountDTO:
         """Get account by Riot ID (gameName#tagLine)."""
-        used_region = region or self.region
+        used_region = get_account_region(region or self.region)
         self._record_api_call(
             ACCOUNT_BY_RIOT_ID,
             enum_str(used_region),
             {"gameName": game_name, "tagLine": tag_line},
         )
-        url = self.endpoints.account_by_riot_id(game_name, tag_line, region)
+        url = self.endpoints.account_by_riot_id(game_name, tag_line, used_region)
         response = await self._make_request(url)
         return AccountDTO(**self._require_object(response, "account"))
 
@@ -533,13 +534,13 @@ class RiotAPIClient:
         self, puuid: str, region: Region | None = None
     ) -> AccountDTO:
         """Get account by PUUID."""
-        used_region = region or self.region
+        used_region = get_account_region(region or self.region)
         self._record_api_call(
             ACCOUNT_BY_PUUID,
             enum_str(used_region),
             {"puuid": puuid},
         )
-        url = self.endpoints.account_by_puuid(puuid, region)
+        url = self.endpoints.account_by_puuid(puuid, used_region)
         response = await self._make_request(url)
         return AccountDTO(**self._require_object(response, "account"))
 
