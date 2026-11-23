@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MatchmakingAnalysisStartCard } from "@/features/matchmaking/components/matchmaking-analysis-start-card";
+import { ANALYSIS_MATCH_COUNT } from "@/features/matchmaking/matchmaking-progress";
+
+import { documentedColdRuns } from "./support/matchmaking-cost-table";
 
 function renderCard(
   overrides: Partial<
@@ -16,8 +20,6 @@ function renderCard(
     analysisFailure: null as string | null,
     startPending: false,
     startLabel: "Start Analysis" as const,
-    matchCount: 10,
-    onMatchCountChange: vi.fn<(count: number) => void>(),
     endDate: null as string | null,
     onEndDateChange: vi.fn<(date: string | null) => void>(),
     onStart: vi.fn<() => void>(),
@@ -27,81 +29,64 @@ function renderCard(
   return { ...view, props };
 }
 
-const pressed = (name: string) =>
-  screen.getByRole("button", { name }).getAttribute("aria-pressed");
-
-function customInput(): HTMLInputElement {
-  return screen.getByLabelText("Custom match count");
+/** The card with the session's own end-date state, as the page renders it. */
+function StatefulCard() {
+  const [endDate, setEndDate] = useState<string | null>(null);
+  return (
+    <MatchmakingAnalysisStartCard
+      playerSelector={<input aria-label="Choose player for analysis" />}
+      analysisFailure={null}
+      startPending={false}
+      startLabel="Start Analysis"
+      endDate={endDate}
+      onEndDateChange={setEndDate}
+      onStart={vi.fn<() => void>()}
+    />
+  );
 }
 
+const endDateInput = () =>
+  screen.getByLabelText("Last day to include (optional)") as HTMLInputElement;
+
+/** Freeze the clock at `now` in the viewer time zone `zone`. */
+function viewerAt(now: string, zone: string) {
+  vi.stubEnv("TZ", zone);
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(now));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
 describe("the matchmaking analysis start card", () => {
-  it("marks the chosen preset and only it as pressed", async () => {
-    const user = userEvent.setup();
-    const { props } = renderCard();
+  it("offers no match-count choice and names the fixed count", () => {
+    // LGA-140: every run analyzes the same ten matches; the presets and the
+    // custom input are gone, and the API refuses any other count.
+    renderCard();
 
-    expect(pressed("10")).toBe("true");
-    expect(pressed("20")).toBe("false");
-    expect(pressed("30")).toBe("false");
-    expect(pressed("Custom")).toBe("false");
-
-    await user.click(screen.getByRole("button", { name: "20" }));
-    expect(props.onMatchCountChange).toHaveBeenCalledWith(20);
+    expect(screen.queryByText("Matches to analyze")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Custom" })).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(
+      screen.getByText(
+        new RegExp(`across their last ${ANALYSIS_MATCH_COUNT} ranked matches`),
+      ),
+    ).toBeTruthy();
   });
 
-  it("reveals a custom count that respects the backend's bounds", async () => {
-    const user = userEvent.setup();
-    const { props } = renderCard();
+  it("states the documented cold-cache duration before a run starts", () => {
+    // The cost table in docs/matchmaking-analysis.md, which the backend's
+    // formulas are held to as well (LGA-147).
+    const [documented] = documentedColdRuns();
+    renderCard();
 
-    await user.click(screen.getByRole("button", { name: "Custom" }));
-    expect(customInput()).toBeTruthy();
-
-    // An in-range integer reports as it is typed.
-    fireEvent.change(customInput(), { target: { value: "25" } });
-    expect(props.onMatchCountChange).toHaveBeenCalledWith(25);
-
-    // Out-of-range values never reach the parent while typing; the blur
-    // clamps them into the window the backend accepts (10-100).
-    fireEvent.change(customInput(), { target: { value: "500" } });
-    expect(props.onMatchCountChange).not.toHaveBeenCalledWith(500);
-    fireEvent.blur(customInput());
-    expect(props.onMatchCountChange).toHaveBeenLastCalledWith(100);
-    expect(customInput().value).toBe("100");
-
-    fireEvent.change(customInput(), { target: { value: "5" } });
-    expect(props.onMatchCountChange).not.toHaveBeenCalledWith(5);
-    fireEvent.blur(customInput());
-    expect(props.onMatchCountChange).toHaveBeenLastCalledWith(10);
+    expect(documented?.matchCount).toBe(ANALYSIS_MATCH_COUNT);
+    expect(
+      screen.getByTestId("matchmaking-expected-duration").textContent,
+    ).toContain(`up to about ${documented?.duration} when`);
   });
-
-  it("recognises a custom count it was mounted with", () => {
-    // A restored or deep-linked count of 25 is not any preset, so the card
-    // must open in custom mode rather than highlighting nothing.
-    renderCard({ matchCount: 25 });
-
-    expect(pressed("Custom")).toBe("true");
-    expect(pressed("10")).toBe("false");
-    expect(pressed("20")).toBe("false");
-    expect(pressed("30")).toBe("false");
-    expect(customInput().value).toBe("25");
-  });
-
-  it.each([
-    // The cost table in docs/matchmaking-analysis.md: 100N + 2 requests
-    // through 100 requests / 120 s.
-    [10, "20 min"],
-    [30, "1 h"],
-    [100, "3 h 20 min"],
-  ])(
-    "states the cold-cache duration of a %i-match run before it starts",
-    (matchCount, duration) => {
-      // The largest run used to be described as "over an hour"; it is three.
-      renderCard({ matchCount });
-
-      expect(
-        screen.getByTestId("matchmaking-expected-duration").textContent,
-      ).toContain(`up to about ${duration} when`);
-    },
-  );
 
   it("refuses a last day after today instead of sending it", async () => {
     // `max` on a date input stops the picker, not the keyboard, and the
@@ -119,33 +104,51 @@ describe("the matchmaking analysis start card", () => {
   });
 
   it.each([
-    // UTC+14 is the latest clock on Earth; its day turns at 10:00 UTC. The
-    // API accepts up to that viewer's today, and the card must agree with it.
-    ["2026-11-15T09:59:00Z", "2026-11-15", "2026-11-16"],
-    ["2026-11-15T10:00:00Z", "2026-11-16", "2026-11-17"],
+    // LGA-142: after 11:00 in Prague, UTC+14 is already on the next day, and
+    // the card used to offer it; the API would take it and run "Latest".
+    ["2026-11-15T12:00:00Z", "Europe/Prague", "2026-11-15", "2026-11-16"],
+    // Half an hour after the viewer's midnight, their new day is selectable.
+    ["2026-11-15T23:30:00Z", "Europe/Prague", "2026-11-16", "2026-11-17"],
+    ["2026-11-15T06:00:00Z", "America/Los_Angeles", "2026-11-14", "2026-11-15"],
+    // At UTC+14 the viewer's today is the API's bound, never past it.
+    ["2026-11-15T10:00:00Z", "Pacific/Kiritimati", "2026-11-16", "2026-11-17"],
   ])(
-    "at %s accepts %s as the last day and refuses %s",
-    (now, lastAllowed, firstRefused) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(new Date(now));
-      try {
-        renderCard({ endDate: lastAllowed });
-        expect(screen.queryByRole("alert")).toBeNull();
-        expect(
-          screen.getByRole("button", { name: "Start Analysis" }),
-        ).toHaveProperty("disabled", false);
-        cleanup();
+    "at %s in %s accepts %s as the last day and refuses %s",
+    (now, zone, lastAllowed, firstRefused) => {
+      viewerAt(now, zone);
 
-        renderCard({ endDate: firstRefused });
-        expect(screen.getByRole("alert")).toBeTruthy();
-        expect(
-          screen.getByRole("button", { name: "Start Analysis" }),
-        ).toHaveProperty("disabled", true);
-      } finally {
-        vi.useRealTimers();
-      }
+      renderCard({ endDate: lastAllowed });
+      expect(endDateInput().max).toBe(lastAllowed);
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Start Analysis" }),
+      ).toHaveProperty("disabled", false);
+      cleanup();
+
+      renderCard({ endDate: firstRefused });
+      expect(screen.getByRole("alert")).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Start Analysis" }),
+      ).toHaveProperty("disabled", true);
     },
   );
+
+  it("moves the bound on when a card left open passes midnight", () => {
+    // The clock is read again on every change, not once per mount: the new
+    // day is accepted without reloading the page.
+    viewerAt("2026-11-15T22:30:00Z", "Europe/Prague");
+    render(<StatefulCard />);
+    expect(endDateInput().max).toBe("2026-11-15");
+
+    vi.setSystemTime(new Date("2026-11-15T23:30:00Z"));
+    fireEvent.change(endDateInput(), { target: { value: "2026-11-16" } });
+
+    expect(endDateInput().max).toBe("2026-11-16");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Start Analysis" }),
+    ).toHaveProperty("disabled", false);
+  });
 
   it("starts a run for a last day that has already happened", async () => {
     const user = userEvent.setup();
@@ -177,8 +180,6 @@ describe("the matchmaking analysis start card", () => {
         analysisFailure={null}
         startPending
         startLabel="Start Analysis"
-        matchCount={10}
-        onMatchCountChange={vi.fn<(count: number) => void>()}
         endDate={null}
         onEndDateChange={vi.fn<(date: string | null) => void>()}
         onStart={props.onStart}

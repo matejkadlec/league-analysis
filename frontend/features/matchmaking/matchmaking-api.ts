@@ -14,9 +14,10 @@ import {
   MessageResponseSchema,
 } from "@/lib/core/schemas";
 
+import { ANALYSIS_MATCH_COUNT } from "./matchmaking-progress";
+
 export async function startMatchmakingAnalysis(
   puuid: string,
-  matchCount: number,
   endDate: string | null,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedPost(
@@ -24,7 +25,7 @@ export async function startMatchmakingAnalysis(
     "/matchmaking-analysis/start",
     {
       puuid,
-      match_count: matchCount,
+      match_count: ANALYSIS_MATCH_COUNT,
       end_date: endDate,
     } satisfies MatchmakingAnalysisRequest,
   );

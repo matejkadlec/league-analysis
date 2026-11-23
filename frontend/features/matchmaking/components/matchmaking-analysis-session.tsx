@@ -61,7 +61,6 @@ export function MatchmakingAnalysisSession({
     runKey: string | null;
     samples: ThroughputSample[];
   }>({ runKey: null, samples: [] });
-  const [matchCount, setMatchCount] = useState(10);
   const [endDate, setEndDate] = useState<string | null>(null);
 
   const watchingCreatedAt = resolveWatchingCreatedAt(state, latestAnalysis);
@@ -69,7 +68,6 @@ export function MatchmakingAnalysisSession({
   const queryClient = useQueryClient();
   const { startMutation, cancelMutation } =
     useMatchmakingAnalysisMutations(puuid, watchingCreatedAt, dispatch, {
-      matchCount,
       endDate,
     });
   const storedWatching = state.phase === "running" || state.phase === "starting";
@@ -309,8 +307,6 @@ export function MatchmakingAnalysisSession({
   );
 
   const startCardControls = {
-    matchCount,
-    onMatchCountChange: setMatchCount,
     endDate,
     onEndDateChange: setEndDate,
   };

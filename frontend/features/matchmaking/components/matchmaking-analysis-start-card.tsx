@@ -9,23 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MAX_MATCH_COUNT, MIN_MATCH_COUNT } from "@/lib/core/schemas";
-import { cn } from "@/lib/core/utils";
 
 import { ANALYSIS_CARD_TRANSITION } from "../matchmaking-analysis-state";
 import {
+  ANALYSIS_MATCH_COUNT,
   estimateColdRunMinutes,
   formatRunDuration,
 } from "../matchmaking-progress";
 
-const MATCH_COUNT_PRESETS = [10, 20, 30] as const;
-
-function clampMatchCount(raw: string): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value)) {
-    return MIN_MATCH_COUNT;
-  }
-  return Math.min(MAX_MATCH_COUNT, Math.max(MIN_MATCH_COUNT, Math.round(value)));
+/** The viewer's calendar date, `YYYY-MM-DD`, from their own clock. */
+function localIsoDate(now: Date): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 interface MatchmakingAnalysisStartCardProps {
@@ -33,17 +29,15 @@ interface MatchmakingAnalysisStartCardProps {
   analysisFailure: string | null;
   startPending: boolean;
   startLabel: "Start Analysis" | "Run New Analysis";
-  matchCount: number;
-  onMatchCountChange: (count: number) => void;
   endDate: string | null;
   onEndDateChange: (date: string | null) => void;
   onStart: () => void;
 }
 
 /**
- * The start card's placeholder, in its geometry -- the description, the three
- * fields and the button -- so the result cards below do not move when the
- * latest run answers and the real card replaces it.
+ * The start card's placeholder, in its geometry -- the description, the two
+ * fields, the duration line and the button -- so the result cards below do
+ * not move when the latest run answers and the real card replaces it.
  */
 export function MatchmakingAnalysisLoadingCard() {
   return (
@@ -62,14 +56,10 @@ export function MatchmakingAnalysisLoadingCard() {
           <Skeleton className="h-9 w-full" />
         </div>
         <div className="space-y-1.5">
-          <Skeleton className="h-4 w-36" />
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-        <div className="space-y-1.5">
           <Skeleton className="h-4 w-44" />
           <Skeleton className="h-9 w-40" />
         </div>
+        <Skeleton className="h-10 w-full" />
         <Skeleton className="h-10 w-full" />
       </CardContent>
     </Card>
@@ -81,24 +71,14 @@ export function MatchmakingAnalysisStartCard({
   analysisFailure,
   startPending,
   startLabel,
-  matchCount,
-  onMatchCountChange,
   endDate,
   onEndDateChange,
   onStart,
 }: MatchmakingAnalysisStartCardProps) {
-  // The last day the API accepts: today at the latest clock on Earth
-  // (UTC+14), so a viewer ahead of UTC can pick their own current day. Render
-  // must stay pure, so the clock is read once per mount.
-  const [today] = useState(() =>
-    new Date(Date.now() + 14 * 3_600_000).toISOString().slice(0, 10),
-  );
-  const isPresetCount = (MATCH_COUNT_PRESETS as readonly number[]).includes(
-    matchCount,
-  );
-  const [customActive, setCustomActive] = useState(!isPresetCount);
-  const [customText, setCustomText] = useState(String(matchCount));
-  const customShown = customActive || !isPresetCount;
+  // The viewer's own today (LGA-142): never later than the API's bound (today
+  // at UTC+14), so whatever passes here is accepted. Render must stay pure,
+  // so the clock is read at mount and again on every change of the field.
+  const [today, setToday] = useState(() => localIsoDate(new Date()));
   // ISO dates order as strings. `max` on the input stops the picker but not
   // the keyboard, so a later day is refused here and never sent.
   const endDateInFuture = endDate !== null && endDate > today;
@@ -114,10 +94,10 @@ export function MatchmakingAnalysisStartCard({
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Analyze matchmaking fairness for the analyzed player by comparing
-          ally and enemy win rates and ranks across their last {matchCount}{" "}
-          ranked matches. Each participant&apos;s rate is measured at the time
-          of the shared match. The Calculation Flowchart explains the full
-          model.
+          ally and enemy win rates and ranks across their last{" "}
+          {ANALYSIS_MATCH_COUNT} ranked matches. Each participant&apos;s rate
+          is measured at the time of the shared match, from the games before
+          it. The Calculation Flowchart explains the full model.
         </p>
         {analysisFailure && (
           <Alert variant="destructive">
@@ -130,87 +110,6 @@ export function MatchmakingAnalysisStartCard({
             Choose player for analysis
           </Label>
           {playerSelector}
-        </div>
-        <div className="space-y-1.5">
-          <Label id="matchmaking-match-count-label">Matches to analyze</Label>
-          <div
-            className="flex gap-2"
-            role="group"
-            aria-labelledby="matchmaking-match-count-label"
-          >
-            {MATCH_COUNT_PRESETS.map((preset) => (
-              <Button
-                key={preset}
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-pressed={!customShown && matchCount === preset}
-                className={cn(
-                  !customShown && matchCount === preset
-                    ? "border-primary text-primary"
-                    : "text-muted-foreground",
-                )}
-                onClick={() => {
-                  setCustomActive(false);
-                  onMatchCountChange(preset);
-                }}
-              >
-                {preset}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-pressed={customShown}
-              className={cn(
-                customShown
-                  ? "border-primary text-primary"
-                  : "text-muted-foreground",
-              )}
-              onClick={() => {
-                setCustomActive(true);
-                setCustomText(String(matchCount));
-              }}
-            >
-              Custom
-            </Button>
-            {customShown && (
-              <Input
-                type="number"
-                min={MIN_MATCH_COUNT}
-                max={MAX_MATCH_COUNT}
-                value={customText}
-                aria-label="Custom match count"
-                className="h-8 w-20"
-                onChange={(event) => {
-                  setCustomText(event.target.value);
-                  const value = Number(event.target.value);
-                  if (
-                    Number.isInteger(value) &&
-                    value >= MIN_MATCH_COUNT &&
-                    value <= MAX_MATCH_COUNT
-                  ) {
-                    onMatchCountChange(value);
-                  }
-                }}
-                onBlur={() => {
-                  const clamped = clampMatchCount(customText);
-                  setCustomText(String(clamped));
-                  onMatchCountChange(clamped);
-                }}
-              />
-            )}
-          </div>
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="matchmaking-expected-duration"
-          >
-            Expected duration: up to about{" "}
-            {formatRunDuration(estimateColdRunMinutes(matchCount))} when
-            nothing is stored yet, less for players and matches already
-            fetched.
-          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="matchmaking-end-date">
@@ -226,9 +125,10 @@ export function MatchmakingAnalysisStartCard({
                 endDateInFuture ? "matchmaking-end-date-error" : undefined
               }
               value={endDate ?? ""}
-              onChange={(event) =>
-                onEndDateChange(event.target.value || null)
-              }
+              onChange={(event) => {
+                setToday(localIsoDate(new Date()));
+                onEndDateChange(event.target.value || null);
+              }}
               className="w-auto"
             />
             {endDate && (
@@ -252,6 +152,14 @@ export function MatchmakingAnalysisStartCard({
             </p>
           )}
         </div>
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="matchmaking-expected-duration"
+        >
+          Expected duration: up to about{" "}
+          {formatRunDuration(estimateColdRunMinutes(ANALYSIS_MATCH_COUNT))} when
+          nothing is stored yet, less for players and matches already fetched.
+        </p>
         <Button
           onClick={onStart}
           disabled={startPending || endDateInFuture}

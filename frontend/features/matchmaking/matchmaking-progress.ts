@@ -1,15 +1,39 @@
 const RIOT_LONG_WINDOW_SECONDS = 120;
 const RIOT_LONG_WINDOW_REQUESTS = 100;
+const SAMPLE_MATCHES_PER_PLAYER = 10;
 
 /**
- * Minutes a run of `matchCount` spine matches takes with nothing cached: the
- * backend's `theoretical_max_requests` (100N + 2) through the long window.
- * `docs/matchmaking-analysis.md` carries the same table.
+ * Spine matches every new run analyzes: the backend's fixed `MATCH_COUNT`
+ * (LGA-140), which refuses any other count.
+ */
+export const ANALYSIS_MATCH_COUNT = 10;
+
+/**
+ * Riot requests of a run of `matchCount` spine matches with nothing cached,
+ * per routing host: the backend's `match_v5_max_requests` (regional) and
+ * `league_v4_max_requests` (platform). The spine match is in no sample.
+ */
+export function coldRunRequestsByHost(matchCount: number): {
+  matchV5: number;
+  leagueV4: number;
+} {
+  const others = 9 * matchCount;
+  return {
+    matchV5: 1 + others + matchCount + others * SAMPLE_MATCHES_PER_PLAYER,
+    leagueV4: others + 1,
+  };
+}
+
+/**
+ * Minutes that run takes: application limits apply per routing host, so the
+ * busier host's requests through its long window set the pace (LGA-147).
+ * `docs/matchmaking-analysis.md` carries the same table, and tests read it.
  */
 export function estimateColdRunMinutes(matchCount: number): number {
-  const requests = 100 * matchCount + 2;
+  const { matchV5, leagueV4 } = coldRunRequestsByHost(matchCount);
   return Math.round(
-    (requests / RIOT_LONG_WINDOW_REQUESTS) * (RIOT_LONG_WINDOW_SECONDS / 60),
+    (Math.max(matchV5, leagueV4) / RIOT_LONG_WINDOW_REQUESTS) *
+      (RIOT_LONG_WINDOW_SECONDS / 60),
   );
 }
 

@@ -22,6 +22,7 @@ import {
   getMatchmakingAnalysisStatus,
   startMatchmakingAnalysis,
 } from "@/features/matchmaking/matchmaking-api";
+import { ANALYSIS_MATCH_COUNT } from "@/features/matchmaking/matchmaking-progress";
 import {
   discoverPlayer,
   searchPlayerSuggestions,
@@ -120,12 +121,17 @@ describe("player-api wire shapes", () => {
 
 describe("matchmaking-api wire shapes", () => {
   it("starts an analysis with the puuid and run params in the body", async () => {
-    await startMatchmakingAnalysis("p-1", 20, "2026-07-26");
+    await startMatchmakingAnalysis("p-1", "2026-07-26");
 
     expect(request().method).toBe("post");
     expect(request().url).toBe("/matchmaking-analysis/start");
+    // The count is fixed (LGA-140), and the backend refuses any other.
     expect(request().data).toBe(
-      JSON.stringify({ puuid: "p-1", match_count: 20, end_date: "2026-07-26" }),
+      JSON.stringify({
+        puuid: "p-1",
+        match_count: ANALYSIS_MATCH_COUNT,
+        end_date: "2026-07-26",
+      }),
     );
   });
 

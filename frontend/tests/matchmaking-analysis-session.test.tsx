@@ -153,7 +153,7 @@ describe("the matchmaking analysis session", () => {
     });
   });
 
-  it("starts a run with the match count and end date the form collected", async () => {
+  it("starts a run with the end date the form collected", async () => {
     const user = userEvent.setup();
     startMatchmakingAnalysis.mockReturnValue(
       new Promise<ApiResponse<MatchmakingAnalysisResponse>>(() => undefined),
@@ -161,10 +161,9 @@ describe("the matchmaking analysis session", () => {
 
     renderSession(null);
 
-    // The start card's controls are the session's own state; changing them
-    // here proves the wiring that carries the form into the start request.
-    // A date input is set whole, not typed digit by digit.
-    await user.click(screen.getByRole("button", { name: "20" }));
+    // The start card's field is the session's own state; changing it here
+    // proves the wiring that carries the form into the start request. A date
+    // input is set whole, not typed digit by digit.
     fireEvent.change(screen.getByLabelText("Last day to include (optional)"), {
       target: { value: "2026-08-01" },
     });
@@ -173,13 +172,12 @@ describe("the matchmaking analysis session", () => {
     await waitFor(() => {
       expect(startMatchmakingAnalysis).toHaveBeenCalledWith(
         "test-puuid",
-        20,
         "2026-08-01",
       );
     });
     // In flight is visible: the form swaps for the active card. Before the
-    // first status answer the expected player count is still the 10-match
-    // default; the ETA is the static estimate, so it is matched loosely.
+    // first status answer the expected player count is the fixed 10-match
+    // spine's; the ETA is the static estimate, so it is matched loosely.
     expect(
       await screen.findByText(/Analyzing 0 of 100 players/),
     ).toBeTruthy();

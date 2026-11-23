@@ -83,7 +83,7 @@ function renderMutations(watchingCreatedAt: string | null = null) {
       "player-puuid",
       watchingCreatedAt,
       dispatch,
-      { matchCount: 10, endDate: null },
+      { endDate: null },
     ),
   );
   return { ...view, dispatch };
@@ -121,11 +121,7 @@ describe("starting a matchmaking analysis", () => {
       queryClient.getQueryState(matchmakingStatusQueryKey("player-puuid")),
     ).toBeUndefined();
     expect(dispatch).toHaveBeenCalledWith({ type: "start-requested" });
-    expect(startMatchmakingAnalysis).toHaveBeenCalledWith(
-      "player-puuid",
-      10,
-      null,
-    );
+    expect(startMatchmakingAnalysis).toHaveBeenCalledWith("player-puuid", null);
 
     const started = run({ progress: 55, created_at: "2026-08-09T02:00:00.000Z" });
     await act(async () => {
