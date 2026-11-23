@@ -257,7 +257,6 @@ class PlayerService:
         user_id: int,
     ) -> PlayerResponse:
         """Resolve one Riot ID into shared canonical data without tracking it."""
-        await ensure_riot_writer_maintenance_is_inactive(self.db)
         region = get_account_region_by_platform(platform)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
@@ -267,6 +266,10 @@ class PlayerService:
         if not summoner:
             raise PlayerNotFoundError("Player details were not found on this server.")
 
+        # Fetch first, lock second: the guard's row locks last until the commit
+        # below, so taking them before the Riot calls would stall every other
+        # writer for as long as Riot takes to answer (LGA-127).
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone:
         # discovery cannot tell a re-encrypted PUUID from a reclaimed Riot ID,
@@ -511,7 +514,6 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player profile", puuid=player.puuid)
 
         platform_enum = Platform(player.platform.lower())
@@ -523,6 +525,10 @@ class PlayerService:
             player.puuid, platform_enum
         )
         account = await riot_api_client.get_account_by_puuid(player.puuid, region)
+
+        # After the Riot calls, before the first write: the guard's locks are
+        # held until the caller commits (LGA-127).
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
 
         changed = False
         if account.game_name is not None and account.game_name != player.game_name:
@@ -573,13 +579,16 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player league", puuid=player.puuid)
 
         platform_enum = Platform(player.platform.lower())
         league_entries = await riot_api_client.get_league_entries_by_puuid(
             player.puuid, platform_enum
         )
+        # After the Riot call, so its locks never wait on Riot (LGA-127), and on
+        # every path: Match Fetcher's freshness and LP writes that follow in
+        # this transaction rely on it.
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         if not league_entries:
             logger.debug("No ranked data found for player", puuid=player.puuid)
             return False

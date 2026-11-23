@@ -38,6 +38,10 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
   name-resolved PUUID is the same Riot account. Repair a stale population
   through an explicit operator-run pass with a reviewed mapping instead; see
   [`../../../docs/riot-api.md`](../../../docs/riot-api.md).
+- A Riot-data writer calls `ensure_riot_writer_maintenance_is_inactive` after
+  its Riot calls and before its first write. Its locks last until the
+  transaction commits, so taking them before a Riot await stalls every other
+  writer for as long as Riot takes to answer (LGA-127).
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
   run-per-PUUID database constraint, exact-run cancellation, and shared

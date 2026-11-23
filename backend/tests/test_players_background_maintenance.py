@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform
 from app.core.riot_api.models import MatchDTO
 from app.features.auth.users.models import User
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
@@ -186,30 +187,89 @@ async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
     assert started_tasks == []
 
 
-async def test_player_refresh_uses_the_shared_writer_guard(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Profile and league refreshes cannot repopulate cleanup-owned rows.
+class _RecordingRiot:
+    """Answers each Riot read and records that it was asked."""
 
-    Driven through the service rather than a route: the only route that
-    called it was `POST /{puuid}/refresh-league`, which had no client. The
-    jobs reach these two methods directly, so the guard still has to hold.
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    async def get_account_by_riot_id(self, *_args: object) -> SimpleNamespace:
+        self._events.append("riot")
+        return SimpleNamespace(puuid="test-puuid", game_name="New", tag_line="NEW")
+
+    async def get_account_by_puuid(self, *_args: object) -> SimpleNamespace:
+        self._events.append("riot")
+        return SimpleNamespace(game_name="New", tag_line="NEW")
+
+    async def get_summoner_by_puuid(self, *_args: object) -> SimpleNamespace:
+        self._events.append("riot")
+        return SimpleNamespace(profile_icon_id=99, summoner_level=99)
+
+    async def get_league_entries_by_puuid(self, *_args: object) -> list[object]:
+        self._events.append("riot")
+        return [object()]
+
+
+def _old_player() -> Player:
+    return cast(
+        Player,
+        SimpleNamespace(
+            puuid="test-puuid",
+            platform="eun1",
+            game_name="Old",
+            tag_line="OLD",
+            profile_icon_id=1,
+            summoner_level=1,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("method", "riot_reads"),
+    [
+        pytest.param("discover_player", 2, id="discover"),
+        pytest.param("update_player_profile", 2, id="profile"),
+        pytest.param("update_player_league", 1, id="league"),
+    ],
+)
+async def test_player_writers_check_maintenance_after_riot_and_before_writing(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    riot_reads: int,
+) -> None:
+    """The guard's row locks last until the commit, so it runs after Riot.
+
+    Taken first, those locks stalled every other writer for as long as Riot
+    took to answer (LGA-127). It still runs before the first write: the
+    session has no methods and the player keeps its values.
     """
-    guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
+    events: list[str] = []
+
+    async def refuse(_session: object) -> None:
+        events.append("guard")
+        raise RiotWriterMaintenanceActiveError()
+
     monkeypatch.setattr(
-        players_service_module,
-        "ensure_riot_writer_maintenance_is_inactive",
-        guard,
+        players_service_module, "ensure_riot_writer_maintenance_is_inactive", refuse
     )
     player_service = PlayerService(cast(AsyncSession, SimpleNamespace()))
-    player = cast(Player, SimpleNamespace(puuid="test-puuid", platform="eun1"))
+    riot = cast(RiotAPIClient, _RecordingRiot(events))
+    player = _old_player()
+
+    if method == "discover_player":
+        call = player_service.discover_player(
+            riot, "New", "NEW", Platform.EUN1, user_id=7
+        )
+    elif method == "update_player_profile":
+        call = player_service.update_player_profile(player, riot)
+    else:
+        call = player_service.update_player_league(player, riot)
 
     with pytest.raises(RiotWriterMaintenanceActiveError):
-        await player_service.update_player_profile(
-            player, cast(RiotAPIClient, object())
-        )
+        await call
 
-    guard.assert_awaited_once_with(player_service.db)
+    assert events == ["riot"] * riot_reads + ["guard"]
+    assert (player.game_name, player.profile_icon_id) == ("Old", 1)
 
 
 async def test_match_storage_rechecks_maintenance_before_each_write(
