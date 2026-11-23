@@ -7,7 +7,7 @@ here is over stored rows rather than over the query that fetched them.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -323,7 +323,7 @@ def scheduler_reads_the_test_transaction(
     """The scheduler opens its own sessions; hand it this test's rows."""
 
     @asynccontextmanager
-    async def get_session() -> AsyncIterator[AsyncSession]:
+    async def get_session() -> AsyncGenerator[AsyncSession]:
         yield database_session
 
     monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
