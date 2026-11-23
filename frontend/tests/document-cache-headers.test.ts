@@ -51,6 +51,32 @@ describe("document cache headers", () => {
     ]);
   });
 
+  it("leaves the dev server's static assets to Next.js", async () => {
+    // LGA-166: `next dev` names chunks by module, not content, so an immutable
+    // copy outlived every edit and branch switch and pages kept stale CSS.
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+    const { default: nextConfig } = await import("../next.config");
+    const rules = (await nextConfig.headers?.()) ?? [];
+
+    expect(rules.map((rule) => rule.source)).toEqual(["/", "/:path*"]);
+    expect(JSON.stringify(rules)).not.toContain("immutable");
+  });
+
+  it("keeps hashed assets immutable in a production build", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.resetModules();
+    const { default: nextConfig } = await import("../next.config");
+    const rules = (await nextConfig.headers?.()) ?? [];
+
+    expect(rules.find((rule) => rule.source === "/_next/static/:path*")).toEqual({
+      source: "/_next/static/:path*",
+      headers: [
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    });
+  });
+
   it("does not pin a deployment id when the build did not name one", async () => {
     vi.stubEnv("NEXT_DEPLOYMENT_ID", undefined);
     vi.resetModules();

@@ -69,12 +69,19 @@ const nextConfig: NextConfig = {
           ...SECURITY_HEADERS,
         ],
       },
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          { key: "Cache-Control", value: HASHED_STATIC_CACHE_CONTROL },
-        ],
-      },
+      // Not under `next dev`: its chunk names are not content-hashed, so a
+      // year-long immutable copy outlives the next edit or branch switch and
+      // the browser keeps stale CSS (LGA-166). Next's own dev caching applies.
+      ...(process.env.NODE_ENV === "development"
+        ? []
+        : [
+            {
+              source: "/_next/static/:path*",
+              headers: [
+                { key: "Cache-Control", value: HASHED_STATIC_CACHE_CONTROL },
+              ],
+            },
+          ]),
     ];
   },
   // Only the versioned API: the backend serves its interactive documentation
