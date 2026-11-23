@@ -42,8 +42,9 @@ version_output="$("$gitleaks_binary" version)"
 # strings that trip the default ruleset and belong to no commit.
 scan_sources=()
 while IFS= read -r -d '' path; do
-  # A file staged for deletion is still listed but no longer on disk.
-  [[ -e "$path" ]] || continue
+  # A file staged for deletion is still listed but no longer on disk. The path
+  # is the repository's, not the caller's: test.sh calls this from backend/.
+  [[ -e "$repository_root/$path" ]] || continue
   scan_sources+=("$path")
 done < <(git -C "$repository_root" ls-files --cached --others --exclude-standard -z)
 [[ ${#scan_sources[@]} -gt 0 ]] || {

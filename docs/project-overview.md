@@ -140,11 +140,19 @@ into the selected Node when it differs and prints what it did. Backend tooling n
 ./run.sh --help
 ```
 
-`run.sh` creates `logs/` before redirecting output, loads the current
-worktree's protected `.env`, verifies the database connection, applies Alembic
-revisions through the locked migration runner, starts Uvicorn with reload only
-after migration succeeds, waits for the backend, installs frontend dependencies
-only when `node_modules` is absent, and starts Next.js. Defaults:
+`run.sh` loads the current worktree's protected `.env` and checks every
+prerequisite before it stops or starts anything ([`tools/preflight.sh`](../tools/preflight.sh)):
+`lsof`, `ss`, `curl`, `psql` and `uv` on PATH, the `POSTGRES_*` settings, a
+PostgreSQL server that accepts them and runs the major version
+`compose.gate.yml` pins, the pinned Node and npm, and a backend environment
+`uv run` can prepare with the pinned Python. A failed check prints what is wrong
+and how to fix it. Then it creates `logs/` before redirecting output, applies
+Alembic revisions through the locked migration runner, starts Uvicorn with
+reload only after migration succeeds, waits for the backend, installs frontend
+dependencies only when `node_modules` is absent, and starts Next.js. Any later
+failure prints the step, line and command that failed, and every exit (a
+failure, Ctrl+C, a dead service) stops the backend and frontend this launcher
+started. Defaults:
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
@@ -152,7 +160,7 @@ only when `node_modules` is absent, and starts Next.js. Defaults:
 - Backend log: `logs/backend.log`
 - Frontend log: `logs/frontend.log`
 
-`run.sh` requires `lsof` and `ss`. Before the database check, it stops the
+After the prerequisites, it stops the
 backend a previous `./run.sh` of this checkout started on the selected backend
 port, as a whole process tree: the wrapper, Uvicorn's reloader and its worker
 are found by a marker in their environment, terminated, and force-stopped if

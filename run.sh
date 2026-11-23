@@ -285,37 +285,24 @@ stop_listeners_on_port() {
     echo -e "${GREEN}✓ Port $port is available${NC}"
 }
 
-if ! command -v lsof >/dev/null 2>&1; then
-    echo -e "${RED}ERROR: lsof is required to stop processes on the selected ports.${NC}" >&2
-    echo -e "${YELLOW}Install lsof, then run this command again.${NC}" >&2
-    exit 1
-fi
+# shellcheck source=tools/preflight.sh
+source "$SCRIPT_DIR/tools/preflight.sh"
 
-if ! command -v ss >/dev/null 2>&1; then
-    echo -e "${RED}ERROR: ss is required to inspect listeners on the selected ports.${NC}" >&2
-    echo -e "${YELLOW}Install the iproute2 package, then run this command again.${NC}" >&2
-    exit 1
-fi
+BACKEND_PID=""
+FRONTEND_PID=""
+CURRENT_STEP="checking prerequisites"
+SERVICES_STOPPED=false
 
-# The previous backend first, as a whole process tree: two backends on one
-# database are two job runners sharing one Riot key.
-stop_backend_processes "$BACKEND_MARKER"
-stop_listeners_on_port "$FRONTEND_PORT"
-if [ "$BACKEND_PORT" != "$FRONTEND_PORT" ]; then
-    stop_listeners_on_port "$BACKEND_PORT"
-fi
-
-LOCAL_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
-if [ -n "${CORS_ORIGINS:-}" ]; then
-    RUN_CORS_ORIGINS="$CORS_ORIGINS,$LOCAL_CORS_ORIGINS"
-else
-    RUN_CORS_ORIGINS="$LOCAL_CORS_ORIGINS"
-fi
-
-mkdir -p "$SCRIPT_DIR/logs"
-
-# Function to cleanup background processes on exit
+# Stops what this launcher started, once, whichever way it ends.
 cleanup() {
+    if [ "$SERVICES_STOPPED" = true ]; then
+        return
+    fi
+    SERVICES_STOPPED=true
+    if [ -z "$BACKEND_PID" ] && [ -z "$FRONTEND_PID" ]; then
+        return
+    fi
+
     echo ""
     echo -e "${YELLOW}============================================${NC}"
     echo -e "${YELLOW}⚠️  Shutting down services...${NC}"
@@ -334,11 +321,35 @@ cleanup() {
     fi
 
     echo -e "${GREEN}✓ All services stopped${NC}"
-    exit 0
 }
 
-# Trap SIGINT (Ctrl+C) and SIGTERM
-trap cleanup SIGINT SIGTERM
+# When errexit ends the launcher, the failing command is named, so no failure
+# is silent. A failing subshell reports through the command that ran it.
+report_failure() {
+    local status="$1"
+    local line="$2"
+    local command="$3"
+
+    if [ "$BASHPID" != "$$" ]; then
+        return
+    fi
+    echo -e "${RED}ERROR: run.sh failed while $CURRENT_STEP, at line $line (exit $status): $command${NC}" >&2
+    echo -e "${YELLOW}Logs: logs/backend.log and logs/frontend.log${NC}" >&2
+}
+
+finish() {
+    local status=$?
+
+    trap - ERR
+    cleanup
+    exit "$status"
+}
+
+set -E
+trap 'report_failure "$?" "$LINENO" "$BASH_COMMAND"' ERR
+trap finish EXIT
+# Ctrl+C (SIGINT) and SIGTERM are the normal way to stop; EXIT cleans up.
+trap 'exit 0' SIGINT SIGTERM
 
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}📊 League Analysis - Development Environment${NC}"
@@ -348,16 +359,36 @@ echo -e "${GREEN}Frontend port:${NC} $FRONTEND_PORT"
 echo -e "${GREEN}Backend port:${NC}  $BACKEND_PORT"
 echo ""
 
-# Check PostgreSQL connection
-echo -e "${YELLOW}Checking PostgreSQL connection...${NC}"
-if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\q' 2>/dev/null; then
-    echo -e "${RED}ERROR: Cannot connect to PostgreSQL at $POSTGRES_HOST:$POSTGRES_PORT${NC}"
-    echo -e "${RED}Make sure PostgreSQL is running on WSL${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ PostgreSQL connection OK${NC}"
+# Everything is checked before anything is stopped or started, so a wrong
+# prerequisite ends the run with its fix and leaves no process behind.
+echo -e "${YELLOW}Checking prerequisites...${NC}"
+preflight_commands lsof ss curl psql uv || exit 1
+preflight_postgres_settings || exit 1
+preflight_postgres "$POSTGRES_HOST" "$POSTGRES_PORT" "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" || exit 1
+preflight_node || exit 1
+preflight_backend_environment || exit 1
+echo -e "${GREEN}✓ Prerequisites OK (Node $project_node_version, PostgreSQL $POSTGRES_HOST:$POSTGRES_PORT)${NC}"
 echo ""
 
+CURRENT_STEP="stopping the previous run"
+# The previous backend first, as a whole process tree: two backends on one
+# database are two job runners sharing one Riot key.
+stop_backend_processes "$BACKEND_MARKER"
+stop_listeners_on_port "$FRONTEND_PORT"
+if [ "$BACKEND_PORT" != "$FRONTEND_PORT" ]; then
+    stop_listeners_on_port "$BACKEND_PORT"
+fi
+
+LOCAL_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
+if [ -n "${CORS_ORIGINS:-}" ]; then
+    RUN_CORS_ORIGINS="$CORS_ORIGINS,$LOCAL_CORS_ORIGINS"
+else
+    RUN_CORS_ORIGINS="$LOCAL_CORS_ORIGINS"
+fi
+
+mkdir -p "$SCRIPT_DIR/logs"
+
+CURRENT_STEP="applying database migrations"
 # Apply reviewed schema revisions before any application writer can start.
 echo -e "${YELLOW}Applying database migrations...${NC}"
 cd "$SCRIPT_DIR/backend"
@@ -370,6 +401,7 @@ echo -e "${GREEN}✓ Database migrations applied${NC}"
 echo ""
 
 # Start backend
+CURRENT_STEP="starting the backend"
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Backend (FastAPI)${NC}"
 echo -e "${BLUE}=============================================${NC}"
@@ -382,6 +414,7 @@ echo -e "${GREEN}  Logs: logs/backend.log${NC}"
 echo ""
 
 # Wait for backend to be ready
+CURRENT_STEP="waiting for the backend"
 echo -e "${YELLOW}Waiting for backend to be ready...${NC}"
 for i in {1..30}; do
     if curl -s "http://localhost:$BACKEND_PORT/api" > /dev/null 2>&1; then
@@ -390,16 +423,15 @@ for i in {1..30}; do
     fi
     if [ "$i" -eq 30 ]; then
         echo -e "${RED}ERROR: Backend failed to start. Check logs/backend.log${NC}"
-        cleanup
+        exit 1
     fi
     sleep 1
 done
 echo ""
 
 # Check if frontend dependencies are installed
+CURRENT_STEP="installing frontend dependencies"
 cd "$SCRIPT_DIR/frontend"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/tools/use-project-node.sh"
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
     npm install
@@ -408,6 +440,7 @@ if [ ! -d "node_modules" ]; then
 fi
 
 # Start frontend
+CURRENT_STEP="starting the frontend"
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Frontend (Next.js)${NC}"
 echo -e "${BLUE}=============================================${NC}"
@@ -421,7 +454,7 @@ if ! ps -p "$FRONTEND_PID" > /dev/null; then
     echo -e "${RED}ERROR: Frontend failed to start (process exited). Check logs/frontend.log${NC}"
     echo -e "${YELLOW}Last 10 lines of frontend log:${NC}"
     tail -n 10 "$SCRIPT_DIR/logs/frontend.log"
-    cleanup
+    exit 1
 fi
 
 echo -e "${GREEN}  App: http://localhost:$FRONTEND_PORT${NC}"
@@ -446,6 +479,7 @@ echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""
 
 # Monitor both processes - if one dies, shut down the other
+CURRENT_STEP="running"
 while true; do
     # Check if backend is still running
     if ! ps -p $BACKEND_PID > /dev/null 2>&1; then
@@ -457,7 +491,7 @@ while true; do
         tail -n 20 "$SCRIPT_DIR/logs/backend.log"
         echo ""
         echo -e "${YELLOW}Shutting down frontend...${NC}"
-        cleanup
+        exit 1
     fi
 
     # Check if frontend is still running
@@ -470,7 +504,7 @@ while true; do
         tail -n 20 "$SCRIPT_DIR/logs/frontend.log"
         echo ""
         echo -e "${YELLOW}Shutting down backend...${NC}"
-        cleanup
+        exit 1
     fi
 
     sleep 5
