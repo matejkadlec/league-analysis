@@ -15,7 +15,8 @@ Inherits repository-wide rules from
 ## Boundaries
 
 - Use regional routing for Account-V1 and Match-V5 and platform routing for
-  Summoner-V4 and League-V4.
+  Summoner-V4 and League-V4. Account-V1 has no `sea` cluster: its URL builders
+  route through `get_account_region()`, never a Match-V5 region directly.
 - Use PUUID as the durable player identifier.
 - Keep HTTP I/O async and validate responses through the DTO layer.
 - Treat Account-V1 `gameName`/`tagLine` and mode-sensitive participant fields

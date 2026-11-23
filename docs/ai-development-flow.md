@@ -54,7 +54,7 @@ refuses them from any other status:
 | any status | NEXT | `21` | NEXT (global) |
 | any status | REJECTED | `10` | REJECTED (global) |
 | TO DO | NEXT | `3` | TO DO NEXT |
-| NEXT | IN PROGRESS | not yet read | no ticket was in NEXT on 2026-11-15; take it from `getTransitionsForJiraIssue` and record it here |
+| NEXT | IN PROGRESS | `4` | WORK STARTED (read on 2026-11-23) |
 | IN PROGRESS | PENDING CR | `2` | DOES NOT NEED USER QA |
 | IN PROGRESS | PENDING USER QA | `5` | NEEDS USER QA |
 | PENDING USER QA | PENDING CR | `8` | USER QA PASSED |

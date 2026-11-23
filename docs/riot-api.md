@@ -122,6 +122,15 @@ the mapping and rejects an unknown platform rather than defaulting to Europe.
 A wrong default would send a player's requests to another continent's host and
 return an empty history that looks like a legitimate answer.
 
+ACCOUNT-V1 has fewer regional clusters than MATCH-V5: `americas`, `asia` and
+`europe`, each returning the same account, while MATCH-V5 also has `sea` for
+OC1, SG2, TW2 and VN2. Riot answers an account request on `sea` with 403, which
+credential health would record as a rejected key (LGA-116). The ACCOUNT-V1 URL
+builders in `endpoints.py` therefore resolve their own cluster through
+`get_account_region()`, which sends `sea` to `asia`, so no caller can build an
+account URL on `sea` even when it holds a MATCH-V5 region;
+`get_account_region_by_platform()` names the cluster for a platform.
+
 ---
 
 ## 2. Credential Precedence and Health Authority
