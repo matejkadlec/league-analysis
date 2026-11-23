@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
+import { PageSections, Section } from "@/components/page-sections";
 import { ProtectedRoute } from "@/features/auth";
 import { MatchHistory, MatchHistoryLoadingCard } from "@/features/matches";
 import { SelectPlayerCard, usePlayerContext } from "@/features/players";
@@ -14,7 +15,7 @@ export default function MatchHistoryPage() {
         className="container mx-auto min-h-[calc(100dvh+1px)] px-4 py-8"
         data-testid="match-history-page"
       >
-        <div className="space-y-6">
+        <PageSections>
           <PageHeader title="Match History">
             <p className="text-sm leading-relaxed">
               Explore player&apos;s matches, queue results, team objectives,
@@ -22,22 +23,24 @@ export default function MatchHistoryPage() {
             </p>
           </PageHeader>
 
-          {isLoading ? (
-            <MatchHistoryLoadingCard />
-          ) : currentPlayer ? (
-            // Keyed by PUUID: a switch remounts the card, so the previous
-            // player's rows, page number and in-flight query cannot survive
-            // into the new player's history.
-            <MatchHistory
-              key={currentPlayer.puuid}
-              puuid={currentPlayer.puuid}
-              lastUpdated={currentPlayer.match_synced_at}
-              onSelectPlayer={selectPlayerByPuuid}
-            />
-          ) : (
-            <SelectPlayerCard />
-          )}
-        </div>
+          <Section>
+            {isLoading ? (
+              <MatchHistoryLoadingCard />
+            ) : currentPlayer ? (
+              // Keyed by PUUID: a switch remounts the card, so the previous
+              // player's rows, page number and in-flight query cannot survive
+              // into the new player's history.
+              <MatchHistory
+                key={currentPlayer.puuid}
+                puuid={currentPlayer.puuid}
+                lastUpdated={currentPlayer.match_synced_at}
+                onSelectPlayer={selectPlayerByPuuid}
+              />
+            ) : (
+              <SelectPlayerCard />
+            )}
+          </Section>
+        </PageSections>
       </div>
     </ProtectedRoute>
   );

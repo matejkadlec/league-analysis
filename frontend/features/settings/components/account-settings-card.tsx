@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/core/utils";
 import { Eye, UserCog } from "lucide-react";
 import { ChangeEmailDialog } from "./change-email-dialog";
 import { DisplayNameField } from "./display-name-field";
@@ -14,18 +13,12 @@ import { PasswordChangeSection } from "./password-change-section";
 import { ACCOUNT_ACTION_BUTTON_CLASS } from "../settings-helpers";
 import { useChangeEmail } from "./use-change-email";
 
-interface AccountSettingsCardProps {
-  className?: string;
-}
-
-export function AccountSettingsCard({
-  className = "lg:col-span-1",
-}: AccountSettingsCardProps) {
+export function AccountSettingsCard() {
   const emailChange = useChangeEmail();
 
   return (
     <>
-      <Card className={cn("h-full p-6 text-left", className)}>
+      <Card className="p-6 text-left">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
           <UserCog className="h-5 w-5 text-[#cfa93a]" />
           Account Settings

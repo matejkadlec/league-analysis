@@ -2,8 +2,8 @@
 
 import { ProtectedRoute, useAuth } from "@/features/auth";
 import { PageHeader } from "@/components/page-header";
+import { PageSections, Section, SectionRow } from "@/components/page-sections";
 import { AccountSettingsCard, RiotApiSettingsCard } from "@/features/settings";
-import { cn } from "@/lib/core/utils";
 
 export default function SettingsPage() {
   return (
@@ -19,7 +19,7 @@ function SettingsPageContent() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 space-y-6">
+      <PageSections>
         <PageHeader title="Settings">
           <p className="text-sm leading-relaxed">
             {isAdmin
@@ -28,14 +28,19 @@ function SettingsPageContent() {
           </p>
         </PageHeader>
 
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
-          <AccountSettingsCard
-            className={cn(isAdmin ? "lg:col-span-2" : "lg:col-span-5")}
-          />
-
-          {isAdmin && <RiotApiSettingsCard />}
-        </div>
-      </div>
+        {/* Two forms, so a row for an administrator; alone, the account form
+            keeps half the width instead of stretching its fields across. */}
+        {isAdmin ? (
+          <SectionRow>
+            <AccountSettingsCard />
+            <RiotApiSettingsCard />
+          </SectionRow>
+        ) : (
+          <Section width="half">
+            <AccountSettingsCard />
+          </Section>
+        )}
+      </PageSections>
     </div>
   );
 }
