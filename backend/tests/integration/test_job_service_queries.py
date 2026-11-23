@@ -7,13 +7,17 @@ here is over stored rows rather than over the query that fetched them.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.jobs import control as control_module
+from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.models import (
+    PLAYER_SYNC_TRIGGER,
     ExecutionType,
     JobConfiguration,
     JobExecution,
@@ -54,6 +58,7 @@ async def _stored_execution(
     status: JobStatus,
     execution_type: ExecutionType,
     started_at: datetime,
+    triggered_by: str = "system",
 ) -> JobExecution:
     """One `jobs.job_executions` row."""
     execution = JobExecution(
@@ -61,6 +66,7 @@ async def _stored_execution(
         started_at=started_at,
         status=status,
         execution_type=execution_type,
+        triggered_by=triggered_by,
         api_requests_made=0,
         records_created=0,
         records_updated=0,
@@ -308,3 +314,113 @@ async def test_the_execution_list_honours_the_status_filter(
 
     assert listed.total == 1
     assert [row.id for row in listed.executions] == [failed.id]
+
+
+@pytest.fixture
+def scheduler_reads_the_test_transaction(
+    database_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scheduler opens its own sessions; hand it this test's rows."""
+
+    @asynccontextmanager
+    async def get_session() -> AsyncIterator[AsyncSession]:
+        yield database_session
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
+
+
+@pytest.mark.usefixtures("scheduler_reads_the_test_transaction")
+@pytest.mark.parametrize(
+    ("status", "execution_type", "triggered_by"),
+    [
+        pytest.param(
+            JobStatus.FAILED, ExecutionType.REGULAR, "system", id="failed-without-a-key"
+        ),
+        pytest.param(
+            JobStatus.CANCELLED,
+            ExecutionType.REGULAR,
+            "system",
+            id="cancelled-by-startup-recovery",
+        ),
+        pytest.param(
+            JobStatus.RATE_LIMITED,
+            ExecutionType.REGULAR,
+            "system",
+            id="stopped-at-the-rate-limit",
+        ),
+        pytest.param(
+            JobStatus.SUCCESS, ExecutionType.TEST, "user", id="test-health-check"
+        ),
+        pytest.param(
+            JobStatus.SUCCESS,
+            ExecutionType.REGULAR,
+            PLAYER_SYNC_TRIGGER,
+            id="one-player-update",
+        ),
+    ],
+)
+async def test_startup_catch_up_ignores_runs_that_did_not_cover_the_job(
+    database_session: AsyncSession,
+    status: JobStatus,
+    execution_type: ExecutionType,
+    triggered_by: str,
+) -> None:
+    """Only a successful regular run over every player is "the job ran".
+
+    Each row here is five minutes old on an hourly job. Read as the last run,
+    it suppresses the catch-up and the tracked players go unvisited.
+    """
+    configuration = await _stored_configuration(
+        database_session, name="updater", job_type=JobType.PLAYER_UPDATER
+    )
+    await _stored_execution(
+        database_session,
+        configuration,
+        status=status,
+        execution_type=execution_type,
+        started_at=NOW - timedelta(minutes=5),
+        triggered_by=triggered_by,
+    )
+
+    overdue = await scheduler_module._collect_overdue_jobs(
+        [configuration], scheduler_module.job_registry(), NOW
+    )
+
+    assert [config.id for config, _job_class in overdue] == [configuration.id]
+
+
+@pytest.mark.usefixtures("scheduler_reads_the_test_transaction")
+@pytest.mark.parametrize("triggered_by", ["system", "user"])
+async def test_startup_catch_up_trusts_a_recent_run_over_every_player(
+    database_session: AsyncSession, triggered_by: str
+) -> None:
+    """A newer row that covered nothing must not hide the run that did.
+
+    Otherwise one Update click or one failed start after a good run would
+    make every restart repeat a job that is still on schedule.
+    """
+    configuration = await _stored_configuration(
+        database_session, name="updater", job_type=JobType.PLAYER_UPDATER
+    )
+    await _stored_execution(
+        database_session,
+        configuration,
+        status=JobStatus.SUCCESS,
+        execution_type=ExecutionType.REGULAR,
+        started_at=NOW - timedelta(minutes=30),
+        triggered_by=triggered_by,
+    )
+    await _stored_execution(
+        database_session,
+        configuration,
+        status=JobStatus.SUCCESS,
+        execution_type=ExecutionType.REGULAR,
+        started_at=NOW - timedelta(minutes=5),
+        triggered_by=PLAYER_SYNC_TRIGGER,
+    )
+
+    overdue = await scheduler_module._collect_overdue_jobs(
+        [configuration], scheduler_module.job_registry(), NOW
+    )
+
+    assert overdue == []

@@ -291,6 +291,32 @@ async def test_deactivating_a_job_takes_it_out_of_the_scheduler(
     assert removed == ["job_7"]
 
 
+class _QueryResultDouble:
+    """Answers every result accessor the scheduler uses with one value."""
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def scalars(self) -> _QueryResultDouble:
+        return self
+
+    def all(self) -> object:
+        return self.value
+
+    def scalar_one_or_none(self) -> object:
+        return self.value
+
+
+class _QuerySessionDouble:
+    """A session whose every query returns the result it was built with."""
+
+    def __init__(self, result: object) -> None:
+        self.result = result
+
+    async def execute(self, _statement: object) -> _QueryResultDouble:
+        return _QueryResultDouble(self.result)
+
+
 async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -307,30 +333,12 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         started_at=datetime.now(UTC) - timedelta(minutes=16)
     )
 
-    class ResultDouble:
-        def __init__(self, value: object) -> None:
-            self.value = value
-
-        def scalars(self) -> ResultDouble:
-            return self
-
-        def all(self) -> object:
-            return self.value
-
-        def scalar_one_or_none(self) -> object:
-            return self.value
-
-    class SessionDouble:
-        def __init__(self, result: object) -> None:
-            self.result = result
-
-        async def execute(self, _statement: object) -> ResultDouble:
-            return ResultDouble(self.result)
-
-    sessions = iter([SessionDouble([job_config]), SessionDouble(last_execution)])
+    sessions = iter(
+        [_QuerySessionDouble([job_config]), _QuerySessionDouble(last_execution)]
+    )
 
     @asynccontextmanager
-    async def get_session() -> AsyncGenerator[SessionDouble]:
+    async def get_session() -> AsyncGenerator[_QuerySessionDouble]:
         yield next(sessions)
 
     constructed: list[tuple[int, str]] = []
@@ -379,6 +387,91 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         "name": "Match Fetcher startup catch-up",
         "replace_existing": True,
     }
+
+
+async def test_a_restart_does_not_postpone_the_next_scheduled_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rebuilt schedule counts from the last covering run, not the restart.
+
+    Counted from the restart, a backend restarted more often than a job's
+    interval never reaches that job's scheduled run at all.
+    """
+    restarted_at = datetime.now(UTC)
+    job_config = SimpleNamespace(
+        id=7,
+        name="Match Fetcher",
+        job_type=JobType.MATCH_FETCHER,
+        config_json={"interval_seconds": 3600},
+        schedule="interval:3600",
+    )
+    last_execution = SimpleNamespace(started_at=restarted_at - timedelta(minutes=50))
+    sessions = iter(
+        [_QuerySessionDouble([job_config]), _QuerySessionDouble(last_execution)]
+    )
+
+    @asynccontextmanager
+    async def get_session() -> AsyncGenerator[_QuerySessionDouble]:
+        yield next(sessions)
+
+    class JobDouble:
+        def __init__(self, job_config_id: int) -> None:
+            self.job_config_id = job_config_id
+
+        async def run(self) -> None:  # pragma: no cover - must not run here
+            raise AssertionError("scheduling ran the job")
+
+    scheduled: list[dict[str, object]] = []
+
+    class SchedulerDouble:
+        def add_job(self, _func: Callable[..., object], **kwargs: object) -> None:
+            scheduled.append(kwargs)
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
+    monkeypatch.setattr(
+        scheduler_module,
+        "job_registry",
+        lambda: {JobType.MATCH_FETCHER: JobDouble},
+    )
+    monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())
+
+    await scheduler_module._load_and_schedule_jobs()
+
+    assert [entry["id"] for entry in scheduled] == ["job_7"]
+    assert scheduled[0]["next_run_time"] == restarted_at + timedelta(minutes=10)
+
+
+def test_an_overdue_job_restarts_its_schedule_one_interval_from_now() -> None:
+    """Its catch-up runs at startup, so the schedule must not fire beside it.
+
+    Two runs of one job dispatched together: the second only finds the key
+    held and is skipped, but it is a wasted dispatch on every overdue start.
+    """
+    now = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+    stale = cast(JobExecution, SimpleNamespace(started_at=now - timedelta(minutes=70)))
+
+    assert scheduler_module._overdue_reason(stale, now, 3600) is not None
+    assert scheduler_module._first_scheduled_run(stale, now, 3600) == now + timedelta(
+        hours=1
+    )
+    assert scheduler_module._first_scheduled_run(None, now, 3600) == now + timedelta(
+        hours=1
+    )
+
+
+def test_a_job_exactly_on_its_interval_fires_now_from_its_schedule() -> None:
+    """Exactly due is not overdue, so no catch-up covers it.
+
+    The overdue check is strict; a schedule that also pushed this job a whole
+    interval out would leave it with neither run.
+    """
+    now = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+    exactly_due = cast(
+        JobExecution, SimpleNamespace(started_at=now - timedelta(seconds=3600))
+    )
+
+    assert scheduler_module._overdue_reason(exactly_due, now, 3600) is None
+    assert scheduler_module._first_scheduled_run(exactly_due, now, 3600) == now
 
 
 def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
