@@ -16,9 +16,10 @@ Top Champions pagination boundaries and the Playwright suite covers its
 browser interaction):
 
 - Cards render aggregate statistics for the globally selected player.
-- Top Champions shows exactly five champion rows per local page with a stable
-  card height on a partial final page; the backend returns the complete
-  ordered aggregate and the card paginates locally.
+- Top Champions shows exactly ten champion rows per local page (LGA-152), in
+  two ranked columns from `xl` (1-5, then 6-10), with a stable card height on a
+  partial final page; the backend returns the complete ordered aggregate and
+  the card paginates locally.
 - Win-rate color coding: green ≥51%, yellow >49%, red ≤49% (see
   `lib/core/format.ts`).
 - Cards show an updated timestamp sourced per the freshness rules in
