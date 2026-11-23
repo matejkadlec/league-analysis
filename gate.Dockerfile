@@ -62,7 +62,7 @@ RUN set -eux; \
 # and so that nothing is installed while the gate runs. Keep the version in
 # step with the one backend/pyproject.toml locks for .githooks/pre-commit.
 RUN set -eux; \
-    uv venv --python 3.14 /opt/pre-commit; \
+    uv venv --python 3.15 /opt/pre-commit; \
     VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.7.0; \
     ln --symbolic /opt/pre-commit/bin/pre-commit /usr/local/bin/pre-commit; \
     chmod -R a+rX /opt/pre-commit; \

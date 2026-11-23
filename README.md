@@ -1,6 +1,6 @@
 # League Analysis
 
-![Python](https://img.shields.io/badge/Python-3.14.7-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.15.0-3776AB?logo=python&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2.8-61DAFB?logo=react&logoColor=black)
 ![Next.js](https://img.shields.io/badge/Next.js-16.3.3-000000?logo=nextdotjs&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141.1-009688?logo=fastapi&logoColor=white)
@@ -54,7 +54,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Python 3.14.7 and Node 26.13.1 are pinned in the repository. `uv` can install the
+Python 3.15.0 and Node 26.13.1 are pinned in the repository. `uv` can install the
 required Python version automatically.
 
 ### 2. Create your local database
