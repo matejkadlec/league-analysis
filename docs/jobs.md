@@ -136,7 +136,11 @@ executions re-check the interlock after loading fresh configuration and record
 `CANCELLED` before any gameplay write. Every direct Riot-data writer (account
 linking, player tracking/refresh, match-history storage, matchmaking analysis)
 acquires gameplay and job-table locks **in cleanup order** before its
-core/auth write. Non-writing `TEST` executions are not blocked. The jobs API
+core/auth write. It takes them **after** its Riot calls: the locks last until
+its transaction commits, so a writer that took them and then awaited Riot
+stalled every other writer for as long as Riot took to answer, a saturated rate
+window or a run of retries included (LGA-127). Non-writing `TEST` executions
+are not blocked. The jobs API
 cannot create or clear the interlock (`preserve_riot_writer_maintenance_mode`,
 `backend/app/features/jobs/maintenance.py`); only the cleanse command's
 `--resume-writers` removes it.

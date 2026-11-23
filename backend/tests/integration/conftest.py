@@ -18,7 +18,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import URL, create_engine, text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.features.auth.users.models import User
@@ -172,6 +172,24 @@ async def database_session(migrated_database: str) -> AsyncIterator[AsyncSession
         await session.close()
         await transaction.rollback()
         await connection.close()
+        await engine.dispose()
+
+
+@pytest.fixture
+async def second_connection_engine(
+    migrated_database: str,
+) -> AsyncIterator[AsyncEngine]:
+    """An engine outside `database_session`'s rolled-back transaction.
+
+    For the claims only another connection can make: whether one session's
+    locks block a second one. A test removes whatever it commits through it.
+    """
+    engine = create_async_engine(
+        _connection_url("postgresql+asyncpg", migrated_database), poolclass=NullPool
+    )
+    try:
+        yield engine
+    finally:
         await engine.dispose()
 
 

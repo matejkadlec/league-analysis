@@ -1,6 +1,8 @@
 """Matchmaking-analysis logging regressions for previously silent failures."""
 
 import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
@@ -56,6 +58,12 @@ def _unused_database() -> object:
     return object()
 
 
+@asynccontextmanager
+async def _free_lease(*_args: object) -> AsyncGenerator[bool]:
+    """The worker lease, granted without a database."""
+    yield True
+
+
 async def test_failure_state_persist_failure_is_logged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -70,6 +78,7 @@ async def test_failure_state_persist_failure_is_logged(
         raise ValueError("no active Riot API key")
 
     monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _no_key)
+    monkeypatch.setattr(analysis_service_module, "hold_run_lease", _free_lease)
 
     service = analysis_service_module.MatchmakingAnalysisService(
         cast(AsyncSession, _unused_database()),
