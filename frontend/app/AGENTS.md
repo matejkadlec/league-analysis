@@ -13,7 +13,9 @@ frontend rules from [`../AGENTS.md`](../AGENTS.md).
 - Add `"use client"` for hooks, browser APIs, event handlers; always handle
   loading/error/success states.
 - Add new pages to `components/sidebar-nav.tsx`.
-- Use the container pattern: `<div className="container mx-auto py-8">`.
+- Use the container pattern: `<div className="container mx-auto py-8">`, with
+  the page header and every card inside one `PageSections`
+  (`components/page-sections.tsx`).
 - Player Overview and Match History consume the shared current-player context;
   they must not restore duplicated large Player Search cards. Preserve
   `?puuid=` for deep links, history, and independent browser tabs — the

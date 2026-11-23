@@ -92,6 +92,13 @@ public API via `index.ts`.
   `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
   refresh signal; accepting, polling, or completing a run must not mark the key
   valid. Only backend-observed direct Riot responses own that decision.
+- Matchmaking Analysis shows a result as two cards in one row, Win Rates &
+  Verdict and Ranks, both naming the run they show; the scope picked on the
+  first re-slices the second, so the scope state lives above both. The history
+  under them is a disclosure, closed by default, whose open state persists only
+  through consent-gated optional storage. Win rates are plain figures: only the
+  gap carries a verdict, read by `matchmaking/gap-verdict.ts` with the same
+  fairness band on both surfaces and always with its symbol and sign.
 - Rank Manipulation takes every string the specification fixes — bands,
   family titles, confidence labels, note readings, disclaimer — from
   `smurf-boost/smurf-boost-vocabulary.ts`; never write one of those inline.

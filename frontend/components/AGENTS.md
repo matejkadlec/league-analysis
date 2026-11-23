@@ -17,6 +17,10 @@ go in `features/`.
 - **Never edit `ui/` files manually** — they are shadcn/ui primitives. Add
   components via `npx shadcn@latest add <component>`; do not create custom UI
   primitives.
+- Card pages lay out through `page-sections.tsx` (`PageSections`, `Section`,
+  `SectionRow`); the rule it encodes is in the frontend design-system
+  contract. Skeletons use the same primitive, so a loaded page keeps the
+  geometry its placeholder reserved.
 - Use `cn()` for conditional classes; no direct axios calls (use TanStack
   Query); never skip loading/error states or TypeScript prop interfaces; no
   camelCase component file names.

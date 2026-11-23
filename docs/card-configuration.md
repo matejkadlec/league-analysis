@@ -36,7 +36,7 @@ secret.
 
 | Surface | Current behavior and dependency | First-release decision | Rationale |
 | --- | --- | --- | --- |
-| **Top Champions** | The profile page requests `GET /api/v1/matches/player/{puuid}/champion-stats?queues=420` (no limit parameter). The service returns the complete matching champion aggregate ordered by games played with the champion name as the deterministic tie-breaker; the UI displays five rows per local page. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
+| **Top Champions** | The profile page requests `GET /api/v1/matches/player/{puuid}/champion-stats?queues=420` (no limit parameter). The service returns the complete matching champion aggregate ordered by games played with the champion name as the deterministic tie-breaker; the UI displays ten rows per local page (five until LGA-152 gave the card a line of its own). | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /api/v1/matches/player/{puuid}/lane-stats?queues=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
@@ -203,7 +203,7 @@ recent population, an actual-sample-size label instead of `Recent 10 games`:
 
 | Card | Current behavior preserved by default |
 | --- | --- |
-| Top Champions | Queue 420, all roles, no aggregate thresholds, and up to five eligible champions ordered by games played with a deterministic tie-breaker. The visible capacity is unchanged even though filtering must evaluate the complete aggregate population. |
+| Top Champions | Queue 420, all roles, no aggregate thresholds, and up to ten eligible champions per page (five before LGA-152) ordered by games played with a deterministic tie-breaker. The visible capacity is unchanged even though filtering must evaluate the complete aggregate population. |
 | Recent Performance | Queue 420, recent 10 matches against the current overall matching population capped at 10,000, 0.05 absolute win-rate tolerance, and 0.05 relative tolerance for the remaining metrics. For sparse results, LGA-25 intentionally replaces the current `Recent 10 games` copy with actual-sample-size disclosure. |
 
 The initial persistence API should have an explicit read, validated upsert, and

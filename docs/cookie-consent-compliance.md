@@ -122,6 +122,7 @@ Implementation:
   - `header_messages_closed:v1`
   - `league_analysis_match_history_page_size`
   - `league_analysis_match_history_queue_filters`
+  - `league_analysis_matchmaking_history_open`
 
 ## Important Caveat
 
