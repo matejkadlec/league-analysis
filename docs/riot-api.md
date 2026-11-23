@@ -331,6 +331,14 @@ with the result.
   100/200), so adding it is design work, not an id. ARAM: Mayhem (2400) stays
   synced, and its variant 2450 joins the allowlist only once MATCH-V5 returns
   Mayhem matches (LGA-121).
+- **Catalogue against Riot's list:** `backend/tests/test_queue_catalogue.py`
+  holds `QueueType` to a vendored copy of the official `queues.json`
+  (`backend/tests/fixtures/riot_queues_<date>.json`). Every queue that list
+  names and does not mark deprecated is catalogued or left out on purpose
+  (custom games, TFT, retired rotating modes). Riot's list lags its own API:
+  710, 1740, 1750 and 2450 are live but unlisted (2026-11-23). Refresh the
+  copy by downloading the file again; the test then names each new queue to
+  decide on.
 - The client validates match-list inputs **before I/O**: it rejects negative
   `start`, `count` outside 0–100, unsupported queue or type values, invalid
   epoch values, and reversed time ranges. Unknown stored queue IDs stay visible
