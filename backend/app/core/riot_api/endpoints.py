@@ -2,7 +2,14 @@
 
 from urllib.parse import quote, urlencode
 
-from .constants import MatchType, Platform, QueueType, Region, enum_str
+from .constants import (
+    MatchType,
+    Platform,
+    QueueType,
+    Region,
+    enum_str,
+    get_account_region,
+)
 
 # One spelling per Riot path. The builders below format these into a URL and
 # the client hands the same string to `_record_api_call`, so an endpoint that
@@ -42,12 +49,18 @@ class RiotAPIEndpoints:
         platform = platform or self.platform
         return f"https://{enum_str(platform)}.api.riotgames.com"
 
-    # Account endpoints (Regional)
+    # Account endpoints (Regional). Both resolve their own cluster, so a
+    # caller holding a MATCH-V5 region (`sea`) cannot build an account URL
+    # on a host that does not serve ACCOUNT-V1.
+    def get_account_base_url(self, region: Region | None = None) -> str:
+        """Get base URL for ACCOUNT-V1, which has no `sea` cluster."""
+        return self.get_base_url(get_account_region(region or self.region))
+
     def account_by_riot_id(
         self, game_name: str, tag_line: str, region: Region | None = None
     ) -> str:
         """Get account by Riot ID endpoint."""
-        base_url = self.get_base_url(region)
+        base_url = self.get_account_base_url(region)
         path = ACCOUNT_BY_RIOT_ID.format(
             gameName=quote(game_name, safe=""), tagLine=quote(tag_line, safe="")
         )
@@ -55,7 +68,7 @@ class RiotAPIEndpoints:
 
     def account_by_puuid(self, puuid: str, region: Region | None = None) -> str:
         """Get account by PUUID endpoint."""
-        base_url = self.get_base_url(region)
+        base_url = self.get_account_base_url(region)
         return base_url + ACCOUNT_BY_PUUID.format(puuid=quote(puuid, safe=""))
 
     def summoner_by_puuid(self, puuid: str, platform: Platform | None = None) -> str:
