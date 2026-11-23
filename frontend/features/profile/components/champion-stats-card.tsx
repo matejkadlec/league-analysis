@@ -1,12 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { ChampionStatsResponse } from "@/lib/core/schemas";
-import {
-  getChampionIconUrl,
-  getChampionDisplayName,
-} from "@/lib/core/riot/data-dragon";
+import { getChampionDisplayName } from "@/lib/core/riot/data-dragon";
+import { ChampionIcon } from "@/components/champion-icon";
 import { useDDragonVersion } from "@/lib/core/riot/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -129,11 +126,9 @@ export function ChampionStatsCard({
 
               {/* Champion icon */}
               <div className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/20">
-                <Image
-                  src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
-                  alt={getChampionDisplayName(champ.champion_name)}
-                  fill
-                  className="object-cover"
+                <ChampionIcon
+                  championName={champ.champion_name}
+                  ddragonVersion={ddragonVersion}
                   sizes="40px"
                 />
               </div>

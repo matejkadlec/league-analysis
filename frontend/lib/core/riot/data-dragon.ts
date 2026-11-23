@@ -13,14 +13,27 @@ function getVersionedBaseUrl(version: string): string {
   return `https://ddragon.leagueoflegends.com/cdn/${version}`;
 }
 
+/**
+ * MATCH-V5 `championName` values that are not Data Dragon ids. Riot closed the
+ * report as a duplicate without changing it, so the client normalises them
+ * (LGA-117): `FiddleSticks.png` is a 403.
+ */
+const MATCH_V5_CHAMPION_ID_FIXES: Readonly<Record<string, string>> = {
+  FiddleSticks: "Fiddlesticks",
+};
+
+/** A MATCH-V5 `championName` in Data Dragon's id spelling. */
+export function toDataDragonChampionId(championName: string): string {
+  return MATCH_V5_CHAMPION_ID_FIXES[championName] ?? championName;
+}
+
 export function getChampionIconUrl(
   championName: string,
   version: string = DDRAGON_FALLBACK_VERSION,
 ): string {
-  // `championName` must already be in Data Dragon's own spelling -- camelCase,
-  // no spaces, no punctuation ("AurelionSol", "Kaisa", "KSante") -- which is
-  // what the backend's `championName` field carries.
-  return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
+  // Data Dragon ids are camelCase with no spaces or punctuation ("AurelionSol",
+  // "Kaisa", "KSante"); the stored MATCH-V5 value is one, bar the fixes above.
+  return `${getVersionedBaseUrl(version)}/img/champion/${toDataDragonChampionId(championName)}.png`;
 }
 
 /** Get the URL for a summoner profile icon. */
@@ -55,6 +68,9 @@ const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   RekSai: "Rek'Sai",
   Belveth: "Bel'Veth",
   KSante: "K'Sante",
+  // Champions whose id is another spelling or another name
+  Leblanc: "LeBlanc",
+  MonkeyKing: "Wukong",
   // Champions with spaces
   AurelionSol: "Aurelion Sol",
   DrMundo: "Dr. Mundo",
@@ -69,9 +85,10 @@ const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   XinZhao: "Xin Zhao",
 };
 
-/** Data Dragon spelling to in-game name: "MissFortune" -> "Miss Fortune". */
+/** MATCH-V5 `championName` to in-game name: "MissFortune" -> "Miss Fortune". */
 export function getChampionDisplayName(championName: string): string {
-  return CHAMPION_DISPLAY_NAME_MAP[championName] || championName;
+  const id = toDataDragonChampionId(championName);
+  return CHAMPION_DISPLAY_NAME_MAP[id] ?? id;
 }
 
 /**

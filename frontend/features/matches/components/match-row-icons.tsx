@@ -5,7 +5,6 @@ import Image from "next/image";
 
 import type { TeamChampion } from "@/lib/core/schemas";
 import {
-  getChampionIconUrl,
   getChampionDisplayName,
   getSummonerSpellIconUrlById,
   getKeystoneIconUrlById,
@@ -15,6 +14,7 @@ import {
   getSummonerSpellName,
 } from "@/lib/core/riot/data-dragon";
 import { formatRiotId } from "@/features/players";
+import { ChampionIcon } from "@/components/champion-icon";
 import { cn } from "@/lib/core/utils";
 import {
   Tooltip,
@@ -209,12 +209,10 @@ export function ChampionPortrait({
 
   const championName = getChampionDisplayName(participant.champion_name);
   const icon = (
-    <Image
-      src={getChampionIconUrl(participant.champion_name, ddragonVersion)}
-      alt={championName}
-      fill
+    <ChampionIcon
+      championName={participant.champion_name}
+      ddragonVersion={ddragonVersion}
       sizes="52px"
-      className="object-cover"
       unoptimized
     />
   );
@@ -257,12 +255,10 @@ export function renderTeamChampIcon(
   const riotId = formatRiotId(champ);
   const shell = `relative h-6 w-6 rounded overflow-hidden shrink-0 ${borderColor}`;
   const icon = (
-    <Image
-      src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
-      alt={championName}
-      fill
+    <ChampionIcon
+      championName={champ.champion_name}
+      ddragonVersion={ddragonVersion}
       sizes="24px"
-      className="object-cover"
       unoptimized
     />
   );
