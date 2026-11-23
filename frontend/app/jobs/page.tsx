@@ -50,17 +50,26 @@ function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
   return <span>Auto-refresh in {secondsUntilRefresh}s</span>;
 }
 
-// Placeholders in the loaded geometry: the four status tiles, and the job
-// cards as one row, so the tabs and executions below do not jump.
+// Placeholders in the loaded geometry: the four status tiles and the System
+// Health line beneath them, and the job cards as one row, so the tabs and
+// executions below do not jump when the queries answer.
 function SystemStatusSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-busy="true">
       {[...Array(4)].map((_, index) => (
-        <Card key={index} className="space-y-3 p-6">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-7 w-16" />
+        <Card key={index}>
+          <CardContent className="space-y-2 p-6">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-5 w-20" />
+          </CardContent>
         </Card>
       ))}
+      <Card className="md:col-span-2 lg:col-span-4">
+        <CardContent className="p-6">
+          <Skeleton className="h-[6.5rem] w-full" />
+        </CardContent>
+      </Card>
     </div>
   );
 }
