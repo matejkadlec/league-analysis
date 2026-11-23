@@ -1,6 +1,7 @@
 // Module-private: the page size is observable through `getChampionPage`,
-// which is what the tests assert against.
-const CHAMPIONS_PER_PAGE = 5;
+// which is what the tests assert against. Ten because the card has a line of
+// its own (LGA-152): nothing beside it caps the list any more.
+const CHAMPIONS_PER_PAGE = 10;
 
 export interface ChampionPaginationState {
   dataSourceKey: string;

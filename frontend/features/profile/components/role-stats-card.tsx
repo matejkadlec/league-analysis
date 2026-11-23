@@ -74,8 +74,10 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                   />
                 </div>
 
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1 space-y-2">
+                  {/* Wraps the figures under the role on the narrowest phones
+                      rather than pushing them past the card's edge. */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{lane.lane}</span>
                       <span className="text-sm text-muted-foreground">

@@ -109,11 +109,18 @@ export function ChampionStatsCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="min-h-[20.5rem] space-y-3">
+        {/* Ten rows in two ranked columns from `xl` (1-5, then 6-10). The
+            height is reserved for a full page, so a short last page does not
+            pull the cards below it upwards. `role` survives WebKit's reset. */}
+        <ol
+          role="list"
+          aria-label="Top champions"
+          className="grid min-h-[41.75rem] grid-cols-1 content-start gap-3 xl:min-h-[20.5rem] xl:grid-flow-col xl:grid-cols-2 xl:grid-rows-5 xl:gap-x-8"
+        >
           {championPage.items.map((champ, index) => (
-            <div
+            <li
               key={champ.champion_name}
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+              className="flex min-w-0 items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
             >
               {/* Rank number */}
               <span className="text-sm font-medium text-muted-foreground w-4">
@@ -151,9 +158,9 @@ export function ChampionStatsCard({
               </div>
 
               <PerformanceFigures stats={champ} />
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </CardContent>
     </Card>
   );
