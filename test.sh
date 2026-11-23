@@ -7,9 +7,6 @@ readonly repository_root
 
 run_frontend=true
 run_backend=true
-next_env_file="$repository_root/frontend/next-env.d.ts"
-next_env_backup=""
-next_env_existed=false
 
 usage() {
   printf '%s\n' \
@@ -46,28 +43,6 @@ if [[ $# -eq 1 ]]; then
       exit 2
       ;;
   esac
-fi
-
-cleanup_generated_files() {
-  if [[ -z "$next_env_backup" ]]; then
-    return
-  fi
-
-  if [[ "$next_env_existed" == true ]]; then
-    cp "$next_env_backup" "$next_env_file"
-  else
-    rm -f -- "$next_env_file"
-  fi
-  rm -f -- "$next_env_backup"
-}
-
-if [[ "$run_frontend" == true ]]; then
-  next_env_backup="$(mktemp "${TMPDIR:-/tmp}/league-analysis-next-env.XXXXXX")"
-  if [[ -f "$next_env_file" ]]; then
-    next_env_existed=true
-    cp "$next_env_file" "$next_env_backup"
-  fi
-  trap cleanup_generated_files EXIT
 fi
 
 run_step() {

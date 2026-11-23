@@ -124,9 +124,16 @@ rm -rf .next     # Clear cache
 ```
 
 The authoritative gate selects the Node version from `../.nvmrc`, installs with
-`npm ci`, rejects oxlint warnings, and preserves tracked `next-env.d.ts` content
-across the production build. Install the matching browser once before the
-separate Playwright suite: `npx playwright install chromium`.
+`npm ci` and rejects oxlint warnings. Install the matching browser once before
+the separate Playwright suite: `npx playwright install chromium`.
+
+Starting the application leaves the tree clean. `next-env.d.ts` is generated
+and ignored: `next dev` and `next build` write it with different import paths,
+and the type check, lint and dead-code scan do not need it. The
+`nextjs-agent-rules` block at the end of this file belongs to Next.js, which
+rewrites it on `next dev` whenever it differs from what the installed version
+generates: keep it byte-for-byte as generated
+(`tests/next-agent-rules-block.test.ts` fails after a Next.js bump changes it).
 
 Vitest runs in randomised order, so a test may not depend on one before it.
 Drive user actions with `user-event`, not `fireEvent` — `house/no-fire-event-click`
@@ -147,7 +154,7 @@ both processes on localhost.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
