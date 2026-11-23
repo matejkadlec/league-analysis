@@ -1,9 +1,8 @@
 """ACCOUNT-V1 routing: no account request may go to the `sea` cluster (LGA-116).
 
-MATCH-V5 serves `americas`, `asia`, `europe` and `sea`; ACCOUNT-V1 serves only
-the first three. Riot answers an account request on `sea` with 403, and every
-403 is credential-health evidence that the key was rejected, so one OCE, SG,
-TW or VN lookup used to flip the whole application to "key invalid".
+Riot answers an account request on `sea` with 403, which credential health
+records as a rejected key, so one SEA-platform lookup flipped the whole
+application to "key invalid".
 """
 
 from datetime import UTC, datetime
