@@ -273,13 +273,44 @@ start request stays bounded; an insufficient history becomes a retryable
 If the server restarts mid-run, the analysis row remains active with
 `completed_at = NULL`. Shutdown can cancel the worker **before**
 `_run_analysis` sets `started_at`, so a resumable row may still be `pending`
-with `started_at = NULL` — treat that state as resumable, not stranded. On the
-next explicit start, `start_analysis` attaches to the row, relaunches its
-worker, and preserves already-completed `puuid_progress` keys
-(`started_at` is set with `coalesce`, so the original start survives). What
-survives is the progress display and the matches and rank snapshots already
-stored; the win-rate cache lived in the dead process, so the resumed worker
-walks the spine again and re-reads those players, mostly from the database.
+with `started_at = NULL` — treat that state as resumable, not stranded.
+Nothing resumes it on its own: the next status poll of that run (or an
+explicit start, which attaches to it) relaunches its worker, so a run whose
+page nobody opens stays active without one. The status read therefore has a
+side effect, by design.
+
+The resumed worker keeps every finished participant (LGA-129). Each
+participant's progress flip and their **sample** — win rate, the match IDs it
+counted, rank value, tier and freshness basis, and whether a Riot read failed
+for them — are written in one UPDATE, the sample appended to
+`participant_samples` (JSONB, revision `20261123_0036`). On resume the worker
+restores those samples into its caches before it walks the spine again, so a
+participant already marked done costs no Riot call and the bar moves only for
+work actually left; Recent Form is re-read from the stored sample matches,
+database-only. A participant the worker finished after a spine shift (a
+latest-matches run whose player played a new game meanwhile) is restored only
+while they are still in the new spine. `started_at` is set with `coalesce`, so
+the original start survives, and `rate_limit_reset_at` is cleared, since the
+resumed worker is not waiting. A finished run (completed, failed, cancelled)
+keeps no samples: every terminal write clears the column. `requests_saved`
+counts only the calls of the worker that finished the run.
+
+Rows left active by a version without samples resume as before: their
+participants marked done are read again, mostly from the database.
+
+### One worker per run
+
+The run registry (`_running_analyses`) is process-local, and a backend that
+outlived a restart is invisible to the new one, so a registry miss is not
+proof that no worker runs. Every worker holds the run's **lease** for its whole
+life: a session-level PostgreSQL advisory lock
+(`pg_try_advisory_lock(namespace, key)`, the key a digest of the run identity,
+`worker_lease.py`) on a connection of its own, closed rather than pooled when
+the worker ends, so a dead process leaves no lease behind. A status poll or an
+attaching start re-arms a run only when this process has no live worker for it
+**and** `pg_locks` shows no lease held; a worker that still finds the lease
+taken exits without touching the run, which covers two processes passing that
+check at once.
 
 Startup recovery (`_cancel_orphaned_player_syncs` in the jobs scheduler)
 **deliberately excludes** `core.matchmaking_analyses`: this table has the
@@ -290,7 +321,8 @@ boot would discard resumable progress.
 
 `puuid_progress` (JSONB) maps `"{puuid}:{match_id}"` keys to booleans — one
 key per participant slot per spine match, pre-populated after the spine is
-known and flipped true per player as win rates complete. The model column
+known and flipped true per player once their whole sample (win rate, form,
+rank) is read, in the same UPDATE that stores the sample. The model column
 comment (`{puuid: true/false}`) is stale; this composite-key description is
 authoritative. Progress counts shown to the client are
 `sum(values) / len(keys)`.
@@ -440,7 +472,8 @@ completion reaches 100% and triggers result/history refresh.
 | Riot failure on a **required** fetch          | Error propagates; run becomes `failed`                          |
 | DB connection error                           | Exception propagates; run marked `failed`                       |
 | Browser reload during analysis                | Exact persisted run rehydrated; polling continues               |
-| Server restart during analysis                | Active record remains; next explicit start resumes it           |
+| Server restart during analysis                | Active record remains; the next poll or start resumes it, finished players restored |
+| Worker of an older process still alive        | Its lease blocks a second worker; the run resumes once it is gone |
 | Same player in multiple spine matches         | Win rate computed once at first-encounter anchor, cached by PUUID |
 | Analysis already running for player           | Unique active row is returned; no duplicate task is created     |
 | Exact run cancelled                           | Terminal `cancelled` record retained; fetched matches kept      |

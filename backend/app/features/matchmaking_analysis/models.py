@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import NotRequired, TypedDict, get_args
+from typing import Literal, NotRequired, TypedDict, get_args
 
 from sqlalchemy import (
     CheckConstraint,
@@ -81,6 +81,25 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     degraded_players: NotRequired[int]
 
 
+type RankBasis = Literal["period_accurate", "current_day"]
+
+
+class ParticipantSampleJSON(TypedDict):
+    """One participant's finished sample in the `participant_samples` JSONB.
+
+    Everything the run's caches held for the participant, so a resumed worker
+    restores it instead of reading the participant from Riot again.
+    `rank_basis` is None when no rank was read (unranked or unreadable).
+    """
+
+    winrate: float | None
+    sample_match_ids: list[str]
+    rank_value: int | None
+    rank_tier: str
+    rank_basis: RankBasis | None
+    degraded: bool
+
+
 class MatchmakingAnalysis(Base):
     """Persisted lifecycle and results for one matchmaking analysis run."""
 
@@ -157,6 +176,16 @@ class MatchmakingAnalysis(Base):
         nullable=True,
         default=dict,
         comment="Tracks analyzed PUUIDs: {puuid: true/false}",
+    )
+
+    # Written with the progress flip it belongs to, in one UPDATE, so a key
+    # marked done always has the sample a resumed worker restores.
+    participant_samples: Mapped[dict[str, ParticipantSampleJSON] | None] = (
+        mapped_column(
+            ABSENT_AS_NULL_JSONB,
+            nullable=True,
+            comment="Finished participant samples a resumed worker restores",
+        )
     )
 
     # Number of API requests saved due to cached match data

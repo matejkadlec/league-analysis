@@ -1,7 +1,8 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
@@ -29,7 +30,10 @@ from app.core.riot_api.models import LeagueEntryDTO
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.errors import MatchmakingAnalysisRuntimeError
-from app.features.matchmaking_analysis.models import MatchmakingAnalysis
+from app.features.matchmaking_analysis.models import (
+    MatchmakingAnalysis,
+    ParticipantSampleJSON,
+)
 from app.features.matchmaking_analysis.ranks import rank_value, summarize_ranks
 from app.features.matchmaking_analysis.schemas import (
     MatchmakingAnalysisParams,
@@ -88,6 +92,7 @@ def _analysis(status: str = "pending") -> MatchmakingAnalysis:
             requests_saved=0,
             rate_limit_reset_at=None,
             params=None,
+            participant_samples=None,
         ),
     )
 
@@ -129,6 +134,9 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     service = MatchmakingAnalysisService(
         cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
+    monkeypatch.setattr(
+        analysis_service_module, "run_lease_is_held", AsyncMock(return_value=False)
+    )
     service._get_active_analysis = AsyncMock(return_value=existing)
     service._ensure_background_task = MagicMock()
 
@@ -142,9 +150,14 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     )
 
 
-async def test_status_poll_resumes_a_run_whose_worker_did_not_survive() -> None:
+async def test_status_poll_resumes_a_run_whose_worker_did_not_survive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A deploy mid-run cancels the task but keeps the row active; the poll
     is the only caller left that can re-arm it."""
+    monkeypatch.setattr(
+        analysis_service_module, "run_lease_is_held", AsyncMock(return_value=False)
+    )
     active = _analysis("in_progress")
     database = SimpleNamespace(
         execute=AsyncMock(
@@ -177,6 +190,50 @@ async def test_status_poll_leaves_a_finished_run_alone() -> None:
     await service.get_analysis_status(_PUUID, done.created_at)
 
     service._ensure_background_task.assert_not_called()
+
+
+async def test_a_status_poll_does_not_start_a_second_worker_while_one_is_alive_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """This process's registry is empty, but another process's worker holds
+    the run's lease: the poll leaves the run to it (LGA-129)."""
+    lease_check = AsyncMock(return_value=True)
+    monkeypatch.setattr(analysis_service_module, "run_lease_is_held", lease_check)
+    active = _analysis("in_progress")
+    database = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: active)
+        )
+    )
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+    service._ensure_background_task = MagicMock()
+
+    response = await service.get_analysis_status(_PUUID, active.created_at)
+
+    assert response is not None
+    assert response.status == "in_progress"
+    service._ensure_background_task.assert_not_called()
+    lease_check.assert_awaited_once_with(database, _USER_ID, _PUUID, active.created_at)
+
+
+async def test_a_worker_that_cannot_take_the_lease_does_no_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two processes can both pass the poll's check; only one worker runs."""
+
+    @asynccontextmanager
+    async def taken_lease(*_args: object) -> AsyncGenerator[bool]:
+        yield False
+
+    monkeypatch.setattr(analysis_service_module, "hold_run_lease", taken_lease)
+    service = _bare_service()
+    service._run_leased_analysis = AsyncMock()
+
+    await service._run_analysis_background(_PUUID, datetime.now(UTC))
+
+    service._run_leased_analysis.assert_not_awaited()
 
 
 async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
@@ -696,6 +753,197 @@ async def test_a_legacy_row_without_params_resumes_as_a_ten_match_run() -> None:
     assert service._spine_end_time_seconds is None
 
 
+class _RecordingRiot:
+    """Answers every participant read with nothing, and records who was read."""
+
+    def __init__(self) -> None:
+        self.match_lists: list[str] = []
+        self.league_reads: list[str] = []
+
+    async def get_match_list_by_puuid(
+        self, *, puuid: str, **_kwargs: object
+    ) -> SimpleNamespace:
+        self.match_lists.append(puuid)
+        return SimpleNamespace(match_ids=[])
+
+    async def get_league_entries_by_puuid(
+        self, puuid: str, **_kwargs: object
+    ) -> list[LeagueEntryDTO]:
+        self.league_reads.append(puuid)
+        return []
+
+
+def _empty_result() -> SimpleNamespace:
+    """What the stubbed database answers to every read: nothing stored."""
+    return SimpleNamespace(
+        tuples=lambda: SimpleNamespace(all=list),
+        scalar_one_or_none=lambda: None,
+    )
+
+
+async def test_a_resumed_run_does_not_refetch_players_already_marked_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Players a dead worker finished come back from the row, not from Riot.
+
+    The resumed worker used to read them again while the bar already showed
+    them done (LGA-129); only the unfinished enemy costs Riot calls here.
+    """
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    progress_writes: list[dict[str, bool]] = []
+
+    async def execute(statement: ClauseElement) -> SimpleNamespace:
+        progress = (statement.compile().params or {}).get("puuid_progress")
+        if progress is not None:
+            progress_writes.append(dict(progress))
+        return _empty_result()
+
+    riot = _RecordingRiot()
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace(execute=execute, commit=AsyncMock())),
+        cast(RiotAPIClient, riot),
+        _USER_ID,
+    )
+    service._region = Region.EUROPE
+    lobby = [(_PUUID, 100), ("done-ally", 100), ("fresh-enemy", 200)]
+    service._get_match_participants = AsyncMock(return_value=lobby)
+    service._get_win_status = AsyncMock(return_value=True)
+    run = _analysis("in_progress")
+    stored_progress = {
+        f"{_PUUID}:EUW1_0": True,
+        "done-ally:EUW1_0": True,
+        "fresh-enemy:EUW1_0": False,
+    }
+    run.puuid_progress = dict(stored_progress)
+    done_ally: ParticipantSampleJSON = {
+        "winrate": 0.4,
+        "sample_match_ids": ["EUW1_7", "EUW1_8"],
+        "rank_value": 1240,
+        "rank_tier": "GOLD",
+        "rank_basis": "period_accurate",
+        "degraded": True,
+    }
+    run.participant_samples = {
+        _PUUID: {
+            "winrate": 0.6,
+            "sample_match_ids": ["EUW1_9"],
+            "rank_value": None,
+            "rank_tier": "UNRANKED",
+            "rank_basis": None,
+            "degraded": False,
+        },
+        "done-ally": done_ally,
+    }
+    service._get_analysis = AsyncMock(return_value=run)
+
+    await service._initialize_progress_keys(_PUUID, run.created_at, ["EUW1_0"])
+    stats = await service._sample_spine_match(
+        _PUUID, run.created_at, "EUW1_0", 1_786_100_000, Platform.EUW1
+    )
+
+    assert riot.match_lists == ["fresh-enemy"]
+    assert riot.league_reads == ["fresh-enemy"]
+    assert stats is not None
+    assert stats.ally_winrates == {_PUUID: 0.6, "done-ally": 0.4}
+    assert service._rank_tiers["done-ally"] == "GOLD"
+    assert service._rank_period_accurate == 1
+    assert service._degraded_players == {"done-ally"}
+    assert service.matches_analyzed == 3
+    assert progress_writes[0] == stored_progress
+    assert progress_writes[-1]["fresh-enemy:EUW1_0"] is True
+
+
+async def test_a_restored_player_left_off_the_new_spine_is_not_counted() -> None:
+    """A restart can shift a latest-matches spine; a sample whose player is no
+    longer in it must not add their matches to the run."""
+    service = _bare_service()
+    gone: ParticipantSampleJSON = {
+        "winrate": 0.5,
+        "sample_match_ids": ["EUW1_1", "EUW1_2"],
+        "rank_value": None,
+        "rank_tier": "UNRANKED",
+        "rank_basis": None,
+        "degraded": False,
+    }
+
+    restored = service._restore_participant_samples({"gone": gone}, {"still-here"})
+
+    assert restored == set()
+    assert service.matches_analyzed == 0
+    assert "gone" not in service._winrate_cache
+
+
+async def test_a_finished_participant_is_marked_done_with_its_sample_in_one_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Progress and sample land together, so no key is done without a sample."""
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+    run = _analysis("in_progress")
+    run.puuid_progress = {"ally:EUW1_0": False, "ally:EUW1_1": False, "x:EUW1_0": False}
+    service._get_analysis = AsyncMock(return_value=run)
+    service._winrate_cache["ally"] = 0.7
+    service._winrate_sample_ids["ally"] = ["EUW1_5"]
+    service._record_rank("ally", "GOLD", "II", 40, period_accurate=False)
+
+    await service._record_participant_sample(_PUUID, run.created_at, "ally")
+
+    database.execute.assert_awaited_once()
+    params = database.execute.await_args.args[0].compile().params
+    assert params["puuid_progress"] == {
+        "ally:EUW1_0": True,
+        "ally:EUW1_1": True,
+        "x:EUW1_0": False,
+    }
+    written: list[object] = [
+        value for value in params.values() if isinstance(value, dict)
+    ]
+    assert {
+        "ally": {
+            "winrate": 0.7,
+            "sample_match_ids": ["EUW1_5"],
+            "rank_value": rank_value("GOLD", "II", 40),
+            "rank_tier": "GOLD",
+            "rank_basis": "current_day",
+            "degraded": False,
+        }
+    } in written
+
+
+async def test_resume_clears_a_stale_rate_limit_reset_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A worker that died while waiting left a reset time behind; the resumed
+    worker is not waiting, so `in_progress` must not carry it (LGA-129)."""
+    monkeypatch.setattr(
+        analysis_service_module,
+        "ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
+    )
+
+    await service._mark_analysis_in_progress(_PUUID, datetime.now(UTC))
+
+    params = database.execute.await_args.args[0].compile().params
+    assert params["status"] == "in_progress"
+    assert "rate_limit_reset_at" in params
+    assert params["rate_limit_reset_at"] is None
+
+
 async def test_spine_fetch_uses_the_runs_count_and_end_time() -> None:
     service = _bare_service()
     service.match_count = 20
@@ -932,7 +1180,6 @@ def _winrate_service(
         _USER_ID,
     )
     service._region = Region.EUROPE
-    service._mark_player_progress = AsyncMock()
     return service
 
 
@@ -955,9 +1202,7 @@ async def test_a_transient_failure_never_yields_a_one_match_winrate(
     """
     service = _winrate_service([("EUN1_SPINE", True)], failure)
 
-    winrate = await service._cached_player_winrate(
-        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
-    )
+    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
 
     assert winrate is None
     assert "ally" not in service._winrate_sample_ids
@@ -974,9 +1219,7 @@ async def test_a_failed_list_call_keeps_a_winrate_that_rests_on_enough_matches()
     ]
     service = _winrate_service(rows, ServiceUnavailableError("upstream"))
 
-    winrate = await service._cached_player_winrate(
-        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
-    )
+    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
 
     assert winrate == pytest.approx(3 / 5)
     assert service.matches_analyzed == MIN_WINRATE_SAMPLE_AFTER_FAILED_FETCH
@@ -986,9 +1229,7 @@ async def test_a_player_riot_has_no_history_for_is_not_a_failure() -> None:
     """A 404 is an answer: the stored game is all there is, and it counts."""
     service = _winrate_service([("EUN1_SPINE", True)], NotFoundError("no matches"))
 
-    winrate = await service._cached_player_winrate(
-        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
-    )
+    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
 
     assert winrate == pytest.approx(1.0)
     assert service.optional_fetch_failures == 0
@@ -1003,6 +1244,7 @@ async def test_a_participant_whose_read_failed_is_counted_as_degraded() -> None:
     service._cached_player_winrate = AsyncMock(side_effect=failing_winrate)
     service._cached_player_performance = AsyncMock(return_value=None)
     service._cached_player_rank = AsyncMock()
+    service._record_participant_sample = AsyncMock()
     side = analysis_service_module.SideSamples({}, {})
 
     await service._sample_participant(
@@ -1087,7 +1329,6 @@ def _detail_failure_service(failure: Exception) -> MatchmakingAnalysisService:
         _USER_ID,
     )
     service._region = Region.EUROPE
-    service._mark_player_progress = AsyncMock()
     return service
 
 
@@ -1102,9 +1343,7 @@ async def test_failed_match_details_never_leave_a_one_match_winrate(
     """The other path to the same figure: the list arrives, the games do not."""
     service = _detail_failure_service(failure)
 
-    winrate = await service._cached_player_winrate(
-        "ally", 1_786_100_000, _PUUID, datetime.now(UTC)
-    )
+    winrate = await service._cached_player_winrate("ally", 1_786_100_000)
 
     assert winrate is None
     assert "ally" not in service._winrate_sample_ids

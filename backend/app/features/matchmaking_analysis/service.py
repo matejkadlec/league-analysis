@@ -22,6 +22,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
@@ -64,7 +65,7 @@ from app.features.players.leagues import (
 from app.features.players.models import Player
 
 from .errors import MatchmakingAnalysisRuntimeError
-from .models import MatchmakingAnalysis
+from .models import MatchmakingAnalysis, ParticipantSampleJSON, RankBasis
 from .models import MatchmakingAnalysisResultsJSON as MatchmakingAnalysisResultsJSON
 from .ranks import (
     UNRANKED,
@@ -92,6 +93,7 @@ from .statistics import (
 )
 from .statistics import side_performance as side_performance
 from .statistics import trimmed_mean as trimmed_mean
+from .worker_lease import hold_run_lease, run_lease_is_held
 
 logger = structlog.get_logger(__name__)
 
@@ -264,6 +266,9 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         # means unranked or unreadable; the tier bucket then says UNRANKED.
         self._rank_values: dict[str, int | None] = {}
         self._rank_tiers: dict[str, str] = {}
+        # Which freshness counter each read rank went into, so a persisted
+        # participant sample can restore the same count.
+        self._rank_bases: dict[str, RankBasis] = {}
         self._ally_rank_puuids: set[str] = set()
         self._enemy_rank_puuids: set[str] = set()
         self._rank_period_accurate: int = 0
@@ -293,7 +298,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         existing = await self._get_active_analysis(puuid)
         if existing:
             logger.info("Attaching to active analysis", puuid=puuid)
-            self._ensure_background_task(puuid, existing.created_at)
+            await self._resume_unless_running(puuid, existing.created_at)
             return MatchmakingAnalysisResponse.model_validate(existing)
 
         now = datetime.now(UTC)
@@ -316,7 +321,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 # `raise` would not surface the constraint that failed.
                 raise conflict
             logger.info("Attached after concurrent start", puuid=puuid)
-            self._ensure_background_task(puuid, existing.created_at)
+            await self._resume_unless_running(puuid, existing.created_at)
             return MatchmakingAnalysisResponse.model_validate(existing)
 
         logger.info("Created new matchmaking analysis", puuid=puuid, created_at=now)
@@ -340,6 +345,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 error_code=None,
                 error_message=None,
                 rate_limit_reset_at=None,
+                participant_samples=None,
             )
         )
         await self.db.commit()
@@ -409,7 +415,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             # Shutdown leaves the row active on the contract that a restart
             # resumes it, and this poll is the only caller left to honour it:
             # the UI hides Start, and startup recovery skips this table.
-            self._ensure_background_task(puuid, created_at)
+            await self._resume_unless_running(puuid, analysis.created_at)
         return response
 
     async def get_analysis_history(
@@ -466,10 +472,28 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         )
         return result.scalar_one_or_none()
 
+    def _has_live_local_worker(self, puuid: str, created_at: datetime) -> bool:
+        running = _running_analyses.get((self.user_id, puuid))
+        return bool(
+            running and running.created_at == created_at and not running.task.done()
+        )
+
+    async def _resume_unless_running(self, puuid: str, created_at: datetime) -> None:
+        """Start a worker for the active run unless a live one already owns it.
+
+        The registry knows only this process's workers; the lease answers for
+        every process, so a poll cannot start a second worker (LGA-129).
+        """
+        if self._has_live_local_worker(puuid, created_at):
+            return
+        if await run_lease_is_held(self.db, self.user_id, puuid, created_at):
+            logger.info("matchmaking_worker_alive_elsewhere", puuid=puuid)
+            return
+        self._ensure_background_task(puuid, created_at)
+
     def _ensure_background_task(self, puuid: str, created_at: datetime) -> None:
         """Start the process-local worker once for the persisted active run."""
-        running = _running_analyses.get((self.user_id, puuid))
-        if running and running.created_at == created_at and not running.task.done():
+        if self._has_live_local_worker(puuid, created_at):
             return
 
         task = asyncio.create_task(self._run_analysis_background(puuid, created_at))
@@ -483,17 +507,18 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
     # ================================================================
 
     async def _run_analysis_background(self, puuid: str, created_at: datetime) -> None:
-        """Run analysis in background with its own DB session."""
+        """Run analysis in background, only while this worker holds the lease."""
         # Every log line below this point — the whole run, several call layers
         # deep — carries the run's identity without being handed it.
         structlog_contextvars.bind_contextvars(puuid=puuid, created_at=created_at)
         try:
-            async with (
-                db_manager.get_session() as db,
-                tracked_riot_client(db) as riot_client,
-            ):
-                service = MatchmakingAnalysisService(db, riot_client, self.user_id)
-                await service._run_analysis(puuid, created_at)
+            async with hold_run_lease(
+                db_manager.engine, self.user_id, puuid, created_at
+            ) as owned:
+                if owned:
+                    await self._run_leased_analysis(puuid, created_at)
+                else:
+                    logger.info("matchmaking_worker_alive_elsewhere")
         except asyncio.CancelledError:
             # Deliberately leaves the persisted row active: this also fires when
             # process shutdown cancels the task, and a restart is contracted to
@@ -501,38 +526,58 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             logger.info("Background analysis task cancelled; persisted run left active")
             raise
         except Exception as e:
-            logger.error(
-                "Background analysis failed",
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
-            error_code, error_message = self._safe_failure_details(e)
-            try:
-                async with db_manager.get_session() as db:
-                    await ensure_riot_writer_maintenance_is_inactive(db)
-                    await db.execute(
-                        update(MatchmakingAnalysis)
-                        .where(self._active_run_where(puuid, created_at))
-                        .values(
-                            status="failed",
-                            rate_limit_reset_at=None,
-                            completed_at=datetime.now(UTC),
-                            error_code=error_code,
-                            error_message=error_message,
-                        )
-                    )
-                    await db.commit()
-            except Exception as persist_error:
-                logger.error(
-                    "matchmaking_failure_state_persist_failed",
-                    error_code=error_code,
-                    error_type=type(persist_error).__name__,
-                )
+            # Only the lease itself reaches here: the run's own failures are
+            # persisted below. The row stays active for the next poll.
+            logger.error("matchmaking_worker_lease_failed", error_type=type(e).__name__)
         finally:
             running = _running_analyses.get((self.user_id, puuid))
             if running and running.task is asyncio.current_task():
                 _running_analyses.pop((self.user_id, puuid), None)
             structlog_contextvars.clear_contextvars()
+
+    async def _run_leased_analysis(self, puuid: str, created_at: datetime) -> None:
+        """The worker's run with its own DB session; a failure is persisted."""
+        try:
+            async with (
+                db_manager.get_session() as db,
+                tracked_riot_client(db) as riot_client,
+            ):
+                service = MatchmakingAnalysisService(db, riot_client, self.user_id)
+                await service._run_analysis(puuid, created_at)
+        except Exception as e:
+            logger.error(
+                "Background analysis failed",
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            await self._persist_background_failure(puuid, created_at, e)
+
+    async def _persist_background_failure(
+        self, puuid: str, created_at: datetime, error: Exception
+    ) -> None:
+        error_code, error_message = self._safe_failure_details(error)
+        try:
+            async with db_manager.get_session() as db:
+                await ensure_riot_writer_maintenance_is_inactive(db)
+                await db.execute(
+                    update(MatchmakingAnalysis)
+                    .where(self._active_run_where(puuid, created_at))
+                    .values(
+                        status="failed",
+                        rate_limit_reset_at=None,
+                        participant_samples=None,
+                        completed_at=datetime.now(UTC),
+                        error_code=error_code,
+                        error_message=error_message,
+                    )
+                )
+                await db.commit()
+        except Exception as persist_error:
+            logger.error(
+                "matchmaking_failure_state_persist_failed",
+                error_code=error_code,
+                error_type=type(persist_error).__name__,
+            )
 
     @staticmethod
     def _safe_failure_details(error: Exception) -> tuple[MatchmakingErrorCode, str]:
@@ -601,6 +646,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self._performance_cache = {}
         self._rank_values = {}
         self._rank_tiers = {}
+        self._rank_bases = {}
         self._ally_rank_puuids = set()
         self._enemy_rank_puuids = set()
         self._rank_period_accurate = 0
@@ -704,6 +750,9 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             ),
             error_code=None,
             error_message=None,
+            # A worker interrupted while waiting left its reset time behind,
+            # and this worker is not waiting: no stale time survives (LGA-129).
+            rate_limit_reset_at=None,
         )
 
     async def _load_spine_match_ids(
@@ -773,11 +822,45 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
 
         existing_analysis = await self._get_analysis(puuid, created_at)
         existing_progress = existing_analysis.puuid_progress or {}
+        restored = self._restore_participant_samples(
+            existing_analysis.participant_samples or {},
+            {key.partition(":")[0] for key in all_keys},
+        )
         initial_progress = {
-            key: bool(existing_progress.get(key, False)) for key in all_keys
+            key: bool(existing_progress.get(key, False))
+            or key.partition(":")[0] in restored
+            for key in all_keys
         }
         await self._update_progress(puuid, created_at, initial_progress)
-        logger.info("Progress initialized", total_keys=len(all_keys))
+        logger.info(
+            "Progress initialized",
+            total_keys=len(all_keys),
+            restored_participants=len(restored),
+        )
+
+    def _restore_participant_samples(
+        self,
+        samples: dict[str, ParticipantSampleJSON],
+        spine_puuids: set[str],
+    ) -> set[str]:
+        """Load the samples an interrupted worker finished into this run's caches.
+
+        Each restored participant is a cache hit for the rest of the run, so it
+        costs no Riot call. Returns who was restored.
+        """
+        restored = set(samples) & spine_puuids
+        for p_puuid in restored:
+            sample = samples[p_puuid]
+            self._winrate_cache[p_puuid] = sample["winrate"]
+            if sample["sample_match_ids"]:
+                self._winrate_sample_ids[p_puuid] = list(sample["sample_match_ids"])
+                self.matches_analyzed += len(sample["sample_match_ids"])
+            self._rank_values[p_puuid] = sample["rank_value"]
+            self._rank_tiers[p_puuid] = sample["rank_tier"]
+            self._count_rank_basis(p_puuid, sample["rank_basis"])
+            if sample["degraded"]:
+                self._degraded_players.add(p_puuid)
+        return restored
 
     async def _collect_match_averages(
         self, puuid: str, created_at: datetime, spine_match_ids: list[str]
@@ -864,6 +947,7 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
                 error_message=None,
                 requests_saved=self.requests_saved,
                 rate_limit_reset_at=None,
+                participant_samples=None,
             )
         )
 
@@ -962,10 +1046,9 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         analysis_created_at: datetime,
     ) -> None:
         """One participant's winrate, trailing form and rank, onto their side."""
+        already_sampled = p_puuid in self._winrate_cache
         failures_before = self.optional_fetch_failures
-        wr = await self._cached_player_winrate(
-            p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
-        )
+        wr = await self._cached_player_winrate(p_puuid, end_time_seconds)
         if wr is not None:
             side.winrates[p_puuid] = wr
         # After the winrate above, so the sampled match IDs it recorded exist.
@@ -977,13 +1060,13 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         # can fail and the set keeps the player for their later matches.
         if self.optional_fetch_failures > failures_before:
             self._degraded_players.add(p_puuid)
+        if not already_sampled:
+            await self._record_participant_sample(
+                analysis_puuid, analysis_created_at, p_puuid
+            )
 
     async def _cached_player_winrate(
-        self,
-        p_puuid: str,
-        end_time_seconds: int,
-        analysis_puuid: str,
-        analysis_created_at: datetime,
+        self, p_puuid: str, end_time_seconds: int
     ) -> float | None:
         if p_puuid in self._winrate_cache:
             return self._winrate_cache[p_puuid]
@@ -992,7 +1075,6 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         if self.optional_fetch_failures > failures_before:
             wr = self._winrate_unless_sample_is_thin(p_puuid, wr)
         self._winrate_cache[p_puuid] = wr
-        await self._mark_player_progress(analysis_puuid, analysis_created_at, p_puuid)
         return wr
 
     def _winrate_unless_sample_is_thin(
@@ -1039,18 +1121,44 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
         self._performance_cache[p_puuid] = perf
         return perf
 
-    async def _mark_player_progress(
+    async def _record_participant_sample(
         self,
         analysis_puuid: str,
         analysis_created_at: datetime,
         p_puuid: str,
     ) -> None:
+        """Mark one participant done and persist their sample, in one UPDATE.
+
+        A key marked done therefore always has the sample a resumed worker
+        restores instead of reading the participant from Riot again.
+        """
         analysis = await self._get_analysis(analysis_puuid, analysis_created_at)
         progress = analysis.puuid_progress or {}
         for key in list(progress.keys()):
             if key.startswith(f"{p_puuid}:"):
                 progress[key] = True
-        await self._update_progress(analysis_puuid, analysis_created_at, progress)
+        # Appended in SQL, so each write carries one sample, not all of them.
+        samples = func.coalesce(
+            MatchmakingAnalysis.participant_samples, literal({}, JSONB)
+        ).op("||", return_type=JSONB)(
+            literal({p_puuid: self._participant_sample(p_puuid)}, JSONB)
+        )
+        await self._write_active_run(
+            analysis_puuid,
+            analysis_created_at,
+            puuid_progress=progress,
+            participant_samples=samples,
+        )
+
+    def _participant_sample(self, p_puuid: str) -> ParticipantSampleJSON:
+        return {
+            "winrate": self._winrate_cache.get(p_puuid),
+            "sample_match_ids": list(self._winrate_sample_ids.get(p_puuid, [])),
+            "rank_value": self._rank_values.get(p_puuid),
+            "rank_tier": self._rank_tiers.get(p_puuid, UNRANKED),
+            "rank_basis": self._rank_bases.get(p_puuid),
+            "degraded": p_puuid in self._degraded_players,
+        }
 
     # ================================================================
     # Participant Ranks
@@ -1122,7 +1230,15 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             tier_value, rank_value_arg, league_points
         )
         self._rank_tiers[p_puuid] = tier_value
-        if period_accurate:
+        self._count_rank_basis(
+            p_puuid, "period_accurate" if period_accurate else "current_day"
+        )
+
+    def _count_rank_basis(self, p_puuid: str, basis: RankBasis | None) -> None:
+        if basis is None:
+            return
+        self._rank_bases[p_puuid] = basis
+        if basis == "period_accurate":
             self._rank_period_accurate += 1
         else:
             self._rank_current_day += 1
@@ -1412,4 +1528,5 @@ class MatchmakingAnalysisService(RateLimitRetryMixin):
             error_code=error_code,
             error_message=msg,
             rate_limit_reset_at=None,
+            participant_samples=None,
         )

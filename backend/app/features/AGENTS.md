@@ -44,8 +44,9 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
   writer for as long as Riot takes to answer (LGA-127).
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
-  run-per-PUUID database constraint, exact-run cancellation, and shared
-  rate-limiter/maintenance boundaries. Any `AuthenticationError` or
+  run-per-PUUID database constraint, exact-run cancellation, the worker lease
+  (one live worker per run across processes), the participant samples a
+  resumed worker restores, and shared rate-limiter/maintenance boundaries. Any `AuthenticationError` or
   `ForbiddenError`, including during optional cache filling, must terminate with
   `error_code=RIOT_API_KEY_INVALID` so the shared frontend credential warning
   survives the background-run HTTP 200 polling boundary.

@@ -1,5 +1,7 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, NoReturn, Self, cast, override
@@ -608,6 +610,12 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _cancelled)
+
+    @asynccontextmanager
+    async def _free_lease(*_args: object) -> AsyncGenerator[bool]:
+        yield True
+
+    monkeypatch.setattr(analysis_module, "hold_run_lease", _free_lease)
 
     service = analysis_module.MatchmakingAnalysisService(
         cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace()), _USER_ID
